@@ -5,17 +5,40 @@
 ---
 
 ## Project Purpose
-[Fill in: What this project does - 1-2 sentences]
+Ivy is Grove's first-party, zero-knowledge mail client for `@grove.place` email addresses. It provides a privacy-first web interface integrated with the Grove ecosystem—users can send, receive, and organize email without Grove being able to read any of their data.
 
 ## Tech Stack
-[Fill in: Technologies, frameworks, and languages used]
-- Language:
-- Framework:
-- Key Libraries:
-- Package Manager:
+- **Language**: TypeScript
+- **Frontend**: SvelteKit (SSR + client-side)
+- **Backend**: Cloudflare Workers
+- **Database**: Cloudflare D1 (metadata, queues)
+- **Storage**: Cloudflare R2 (encrypted email bodies, attachments)
+- **Auth**: Heartwood (Grove SSO)
+- **Mail Server**: Forward Email (SMTP/IMAP relay)
+- **Newsletters**: Postmark (broadcast streams)
+- **Encryption**: AES-256-GCM (client-side), Argon2id (key derivation)
+- **Package Manager**: pnpm
 
 ## Architecture Notes
-[Fill in: Key architectural decisions, patterns, or structure]
+### Zero-Knowledge Design
+- All email content encrypted client-side before storage
+- Server stores only: `user_id`, `created_at`, `r2_key`, and encrypted blobs
+- Search happens client-side via IndexedDB
+- Thread grouping computed client-side from email headers
+
+### Data Flow
+- **Incoming**: Forward Email webhook → D1 buffer → encrypt → R2 → delete buffer
+- **Outgoing**: Compose → encrypt → D1 queue (delayed send) → Forward Email SMTP
+- **Newsletters**: Compose → Postmark Broadcast Stream (Oak+ users only)
+
+### Key Directories
+```
+src/
+├── lib/           # Shared utilities, encryption, API clients
+├── routes/        # SvelteKit routes (pages + API)
+├── components/    # Svelte components
+└── workers/       # Cloudflare Worker entry points
+```
 
 ---
 
@@ -173,5 +196,5 @@ For all detailed guides, workflows, and examples, see:
 
 ---
 
-*Last updated: 2025-11-28*
-*Model: Claude Sonnet 4.5*
+*Last updated: 2025-12-15*
+*Model: Claude Opus 4.5*

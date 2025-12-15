@@ -1,0 +1,49 @@
+# Ivy - Cloudflare Workers Configuration
+# https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "ivy"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Build settings for SvelteKit
+[build]
+command = "pnpm build"
+
+# Development settings
+[dev]
+port = 5173
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "ivy-db"
+database_id = "TODO_CREATE_DATABASE"
+
+# R2 Storage
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "ivy-storage"
+
+# KV Namespace (for rate limiting, caching)
+[[kv_namespaces]]
+binding = "KV"
+id = "TODO_CREATE_KV"
+
+# Environment variables (use secrets for sensitive values)
+[vars]
+ENVIRONMENT = "development"
+
+# Secrets (set via wrangler secret put)
+# FORWARD_EMAIL_API_KEY
+# POSTMARK_SERVER_TOKEN
+# WEBHOOK_SECRET
+# TURNSTILE_SECRET_KEY
+
+# Production environment
+[env.production]
+vars = { ENVIRONMENT = "production" }
+
+# Scheduled triggers (for queue processing)
+[triggers]
+crons = ["* * * * *"]  # Every minute - process send queue
