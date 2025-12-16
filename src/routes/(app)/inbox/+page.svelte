@@ -57,11 +57,14 @@
 
 	<div class="thread-list">
 		{#each $threads as thread (thread.id)}
-			<button
+			<div
 				class="thread-item"
 				class:unread={!thread.isRead}
 				class:selected={$selectedThreadId === thread.id}
 				onclick={() => selectThread(thread.id)}
+				onkeydown={(e) => e.key === 'Enter' && selectThread(thread.id)}
+				role="button"
+				tabindex="0"
 			>
 				<div class="thread-checkbox">
 					<input type="checkbox" onclick={(e) => e.stopPropagation()} />
@@ -92,7 +95,7 @@
 						<span class="thread-snippet">{getSnippet(thread)}</span>
 					</div>
 				</div>
-			</button>
+			</div>
 		{:else}
 			<div class="empty-state">
 				<div class="empty-icon">
