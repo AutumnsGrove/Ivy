@@ -29,9 +29,67 @@ export interface Thread {
 	labels: string[];
 }
 
+// Mock data for UI development
+const mockThreads: Thread[] = [
+	{
+		id: '1',
+		emails: [],
+		subject: 'Welcome to Grove',
+		participants: ['Grove Team', 'you'],
+		lastDate: new Date(Date.now() - 1000 * 60 * 30), // 30 min ago
+		isRead: false,
+		labels: ['inbox']
+	},
+	{
+		id: '2',
+		emails: [],
+		subject: 'Your account has been created',
+		participants: ['noreply@grove.place'],
+		lastDate: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
+		isRead: false,
+		labels: ['inbox']
+	},
+	{
+		id: '3',
+		emails: [],
+		subject: 'Re: Project proposal for Q1',
+		participants: ['Alex Chen', 'you', 'Jordan Miller'],
+		lastDate: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
+		isRead: true,
+		labels: ['inbox']
+	},
+	{
+		id: '4',
+		emails: [],
+		subject: 'Meeting notes from last week',
+		participants: ['Sarah Johnson'],
+		lastDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2), // 2 days ago
+		isRead: true,
+		labels: ['inbox']
+	},
+	{
+		id: '5',
+		emails: [],
+		subject: 'Invoice #1234 - December 2024',
+		participants: ['Billing'],
+		lastDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3), // 3 days ago
+		isRead: true,
+		labels: ['inbox']
+	},
+	{
+		id: '6',
+		emails: [],
+		subject: 'Your weekly digest',
+		participants: ['Grove Weekly'],
+		lastDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5), // 5 days ago
+		isRead: true,
+		labels: ['inbox']
+	}
+];
+
 // Email stores
 export const emails = writable<Email[]>([]);
-export const threads = writable<Thread[]>([]);
+export const threads = writable<Thread[]>(mockThreads);
 export const selectedThreadId = writable<string | null>(null);
 
 // Derived stores
