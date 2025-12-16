@@ -302,7 +302,6 @@
 		background: var(--color-bg-secondary);
 		border-radius: var(--radius-lg);
 		border: 1px solid var(--color-border);
-		overflow: hidden;
 	}
 
 	.message-header {
@@ -407,6 +406,7 @@
 		padding: var(--space-3) var(--space-4);
 		border-top: 1px solid var(--color-border-subtle);
 		background: var(--color-bg-tertiary);
+		border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 	}
 
 	.reply-btn {
