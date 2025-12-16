@@ -43,6 +43,15 @@ export const selectedThread = derived(
 // UI state
 export const isComposing = writable(false);
 export const searchQuery = writable('');
+export const isSidebarCollapsed = writable(false);
+
+// Theme state
+export type Theme = 'dark' | 'light';
+export const theme = writable<Theme>('dark');
 
 // User state
-export const currentUser = writable<{ id: string; email: string } | null>(null);
+export const currentUser = writable<{ id: string; email: string; name?: string; avatar?: string } | null>({
+	id: '1',
+	email: 'user@grove.place',
+	name: 'Grove User'
+});
