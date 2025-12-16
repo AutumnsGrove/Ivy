@@ -3,23 +3,23 @@
 ## Phase 1: Foundation (MVP)
 
 ### Project Setup
-- [ ] Initialize SvelteKit project with TypeScript
-- [ ] Configure Cloudflare adapter (`@sveltejs/adapter-cloudflare`)
-- [ ] Set up `wrangler.toml` with D1, R2, and KV bindings
-- [ ] Configure pnpm workspace and dependencies
-- [ ] Set up Vitest for testing
-- [ ] Create secrets template (`secrets_template.json`)
+- [x] Initialize SvelteKit project with TypeScript
+- [x] Configure Cloudflare adapter (`@sveltejs/adapter-cloudflare`)
+- [x] Set up `wrangler.toml` with D1, R2, and KV bindings
+- [x] Configure pnpm workspace and dependencies
+- [x] Set up Vitest for testing
+- [x] Create secrets template (`secrets_template.json`)
 
 ### Database (D1)
-- [ ] Create D1 database via Wrangler
-- [ ] Write migration: `ivy_settings` table
-- [ ] Write migration: `ivy_emails` table
-- [ ] Write migration: `ivy_email_queue` table
-- [ ] Write migration: `ivy_webhook_buffer` table
-- [ ] Write migration: `ivy_contact_form_buffer` table
-- [ ] Write migration: `ivy_newsletter_sends` table
-- [ ] Write migration: `ivy_admin_audit_log` table
-- [ ] Create indexes for all tables
+- [x] Create D1 database via Wrangler
+- [x] Write migration: `ivy_settings` table
+- [x] Write migration: `ivy_emails` table
+- [x] Write migration: `ivy_email_queue` table
+- [x] Write migration: `ivy_webhook_buffer` table
+- [x] Write migration: `ivy_contact_form_buffer` table
+- [x] Write migration: `ivy_newsletter_sends` table
+- [x] Write migration: `ivy_admin_audit_log` table
+- [x] Create indexes for all tables
 
 ### Encryption (lib/crypto)
 - [ ] Implement AES-256-GCM encrypt/decrypt utilities
@@ -46,23 +46,30 @@
 - [ ] Alert user on delivery failures
 
 ### Core UI Components
-- [ ] Create layout with sidebar navigation
-- [ ] Create email list component
-- [ ] Create thread view component
-- [ ] Create compose modal
-- [ ] Create rich text editor (Tiptap or similar)
+- [x] Create layout with sidebar navigation
+- [x] Create email list component (ThreadList)
+- [x] Create thread view component (collapsible messages, reply box)
+- [x] Create compose modal
+- [ ] Create rich text editor (Tiptap or similar) — *using textarea for now*
 - [ ] Create attachment upload component
 
-### Core Routes
-- [ ] `/` — Redirect to inbox or onboarding
-- [ ] `/inbox` — Main inbox view
-- [ ] `/sent` — Sent emails
-- [ ] `/drafts` — Draft emails
-- [ ] `/archive` — Archived threads
-- [ ] `/trash` — Deleted items
-- [ ] `/thread/[id]` — Thread detail view
-- [ ] `/compose` — Full-page compose (mobile)
-- [ ] `/settings` — User settings
+### Design System
+- [x] Grove-themed color palette (dark mode default)
+- [x] Light mode support with theme toggle
+- [x] CSS custom properties for theming
+- [x] Icon component with SVG icons
+- [x] Typography and spacing system
+
+### Core Routes (Fully Styled)
+- [x] `/` — Redirect to inbox (server-side)
+- [x] `/inbox` — Main inbox view with email list
+- [x] `/sent` — Sent emails with empty state
+- [x] `/drafts` — Draft emails with mock draft
+- [x] `/archive` — Archived threads with empty state
+- [x] `/trash` — Deleted items with 30-day notice
+- [x] `/thread/[id]` — Thread detail with message expansion
+- [x] `/compose` — Compose modal (accessible from anywhere)
+- [x] `/settings` — Full settings UI (account, appearance, email, notifications, security, storage)
 
 ### Unsend Queue
 - [ ] Implement delayed send queue (D1)
@@ -141,4 +148,4 @@
 
 ---
 
-*Last updated: 2025-12-15*
+*Last updated: 2025-12-16*
