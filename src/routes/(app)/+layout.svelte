@@ -2,6 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import { page } from '$app/stores';
 	import Icon from '$lib/components/Icons.svelte';
+	import GroveLogo from '$lib/components/GroveLogo.svelte';
 	import { theme, isComposing, currentUser, searchQuery, isSidebarOpen, isSearchExpanded } from '$lib/stores';
 
 	let { children }: { children: Snippet } = $props();
@@ -50,8 +51,8 @@
 	<!-- Sidebar -->
 	<aside class="sidebar" class:open={$isSidebarOpen}>
 		<div class="sidebar-header">
-			<a href="/inbox" class="logo">
-				<Icon name="leaf" size={24} />
+			<a href="/inbox" class="logo" onclick={closeSidebar}>
+				<GroveLogo size={24} color="var(--color-primary)" />
 				<span class="logo-text">Ivy</span>
 			</a>
 		</div>
@@ -109,11 +110,8 @@
 				<Icon name="menu" size={24} />
 			</button>
 
-			<!-- Search - expandable on mobile -->
-			<div class="search-container" class:expanded={$isSearchExpanded}>
-				<button class="icon-btn search-toggle" onclick={toggleSearch} title="Search">
-					<Icon name="search" size={20} />
-				</button>
+			<!-- Desktop search bar -->
+			<div class="search-container desktop-search">
 				<div class="search-input-wrapper">
 					<Icon name="search" size={18} class="search-icon" />
 					<input
@@ -122,13 +120,15 @@
 						class="search-input"
 						bind:value={$searchQuery}
 					/>
-					<button class="icon-btn search-close" onclick={toggleSearch} title="Close search">
-						<Icon name="x" size={18} />
-					</button>
 				</div>
 			</div>
 
 			<div class="header-actions">
+				<!-- Mobile search toggle -->
+				<button class="icon-btn search-toggle" onclick={toggleSearch} title="Search">
+					<Icon name="search" size={20} />
+				</button>
+
 				<button class="icon-btn" onclick={toggleTheme} title="Toggle theme">
 					{#if $theme === 'dark'}
 						<Icon name="sun" size={20} />
@@ -144,6 +144,24 @@
 				</button>
 			</div>
 		</header>
+
+		<!-- Mobile search dropdown -->
+		{#if $isSearchExpanded}
+			<div class="mobile-search-dropdown">
+				<div class="search-input-wrapper">
+					<Icon name="search" size={18} class="search-icon" />
+					<input
+						type="text"
+						placeholder="Search mail..."
+						class="search-input"
+						bind:value={$searchQuery}
+					/>
+					<button class="icon-btn search-close" onclick={toggleSearch} title="Close search">
+						<Icon name="x" size={18} />
+					</button>
+				</div>
+			</div>
+		{/if}
 
 		<!-- Page Content -->
 		<main class="content">
@@ -679,6 +697,11 @@
 		}
 	}
 
+	/* Mobile search dropdown - hidden by default */
+	.mobile-search-dropdown {
+		display: none;
+	}
+
 	/* Mobile breakpoint (< 768px) - Compact header */
 	@media (max-width: 767px) {
 		.header {
@@ -686,46 +709,33 @@
 			gap: var(--space-2);
 		}
 
-		/* Collapsible search on mobile */
-		.search-container {
-			flex: 0;
-			position: static;
-		}
-
-		.search-input-wrapper {
+		/* Hide desktop search on mobile */
+		.desktop-search {
 			display: none;
 		}
 
+		/* Show search toggle on mobile */
 		.search-toggle {
 			display: flex;
 		}
 
-		/* Expanded search state */
-		.search-container.expanded {
-			position: fixed;
-			inset: 0;
-			z-index: 70;
+		/* Mobile search dropdown */
+		.mobile-search-dropdown {
+			display: flex;
+			padding: var(--space-2) var(--space-3);
 			background: var(--color-bg-secondary);
-			padding: var(--space-2);
-			display: flex;
-			align-items: center;
-			gap: var(--space-2);
+			border-bottom: 1px solid var(--color-border);
 		}
 
-		.search-container.expanded .search-toggle {
-			display: none;
-		}
-
-		.search-container.expanded .search-input-wrapper {
-			display: flex;
+		.mobile-search-dropdown .search-input-wrapper {
 			flex: 1;
 		}
 
-		.search-container.expanded .search-close {
+		.mobile-search-dropdown .search-close {
 			display: flex;
 		}
 
-		.search-container.expanded .search-input {
+		.mobile-search-dropdown .search-input {
 			font-size: var(--text-base);
 		}
 
