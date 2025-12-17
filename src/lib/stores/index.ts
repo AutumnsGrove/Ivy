@@ -101,7 +101,8 @@ export const selectedThread = derived(
 // UI state
 export const isComposing = writable(false);
 export const searchQuery = writable('');
-export const isSidebarCollapsed = writable(false);
+export const isSidebarOpen = writable(false); // Mobile sidebar drawer state
+export const isSearchExpanded = writable(false); // Mobile search expansion state
 
 // Theme state
 export type Theme = 'dark' | 'light';
