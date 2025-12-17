@@ -107,6 +107,14 @@
 	/* Layout */
 	--sidebar-width: 260px;
 	--header-height: 56px;
+
+	/* Breakpoints (for reference in media queries) */
+	/* Mobile: < 640px */
+	/* Tablet: 640px - 1023px */
+	/* Desktop: >= 1024px */
+	--breakpoint-sm: 640px;
+	--breakpoint-md: 768px;
+	--breakpoint-lg: 1024px;
 }
 
 /* Light Theme */

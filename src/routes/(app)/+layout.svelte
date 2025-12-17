@@ -2,9 +2,21 @@
 	import type { Snippet } from 'svelte';
 	import { page } from '$app/stores';
 	import Icon from '$lib/components/Icons.svelte';
-	import { theme, isComposing, currentUser, searchQuery } from '$lib/stores';
+	import { theme, isComposing, currentUser, searchQuery, isSidebarOpen, isSearchExpanded } from '$lib/stores';
 
 	let { children }: { children: Snippet } = $props();
+
+	function toggleSidebar() {
+		isSidebarOpen.update((v) => !v);
+	}
+
+	function closeSidebar() {
+		isSidebarOpen.set(false);
+	}
+
+	function toggleSearch() {
+		isSearchExpanded.update((v) => !v);
+	}
 
 	function toggleTheme() {
 		theme.update((t) => {
@@ -30,8 +42,13 @@
 </script>
 
 <div class="app-layout">
+	<!-- Mobile Sidebar Backdrop -->
+	{#if $isSidebarOpen}
+		<button class="sidebar-backdrop" onclick={closeSidebar} aria-label="Close menu"></button>
+	{/if}
+
 	<!-- Sidebar -->
-	<aside class="sidebar">
+	<aside class="sidebar" class:open={$isSidebarOpen}>
 		<div class="sidebar-header">
 			<a href="/inbox" class="logo">
 				<Icon name="leaf" size={24} />
@@ -50,6 +67,7 @@
 					href={item.href}
 					class="nav-item"
 					class:active={$page.url.pathname === item.href}
+					onclick={closeSidebar}
 				>
 					<Icon name={item.icon} size={18} />
 					<span class="nav-label">{item.label}</span>
@@ -63,7 +81,7 @@
 		<div class="sidebar-divider"></div>
 
 		<nav class="nav-secondary">
-			<a href="/settings" class="nav-item" class:active={$page.url.pathname === '/settings'}>
+			<a href="/settings" class="nav-item" class:active={$page.url.pathname === '/settings'} onclick={closeSidebar}>
 				<Icon name="settings" size={18} />
 				<span class="nav-label">Settings</span>
 			</a>
@@ -86,14 +104,28 @@
 	<div class="main-area">
 		<!-- Header -->
 		<header class="header">
-			<div class="search-container">
-				<Icon name="search" size={18} class="search-icon" />
-				<input
-					type="text"
-					placeholder="Search mail..."
-					class="search-input"
-					bind:value={$searchQuery}
-				/>
+			<!-- Mobile menu button -->
+			<button class="icon-btn menu-btn" onclick={toggleSidebar} title="Menu">
+				<Icon name="menu" size={24} />
+			</button>
+
+			<!-- Search - expandable on mobile -->
+			<div class="search-container" class:expanded={$isSearchExpanded}>
+				<button class="icon-btn search-toggle" onclick={toggleSearch} title="Search">
+					<Icon name="search" size={20} />
+				</button>
+				<div class="search-input-wrapper">
+					<Icon name="search" size={18} class="search-icon" />
+					<input
+						type="text"
+						placeholder="Search mail..."
+						class="search-input"
+						bind:value={$searchQuery}
+					/>
+					<button class="icon-btn search-close" onclick={toggleSearch} title="Close search">
+						<Icon name="x" size={18} />
+					</button>
+				</div>
 			</div>
 
 			<div class="header-actions">
@@ -338,10 +370,11 @@
 	.search-container {
 		flex: 1;
 		max-width: 600px;
-		position: relative;
+		display: flex;
+		align-items: center;
 	}
 
-	.search-container :global(.search-icon) {
+	.search-input-wrapper :global(.search-icon) {
 		position: absolute;
 		left: var(--space-3);
 		top: 50%;
@@ -562,5 +595,204 @@
 
 	.btn-primary:hover {
 		background: var(--color-primary-hover);
+	}
+
+	/* Mobile Sidebar Backdrop */
+	.sidebar-backdrop {
+		display: none;
+	}
+
+	/* Menu button - hidden on desktop */
+	.menu-btn {
+		display: none;
+	}
+
+	/* Search wrapper for mobile expandable search */
+	.search-input-wrapper {
+		flex: 1;
+		position: relative;
+		display: flex;
+		align-items: center;
+	}
+
+	.search-toggle,
+	.search-close {
+		display: none;
+	}
+
+	/* ==========================================
+	   RESPONSIVE STYLES - Tablet & Mobile
+	   ========================================== */
+
+	/* Tablet breakpoint (< 1024px) - Collapsible sidebar */
+	@media (max-width: 1023px) {
+		.sidebar {
+			position: fixed;
+			left: 0;
+			top: 0;
+			bottom: 0;
+			z-index: 60;
+			transform: translateX(-100%);
+			transition: transform var(--transition-slow);
+		}
+
+		.sidebar.open {
+			transform: translateX(0);
+		}
+
+		.sidebar-backdrop {
+			display: block;
+			position: fixed;
+			inset: 0;
+			background: rgba(0, 0, 0, 0.5);
+			z-index: 50;
+			animation: fadeIn var(--transition-fast);
+			border: none;
+			cursor: default;
+		}
+
+		@keyframes fadeIn {
+			from { opacity: 0; }
+			to { opacity: 1; }
+		}
+
+		.menu-btn {
+			display: flex;
+		}
+
+		/* Larger touch targets for tablet/mobile */
+		.nav-item {
+			min-height: 44px;
+			padding: var(--space-3) var(--space-3);
+		}
+
+		.icon-btn {
+			min-width: 44px;
+			min-height: 44px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.compose-btn {
+			min-height: 48px;
+		}
+	}
+
+	/* Mobile breakpoint (< 768px) - Compact header */
+	@media (max-width: 767px) {
+		.header {
+			padding: 0 var(--space-2);
+			gap: var(--space-2);
+		}
+
+		/* Collapsible search on mobile */
+		.search-container {
+			flex: 0;
+			position: static;
+		}
+
+		.search-input-wrapper {
+			display: none;
+		}
+
+		.search-toggle {
+			display: flex;
+		}
+
+		/* Expanded search state */
+		.search-container.expanded {
+			position: fixed;
+			inset: 0;
+			z-index: 70;
+			background: var(--color-bg-secondary);
+			padding: var(--space-2);
+			display: flex;
+			align-items: center;
+			gap: var(--space-2);
+		}
+
+		.search-container.expanded .search-toggle {
+			display: none;
+		}
+
+		.search-container.expanded .search-input-wrapper {
+			display: flex;
+			flex: 1;
+		}
+
+		.search-container.expanded .search-close {
+			display: flex;
+		}
+
+		.search-container.expanded .search-input {
+			font-size: var(--text-base);
+		}
+
+		/* Compose modal fullscreen on mobile */
+		.compose-modal {
+			max-width: 100%;
+			max-height: 100%;
+			height: 100%;
+			border-radius: 0;
+		}
+
+		.modal-backdrop {
+			padding: 0;
+		}
+
+		.compose-body {
+			min-height: 150px;
+		}
+
+		.compose-body textarea {
+			min-height: 150px;
+		}
+
+		/* Stack compose actions on very small screens */
+		.compose-actions {
+			flex-wrap: wrap;
+			gap: var(--space-2);
+		}
+
+		.compose-toolbar {
+			order: 2;
+			width: 100%;
+			justify-content: center;
+			border-top: 1px solid var(--color-border-subtle);
+			padding-top: var(--space-2);
+			margin-top: var(--space-1);
+		}
+
+		.compose-submit {
+			order: 1;
+			width: 100%;
+			justify-content: stretch;
+		}
+
+		.compose-submit .btn-secondary,
+		.compose-submit .btn-primary {
+			flex: 1;
+			justify-content: center;
+		}
+	}
+
+	/* Small mobile (< 480px) - Extra compact */
+	@media (max-width: 479px) {
+		.sidebar {
+			width: 100%;
+			max-width: 300px;
+		}
+
+		.header-avatar {
+			width: 28px;
+			height: 28px;
+			font-size: var(--text-xs);
+		}
+
+		.user-btn {
+			min-width: 40px;
+			min-height: 40px;
+		}
 	}
 </style>
