@@ -51,7 +51,7 @@
 	<!-- Sidebar -->
 	<aside class="sidebar" class:open={$isSidebarOpen}>
 		<div class="sidebar-header">
-			<a href="/inbox" class="logo">
+			<a href="/inbox" class="logo" onclick={closeSidebar}>
 				<GroveLogo size={24} color="var(--color-primary)" />
 				<span class="logo-text">Ivy</span>
 			</a>
