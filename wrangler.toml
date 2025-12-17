@@ -18,7 +18,8 @@ port = 5173
 [[d1_databases]]
 binding = "DB"
 database_name = "ivy-db"
-database_id = "TODO_CREATE_DATABASE"
+database_id = "57738720-bc43-4a7f-ad5b-ceb86b3c0542"
+migrations_dir = "migrations"
 
 # R2 Storage
 [[r2_buckets]]
@@ -28,7 +29,7 @@ bucket_name = "ivy-storage"
 # KV Namespace (for rate limiting, caching)
 [[kv_namespaces]]
 binding = "KV"
-id = "TODO_CREATE_KV"
+id = "a325ec2e391543f7b9b77e25aa3da977"
 
 # Environment variables (use secrets for sensitive values)
 [vars]
