@@ -22,11 +22,11 @@
 - [x] Create indexes for all tables
 
 ### Encryption (lib/crypto)
-- [ ] Implement AES-256-GCM encrypt/decrypt utilities
-- [ ] Implement Argon2id key derivation (wrapper key from credentials)
-- [ ] Implement email key generation and storage
-- [ ] Implement recovery phrase generation (BIP39 24-word)
-- [ ] Write encryption round-trip tests
+- [x] Implement AES-256-GCM encrypt/decrypt utilities
+- [x] Implement PBKDF2 key derivation (wrapper key from credentials)
+- [x] Implement email key generation and storage
+- [x] Implement recovery phrase generation (BIP39 24-word)
+- [x] Write encryption round-trip tests (26 tests passing)
 
 ### Forward Email Integration
 - [ ] Create Forward Email API client (`lib/api/forwardEmail.ts`)
