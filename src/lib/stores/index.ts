@@ -108,9 +108,5 @@ export const isSearchExpanded = writable(false); // Mobile search expansion stat
 export type Theme = 'dark' | 'light';
 export const theme = writable<Theme>('dark');
 
-// User state
-export const currentUser = writable<{ id: string; email: string; name?: string; avatar?: string } | null>({
-	id: '1',
-	email: 'user@grove.place',
-	name: 'Grove User'
-});
+// User state (populated from server-side session data)
+export const currentUser = writable<{ id: string; email: string; name?: string; avatar?: string } | null>(null);

@@ -1,11 +1,24 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { page } from '$app/stores';
+	import { onMount } from 'svelte';
 	import Icon from '$lib/components/Icons.svelte';
 	import GroveLogo from '$lib/components/GroveLogo.svelte';
 	import { theme, isComposing, currentUser, searchQuery, isSidebarOpen, isSearchExpanded } from '$lib/stores';
 
-	let { children }: { children: Snippet } = $props();
+	let { children, data }: { children: Snippet; data: any } = $props();
+
+	// Update currentUser store with data from server
+	onMount(() => {
+		if (data.user) {
+			currentUser.set({
+				id: data.user.id,
+				email: data.user.email,
+				name: data.user.name,
+				avatar: data.user.image
+			});
+		}
+	});
 
 	function toggleSidebar() {
 		isSidebarOpen.update((v) => !v);
@@ -31,6 +44,15 @@
 
 	function openCompose() {
 		isComposing.set(true);
+	}
+
+	async function logout() {
+		try {
+			await fetch('/auth/logout', { method: 'POST' });
+			// Page will be redirected by the server
+		} catch (error) {
+			console.error('Logout failed:', error);
+		}
 	}
 
 	const navItems = [
@@ -86,6 +108,10 @@
 				<Icon name="settings" size={18} />
 				<span class="nav-label">Settings</span>
 			</a>
+			<button class="nav-item" onclick={logout}>
+				<Icon name="log-out" size={18} />
+				<span class="nav-label">Log out</span>
+			</button>
 		</nav>
 
 		<div class="sidebar-footer">
