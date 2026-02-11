@@ -2,16 +2,16 @@
 	import GroveLogo from '$lib/components/GroveLogo.svelte';
 	import Icon from '$lib/components/Icons.svelte';
 
-	const AUTH_API_URL = 'https://auth-api.grove.place';
+	const AUTH_URL = 'https://login.grove.place';
 
 	function signInWithGoogle() {
 		const callbackURL = encodeURIComponent(window.location.origin + '/inbox');
-		window.location.href = `${AUTH_API_URL}/api/auth/sign-in/google?callbackURL=${callbackURL}`;
+		window.location.href = `${AUTH_URL}/api/auth/sign-in/google?callbackURL=${callbackURL}`;
 	}
 
 	function signInWithGitHub() {
 		const callbackURL = encodeURIComponent(window.location.origin + '/inbox');
-		window.location.href = `${AUTH_API_URL}/api/auth/sign-in/github?callbackURL=${callbackURL}`;
+		window.location.href = `${AUTH_URL}/api/auth/sign-in/github?callbackURL=${callbackURL}`;
 	}
 </script>
 

@@ -1,12 +1,20 @@
-import { redirect } from '@sveltejs/kit';
-import type { PageServerLoad } from './$types';
+/**
+ * Landing Page Server Load
+ *
+ * Owner → redirect to inbox
+ * Others → show landing/login page
+ */
+
+import { redirect } from "@sveltejs/kit";
+import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async ({ locals }) => {
-	// If user is authenticated, redirect to inbox
-	if (locals.user) {
-		throw redirect(302, '/inbox');
-	}
+  // Owner is already logged in — send them straight to inbox
+  if (locals.isOwner) {
+    throw redirect(302, "/inbox");
+  }
 
-	// Otherwise, show login page
-	return {};
+  return {
+    user: locals.user || null,
+  };
 };

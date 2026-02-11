@@ -31,15 +31,31 @@ bucket_name = "ivy-storage"
 binding = "KV"
 id = "a325ec2e391543f7b9b77e25aa3da977"
 
+# Durable Object binding (TriageDO hosted in grove-durable-objects)
+[[durable_objects.bindings]]
+name = "TRIAGE"
+class_name = "TriageDO"
+script_name = "grove-durable-objects"
+
+# Zephyr service binding (email delivery)
+[[services]]
+binding = "ZEPHYR"
+service = "grove-zephyr"
+
+# Workers AI binding (for Lumen classification)
+[ai]
+binding = "AI"
+
 # Environment variables (use secrets for sensitive values)
 [vars]
 ENVIRONMENT = "development"
 
 # Secrets (set via wrangler secret put)
 # FORWARD_EMAIL_API_KEY
-# POSTMARK_SERVER_TOKEN
 # WEBHOOK_SECRET
-# TURNSTILE_SECRET_KEY
+# OPENROUTER_API_KEY
+# ZEPHYR_API_KEY
+# OWNER_EMAIL
 
 # Production environment
 [env.production]

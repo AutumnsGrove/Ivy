@@ -39,7 +39,9 @@
     "wrangler": "^3.0.0"
   },
   "dependencies": {
+    "@autumnsgrove/groveengine": "^0.9.99",
     "bip39": "^3.1.0",
-    "dompurify": "^3.0.0"
+    "dompurify": "^3.0.0",
+    "postal-mime": "^2.4.1"
   }
 }

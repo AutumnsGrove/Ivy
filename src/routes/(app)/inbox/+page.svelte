@@ -1,9 +1,44 @@
 <script lang="ts">
-	import { threads, selectedThreadId } from '$lib/stores';
 	import Icon from '$lib/components/Icons.svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 
-	function formatDate(date: Date): string {
+	let { data } = $props();
+
+	const categories = [
+		{ id: 'all', label: 'All' },
+		{ id: 'important', label: 'Important' },
+		{ id: 'actionable', label: 'Actionable' },
+		{ id: 'fyi', label: 'FYI' },
+		{ id: 'social', label: 'Social' },
+		{ id: 'transactional', label: 'Receipts' },
+		{ id: 'marketing', label: 'Marketing' },
+		{ id: 'junk', label: 'Junk' },
+	];
+
+	const categoryColors: Record<string, string> = {
+		important: 'var(--color-error)',
+		actionable: 'var(--color-warning)',
+		fyi: 'var(--color-primary)',
+		social: '#8b5cf6',
+		transactional: 'var(--color-text-tertiary)',
+		marketing: '#f59e0b',
+		junk: 'var(--color-text-muted)',
+		uncategorized: 'var(--color-text-muted)',
+	};
+
+	let activeCategory = $derived($page.url.searchParams.get('category') || 'all');
+
+	function selectCategory(id: string) {
+		if (id === 'all') {
+			goto('/inbox');
+		} else {
+			goto(`/inbox?category=${id}`);
+		}
+	}
+
+	function formatDate(dateStr: string): string {
+		const date = new Date(dateStr);
 		const now = new Date();
 		const diff = now.getTime() - date.getTime();
 		const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -19,22 +54,16 @@
 		}
 	}
 
-	function selectThread(id: string) {
-		selectedThreadId.set(id);
-		goto(`/thread/${id}`);
+	function getUnreadCount(categoryId: string): number {
+		if (!data.stats) return 0;
+		if (categoryId === 'all') {
+			return Object.values(data.stats).reduce((sum: number, s: { unread: number }) => sum + s.unread, 0);
+		}
+		return data.stats[categoryId]?.unread || 0;
 	}
 
-	function getSnippet(thread: typeof $threads[0]): string {
-		// Mock snippets for demo
-		const snippets: Record<string, string> = {
-			'1': 'Welcome to your new Grove email. We\'re excited to have you join our community...',
-			'2': 'Your @grove.place email address is now active. You can start sending and receiving...',
-			'3': 'I think we should move forward with option B. It aligns better with our goals for...',
-			'4': 'Here are the key takeaways from our meeting: 1. Timeline adjusted to March...',
-			'5': 'Please find attached your invoice for December 2024. Payment is due within 30...',
-			'6': 'This week in Grove: New features, community highlights, and upcoming events...'
-		};
-		return snippets[thread.id] || 'No preview available';
+	function openEmail(id: string) {
+		goto(`/thread/${id}`);
 	}
 </script>
 
@@ -46,54 +75,69 @@
 	<header class="inbox-header">
 		<div class="header-left">
 			<h1>Inbox</h1>
-			<span class="unread-count">{$threads.filter(t => !t.isRead).length} unread</span>
+			<span class="unread-count">{getUnreadCount('all')} unread</span>
 		</div>
 		<div class="header-actions">
-			<button class="action-btn" title="Refresh">
+			<button class="action-btn" title="Refresh" onclick={() => goto('/inbox' + $page.url.search)}>
 				<Icon name="inbox" size={18} />
 			</button>
 		</div>
 	</header>
 
-	<div class="thread-list">
-		{#each $threads as thread (thread.id)}
+	<!-- Category Tabs -->
+	<div class="category-tabs" role="tablist">
+		{#each categories as cat}
+			{@const unread = getUnreadCount(cat.id)}
+			<button
+				class="tab"
+				class:active={activeCategory === cat.id}
+				role="tab"
+				aria-selected={activeCategory === cat.id}
+				onclick={() => selectCategory(cat.id)}
+			>
+				<span class="tab-label">{cat.label}</span>
+				{#if unread > 0}
+					<span class="tab-badge" style="background: {categoryColors[cat.id] || 'var(--color-primary)'}">
+						{unread}
+					</span>
+				{/if}
+			</button>
+		{/each}
+	</div>
+
+	<!-- Email List -->
+	<div class="email-list">
+		{#each data.emails as email (email.id)}
 			<div
-				class="thread-item"
-				class:unread={!thread.isRead}
-				class:selected={$selectedThreadId === thread.id}
-				onclick={() => selectThread(thread.id)}
-				onkeydown={(e) => e.key === 'Enter' && selectThread(thread.id)}
+				class="email-item"
+				class:unread={!email.is_read}
+				onclick={() => openEmail(email.id)}
+				onkeydown={(e) => e.key === 'Enter' && openEmail(email.id)}
 				role="button"
 				tabindex="0"
 			>
-				<div class="thread-checkbox">
-					<input type="checkbox" onclick={(e) => e.stopPropagation()} />
-				</div>
+				<div class="email-category-dot" style="background: {categoryColors[email.category] || 'var(--color-text-muted)'}"></div>
 
-				<div class="thread-star">
-					<button class="star-btn" onclick={(e) => e.stopPropagation()} title="Star">
-						<Icon name="star" size={16} />
-					</button>
-				</div>
-
-				<div class="thread-content">
-					<div class="thread-top">
-						<span class="thread-from">
-							{thread.participants.filter(p => p !== 'you').slice(0, 2).join(', ')}
-							{#if thread.participants.length > 3}
-								<span class="participant-count">+{thread.participants.length - 2}</span>
-							{/if}
-						</span>
-						<span class="thread-date">{formatDate(thread.lastDate)}</span>
+				<div class="email-content">
+					<div class="email-top">
+						<span class="email-from">{email.from}</span>
+						<span class="email-date">{formatDate(email.created_at)}</span>
 					</div>
 
-					<div class="thread-middle">
-						<span class="thread-subject">{thread.subject}</span>
+					<div class="email-middle">
+						<span class="email-subject">{email.subject}</span>
+						{#if email.category && email.category !== 'uncategorized'}
+							<span class="email-category-badge" style="color: {categoryColors[email.category]}; border-color: {categoryColors[email.category]}">
+								{email.category}
+							</span>
+						{/if}
 					</div>
 
-					<div class="thread-bottom">
-						<span class="thread-snippet">{getSnippet(thread)}</span>
-					</div>
+					{#if email.snippet}
+						<div class="email-bottom">
+							<span class="email-snippet">{email.snippet}</span>
+						</div>
+					{/if}
 				</div>
 			</div>
 		{:else}
@@ -101,11 +145,22 @@
 				<div class="empty-icon">
 					<Icon name="inbox" size={48} />
 				</div>
-				<h2>Your inbox is empty</h2>
-				<p>Messages you receive will appear here</p>
+				{#if activeCategory !== 'all'}
+					<h2>No {activeCategory} emails</h2>
+					<p>Emails classified as "{activeCategory}" will appear here</p>
+				{:else}
+					<h2>Your inbox is empty</h2>
+					<p>Forwarded emails will appear here once triage is configured</p>
+				{/if}
 			</div>
 		{/each}
 	</div>
+
+	{#if data.total > data.emails.length}
+		<div class="load-more">
+			<span class="load-more-text">Showing {data.emails.length} of {data.total}</span>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -158,12 +213,64 @@
 		color: var(--color-text-primary);
 	}
 
-	.thread-list {
+	/* Category Tabs */
+	.category-tabs {
+		display: flex;
+		gap: var(--space-1);
+		padding: var(--space-2) var(--space-4);
+		background: var(--color-bg-secondary);
+		border-bottom: 1px solid var(--color-border);
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+	}
+
+	.category-tabs::-webkit-scrollbar {
+		display: none;
+	}
+
+	.tab {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-md);
+		font-size: var(--text-sm);
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+		transition: all var(--transition-fast);
+		min-height: 36px;
+	}
+
+	.tab:hover {
+		background: var(--color-surface-hover);
+		color: var(--color-text-primary);
+	}
+
+	.tab.active {
+		background: var(--color-primary-muted);
+		color: var(--color-primary);
+		font-weight: var(--font-medium);
+	}
+
+	.tab-badge {
+		font-size: 11px;
+		font-weight: var(--font-semibold);
+		color: white;
+		padding: 1px 6px;
+		border-radius: var(--radius-full);
+		min-width: 18px;
+		text-align: center;
+		line-height: 1.4;
+	}
+
+	/* Email List */
+	.email-list {
 		flex: 1;
 		overflow-y: auto;
 	}
 
-	.thread-item {
+	.email-item {
 		display: flex;
 		align-items: flex-start;
 		gap: var(--space-3);
@@ -176,49 +283,27 @@
 		background: transparent;
 	}
 
-	.thread-item:hover {
+	.email-item:hover {
 		background: var(--color-surface-hover);
 	}
 
-	.thread-item.selected {
-		background: var(--color-primary-muted);
-	}
-
-	.thread-item.unread {
+	.email-item.unread {
 		background: var(--color-bg-tertiary);
 	}
 
-	.thread-item.unread:hover {
+	.email-item.unread:hover {
 		background: var(--color-surface-hover);
 	}
 
-	.thread-checkbox {
-		padding-top: var(--space-1);
+	.email-category-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: var(--radius-full);
+		margin-top: 8px;
+		flex-shrink: 0;
 	}
 
-	.thread-checkbox input {
-		width: 16px;
-		height: 16px;
-		accent-color: var(--color-primary);
-		cursor: pointer;
-	}
-
-	.thread-star {
-		padding-top: var(--space-1);
-	}
-
-	.star-btn {
-		padding: 2px;
-		border-radius: var(--radius-sm);
-		color: var(--color-text-muted);
-		transition: all var(--transition-fast);
-	}
-
-	.star-btn:hover {
-		color: var(--color-warning);
-	}
-
-	.thread-content {
+	.email-content {
 		flex: 1;
 		min-width: 0;
 		display: flex;
@@ -226,46 +311,44 @@
 		gap: var(--space-1);
 	}
 
-	.thread-top {
+	.email-top {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--space-3);
 	}
 
-	.thread-from {
+	.email-from {
 		font-weight: var(--font-medium);
 		color: var(--color-text-primary);
 		font-size: var(--text-sm);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
-	.thread-item.unread .thread-from {
+	.email-item.unread .email-from {
 		font-weight: var(--font-semibold);
 	}
 
-	.participant-count {
-		color: var(--color-text-tertiary);
-		font-weight: var(--font-normal);
-	}
-
-	.thread-date {
+	.email-date {
 		font-size: var(--text-xs);
 		color: var(--color-text-tertiary);
 		white-space: nowrap;
 	}
 
-	.thread-item.unread .thread-date {
+	.email-item.unread .email-date {
 		color: var(--color-primary);
 		font-weight: var(--font-medium);
 	}
 
-	.thread-middle {
+	.email-middle {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
 	}
 
-	.thread-subject {
+	.email-subject {
 		font-size: var(--text-sm);
 		color: var(--color-text-primary);
 		overflow: hidden;
@@ -273,20 +356,45 @@
 		white-space: nowrap;
 	}
 
-	.thread-item.unread .thread-subject {
+	.email-item.unread .email-subject {
 		font-weight: var(--font-medium);
 	}
 
-	.thread-bottom {
+	.email-category-badge {
+		font-size: 10px;
+		font-weight: var(--font-semibold);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		padding: 1px 6px;
+		border: 1px solid;
+		border-radius: var(--radius-sm);
+		white-space: nowrap;
+		flex-shrink: 0;
+	}
+
+	.email-bottom {
 		display: flex;
 	}
 
-	.thread-snippet {
+	.email-snippet {
 		font-size: var(--text-sm);
 		color: var(--color-text-tertiary);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	/* Load More */
+	.load-more {
+		padding: var(--space-3) var(--space-4);
+		text-align: center;
+		border-top: 1px solid var(--color-border-subtle);
+		background: var(--color-bg-secondary);
+	}
+
+	.load-more-text {
+		font-size: var(--text-sm);
+		color: var(--color-text-tertiary);
 	}
 
 	/* Empty State */
@@ -314,5 +422,19 @@
 	.empty-state p {
 		font-size: var(--text-sm);
 		color: var(--color-text-tertiary);
+	}
+
+	@media (max-width: 767px) {
+		.inbox-header {
+			padding: var(--space-3) var(--space-4);
+		}
+
+		.category-tabs {
+			padding: var(--space-2) var(--space-3);
+		}
+
+		.tab {
+			min-height: 44px;
+		}
 	}
 </style>
