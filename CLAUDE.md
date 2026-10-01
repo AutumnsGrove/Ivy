@@ -13,10 +13,12 @@ Sibling of Polaris in philosophy, fully independent code. No auth for now; it mu
 
 ## Phase
 
-**Planning.** No application code, Go module or frontend scaffold until the operator approves
-`docs/PLAN.md`. Record every Q&A answer in `docs/qa-log.md` and fold settled decisions into the
-docs. When implementation starts, the first work is the test harness and the day-one E2E smoke
-slice (`docs/STANDARDS.md` section 3), not features.
+**Planning, then spikes, then Milestone 0.** No application code, Go module or frontend scaffold
+until the operator approves `docs/PLAN.md`. The next phase is the spikes in `docs/SPIKES.md`
+(throwaway code on `spike/*` branches, findings in `docs/spikes/`), which run before any build
+implementation. Record every Q&A answer in `docs/qa-log.md` and fold settled decisions into the
+docs. Milestone 0 is the test harness, dev stack and day-one E2E slice, not features. Work happens
+on a branch (never directly on main) so it can go up as a PR.
 
 ## Doc map
 

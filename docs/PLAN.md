@@ -182,6 +182,11 @@ Raw RFC 822 messages are stored so everything derived can be rebuilt and exporte
 Every milestone's exit criteria include the TESTING.md definition of done (unit + integration +
 E2E on both viewports + a live check on the dev mailbox/potato).
 
+-1. **Spikes (settled, round 23): run first, before any build implementation** (`SPIKES.md`,
+   S1-S10: Purelymail live facts, go-imap v2 and its test server, the potato build, Jev, Safari,
+   PDF extraction, compression cost, embeddings, committed-build strategy, disk size). Each ends in
+   a written finding in `docs/spikes/` and doc updates. *Exit:* every spike answered; no settled
+   decision silently contradicted.
 0. **Harness (settled, round 21).** Before any feature: `internal/mailworld` (fake IMAP/SMTP/
    OpenRouter/Ollama/clock with fault injection), the **offline seeded local dev stack
    (`make dev`, `DEV.md`, round 22)**, the `ivy-dev` CLI, the day-one E2E smoke slice
@@ -221,6 +226,17 @@ E2E on both viewports + a live check on the dev mailbox/potato).
 | Committed frontend build output bloats git history | all | Accepted for now; CI drift check |
 | go-imap v2 API vs the v1 snippet seen in the original thread | 1 | Verify before pinning |
 | Locally owned state loss (tags/rules/snooze) if the SD card dies | 2 | Backup snapshots (settled) |
+
+## 6b. Decisions from round 23
+
+- **Spikes before Milestone 0**; PWA is not a goal for now (plain Safari over Tailscale; Firefox
+  occasionally), so "Can't reach Ivy" is the accepted offline behaviour for v1 and offline reading is
+  dropped from the open list. A PWA/push is a possible future.
+- **Dev stack defaults to live OpenRouter** (capped, cached), with a two-account `--pair` preset for
+  testing sends between accounts (`DEV.md`).
+- **Needs the operator's decision (proposed in `ARCHITECTURE.md` 4 and 9a):** soft-delete window and
+  mass-deletion circuit breaker for the mirror; disk budget and raw-blob eviction; how the committed
+  frontend build is produced.
 
 ## 7. Open items for the operator
 

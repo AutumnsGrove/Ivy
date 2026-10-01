@@ -485,3 +485,22 @@ for instant reset; named states for every edge-case screen; safety rails that re
 real `.env`). Added to Milestone 0. Added a `.gitignore` (`.env`, `.dev/`, SQLite files) before any
 secret exists. Interpretation: "iterate on our own documents" read as iterating on the app/UI
 against realistic mail; say so if it meant something else.
+
+## Round 23 — spikes first, live LLM in dev, two-account pair, review (2026-10-01, operator on mobile)
+
+Decisions: **spikes run before Milestone 0** and before any build implementation (`SPIKES.md`,
+S1-S10). **"Can't reach Ivy" is fine** for v1; the operator will use plain Safari (iPhone/iPad,
+sometimes Firefox), not a PWA, maybe later; so `tailscale serve` HTTPS is recommended but optional
+(revises the round 21 transport answer). `.gitignore` added (done). **Dev stack:** seeded database
+with **live OpenRouter as the default** (`--llm live`, key from `.env`, capped, record/replay cache;
+fake only by flag or when no key is found; tests/CI always use the fake). **Demo mode gets a
+two-account `--pair`** with local delivery in mailworld so the operator can test sending between
+accounts (a standing integration/E2E test from Milestone 4). Work moved onto branch
+`docs/standards-baseline` (it had been a detached HEAD) so it can become a PR; no PR opened yet.
+
+Adversarial gap review (done, folded into the docs): mirror-loss protection (soft-delete window and
+mass-deletion circuit breaker), disk budget on the potato's card, SQLite/power-loss safety, FTS
+tokenizer and time-zone tests, log wear, no public exposure or Funnel and the tailnet-wide access
+implication of no-auth, secret file permissions, and how the committed frontend build is produced
+without merge churn. Items needing the operator's yes: soft-delete + breaker, disk eviction policy,
+committed-build strategy.

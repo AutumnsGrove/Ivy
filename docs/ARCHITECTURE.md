@@ -116,6 +116,13 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 7. **Write path (settled):** action -> outbox row -> IMAP command (STORE/MOVE/EXPUNGE/APPEND) ->
    on success update the DB; the UI updates optimistically and rolls back on rejection. Outbox
    retries survive restarts and dropped connections.
+   **Mirror-loss protection (round 23, proposed):** the mirror may be the only complete copy, so
+   "DB follows the server" must not turn a provider mistake or a sync bug into silent data loss.
+   (a) Messages that vanish from the server are **soft-deleted** locally (hidden from every view,
+   raw blob kept) for a retention window (default 30 days) before purging; (b) a **circuit breaker**
+   pauses sync for that folder and raises a Mirror health alert when one sweep would remove more
+   than N messages or X% of a folder (including UIDVALIDITY resets), requiring a click; (c) both
+   are covered by scenario tests with the fake server emptying a mailbox. Needs operator approval.
 8. **Events:** every DB change fans out through an SSE hub so open clients update live.
 9. **Spam handling (round 17, proposed):** the provider filters (Purelymail: SpamAssassin, Junk
    folder). Ivy stores the parsed `X-Spam-Status` score/flag on each message, treats the `junk`
@@ -234,6 +241,25 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 - **Resource budget (potato, 1.9 GB RAM, ~800 MB free, swap in use):** Ivy target well under
   100 MB resident at idle; embedding and extraction are serialized background jobs; numbers get
   measured and recorded in `docs/perf.md`, not assumed.
+
+## 9a. Operational gaps found in the round 23 review
+
+- **Disk budget:** a full-history mirror with raw RFC 822 blobs may not fit the potato's card
+  (100k messages at ~75 KB is several GB before compression). Plan: zstd at rest, a configured
+  storage budget, `ivy doctor` disk check and alert, and an eviction policy that drops old raw
+  blobs (refetched on demand from IMAP) while keeping parsed text. Measured in spike S10.
+- **SQLite on flash:** power loss and card corruption are real. `PRAGMA integrity_check` in
+  `ivy doctor` and at startup after an unclean exit, periodic WAL checkpoints, backups of locally
+  owned state verified by a restore test, and a kill -9 / power-loss test of the outbox and sync
+  checkpoints with the fake server.
+- **Search quality:** FTS5 tokenizer choice (`unicode61` with diacritics folding, possibly trigram
+  for CJK/partial matches) decided with a multilingual test corpus.
+- **Time:** all timestamps UTC in the DB, local zone at the edge, with DST and bad-`Date`-header
+  tests (clock-skewed mail sorts by internal date).
+- **Logs:** journald with size limits so logs don't wear the card; no mail content in logs.
+- **Committed frontend build:** PRs that change the UI would conflict on and bloat the committed
+  output. Proposal pending spike S9: CI regenerates and commits `web/build` only on merge to main
+  (deterministic build, drift check on PRs compares sources, not output).
 
 ## 9b. Failure states (round 20)
 

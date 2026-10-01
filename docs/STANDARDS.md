@@ -184,10 +184,18 @@ Details and budgets live in `PERFORMANCE.md`. The standards:
 
 ## 8. Access and exposure (no auth for now)
 
-- **Transport (settled, round 21): HTTPS via `tailscale serve`**, which gives a secure context
-  (service worker, PWA install, WebAuthn later). Ivy itself listens on localhost (or the tailnet
-  interface) and trusts the Tailscale proxy only from there; setup and `ivy doctor` check it. The
-  Host allow-list includes the tailnet name. Verify Add-to-Home-Screen on the iPhone/iPad early.
+- **Transport (revised round 23): plain Safari over the tailnet; no PWA for now.** `tailscale
+  serve` HTTPS stays the recommended setup (a secure context is needed later for PWA/push and
+  WebAuthn, and costs nothing) but is optional; Ivy works over plain HTTP on the tailnet. Ivy
+  listens on localhost or the tailnet interface; the Host allow-list includes the tailnet name.
+  Spike S5 records which one the operator's devices actually behave best with.
+- **Never exposed publicly:** no Tailscale Funnel, no `0.0.0.0` on a public interface. `ivy doctor`
+  and startup warn if the listener is reachable from outside the tailnet. Because there is no auth,
+  *any* device on the tailnet (including shared nodes) can read the mailbox; ACLs should restrict
+  who can reach the potato. Tailscale's identity headers (via `serve`) are the planned frictionless
+  auth later.
+- Secrets at rest: `.env` and the DB must be mode 0600 (checked by `ivy doctor`); the provider
+  app-password is the crown jewel on a device with an SD card.
 - Ivy listens on a configured address (default: localhost behind `tailscale serve`, never
   `0.0.0.0` unless asked). Frictionless means no login screen, not no safeguards: reject requests whose `Host` is not
   on the allow-list and mutating requests whose `Origin` does not match (blocks DNS rebinding and
