@@ -142,8 +142,11 @@ unsubscribing always need a click. Model output is plain text; citations are DB-
 ids; automated calls see one account; ask mixes only operator-selected accounts.
 
 **Settings and config.** Lots of behavior is configurable (an explicit operator wish): behavior in
-an in-app settings panel with per-account overrides; secrets in `ivy.yaml`/`.env`. Backup:
-scheduled snapshot of locally owned state to a folder or S3-compatible target, one-line restore.
+an in-app settings panel with per-account overrides; secrets in `ivy.yaml`/`.env`. Backup: **rolling,
+twice a day, 30 days kept (about 60), older pruned**, of locally owned state plus any
+server-deleted ("disabled") messages, to a folder or S3-compatible target (ideally one off the
+potato), one-line restore. **Server-deleted mail is disabled, not erased:** hidden everywhere like a
+deletion, never purged automatically, restorable (`ARCHITECTURE.md` section 4).
 
 **Stats panel (like Polaris's).** One place to see everything the LLM layer did and cost, viewable
 at a glance and drillable to individual calls:
@@ -173,7 +176,7 @@ Go backend; **pure-Go SQLite** (WAL, FTS5; D1-friendly SQL); SvelteKit (`adapter
 pnpm) with **pure CSS, no Tailwind** and vendored Grove design tokens; enmime for MIME; go-imap v2
 for IMAP (verify the v2 API); bluemonday for sanitizing; Ollama for embeddings; OpenRouter for Jev
 (`/systemone`), chat and vision. Bare-metal deployment: the potato builds the binary, the frontend
-build output is committed and embedded, `ivy update` (also an in-app button). Docker is a maybe-later
+build output is built by GitHub Actions on merge to main (bot commit) and embedded, `ivy update` (also an in-app button). Docker is a maybe-later
 path. Access control (passkeys / Face ID, password fallback) is later; Tailscale-only for now.
 Raw RFC 822 messages are stored so everything derived can be rebuilt and exported.
 
@@ -223,9 +226,9 @@ E2E on both viewports + a live check on the dev mailbox/potato).
 | HTML sanitization edge cases and tracker coverage | 1 | Fuzz + XSS corpus + browser checks |
 | Prompt injection via email into stage 2 / ask / vision | 3 | Gate, tripwire, plain-text output, tests |
 | Update flow: build RAM peak, diverged checkout, rollback | 2 | `ivy update` tests with temp repos |
-| Committed frontend build output bloats git history | all | Accepted for now; CI drift check |
+| Committed frontend build output bloats git history | all | Accepted; CI builds it on merge to main, PRs never touch it (round 24). Option: CI-built arm64 release binary |
 | go-imap v2 API vs the v1 snippet seen in the original thread | 1 | Verify before pinning |
-| Locally owned state loss (tags/rules/snooze) if the SD card dies | 2 | Backup snapshots (settled) |
+| Locally owned state (and disabled mail) lost if the potato's storage dies | 2 | Rolling backups, 2/day for 30 days, off-device target recommended (settled) |
 
 ## 6b. Decisions from round 23
 
@@ -234,9 +237,16 @@ E2E on both viewports + a live check on the dev mailbox/potato).
   dropped from the open list. A PWA/push is a possible future.
 - **Dev stack defaults to live OpenRouter** (capped, cached), with a two-account `--pair` preset for
   testing sends between accounts (`DEV.md`).
-- **Needs the operator's decision (proposed in `ARCHITECTURE.md` 4 and 9a):** soft-delete window and
-  mass-deletion circuit breaker for the mirror; disk budget and raw-blob eviction; how the committed
-  frontend build is produced.
+
+## 6c. Decisions from round 24 (all settled)
+
+- **Disabled, not deleted:** server-deleted messages get a `disabled` flag and are hidden as if
+  deleted; never purged automatically; restorable; included in backups.
+- **Rolling backups:** twice a day, keep 30 days (about 60), prune older; floor of 10 newest.
+- **Disk is not a concern** (256 GB): no storage budget or eviction.
+- **Frontend artifacts are generated in GitHub Actions** (bot commit on merge to main); the potato
+  never builds the frontend. Open sub-option: CI-built arm64 binary so the potato builds nothing
+  (decide after spike S3).
 
 ## 7. Open items for the operator
 

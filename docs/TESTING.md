@@ -128,6 +128,15 @@ actually sent:
 - **Migrations:** append-only (positional `user_version`, per Polaris lesson); a test upgrades a
   snapshot DB from **every** prior schema version to current and checks data survives; a test fails
   if a migration is inserted mid-list or edited.
+- **Disabled messages:** scenario tests with the fake server expunging messages, emptying a
+  mailbox, resetting UIDVALIDITY and restoring messages: the rows and blobs survive, every view,
+  search, rule, digest and Ask Ivy tool excludes them, they re-enable with tags intact when the
+  message reappears, nothing purges without the explicit action, and a mass disable raises the
+  alert. A property test asserts "no sync sequence ever deletes a message row".
+- **Rolling backups:** a fake clock drives 2 backups per day for 45 days: exactly the last 30 days
+  remain, pruning happens only after a verified new backup, the floor of 10 holds when the clock
+  jumps or backups fail, a corrupt snapshot is detected, disabled blobs de-duplicate and are never
+  pruned by age, and restore from any kept snapshot round-trips.
 - **Backup/restore:** snapshot of locally owned state, restore into a fresh instance, mirror
   rebuilds from IMAP, round-trip equality of tags/rules/settings/snooze.
 - **`ivy update`:** temp git repos simulate: clean fast-forward; diverged checkout (refuses);
@@ -160,7 +169,8 @@ actually sent:
 
 GitHub Actions: `go vet`, `staticcheck`, `go test -race ./...` (fuzz seed corpora included),
 frontend lint/typecheck/Vitest, Playwright E2E (both viewports), build of the embedded frontend
-checked against the committed output (a drift check, since the frontend build is committed),
+built in a scratch directory (PRs must not touch the committed `web/build/`, which only the CI bot
+writes on merge to main; a check enforces it) plus codegen drift checks for OpenAPI/sqlc output,
 migration-upgrade tests, license header/AGPL check. Coverage floors on the critical packages
 (sync, sanitize, llm gate, rules, update). Live and eval suites are manual/nightly, never required
 for a merge.

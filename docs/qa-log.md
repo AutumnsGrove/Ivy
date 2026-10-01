@@ -504,3 +504,22 @@ tokenizer and time-zone tests, log wear, no public exposure or Funnel and the ta
 implication of no-auth, secret file permissions, and how the committed frontend build is produced
 without merge churn. Items needing the operator's yes: soft-delete + breaker, disk eviction policy,
 committed-build strategy.
+
+## Round 24 — disabled messages, rolling backups, disk, CI-built frontend (2026-10-01)
+
+Operator answers to the round 23 gap review:
+- **Server-deleted messages are disabled, not deleted:** a flag hides them as if deleted; the row and
+  raw message stay. (Interpreted as: never purged automatically, restorable, re-enabled if the
+  message reappears, excluded from views/search/LLM tools, included in backups; explicit "Purge
+  forever" is the only way out. The mass-disable case is an alert with one-click Restore, not a sync
+  stop, since the action is reversible.)
+- **Rolling backups:** twice a day, 30 days total (about 60), prune anything older than 30 days.
+  Added safety rules: prune only after a verified new backup, floor of the 10 newest, at least one
+  target off the potato recommended (proposal; veto if unwanted). Disabled-message blobs are kept
+  de-duplicated in the backup target rather than as 60 copies (proposal).
+- **Disk is not a concern** (potato has 256 GB): no storage budget or raw-blob eviction.
+- **Frontend artifacts are generated in GitHub Actions**, preferably. Context: rebuilding on the
+  potato is not realistic; with Polaris, builds were instant on the dev machine and committed, then
+  moved to Docker built on a GitHub runner in about 2.5-3 minutes. Written as: CI builds on merge to
+  main and the bot commits `web/build/`; PRs never touch it. Open sub-option (decide after spike
+  S3): CI also publishes a cgo-free arm64 binary so the potato builds nothing.
