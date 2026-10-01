@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>New rule, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.row{display:flex;align-items:center}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:0;background:transparent;color:var(--text)}
+.lab{font:500 11px 'Lexend',system-ui,sans-serif;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin:20px 6px 8px}
+.card{border-radius:20px;padding:4px 16px}
+.set{display:flex;align-items:center;gap:12px;min-height:54px;border-bottom:1px solid var(--glass-border);font:400 14.5px 'Lexend',system-ui,sans-serif}
+.set:last-child{border-bottom:0}
+.tok{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 6px 0 12px;border-radius:14px;background:var(--accent-soft);border:1px solid var(--accent-line);font-size:13.5px}
+.addc{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:16px;border:1px dashed var(--glass-border);color:var(--muted);font:400 12.5px 'Lexend',system-ui,sans-serif;white-space:nowrap}
+.tog{position:relative;width:46px;height:28px;border-radius:14px;background:rgba(255,255,255,0.1);border:1px solid var(--glass-border);flex:none}
+.tog i{position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:var(--muted)}
+.glint{width:6px;height:6px;border-radius:50%;background:var(--firefly);box-shadow:0 0 8px 2px var(--firefly-glow);animation:pulse 3.6s ease-in-out infinite;flex:none}
+@keyframes pulse{0%,100%{opacity:0.55}50%{opacity:1}}
+@media (prefers-reduced-motion: reduce){.glint{animation:none}}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.62);--glass-border:rgba(190,235,208,0.15);--firefly:#f7dc92;--firefly-glow:rgba(247,220,146,0.6);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+
+  <div style="position:absolute;left:8px;right:14px;top:14px;display:flex;align-items:center;gap:4px">
+    <button class="iconbtn" aria-label="Close"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+    <div style="flex-grow:1;font-size:20px;font-weight:300">Rule details</div>
+    <button style="height:38px;padding:0 18px;border-radius:19px;border:0;background:var(--accent);color:var(--on-accent);font:500 14px 'Lexend',system-ui,sans-serif">Save</button>
+  </div>
+
+  <div style="position:absolute;left:14px;right:14px;top:62px">
+    <div class="lab" style="margin-top:6px">When</div>
+    <div class="glass card">
+      <div class="set"><span style="color:var(--faint);width:84px;font-size:13px;flex:none">Mail is from</span><span class="tok">Cloudflare<svg class="ic ic-sm" viewBox="0 0 24 24" style="width:13px;height:13px;color:var(--muted)"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></span></div>
+      <div class="set"><span style="color:var(--faint);width:84px;font-size:13px;flex:none">And it looks like</span><span class="tok"><span class="glint"></span>a receipt<svg class="ic ic-sm" viewBox="0 0 24 24" style="width:13px;height:13px;color:var(--muted)"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></span></div>
+    </div>
+    <div class="row" style="gap:8px;margin-top:10px;overflow:hidden">
+      <span class="addc">+ From</span><span class="addc">+ Subject</span><span class="addc">+ Account</span><span class="addc">+ Check</span>
+    </div>
+    <div style="font-size:12px;color:var(--faint);margin:10px 8px 0;line-height:1.5">A check is a question Ivy asks about each message. <span style="color:var(--accent)">Manage checks</span></div>
+
+    <div class="lab">Then</div>
+    <div class="glass card">
+      <div class="set"><div style="flex-grow:1">Add a tag</div><span class="tok"><span style="width:8px;height:8px;border-radius:50%;background:#7cc4ff"></span>receipts<svg class="ic ic-sm" viewBox="0 0 24 24" style="width:13px;height:13px;color:var(--muted)"><path d="m6 9 6 6 6-6"></path></svg></span></div>
+      <div class="set"><div style="flex-grow:1">Show in Reading</div><span class="tog"><i></i></span></div>
+      <div class="set"><div style="flex-grow:1">Snooze until</div><span style="font-size:13.5px;color:var(--faint)">Not set</span></div>
+    </div>
+
+    <div class="glass row" style="gap:12px;border-radius:18px;padding:12px 14px;margin-top:20px">
+      <span class="glint"></span>
+      <div style="flex-grow:1;font-size:13px;color:var(--muted);line-height:1.45">This would have matched <span style="color:var(--text)">5</span> of your last 200 messages.</div>
+      <span style="font-size:13px;color:var(--accent)">See them</span>
+    </div>
+    <div style="font-size:12px;color:var(--faint);margin:12px 8px 0;line-height:1.5">Rules can tag, sort into Reading, or snooze. Moving, deleting and sending always ask you first.</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

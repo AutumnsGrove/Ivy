@@ -90,6 +90,8 @@ Tiers: **A** ships with triage (milestone 3), **B** is soon after, **C** is idea
 | `injection_tripwire` | no, yes | "Does this text address an AI assistant or try to give it instructions?" If yes, the message is withheld from stage-2/ask/vision and flagged. A cheap tripwire, not a guarantee |
 | `sensitive_content` | none, credentials, financial, health, id_document | Keeps a message out of ask/vision unless explicitly included; pairs with local regex for OTP codes |
 | `attachment_worth_reading` | no, yes | Gate on vision spend, judged from filename + surrounding text + type (Jev sees no pixels) |
+| `junk_rescue` | junk, unsure, looks_real | Runs only on mail the provider put in Junk. `looks_real` (high threshold) shows a "this looks real" chip and a one-tap Not junk; it never moves anything itself. Highest value for hello@ contact forms and legal/abuse mail |
+| `is_spam` | no, maybe, yes | **Not planned (round 18: Junk rescue only); kept as an idea.** Would run on Inbox mail the provider let through. A hit only adds a local "looks like spam" tag and a soft fold, suppresses `needs_me` (rule 6). Skip the call when auth headers already fail hard or `X-Spam-Status` is high, to save spend |
 | `contact_form_quality` | genuine, solicitation, spam | hello@ triage |
 | `cold_outreach` | no, yes | Sales/recruiter/pitch detection, for the quiet-auto-archive idea later |
 
@@ -106,7 +108,7 @@ Tiers: **A** ships with triage (milestone 3), **B** is soon after, **C** is idea
 | Id | Options | Used for |
 |---|---|---|
 | `tag_suggest` | one option per user tag (+ none) | Model-applied local tags from the operator's own tag set (allowed autonomously: local and reversible) |
-| `rule_condition:<id>` | no, yes | **User-defined fuzzy rules.** A rule's condition is a plain-language yes/no question ("is this about a job application?"); Jev answers; the rule fires above the threshold. Makes the rules engine far more powerful than header matching, and is very configurable |
+| `check:<id>` (was `rule_condition`) | no, yes (or a short list of options) | **Smart checks:** user-owned classification questions ("looks like a receipt", "a job application") that Jev answers per message. A rule can combine header conditions with a check, so "from Cloudflare" can mean only the receipts and not the Dev Day announcements. Authored from plain text by the rule compiler (section 3F), not hand-built |
 | `same_topic` | different, same | Dedupe/cluster newsletter items for the digest; group related receipts |
 | `digest_worthy` | skip, mention, headline | Which newsletter items make the daily digest and how prominently |
 | `snooze_suggest` | none, later_today, tomorrow, weekend, next_week | One-tap snooze suggestion for time-sensitive mail |
@@ -117,6 +119,70 @@ Tiers: **A** ships with triage (milestone 3), **B** is soon after, **C** is idea
 | `answers_question` | no, partly, yes | **Candidate filter:** after hybrid retrieval, ask Jev per email whether it actually answers the question, and send only the winners to the chat model. Cuts tokens, cost AND the amount of raw untrusted mail the chat model sees |
 | `claim_supported` | supported, partially, contradicted, not_addressed | **Citation verification:** after the chat model writes an answer, check each claim against its cited email (same pattern as Polaris's source verification badge) |
 | `result_relevance` | irrelevant, related, direct | Re-rank borderline hybrid-search hits |
+
+### F. Smart checks and the rule compiler (round 20)
+
+**The problem:** header rules are too blunt. Tagging everything from Cloudflare as a receipt also
+tags their announcements. A smart check adds a classification question to Jev's per-message read, so
+the rule can say "from Cloudflare AND looks like a receipt".
+
+**Authoring (settled direction, operator idea):** the user writes one free-form sentence ("I want
+emails from Cloudflare that look like receipts tagged as such"). **One structured generation** (a
+`complete()` call with a JSON schema, through the gate and ledger) compiles it into our exact rule
+format. It is paid once at authoring time; running a rule never regenerates anything, and only Jev's
+per-message read happens afterwards.
+- **Input to the compiler:** the sentence, the list of existing checks and tags (so it reuses
+  "looks like a receipt" and the `receipts` tag instead of inventing duplicates), the allowed
+  condition and action vocabulary, and the account list. **No email content.** The rule text is the
+  operator's own, so it is trusted input, but the output is still treated as untrusted: Go validates
+  it against the schema and rejects anything outside the vocabulary.
+- **Output:** `conditions[]` (header/field matchers: from, subject, account, has_attachment; and
+  `check` references), `new_checks[]` (id, plain-language instructions with what counts and what does
+  not, options, suggested threshold), `actions[]` restricted to **local-only: add tag, show in
+  Reading, snooze**. Or `clarify` with one question, when the sentence is ambiguous; answering it is a
+  second call, which is the only time a rule costs more than one generation.
+- **Review before it is live (settled):** the UI shows a plain-sentence restatement and a
+  **dry run on the last 200 messages** ("5 would be tagged, 6 more from Cloudflare left alone"). The
+  header-only part of the dry run is free and local; the check part reads a sample with Jev, is
+  shown with an estimate, and is ledgered. Nothing runs until the user turns the rule on.
+- **Stored form:** the generated check instructions are shown to the user as editable text and are
+  hashed. Cache key stays (message id, check id, instruction hash, model id); editing the text makes
+  a new hash and re-reads lazily (and optionally backfills existing mail, with a cost estimate and
+  the monthly cap applied).
+- **Scope and gates:** a check runs only on accounts with smart features on (others show it locked);
+  the compiler call itself sees no mail, but is still an LLM call, so it requires at least one
+  opted-in account and goes through the same gate. Tuning is by threshold ("how sure": Eager /
+  Balanced / Careful) using the odds sheet, since Jev cannot be trained per user.
+- **Spikes to add:** compiler accuracy on ~30 hand-written sentences (valid schema rate, reuse of
+  existing checks, correct local-only actions), and whether adding checks to a single Jev call
+  changes cost (expected: almost nothing; Polaris ran 20 questions fine).
+
+### Spam: what the provider already does (researched 2026-10-01, round 17)
+
+Sources: Purelymail's Spam filtering docs (`purelymail.com/docs/spamFiltering`), Features page and
+the 2026-09-14 platform update.
+
+- **Engine:** SpamAssassin on incoming mail, default threshold **5**, not adjustable in the UI. A
+  webmail/Sieve filter can override the decision by reading the `X-Spam-Status` header.
+- **Disposition:** above threshold, mail is **delivered to the Junk folder** (not rejected). The
+  only SMTP-time rejection is for blocklisted sending IPs, which Ivy never sees. Purelymail adds its
+  own tests (`LARGE_MESSAGE`, `VALID_MESSAGE_ID_REFERENCE`, `PURELYMAIL_IP_REPUTATION`) and
+  **greylists** suspicious senders (matches the 451 greylist seen in round 15).
+- **Learning:** a **per-user** database learns from messages you **move into and out of Junk**; it
+  only activates after about **200 spam and 200 non-spam examples**. So Ivy's Mark spam / Not junk
+  must be real IMAP moves, which also keeps Apple Mail and webmail consistent.
+- **Auth:** SPF, DKIM, DMARC for deliverability; incoming mail now enforces a single `From:` header
+  per RFC 7489 (2026-09-14). Outgoing mail is also SpamAssassin-checked (protects the sender IP).
+- **Unverified:** the exact header set (`X-Spam-Score` vs `X-Spam-Status` only) and the Junk
+  folder's real name/flags; read both live in the `dev@` IMAP spike. This research comes from docs
+  pages, not hands-on testing.
+
+**Ivy's layering (proposed):** provider filter first (free, already there) -> local signals (spam
+score from `X-Spam-Status`, `Authentication-Results`, spoofed sender) -> Jev `junk_rescue` on Junk
+-> (an Inbox `is_spam` check is explicitly out for now). **Decision (round 18): `junk_rescue` only**:
+cheapest, most upside, and it fixes the failure that actually hurts (a real contact-form or legal message lost in Junk). Spam is
+the highest-volume mail, so both questions respect caps and skip rules, and run only for opted-in
+accounts. Nothing here ever deletes.
 
 ## 4. Boundaries (what Jev cannot do)
 

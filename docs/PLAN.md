@@ -23,6 +23,15 @@ up and run for themselves, like Polaris.
 **Feel:** calm and quiet. Soft, warm, whitespace, grove-green leaning, nothing shouting for
 attention. Fresh design (the old Lattice Ivy UI is reference only).
 
+**Design direction (rounds 16/16b, mockups in `design/canvas/`):** a night walk through a botanical
+garden: deep green-black sky with faint stars, Grove's vine pattern tiled behind everything,
+frosted-glass chrome over it, and a calm near-opaque reading panel. Lexend for the interface,
+Newsreader for message text, Lucide icons, gentle firefly motion (reduced-motion aware). Moonlight
+lilac accent. A daytime-garden light theme follows the system setting. Phone: bottom tab bar
+(Inbox, Reading, Search, Tags, Settings) and a side panel for accounts. The Reading tab is a
+newsletter feed with a daily digest. Smart summaries appear as a quiet firefly-dot chip, never
+labelled as AI.
+
 **Non-goals for v1:** calendar-invite RSVP, PGP/S-MIME, CardDAV/CalDAV (all possible later);
 multiple human users (out for now, not on the roadmap); push notifications (Apple Mail keeps that
 job); Gmail parity; importing old Proton mail (start fresh; revisit as an optional one-off).
@@ -64,19 +73,61 @@ overlay), snooze (local hide-until).
   (security@, dmca@: priority, LLM off by default), personal correspondence (protected from any
   automated handling). Automated notifications get generic triage.
 
+**Spam (settled, round 18: Junk rescue only).** The provider filters first:
+Purelymail runs SpamAssassin (threshold 5), files suspected spam in the Junk folder, rejects
+blocklisted IPs at SMTP, and learns per user from messages you move into and out of Junk (after
+~200 examples of each). Ivy mirrors Junk like any folder, shows the spam score from the
+`X-Spam-Status` header, and **moving mail to or from Junk in Ivy is an IMAP move, so it trains the
+provider's filter**. Jev's only spam job is **Junk rescue** ("this looks real", a quiet chip with a
+one-tap Not junk). Jev does not screen the Inbox for spam (an `is_spam` check stays an idea, not
+planned). Never auto-delete or auto-move; a wrong guess must cost nothing. See `JEV.md` section 3B and `ARCHITECTURE.md` section 4.
+
 **Search and ask.** One search box: hybrid keyword (FTS5) + meaning (Ollama `nomic-embed-text`,
-optional remote provider), merged into one ranked list. **Ask your mailbox:** a written answer where
-every claim cites verified emails; an account-picker mode (tap the accounts to include, the rest grey
-out; LLM-off accounts are locked, not just unselected).
+optional remote provider), merged into one ranked list, with quick filters (from, account, has
+attachment, date, tag). **Talk to Ivy** lives at the top of the Search page (a Search / Ask Ivy
+switch): an **agent loop with three read-only tools, `search_mail`, `read_mail` and `think`**,
+that writes a plain answer whose claims cite emails it actually read; an account-picker (tap the
+accounts to include; LLM-off accounts are locked, not just unselected); step and spend caps; it can
+suggest an action but never take one. It shows a short, quiet trace of what it looked at. Details
+in `ARCHITECTURE.md` section 6.
 
 **Tags and rules.** Your own tags; automatic rules (if-this-then-that, including fuzzy plain-language
 conditions answered by Jev); model-applied system tags (the only autonomous model write: local and
 reversible). Smart views from saved searches are out of v1. A **People** view derived from the
 mirror (correspondents, recent threads, compose autocomplete).
+- **Tag colours (round 19):** a fixed palette of 12 named colours (Sky, Rose, Teal, Coral, Lilac,
+  Mint, Gold, Sand, Orchid, Fern, Slate, Berry), each stored with a **night shade and a deeper day
+  shade** so tags stay readable in both themes, plus a custom colour. New tag: name, colour, and an
+  optional "tag matching mail automatically" that leads to a new rule. Tags you did not make
+  ("placed for you": needs you, newsletters, looks real found in Junk) are local and removable.
+- **People:** the Tags tab links to People (often in touch, everyone, search) and a person page
+  (name, address, which account they write to, Write, All mail, tags, conversations).
+- **Rules (round 20):** shown as plain sentences ("When mail is from Cloudflare and looks like a
+  receipt, tag it receipts"), each with an on/off switch and a match count. **Rules are written by
+  describing them:** you type one free-form sentence and **one structured generation** turns it into
+  our exact rule format (plus any new smart checks), once; running a rule never calls the generator
+  again. You review a plain restatement and a dry run on your last 200 messages ("5 would be tagged,
+  6 more from Cloudflare left alone") and then turn it on; nothing runs before that. A
+  detail editor stays for tweaking. **Rule actions are local only: add a tag, show in Reading,
+  snooze.** Moving, deleting, forwarding and sending are never a rule action (they always ask).
+- **Smart checks:** user-owned classification questions Jev answers per message ("looks like a
+  receipt", "a job application"), listed on a Smart checks screen alongside the built-ins, each with
+  an editable plain description, a "how sure" setting (Eager / Balanced / Careful), the accounts it
+  runs on (locked for LLM-off accounts) and a try-on-recent-mail action. Details in `JEV.md` 3F.
+
+**Failure states (round 20).** Calm, specific screens and banners for: server unreachable, sync
+problems (auth failed, unreachable, backfilling) with a **Mirror health** screen, a message or
+attachment that failed to load, send failures (too large, rejected, retrying) with the draft kept,
+toasts with undo and "will keep trying", smart-feature limits and provider errors in Ask Ivy, and
+empty/no-result states. Principle: say what happened, what is safe, and what to do; never lose or
+silently drop anything. See `ARCHITECTURE.md` section 9b.
 
 **Compose (built last).** Markdown and a rich-text editor (markdown first), per-address signatures,
 **undo send with a configurable delay** (setting; default 10 s, 0 = off), drafts in the server's
-Drafts folder (visible in Apple Mail), reply-as-the-right-address.
+Drafts folder (visible in Apple Mail), reply-as-the-right-address. **Images and attachments can be
+added to outgoing mail** (photos, camera, files; inline images; EXIF stripped by default; optional
+photo downscale; size checked against the provider's limit). Replies simply say "Replying to
+name@domain.com" (the contact-form Reply-To case works underneath without extra UI).
 
 **Images and attachments.** Attachments mirrored locally and text-extracted (bodies/.ics, digital
 PDFs and Office files in pure Go). A **vision model** reads images on opted-in accounts (soon):

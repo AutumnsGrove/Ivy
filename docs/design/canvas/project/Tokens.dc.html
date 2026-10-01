@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tokens and type</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.tk,.tk *{box-sizing:border-box}
+.lab{font:500 11px 'Lexend',system-ui,sans-serif;letter-spacing:0.09em;text-transform:uppercase;color:#8ba093;margin:0 0 10px}
+.sw{display:flex;align-items:center;gap:12px;font:400 13px 'Lexend',system-ui,sans-serif;color:#b3c1b6}
+.sw b{display:block;width:44px;height:44px;border-radius:14px;border:1px solid rgba(190,235,208,0.2);flex:none}
+.sw span{color:#f2eddc;display:block;font-weight:500}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 20px}
+</style>
+</helmet>
+<div class="tk" style="width:720px;height:1100px;padding:40px;background:#08120f;color:#f2eddc;font-family:'Lexend',system-ui,sans-serif;display:flex;flex-direction:column;gap:30px">
+  <div>
+    <div style="font-size:30px;font-weight:300">Night garden</div>
+    <div style="font-size:14px;color:#b3c1b6;margin-top:6px;line-height:1.5">Draft tokens. Calm over clever: deep green-black, starlight cream, one soft accent.</div>
+  </div>
+
+  <div>
+    <p class="lab">Night surfaces</p>
+    <div class="grid">
+      <div class="sw"><b style="background:#070d13"></b><div><span>Sky</span>#070d13 → #0c1f18, stars fade out by 380px</div></div>
+      <div class="sw"><b style="background:#0e1e1a"></b><div><span>Glass (chrome)</span>rgba(14,30,26,.58) + blur 14</div></div>
+      <div class="sw"><b style="background:#08120f"></b><div><span>Panel (reading)</span>rgba(8,18,15,.88) + blur 22</div></div>
+      <div class="sw"><b style="background:rgba(190,235,208,0.15)"></b><div><span>Glass border</span>rgba(190,235,208,.15)</div></div>
+    </div>
+  </div>
+
+  <div>
+    <p class="lab">Text</p>
+    <div class="grid">
+      <div class="sw"><b style="background:#f2eddc"></b><div><span>Starlight</span>#f2eddc, text</div></div>
+      <div class="sw"><b style="background:#b3c1b6"></b><div><span>Mist</span>#b3c1b6, secondary</div></div>
+      <div class="sw"><b style="background:#8ba093"></b><div><span>Dew</span>#8ba093, faint, labels</div></div>
+    </div>
+  </div>
+
+  <div>
+    <p class="lab">Accent (chosen: moonlight lilac)</p>
+    <div class="grid">
+      <div class="sw"><b style="background:#c4b5fd"></b><div><span>Night accent</span>#c4b5fd, text on it #1b1238</div></div>
+      <div class="sw"><b style="background:#6d28d9"></b><div><span>Day accent</span>#6d28d9, white text on it</div></div>
+      <div class="sw"><b style="background:#f7dc92"></b><div><span>Firefly</span>#f7dc92, the little light on smart chips</div></div>
+      <div class="sw"><b style="background:#22c55e"></b><div><span>Vines</span>#22c55e tile from Lattice, stacked 3x at night, 2x by day</div></div>
+    </div>
+  </div>
+
+  <div>
+    <p class="lab">Account badges</p>
+    <div class="grid">
+      <div class="sw"><b style="background:#7cc4ff"></b><div><span>autumn@</span>#7cc4ff</div></div>
+      <div class="sw"><b style="background:#f0a6ca"></b><div><span>hello@</span>#f0a6ca</div></div>
+      <div class="sw"><b style="background:#5ad1c8"></b><div><span>dmca@</span>#5ad1c8</div></div>
+      <div class="sw"><b style="background:#f2957f"></b><div><span>security@</span>#f2957f</div></div>
+    </div>
+  </div>
+
+  <div>
+    <p class="lab">Daytime garden</p>
+    <div class="grid">
+      <div class="sw"><b style="background:#eef3e2"></b><div><span>Meadow</span>#faf8ee → #dfeacf, vines on top</div></div>
+      <div class="sw"><b style="background:#2a2014"></b><div><span>Bark text</span>#2a2014, secondary #54442f</div></div>
+      <div class="sw"><b style="background:#6d28d9"></b><div><span>Accent</span>#6d28d9 on white</div></div>
+      <div class="sw"><b style="background:rgba(255,255,255,0.72)"></b><div><span>Glass</span>rgba(255,255,255,.72)</div></div>
+    </div>
+  </div>
+
+  <div>
+    <p class="lab">Type</p>
+    <div style="font-size:26px;font-weight:300;letter-spacing:-0.01em">Lexend 300 · interface</div>
+    <div style="font-size:14.5px;font-weight:500;margin-top:6px">Lexend 500 · sender, subject, buttons</div>
+    <div style="font-family:'Newsreader',Georgia,serif;font-size:24px;font-weight:500;margin-top:14px">Newsreader 500 · message subject</div>
+    <div style="font-family:'Newsreader',Georgia,serif;font-size:18px;line-height:1.65;margin-top:6px;color:#f2eddc">Newsreader 400 · message body, 18 to 19px at 1.65 to 1.7, for plain-text mail and the reading column.</div>
+  </div>
+
+  <div style="font-size:12.5px;color:#8ba093;line-height:1.6">Icons: Lucide, 1.75px stroke, round caps. Radii: cards 18, tab bar 24, panels 26, pills full. Smart chips: no label or AI mark, a pulsing firefly dot and a slow shimmer, Newsreader italic. Motion honours prefers-reduced-motion.</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":720,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

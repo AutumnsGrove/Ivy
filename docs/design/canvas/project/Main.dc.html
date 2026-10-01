@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Inbox, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.stars{position:absolute;left:0;top:0;width:100%;height:380px;background:url(assets/stars.svg) repeat-x top left;-webkit-mask-image:linear-gradient(#000,transparent);mask-image:linear-gradient(#000,transparent)}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.glass-strong{background:var(--glass-strong);border:1px solid var(--glass-border);backdrop-filter:blur(20px) saturate(1.2);-webkit-backdrop-filter:blur(20px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:999px;font:400 11.5px 'Lexend',system-ui,sans-serif;color:var(--muted);border:1px solid var(--glass-border)}
+.pill.need{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-line)}
+.glint{width:6px;height:6px;border-radius:50%;background:var(--firefly);box-shadow:0 0 8px 2px var(--firefly-glow);animation:pulse 3.6s ease-in-out infinite;flex:none}
+@keyframes pulse{0%,100%{opacity:0.55}50%{opacity:1}}
+.tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:1;height:50px;border:0;background:transparent;color:var(--faint);font:400 10.5px 'Lexend',system-ui,sans-serif;border-radius:18px}
+.tab.on{color:var(--accent)}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:1px solid var(--glass-border);background:var(--glass);color:var(--text)}
+.acctbtn{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 14px 0 14px;border-radius:22px;border:1px solid var(--glass-border);background:var(--glass);color:var(--text);font:400 14px 'Lexend',system-ui,sans-serif}
+.row{display:flex;align-items:center}
+.ell{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.drow{display:flex;align-items:center;gap:12px;height:46px;padding:0 12px;border-radius:14px;color:var(--muted);font:400 14.5px 'Lexend',system-ui,sans-serif}
+.drow.on{background:var(--accent-soft);color:var(--text)}
+.av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:500 12px 'Lexend',system-ui,sans-serif;flex:none}
+.dlabel{font:500 11px 'Lexend',system-ui,sans-serif;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);padding:0 12px;margin:16px 0 6px}
+.fire{position:absolute;width:5px;height:5px;border-radius:50%;background:#f7dc92;box-shadow:0 0 10px 3px rgba(247,220,146,0.55);opacity:0.2;animation:drift 9s ease-in-out infinite alternate}
+@keyframes drift{0%{transform:translate(0,0);opacity:0.15}50%{opacity:0.85}100%{transform:translate(20px,-30px);opacity:0.15}}
+@media (prefers-reduced-motion: reduce){.fire,.glint{animation:none}.fire{opacity:0.4}}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);{{vars}}">
+  <div class="scene" style="{{sceneStyle}}"></div>
+  <sc-if value="{{isNight}}" hint-placeholder-val="{{true}}">
+    <div class="stars"></div>
+    <div class="fire" style="left:58px;top:600px;animation-delay:0s"></div>
+    <div class="fire" style="left:318px;top:660px;animation-delay:2.4s"></div>
+    <div class="fire" style="left:232px;top:720px;animation-delay:5s"></div>
+    <div class="fire" style="left:96px;top:690px;animation-delay:7s"></div>
+  </sc-if>
+
+  <!-- header: account switcher opens the side panel -->
+  <div style="position:absolute;left:14px;right:14px;top:16px;display:flex;align-items:center;gap:10px">
+    <button class="acctbtn" aria-label="Switch account, currently all inboxes"><span style="width:9px;height:9px;border-radius:50%;background:var(--accent)"></span>All inboxes<svg class="ic ic-sm" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"></path></svg></button>
+    <span style="flex-grow:1"></span>
+    <button class="iconbtn" aria-label="Search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
+  </div>
+  <div style="position:absolute;left:18px;right:18px;top:74px">
+    <div style="font-size:26px;font-weight:300;letter-spacing:-0.01em">Inbox</div>
+    <div style="font-size:12.5px;color:var(--muted);margin-top:2px">2 need you · 16 unread</div>
+  </div>
+
+  <!-- message cards -->
+  <div style="position:absolute;left:14px;right:14px;top:138px;display:flex;flex-direction:column;gap:8px">
+    <sc-for list="{{mails}}" as="m" hint-placeholder-count="4">
+      <div class="glass" style="border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;gap:3px">
+        <div class="row" style="gap:8px">
+          <span style="width:8px;height:8px;border-radius:50%;background:{{m.color}};flex:none"></span>
+          <span class="ell" style="font-size:14.5px;font-weight:500;flex-grow:1;min-width:0">{{m.from}}</span>
+          <span style="font-size:11.5px;color:var(--faint);flex:none">{{m.time}}</span>
+          <sc-if value="{{m.unread}}" hint-placeholder-val="{{true}}">
+            <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);flex:none"></span>
+          </sc-if>
+        </div>
+        <div class="ell" style="font-size:14px;font-weight:{{m.weight}}">{{m.subject}}</div>
+        <div class="ell" style="font-size:13px;color:var(--muted)">{{m.preview}}</div>
+        <sc-if value="{{m.hasTags}}" hint-placeholder-val="{{false}}">
+          <div class="row" style="gap:6px;margin-top:5px">
+            <sc-if value="{{m.needs}}" hint-placeholder-val="{{false}}">
+              <span class="pill need"><span class="glint"></span>needs you</span>
+            </sc-if>
+            <sc-if value="{{m.hasTag}}" hint-placeholder-val="{{false}}">
+              <span class="pill">{{m.tag}}</span>
+            </sc-if>
+          </div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- compose -->
+  <button aria-label="Compose" style="position:absolute;right:18px;bottom:86px;width:54px;height:54px;border-radius:50%;border:0;background:var(--accent);color:var(--on-accent);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,0.3),0 0 0 6px var(--accent-soft)"><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="m15 5 4 4"></path></svg></button>
+
+  <!-- bottom tabs -->
+  <nav class="glass-strong" aria-label="Main" style="position:absolute;left:14px;right:14px;bottom:14px;height:58px;border-radius:24px;display:flex;align-items:center;padding:0 6px">
+    <button class="tab on"><svg class="ic" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>Inbox</button>
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v14"></path><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"></path></svg>Reading</button>
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>Search</button>
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>Tags</button>
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M10 5H3"></path><path d="M12 19H3"></path><path d="M14 3v4"></path><path d="M16 17v4"></path><path d="M21 12h-9"></path><path d="M21 19h-5"></path><path d="M21 5h-7"></path><path d="M8 10v4"></path><path d="M8 12H3"></path></svg>Settings</button>
+  </nav>
+
+  <!-- side panel: accounts, folders, tags -->
+  <sc-if value="{{isPanelOpen}}" hint-placeholder-val="{{false}}">
+    <div style="position:absolute;left:0;top:0;width:390px;height:844px;background:{{scrim}}"></div>
+    <aside class="glass-strong" aria-label="Accounts and folders" style="position:absolute;left:0;top:0;bottom:0;width:300px;border-radius:0 26px 26px 0;border-left:0;padding:22px 14px;display:flex;flex-direction:column">
+      <div class="dlabel" style="margin-top:0">Accounts</div>
+      <sc-for list="{{accounts}}" as="a" hint-placeholder-count="5">
+        <div class="{{a.cls}}"><span class="av" style="background:{{a.tint}};border:1px solid {{a.color}};color:{{a.color}}">{{a.initial}}</span><span style="flex-grow:1">{{a.name}}</span><span style="font-size:12px;color:var(--faint)">{{a.count}}</span></div>
+      </sc-for>
+      <div class="dlabel">Folders</div>
+      <div class="drow"><svg class="ic" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>Inbox</div>
+      <div class="drow"><svg class="ic" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg>Archive</div>
+      <div class="drow"><svg class="ic" viewBox="0 0 24 24"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>Trash</div>
+      <div class="dlabel">Tags</div>
+      <div class="drow"><span style="color:var(--accent)">#</span>receipts</div>
+      <div class="drow"><span style="color:var(--accent)">#</span>legal</div>
+    </aside>
+  </sc-if>
+</div>
+</x-dc>
+
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"enum","default":"lilac","options":["lilac","green","amber"],"section":"Look"},"theme":{"editor":"enum","default":"night","options":["night","day"],"section":"Look"},"panel":{"editor":"enum","default":"closed","options":["closed","open"],"section":"Layout"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? 'lilac';
+    const theme = this.props.theme ?? 'night';
+    const panel = this.props.panel ?? 'closed';
+    const night = theme === 'night';
+
+    const accents = night
+      ? { lilac: ['196,181,253', '#c4b5fd', '#1b1238'], green: ['74,222,128', '#4ade80', '#06210f'], amber: ['245,196,90', '#f5c45a', '#2a1a02'] }
+      : { lilac: ['109,40,217', '#6d28d9', '#ffffff'], green: ['21,128,61', '#15803d', '#ffffff'], amber: ['180,83,9', '#b45309', '#ffffff'] };
+    const [rgb, hex, onAccent] = accents[accent];
+
+    const base = night
+      ? '--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.58);--glass-strong:rgba(10,22,19,0.86);--glass-border:rgba(190,235,208,0.15);--firefly:#f7dc92;--firefly-glow:rgba(247,220,146,0.6);'
+      : '--text:#2a2014;--muted:#54442f;--faint:#6f5f49;--glass:rgba(255,255,255,0.72);--glass-strong:rgba(255,253,247,0.92);--glass-border:rgba(61,41,20,0.14);--firefly:#c98a12;--firefly-glow:rgba(201,138,18,0.35);';
+    const vars = base + '--accent:' + hex + ';--accent-soft:rgba(' + rgb + ',' + (night ? '0.16' : '0.10') + ');--accent-line:rgba(' + rgb + ',' + (night ? '0.40' : '0.35') + ');--on-accent:' + onAccent + ';';
+
+    const vine = 'url(assets/vines.svg)';
+    const sceneStyle = night
+      ? 'background-color:#070d11;background-image:' + vine + ',' + vine + ',' + vine + ',linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat'
+      : 'background-color:#eef3e2;background-image:' + vine + ',' + vine + ',linear-gradient(180deg,#faf8ee 0%,#eef3e2 55%,#dfeacf 100%);background-size:450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,no-repeat';
+
+    const acct = {
+      autumn: night ? '#7cc4ff' : '#1d6fb8',
+      hello: night ? '#f0a6ca' : '#a8326f',
+      dmca: night ? '#5ad1c8' : '#0f766e',
+      security: night ? '#f2957f' : '#b4432c',
+    };
+    const tintOf = (c) => night ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.6)';
+    const accounts = [
+      { name: 'All inboxes', initial: '·', count: '16', color: hex, on: true },
+      { name: 'autumn@grove.place', initial: 'A', count: '9', color: acct.autumn },
+      { name: 'hello@grove.place', initial: 'H', count: '5', color: acct.hello },
+      { name: 'dmca@grove.place', initial: 'D', count: '1', color: acct.dmca },
+      { name: 'security@grove.place', initial: 'S', count: '1', color: acct.security },
+    ].map(a => ({ ...a, tint: tintOf(a.color), cls: a.on ? 'drow on' : 'drow' }));
+
+    const mk = (from, color, time, subject, preview, unread, needs, tag) => ({
+      from, color, time, subject, preview, unread, needs, tag,
+      weight: unread ? 500 : 400,
+      hasTag: !!tag,
+      hasTags: !!(needs || tag),
+    });
+    const mails = [
+      mk('Mara Linden', acct.hello, '9:41', 'Moving my blog over to Grove?', 'Hi! A friend pointed me to Grove and I wondered whether I can bring my old posts…', true, true, 'contact form'),
+      mk('Takedown requests', acct.dmca, 'Yesterday', 'Notice of alleged infringement', 'We are writing on behalf of a rights holder to notify you of material hosted at…', true, true, 'legal'),
+      mk('GitHub', acct.autumn, '8:12', '[Lattice] Pull request merged into main', 'autumnsgrove merged 3 commits. Review the changes and the follow-up checks…', false, false, ''),
+      mk('Purelymail', acct.autumn, 'Mon', 'Your receipt for this month', 'Thank you for your payment. This receipt covers your account and its users…', false, false, 'receipt'),
+      mk('Wildflower Weekly', acct.autumn, 'Mon', 'Ten shade plants that forgive neglect', 'This week in the garden: ferns, hostas, and the quiet case for moss…', false, false, ''),
+    ];
+
+    return {
+      vars,
+      sceneStyle,
+      isNight: night,
+      isPanelOpen: panel === 'open',
+      scrim: night ? 'rgba(2,6,5,0.5)' : 'rgba(40,30,15,0.25)',
+      accounts,
+      mails,
+    };
+  }
+}
+</script>
+</body>
+</html>

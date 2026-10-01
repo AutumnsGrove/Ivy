@@ -255,4 +255,185 @@ credentials in a local `.env`; the live IMAP spike on `dev@` (PERMANENTFLAGS, AN
 roles, Sent behavior); the Ivy-specific Jev spike (needs the operator's OpenRouter key; ask first);
 the operator's review of the plan docs and the unconfirmed API-design default.
 
+## Round 16 — design direction (2026-10-01)
+
+Operator wants design ironed out before more backend work. Looked at Lattice's Prism tokens
+(`libs/prism`, `docs/design-system/COLORS.md`): Grove green `#16a34a` (grove-600), cream/bark
+neutrals, Lexend as the house font, glass tokens, Lucide via `@lucide/svelte`. Grove's dark mode is
+warm bark-brown and Midnight Bloom is violet; neither is a night sky, so Ivy gets its own variant.
+Fresh design, vendoring only what helps.
+
+**Concept (operator's words, paraphrased):** a nighttime walk through a botanical garden. You feel
+the plant life around you and see the stars above. Calm over clever. SVG background, glassy
+icons, Lucide for now (Phosphor or other later if needed).
+
+| Question | Answer |
+|---|---|
+| Night base | **Deep green-black** (`#060b10` sky fading to `#0c1f18`), starlight cream text. |
+| Light mode | **Yes: a "daytime garden" counterpart**, following the system setting. Doubles design and baseline work (noted). |
+| Glass vs scene | **Atmosphere around, calm reading surface:** garden shows through frosted chrome (lists, nav); the message body sits on a near-opaque panel. |
+| Motion | **Gently alive:** firefly drift, twinkle, maybe a shooting star on inbox zero. Must honour `prefers-reduced-motion` and pause when hidden. Watch battery and the potato-class phone budget. |
+| Phone nav | Undecided. Operator likes both the **bottom tab bar + account chips** and the **drawer**; both mocked (A and E) to compare. |
+| List density | **Airy 3-line cards** (sender, subject, one-line preview; account dot, unread glow, tags). |
+| Type | **Lexend for UI + Newsreader (serif) for reading.** Self-hosted, embedded. |
+| Accent | Undecided: mocked **luminous green**, **firefly amber** and **moonlight lilac** (A, B, C). Leaning green by default. |
+
+Mockups live in `docs/design/canvas/` (Design canvas source: `project/*.dc.html` plus
+`project/assets/*.svg`), published as the "Ivy Design Mockups" artifact. Boards: A night/green/tabs,
+B amber, C lilac, D daytime, E drawer nav, F reading a message, G tokens and type, H desktop
+three-pane. Accessibility notes: accent text colours are chosen to pass on both themes; per-account
+badge colours must also differ in lightness, not hue alone (to revisit).
+
+### Round 16b — operator feedback on the first mockups (2026-10-01)
+
+Operator reviewed the canvas. Decisions:
+
+- **Background:** the glasshouse/foliage scene is out (its lit panes and hard ground band read as a
+  strange box). Use **Grove's vine tile** from Lattice (`libs/engine/.../nature/VineBackground.svelte`,
+  450x450, repeated endlessly, used behind every Grove page) over the night sky. Vendored as
+  `assets/vines.svg` (AGPL-3.0 both sides); stacked 3x at night, 2x by day instead of a second
+  artwork. A sparse starfield fades out in the top ~380px.
+- **Nav:** **option A (bottom tab bar)** wins; the drawer variant is dropped. A **side panel is kept
+  for account switching** (plus folders and tags), opened from an account button in the header, so
+  the account-chip row is gone.
+- **Accent:** **moonlight lilac** (`#c4b5fd` night, `#6d28d9` day). Reason: the chrome already has a
+  lot of green, and lilac contrasts. Amber/green dropped.
+- **Chunkiness:** operator likes it (it keeps focus on content), but chrome was slimmed anyway
+  (card radius 18, tighter padding, 58px tab bar, no chip row). Reassess once they see it.
+- **Light mode:** was "mostly ok", but the background looked dark and contrast was off. Rebuilt on a
+  cream-meadow gradient with a bark text ramp (`#2a2014` / `#54442f`), glass 72% white, vines on top.
+  The background colour is now set per theme in CSS so it can't fall back to the dark base.
+- **Smart chip:** keep the chip at the top of the email but **no "Jev"/AI label, no AI symbol**.
+  It is now a shimmering lilac-and-gold chip with a pulsing firefly dot and one italic serif line.
+  The "needs you" pill uses the same firefly dot instead of an icon. Principle: the LLM layer should
+  feel like a little magic, never a labelled AI feature. (The settings/stats ledger can still say
+  where calls went; this is about the reading surface.)
+- **New: Reading feed** (board E): the newsletter mode, with Today / This week / Saved, a one-line
+  digest chip, serif titles with read time, Read / Save, and one-click Unsubscribe.
+
+Open for the next round: compose, search/ask, settings, empty states, the first-run `init` look,
+and whether the feed gets its own accent or the digest chip moves to the Inbox too.
+
+Earlier open list (partly answered above): pick accent, pick nav, review the garden SVG art style, decide how the
+"needs you" and Jev read-out are labelled (currently "Ivy's read · Jev"), compose and settings
+screens, empty/inbox-zero scene, and whether the day theme needs its own accent.
+
+## Round 17 — spam (2026-10-01)
+
+Operator asked whether spam filtering should run through Jev on inbound, then asked me to research
+Purelymail first. **Findings** (docs only, not hands-on): Purelymail runs SpamAssassin (threshold 5,
+not adjustable), files flagged mail in Junk, rejects only blocklisted IPs at SMTP, greylists
+suspicious senders, adds `X-Spam-Status`, and learns per user from mail moved into/out of Junk
+after ~200 examples of each. Full notes in `JEV.md` ("Spam: what the provider already does").
+
+**Proposed (operator has not yet picked inbox vs Junk vs both):** provider first, local signals,
+then Jev as a second layer. Start with **`junk_rescue`** on the Junk folder (a "looks real" chip and
+one-tap Not junk), optionally `is_spam` on Inbox mail later (tag + soft fold only). Mark spam / Not
+junk are IMAP moves so they train the provider. Never auto-delete or auto-move. Docs updated:
+`PLAN.md` (Spam paragraph), `JEV.md` (catalog + research), `ARCHITECTURE.md` (sync step 9).
+
+Also this round: operator asked for mockups of **Talk to Ivy**, **compose**, **settings**,
+**empty / inbox zero**, and the **first-run** look (see round 17b below).
+
+### Round 17b — more mockups (2026-10-01)
+
+New boards on the canvas (`docs/design/canvas/`): **F Talk to Ivy** (ask-your-mailbox: an "Ivy can
+look in" account row with LLM-off accounts shown locked, a user bubble, a serif answer with numbered
+citation chips and the source emails listed under it, suggestion chips, input bar; the only marker
+is a small firefly dot, no AI badge), **G Compose** (reply as the address it was sent to, Reply-To
+note for contact-form mail, serif editor sheet, formatting bar, "Sends after 10 s, undo any time",
+"Saved to Drafts"), **H Inbox zero** ("All caught up", a moon, a slow shooting star and more
+fireflies, a pointer to new Reading issues), **I First run welcome**, **J First run connect an
+account** (provider auto-detect, app password, Smart features off by default, one-time full-mailbox
+read), **K Settings** (accounts with rename/icon/photo, per-account Smart features, theme / motion /
+accent, undo-send, remote images, digest time, Junk rescue and spam score toggles, spend and calls,
+backup, mirror health, update button). Placeholders ("[version]") mark values we don't have yet.
+
+Not decided yet: whether Talk to Ivy is its own screen (as drawn) or reachable from the search tab;
+the first-run flow beyond two screens (progress while the mailbox is read, the `ivy init` terminal
+side); settings information architecture on desktop.
+
+## Round 18 — decisions after the second mockup pass (2026-10-01)
+
+Operator feedback: the overall design "looks really good"; the settings panel is liked (it leaves a
+lot of room to extend). Decisions:
+
+- **Spam: Junk rescue only.** Jev does not screen the Inbox. (`is_spam` stays an idea.)
+- **Talk to Ivy lives inside the Search page**, behind a Search / Ask Ivy switch at the top, not as
+  its own tab. It is an **agent loop with tools: `search_mail`, `read_mail`, and `think`** (all
+  read-only). Documented in `ARCHITECTURE.md` section 6, `PLAN.md` and `TESTING.md` section 4
+  (read-only tool registry test, locked/withheld mail invisible to tools, step/token caps,
+  citations only to mail the loop read). The mockup shows a short quiet trace of what it did
+  (searched, read, a thinking line) with no AI badge.
+- **Reply note simplified:** drop the "goes to Mara's address, not the form" explanation. Compose just
+  says "Replying to name@domain.com". The Reply-To handling stays underneath.
+- **Images and attachments on outgoing mail are required.** Compose gets an attach button, inline
+  image button and attachment thumbnails/rows, a bottom sheet (Photos, Camera, Files, recent
+  photos, photo size, location removed), and the message view shows attachments (image thumbnails,
+  file rows with download). Rules recorded in `ARCHITECTURE.md` section 5 (size limit from the
+  provider, type rules, EXIF stripped by default, optional downscale, drafts keep attachments).
+- **New boards:** Search (switch, field, quick filters, a doorway to Ask Ivy, highlighted keyword
+  hits, a "similar in meaning" hit) and Tags (your tags with counts, "Placed for you" local tags
+  with the firefly dot, Rules and People links). Settings gained photo size and location-removal rows.
+
+**Follow-up (same day):** the gold-and-lilac "Ask Ivy" doorway card in Search was disliked as
+strange; removed. The Ask Ivy switch segment now uses an icon (Lucide message-circle) plus text, like
+Search, and the in-results link is a plain quiet row. **"Recent photos" is not possible from a web
+page:** Safari/PWAs cannot list the photo library, only open the native picker and receive what is
+chosen (sources: web search on iOS Safari file inputs; HEIC conversion in Safari 17+ is a known
+quirk). The attach sheet now shows Photos / Camera / Files (native pickers) and **"From your mail"**
+(attachments already in the mirror, attached server-side).
+
+Open: provider's real max message size (check SMTP `SIZE` live); whether tag colours are free-choice
+or from the palette; how the agent trace behaves while it is still working (streaming state not
+mocked yet); People and Rules screens.
+
+## Round 19 — tags, people, rules (2026-10-01)
+
+Operator confirmed the tag-colour, tag-creation, People and Rules mockups (offered after the
+attachments discussion). New boards: **O New tag** (sheet: name, 12-colour grid, custom colour,
+"tag matching mail automatically"), **P Tag colours** (edit screen with a Night and Day preview and a
+named palette), **Q People**, **R A person**, **S Rules**, **T New rule**. Decisions recorded in
+`PLAN.md` ("Tags and rules"): palette entries carry a night and a day shade; rules read as plain
+sentences; a rule may use an "is about…" phrase answered by Jev with a "would have matched N of the
+last 200" preview; **rule actions are local only (tag, show in Reading, snooze)**, consistent with the
+safety line (moving, deleting, sending always ask).
+
+Mockup content (names, counts such as "Matched 12 times") is placeholder. Open: how a rule that
+uses an "is about" phrase behaves on LLM-off accounts (proposal: those conditions are unavailable and
+shown locked, like the Ask Ivy account picker); People merging when one person has several
+addresses; desktop versions of Tags, People and Rules.
+
+## Round 20 — smart checks, rule authoring and failure states (2026-10-01)
+
+Operator asked for **smart rules**: a way to add classification options for Jev to check against.
+Motivating case: not everything from Cloudflare is a receipt (Dev Day announcements etc.), so a
+header rule is too blunt; the rule needs "from Cloudflare AND looks like a receipt", which adds a
+classifier step. Operator then proposed the authoring model: **free-form text** ("I want emails from
+Cloudflare that look like receipts tagged as such") compiled by an agent **in one generation** into
+our exact Jev-ready format, so the user just types and the rule is properly made in the background,
+without wasting generations. Rules stay local-only (confirmed).
+
+Decisions: documented in `JEV.md` 3F (compiler contract: no email content as input, reuse existing
+checks and tags, schema + vocabulary validation, local-only actions, one optional clarifying
+question as the only extra call, dry run on the last 200 messages, edit text = new hash), `PLAN.md`
+(Rules and Smart checks), `ARCHITECTURE.md` (rule compiler in the LLM layer) and `TESTING.md`
+(compiler fixture and failure-state fault injection). New mockups: **Rules · Describe it**,
+**Rules · Check it**, **Smart checks** (list), **Smart check detail**; Rule details now uses a check
+chip instead of a free-text "is about" box.
+
+**Edge states requested ("handle all of that"):** mocked **Can't reach Ivy**, **Sync error** banner
+(account can't sign in) and the account-switcher dot, **Mirror health** (per-account status,
+backfill progress, Update password / Try again / View log), **Message failed to load** (plus a
+failed attachment), **Send failed** (too large; draft kept; one-tap fix), **Toasts** (sending with
+undo, sent, archived with undo, will retry, not sent, back online), **Ask Ivy limits and errors**
+(monthly cap reached, provider not responding), **No results**. Error taxonomy and data model in
+`ARCHITECTURE.md` 9b.
+
+Open: offline reading in the PWA (v1 says no; do we want a read-only cache of recent mail?);
+what a rule does when its check's account is LLM-off (proposal: the rule is paused and shown
+locked); whether the compiler runs on the same model as `complete()` or a cheaper one; how far the
+backfill option for a new check should go by default (proposal: new mail only, with an explicit
+"also apply to existing mail" showing a cost estimate).
+
 Notes on round 5: the second-stage model sees raw email text, so it's the higher-risk stage: no tools, structured output (`needs_me` bool + short reason), reason rendered as plain text. Configurability needs a deliberate home (config file vs in-app settings with per-account overrides), asked in round 6.

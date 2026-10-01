@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Edit tag colour, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.row{display:flex;align-items:center}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:0;background:transparent;color:var(--text)}
+.lbl{display:block;font:500 11px 'Lexend',system-ui,sans-serif;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin:0 6px 8px}
+.inp{display:flex;align-items:center;height:52px;padding:0 16px;border-radius:16px;font:400 15px 'Lexend',system-ui,sans-serif}
+.cell{display:flex;flex-direction:column;align-items:center;gap:6px;font:400 11px 'Lexend',system-ui,sans-serif;color:var(--muted)}
+.sw{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.12)}
+.sw.on{box-shadow:0 0 0 3px var(--bg0),0 0 0 5px var(--text)}
+.chipv{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 12px 0 10px;border-radius:15px;font:400 13.5px 'Lexend',system-ui,sans-serif}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:52px;border-radius:26px;font:500 15px 'Lexend',system-ui,sans-serif;border:0;width:100%}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.62);--glass-border:rgba(190,235,208,0.15);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238;--bg0:#08120f">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+
+  <div style="position:absolute;left:8px;right:14px;top:14px;display:flex;align-items:center;gap:4px">
+    <button class="iconbtn" aria-label="Back"><svg class="ic" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg></button>
+    <div style="flex-grow:1;font-size:20px;font-weight:300">Edit tag</div>
+    <button style="height:38px;padding:0 18px;border-radius:19px;border:0;background:var(--accent);color:var(--on-accent);font:500 14px 'Lexend',system-ui,sans-serif">Save</button>
+  </div>
+
+  <div style="position:absolute;left:14px;right:14px;top:68px">
+    <label class="lbl">Name</label>
+    <div class="inp glass">receipts</div>
+
+    <label class="lbl" style="margin-top:22px">How it looks</label>
+    <div class="row" style="gap:10px">
+      <div style="flex:1;border-radius:18px;padding:14px;background:linear-gradient(180deg,#0a1613,#0c1f18);border:1px solid var(--glass-border)">
+        <div style="font-size:11px;color:var(--faint);margin-bottom:10px">Night</div>
+        <span class="chipv" style="background:{{nightTint}};border:1px solid {{nightLine}};color:{{night}}"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>receipts</span>
+      </div>
+      <div style="flex:1;border-radius:18px;padding:14px;background:linear-gradient(180deg,#faf8ee,#eef3e2);border:1px solid rgba(61,41,20,0.14)">
+        <div style="font-size:11px;color:#6f5f49;margin-bottom:10px">Day</div>
+        <span class="chipv" style="background:{{dayTint}};border:1px solid {{dayLine}};color:{{day}}"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>receipts</span>
+      </div>
+    </div>
+
+    <label class="lbl" style="margin-top:24px">Colour</label>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px 8px;justify-items:center">
+      <sc-for list="{{swatches}}" as="s" hint-placeholder-count="12">
+        <div class="cell"><span class="{{s.cls}}" style="background:{{s.night}}"><sc-if value="{{s.on}}" hint-placeholder-val="{{false}}"><svg class="ic" viewBox="0 0 24 24" style="color:#10101a;width:20px;height:20px;stroke-width:2.5"><path d="M20 6 9 17l-5-5"></path></svg></sc-if></span>{{s.name}}</div>
+      </sc-for>
+    </div>
+
+    <div class="glass row" style="gap:12px;border-radius:16px;padding:12px 14px;margin-top:22px;font-size:13.5px;color:var(--muted)">
+      <span style="width:20px;height:20px;border-radius:50%;background:conic-gradient(#f0a6ca,#f5c45a,#86efac,#7cc4ff,#c4b5fd,#f0a6ca);flex:none"></span>
+      <span style="flex-grow:1">Pick your own colour</span>
+      <svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--faint)"><path d="m9 18 6-6-6-6"></path></svg>
+    </div>
+    <div style="font-size:12px;color:var(--faint);margin:8px 8px 0;line-height:1.5">Every colour comes with a deeper shade for the day theme, so tags stay readable in both.</div>
+  </div>
+
+  <div style="position:absolute;left:24px;right:24px;bottom:36px;text-align:center">
+    <button style="border:0;background:transparent;color:#f2957f;font:400 14.5px 'Lexend',system-ui,sans-serif;height:44px">Delete tag</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"selected":{"editor":"int","default":0,"min":0,"max":11,"section":"Look"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const names = ['Sky', 'Rose', 'Teal', 'Coral', 'Lilac', 'Mint', 'Gold', 'Sand', 'Orchid', 'Fern', 'Slate', 'Berry'];
+    const night = ['#7cc4ff', '#f0a6ca', '#5ad1c8', '#f2957f', '#c4b5fd', '#86efac', '#f5c45a', '#e5d3a8', '#e9a8f0', '#a3c97a', '#a9b8c6', '#e07a9b'];
+    const day = ['#1d6fb8', '#a8326f', '#0f766e', '#b4432c', '#6d28d9', '#15803d', '#a16207', '#7a6a3c', '#86198f', '#3f6212', '#475569', '#9f1239'];
+    const sel = this.props.selected ?? 0;
+    const rgb = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)).join(',');
+    return {
+      night: night[sel],
+      nightTint: 'rgba(' + rgb(night[sel]) + ',0.14)',
+      nightLine: 'rgba(' + rgb(night[sel]) + ',0.45)',
+      day: day[sel],
+      dayTint: 'rgba(' + rgb(day[sel]) + ',0.10)',
+      dayLine: 'rgba(' + rgb(day[sel]) + ',0.35)',
+      swatches: names.map((n, i) => ({ name: n, night: night[i], on: i === sel, cls: i === sel ? 'sw on' : 'sw' })),
+    };
+  }
+}
+</script>
+</body>
+</html>

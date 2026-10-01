@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Can't reach Ivy, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.stars{position:absolute;left:0;top:0;width:100%;height:380px;background:url(assets/stars.svg) repeat-x top left;-webkit-mask-image:linear-gradient(#000,transparent);mask-image:linear-gradient(#000,transparent)}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.row{display:flex;align-items:center}
+.ghost{border-radius:18px;height:84px;background:var(--glass);border:1px solid var(--glass-border);opacity:0.35}
+.halo{position:absolute;left:105px;top:196px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(242,149,127,0.16),rgba(242,149,127,0) 68%)}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.58);--glass-border:rgba(190,235,208,0.15);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+  <div class="stars"></div>
+
+  <div style="position:absolute;left:14px;right:14px;top:120px;display:flex;flex-direction:column;gap:10px">
+    <div class="ghost"></div><div class="ghost" style="opacity:0.25"></div>
+  </div>
+
+  <div class="halo"></div>
+  <div class="glass" style="position:absolute;left:150px;top:241px;width:90px;height:90px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#f2957f;border-color:rgba(242,149,127,0.4)">
+    <svg class="ic" viewBox="0 0 24 24" style="width:38px;height:38px;stroke-width:1.5"><path d="m2 2 20 20"></path><path d="M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193"></path><path d="M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07"></path></svg>
+  </div>
+
+  <div style="position:absolute;left:0;right:0;top:366px;text-align:center;padding:0 40px">
+    <div style="font-family:'Newsreader',Georgia,serif;font-size:30px;font-weight:500">Can't reach Ivy</div>
+    <div style="font-size:14.5px;color:var(--muted);line-height:1.55;margin-top:10px">Your phone can't find your server right now. If you reach it over Tailscale, check that Tailscale is on.</div>
+    <div style="font-size:12.5px;color:var(--faint);margin-top:14px">Last connected 3 minutes ago</div>
+  </div>
+
+  <div style="position:absolute;left:24px;right:24px;bottom:56px;display:flex;flex-direction:column;gap:10px;align-items:center">
+    <button style="width:100%;height:56px;border-radius:28px;border:0;background:var(--accent);color:var(--on-accent);font:500 16px 'Lexend',system-ui,sans-serif;display:flex;align-items:center;justify-content:center;gap:10px"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg>Try again</button>
+    <div style="font-size:12.5px;color:var(--faint);text-align:center;line-height:1.5">Your mail is safe. Nothing is lost while you are away.</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

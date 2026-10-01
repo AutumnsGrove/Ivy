@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mirror health, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.row{display:flex;align-items:center}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:0;background:transparent;color:var(--text)}
+.acc{border-radius:20px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.st{display:inline-flex;align-items:center;gap:7px;font:400 12.5px 'Lexend',system-ui,sans-serif}
+.st i{width:8px;height:8px;border-radius:50%;display:block}
+.av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:500 13px 'Lexend',system-ui,sans-serif;flex:none;background:rgba(255,255,255,0.06)}
+.sbtn{height:34px;padding:0 14px;border-radius:17px;border:1px solid var(--glass-border);background:transparent;color:var(--text);font:500 13px 'Lexend',system-ui,sans-serif}
+.sbtn.warn{border-color:rgba(245,196,90,0.5);color:#f5c45a}
+.bar{height:6px;border-radius:3px;background:rgba(255,255,255,0.1);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:3px;background:var(--accent)}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.6);--glass-border:rgba(190,235,208,0.15);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+
+  <div style="position:absolute;left:8px;right:14px;top:14px;display:flex;align-items:center;gap:4px">
+    <button class="iconbtn" aria-label="Back"><svg class="ic" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg></button>
+    <div style="flex-grow:1;font-size:22px;font-weight:300">Mirror health</div>
+  </div>
+
+  <div style="position:absolute;left:14px;right:14px;top:70px;display:flex;flex-direction:column;gap:10px">
+    <div class="glass acc">
+      <div class="row" style="gap:12px"><span class="av" style="border:1px solid #7cc4ff;color:#7cc4ff">A</span><div style="flex-grow:1"><div style="font-size:14.5px">autumn@grove.place</div><div class="st" style="margin-top:3px;color:var(--muted)"><i style="background:#86efac"></i>Up to date · synced just now</div></div></div>
+    </div>
+
+    <div class="glass acc" style="border-color:rgba(245,196,90,0.4)">
+      <div class="row" style="gap:12px"><span class="av" style="border:1px solid #f0a6ca;color:#f0a6ca">H</span><div style="flex-grow:1"><div style="font-size:14.5px">hello@grove.place</div><div class="st" style="margin-top:3px;color:#f5c45a"><i style="background:#f5c45a"></i>Can't sign in · last synced 14 min ago</div></div></div>
+      <div style="font-size:12.5px;color:var(--muted);line-height:1.5">Purelymail didn't accept the saved password. Your mail on the server is untouched.</div>
+      <div class="row" style="gap:8px"><button class="sbtn warn">Update password</button><button class="sbtn">Try again</button><span style="flex-grow:1"></span><span style="font-size:12.5px;color:var(--faint)">View log</span></div>
+    </div>
+
+    <div class="glass acc">
+      <div class="row" style="gap:12px"><span class="av" style="border:1px solid #5ad1c8;color:#5ad1c8">D</span><div style="flex-grow:1"><div style="font-size:14.5px">dmca@grove.place</div><div class="st" style="margin-top:3px;color:var(--muted)"><i style="background:var(--accent)"></i>Reading your mailbox, newest first</div></div><span style="font-size:13px;color:var(--muted)">62%</span></div>
+      <div class="bar"><i style="width:62%"></i></div>
+      <div style="font-size:12px;color:var(--faint)">You can use this account while it finishes.</div>
+    </div>
+
+    <div class="glass acc">
+      <div class="row" style="gap:12px"><span class="av" style="border:1px solid #f2957f;color:#f2957f">S</span><div style="flex-grow:1"><div style="font-size:14.5px">security@grove.place</div><div class="st" style="margin-top:3px;color:var(--muted)"><i style="background:#86efac"></i>Up to date · synced 2 min ago</div></div></div>
+    </div>
+
+    <div class="glass acc" style="gap:8px">
+      <div class="row" style="font-size:13.5px"><span style="flex-grow:1;color:var(--muted)">Search index</span><span>Up to date</span></div>
+      <div class="row" style="font-size:13.5px"><span style="flex-grow:1;color:var(--muted)">Meaning search</span><span>Catching up</span></div>
+      <div class="row" style="font-size:13.5px"><span style="flex-grow:1;color:var(--muted)">Storage used</span><span>[size]</span></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

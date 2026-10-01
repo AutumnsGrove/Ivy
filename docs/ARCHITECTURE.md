@@ -117,6 +117,11 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
    on success update the DB; the UI updates optimistically and rolls back on rejection. Outbox
    retries survive restarts and dropped connections.
 8. **Events:** every DB change fans out through an SSE hub so open clients update live.
+9. **Spam handling (round 17, proposed):** the provider filters (Purelymail: SpamAssassin, Junk
+   folder). Ivy stores the parsed `X-Spam-Status` score/flag on each message, treats the `junk`
+   folder as a normal mirrored folder, and implements Mark spam / Not junk as IMAP MOVE to and from
+   Junk through the same outbox, because those moves train the provider's per-user filter (it needs
+   ~200 examples each way). Jev spam questions are advisory tags only (JEV.md 3B).
 
 ## 5. Parsing and rendering
 
@@ -131,6 +136,22 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   real destination before leaving.
 - **Threading:** JWZ from Message-ID/References/In-Reply-To with a normalized-subject fallback;
   computed on arrival and stored.
+- **Composing with attachments and images (settled need, round 18):** the editor can attach
+  photos and files and place images inline. **Browser limits:** a web page cannot browse the device
+  photo library, so there is no "recent photos" grid. Photos, Camera and Files are buttons that open
+  the phone's own picker (`<input type="file">`, with `accept="image/*"` for the photo/camera sheet;
+  `capture` would force camera-only, so it is used only on the Camera button); the page receives
+  just what the user picks. Desktop adds drag-drop and paste. iOS Safari 17+ may hand back HEIC, so the
+  server converts HEIC to JPEG (verify on the real phone). Separately, a **"From your mail"** list
+  offers attachments already in the mirror (received or sent), attached by a server-side copy with no
+  upload. Uploads go to the server's temp storage and attach to the `send_queue` row;
+  enmime's builder emits `multipart/mixed` (+ `multipart/related` with `cid:` for inline images).
+  Rules: a total-size limit read from the provider (SMTP `SIZE`; verify Purelymail's live) with a
+  clear error before sending, a MIME-type allow/deny list for the dangerous types, **EXIF/location
+  stripped from photos by default** (setting), optional downscale of phone photos (Original / Large /
+  Medium, default Large), per-attachment remove, the saved draft in the Drafts folder carries its
+  attachments, and the copy in Sent keeps them. Reply/forward re-attach the original's attachments
+  only when asked.
 - **Auth results:** parse `Authentication-Results` (SPF/DKIM/DMARC) into a trust signal used by
   the phishing question and the spoofed-sender discount.
 
@@ -140,10 +161,21 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   one list from one search box; embeddings from Ollama `nomic-embed-text` on localhost, remote
   OpenAI-compatible embeddings as an optional provider; embedding is a low-priority background
   queue (one job at a time, shared with other CPU-heavy work).
-- **Ask-your-mailbox (settled behavior):** retrieve (local) -> optional Jev `answers_question` filter
-  (JEV.md E) -> chat model writes the answer with citations to message ids -> verify citations
-  against the DB (and optionally Jev `claim_supported`) -> render as plain text. Account-picker
-  controls which accounts are included; LLM-off accounts are locked.
+- **Talk to Ivy (settled, round 18):** reached from the Search page (a Search / Ask Ivy switch at
+  the top). It is an **agent loop with three tools**, all read-only and all executed locally:
+  `search_mail(query, filters, limit)` (the hybrid search above, restricted to the selected
+  accounts), `read_mail(message_id, part?)` (sanitized text of one message, or one attachment's
+  extracted text), and `think(thought)` (a scratchpad the model uses to plan; never shown as
+  authoritative and never executed). The chat model loops until it answers or hits a cap.
+  Guard rails: a max step count and token budget per question, the account picker decides which
+  accounts the tools can see (LLM-off accounts are locked, so the tools never return their mail),
+  withheld mail (tripwire/sensitive) is invisible to the tools, every model call and tool call is a
+  ledger row, and tool results are wrapped as untrusted data. **Citations must point at message ids
+  the loop actually read in this run**, verified against the DB (optionally Jev `claim_supported`
+  per claim); the final answer renders as plain text. No tool can send, move, delete or tag; a
+  proposed action ("archive these") is shown as a button the user must click.
+  The old fixed pipeline (retrieve -> `answers_question` filter -> answer) remains as the cheap
+  fallback for the one-shot case and as the evaluation baseline.
 
 ## 7. LLM layer
 
@@ -163,6 +195,13 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   "read this image" action, size/dimension filters, content-hash dedupe, monthly cap.
 - **Extraction tiers:** bodies/.ics (0), digital PDFs + OOXML in pure Go (1), vision model (2),
   OCR far-out (3); structured data (schema.org JSON-LD) is tried before any model call for receipts.
+
+- **Rule compiler (round 20):** `rules/compile` turns one plain-text sentence into a validated rule
+  plus any new smart checks with a single structured `complete()` call (see JEV.md 3F). Pipeline:
+  gate -> model -> JSON-schema validate -> vocabulary check (local-only actions, known fields, known
+  accounts) -> dry run -> user review -> store. Rules and checks are stored as data (`rules`,
+  `checks` tables with instruction hash); the engine evaluates header conditions locally and reads
+  check answers from the cached Jev results, so running a rule never calls the compiler.
 
 ## 8. API, frontend, config
 
@@ -195,6 +234,26 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 - **Resource budget (potato, 1.9 GB RAM, ~800 MB free, swap in use):** Ivy target well under
   100 MB resident at idle; embedding and extraction are serialized background jobs; numbers get
   measured and recorded in `docs/perf.md`, not assumed.
+
+## 9b. Failure states (round 20)
+
+Things go wrong in four places; each has a distinct, calm state. Every error carries a stable code,
+and the UI copy answers three questions: what happened, what is safe, what can I do.
+
+| Where | Cause | State the user sees |
+|---|---|---|
+| Phone -> Ivy | Server unreachable (Tailscale off, server down) | Full-screen "Can't reach Ivy" with Try again. v1 has no offline reading (open question: cache recent messages read-only in the PWA) |
+| Ivy -> provider (sync) | Auth failed (`auth_failed`), host unreachable (`unreachable`), other (`error`), backfilling | Amber banner over the inbox naming the account, "your mail is safe, showing what Ivy has", a Fix action; a dot on the account switcher; **Mirror health** screen with per-account status, progress for backfill, Update password / Try again / View log |
+| Message fetch | Body or attachment not downloaded yet or fetch failed | Header and metadata still shown; an inline "This message didn't load" card with Try again and Show what we have; a failing attachment shows its own Retry. Stored as `body_status` so retries back off and survive restarts |
+| Send / write path | SMTP 4xx (transient), 5xx (rejected, e.g. too large), outbox IMAP command failed | Transient: automatic retry with a quiet "will keep trying" toast. Permanent: a **Not sent** sheet with the reason, the draft kept in Drafts, and a concrete fix ("Remove X and send"). Message size is checked against the provider's `SIZE` before sending where known |
+| LLM | Monthly cap reached, provider not responding, gate refusal | Inline card in Ask Ivy ("Ivy is resting", "Ivy can't answer right now") with Raise the limit / Try again / Search instead; smart features degrade to doing nothing, never to blocking mail |
+
+Data model: per account `sync_state` (status, last_ok_at, last_error_code, last_error_detail,
+backfill_done/backfill_total) and per message `body_status`; the SSE hub streams changes so banners
+appear and clear live. Reconnection shows a brief "Back online. Catching up..." toast. Undo and
+retry affordances (Sending with Undo, Archived with Undo) are toasts with a deadline, backed by the
+outbox. Errors never delete anything and never silently drop an action: the outbox keeps it until it
+succeeds or the user dismisses it.
 
 ## 10. Security summary
 

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Person, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.stars{position:absolute;left:0;top:0;width:100%;height:380px;background:url(assets/stars.svg) repeat-x top left;-webkit-mask-image:linear-gradient(#000,transparent);mask-image:linear-gradient(#000,transparent)}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.row{display:flex;align-items:center}
+.ell{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:0;background:transparent;color:var(--text)}
+.lab{font:500 11px 'Lexend',system-ui,sans-serif;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin:22px 6px 8px}
+.pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:999px;font:400 11.5px 'Lexend',system-ui,sans-serif;color:var(--muted);border:1px solid var(--glass-border)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;border-radius:24px;font:500 14.5px 'Lexend',system-ui,sans-serif;border:1px solid var(--glass-border);color:var(--text);background:transparent;padding:0 20px}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:transparent;flex-grow:1}
+.fire{position:absolute;width:5px;height:5px;border-radius:50%;background:#f7dc92;box-shadow:0 0 10px 3px rgba(247,220,146,0.55);opacity:0.2;animation:drift 9s ease-in-out infinite alternate}
+@keyframes drift{0%{transform:translate(0,0);opacity:0.15}50%{opacity:0.85}100%{transform:translate(20px,-30px);opacity:0.15}}
+@media (prefers-reduced-motion: reduce){.fire{animation:none;opacity:0.4}}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.58);--glass-border:rgba(190,235,208,0.15);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+  <div class="stars"></div>
+  <div class="fire" style="left:340px;top:560px;animation-delay:0s"></div>
+
+  <div style="position:absolute;left:8px;right:14px;top:14px;display:flex;align-items:center">
+    <button class="iconbtn" aria-label="Back"><svg class="ic" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg></button>
+    <span style="flex-grow:1"></span>
+    <button class="iconbtn" aria-label="More"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></button>
+  </div>
+
+  <div style="position:absolute;left:0;right:0;top:70px;text-align:center">
+    <div style="width:84px;height:84px;margin:0 auto;border-radius:50%;background:rgba(240,166,202,0.14);border:1px solid rgba(240,166,202,0.5);color:#f0a6ca;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:300;box-shadow:0 0 0 6px rgba(240,166,202,0.07)">ML</div>
+    <div style="font-family:'Newsreader',Georgia,serif;font-size:28px;font-weight:500;margin-top:14px">Mara Linden</div>
+    <div style="font-size:13.5px;color:var(--muted);margin-top:4px">mara@example.com</div>
+    <div class="row" style="gap:6px;justify-content:center;margin-top:10px;font-size:12px;color:var(--faint)"><span style="width:8px;height:8px;border-radius:50%;background:#f0a6ca"></span>Writes to hello@ · first message in March</div>
+  </div>
+
+  <div class="row" style="position:absolute;left:18px;right:18px;top:288px;gap:10px">
+    <button class="btn primary"><svg class="ic" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="m15 5 4 4"></path></svg>Write</button>
+    <button class="btn"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>All mail</button>
+  </div>
+
+  <div style="position:absolute;left:14px;right:14px;top:350px">
+    <div class="lab" style="margin-top:0">Tags</div>
+    <div class="row" style="gap:6px;padding:0 6px"><span class="pill" style="color:#f0a6ca;border-color:rgba(240,166,202,0.45);background:rgba(240,166,202,0.12)">contact form</span><span class="pill">+ add</span></div>
+
+    <div class="lab">Conversations</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div class="glass" style="border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;gap:3px">
+        <div class="row" style="gap:8px"><span class="ell" style="font-size:14.5px;font-weight:500;flex-grow:1">Moving my blog over to Grove?</span><svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--faint);width:14px;height:14px"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg><span style="font-size:11.5px;color:var(--faint)">9:41</span></div>
+        <div class="ell" style="font-size:13px;color:var(--muted)">Hi! A friend pointed me to Grove and I wondered whether…</div>
+      </div>
+      <div class="glass" style="border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;gap:3px">
+        <div class="row" style="gap:8px"><span class="ell" style="font-size:14.5px;flex-grow:1">Question about custom domains</span><span style="font-size:11.5px;color:var(--faint)">Mar</span></div>
+        <div class="ell" style="font-size:13px;color:var(--muted)">You: Happy to help. Here is how that works…</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
