@@ -83,15 +83,16 @@ before it is relied on. The Go binary is never built or published by CI (the pot
 
 ## 6. Before the repository goes public (checklist)
 
-- [ ] Add a `LICENSE` file (AGPL-3.0; **none exists yet**), licence headers per the guard job, and
-      a short `README.md`, `CONTRIBUTING.md` (TDD rules from `STANDARDS.md`) and `SECURITY.md`.
+- [x] `LICENSE` (AGPL-3.0), `README.md` and `SECURITY.md` added (round 27). Still to add: licence
+      headers per the guard job, a `CONTRIBUTING.md` (TDD rules from `STANDARDS.md`), and enabling
+      GitHub's private vulnerability reporting (the `SECURITY.md` points to it).
 - [ ] Run gitleaks over the **full git history** (not just the tip) and review the result; the
       current tree has no secrets, and history should be rechecked at that time.
 - [ ] Review the docs for personal or operational detail you would rather not publish. As of this
-      PR they mention the role addresses (`autumn@`, `hello@`, `security@`, `dmca@` on grove.place,
-      which are public contact points anyway), the `potato-remote` SSH alias and the Purelymail
-      migration notes in `qa-log.md`; none are credentials. `qa-log.md` is also a very candid
-      working log, so decide whether to keep, trim or move it.
+      PR the role email addresses were removed from the docs, mockups and `CLAUDE.md` (they remain
+      in git history; mockups now use `example.com`). What is left: the `potato-remote` SSH alias
+      and the Purelymail migration notes in `qa-log.md`; none are credentials. `qa-log.md` is also
+      a very candid working log, so decide whether to keep, trim or move it.
 - [ ] Enable the settings in section 5 and confirm the ruleset with a test PR.
 - [ ] Decide on the design mockups in `docs/design/canvas/` (large HTML files; fine to publish if
       the Grove assets and fonts used are licensed for it).

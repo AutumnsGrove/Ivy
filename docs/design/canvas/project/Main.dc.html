@@ -152,10 +152,10 @@ class Component extends DCLogic {
     const tintOf = (c) => night ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.6)';
     const accounts = [
       { name: 'All inboxes', initial: '·', count: '16', color: hex, on: true },
-      { name: 'autumn@grove.place', initial: 'A', count: '9', color: acct.autumn },
-      { name: 'hello@grove.place', initial: 'H', count: '5', color: acct.hello },
-      { name: 'dmca@grove.place', initial: 'D', count: '1', color: acct.dmca },
-      { name: 'security@grove.place', initial: 'S', count: '1', color: acct.security },
+      { name: 'me@example.com', initial: 'A', count: '9', color: acct.autumn },
+      { name: 'hello@example.com', initial: 'H', count: '5', color: acct.hello },
+      { name: 'support@example.com', initial: 'D', count: '1', color: acct.dmca },
+      { name: 'alerts@example.com', initial: 'S', count: '1', color: acct.security },
     ].map(a => ({ ...a, tint: tintOf(a.color), cls: a.on ? 'drow on' : 'drow' }));
 
     const mk = (from, color, time, subject, preview, unread, needs, tag) => ({

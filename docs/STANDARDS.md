@@ -64,7 +64,7 @@ thing.
 - **SMTP:** `go-smtp` server that records every message and can answer 4xx/5xx/552 on demand.
 - **OpenRouter:** fake `/systemone`, chat and vision endpoints with a call log and canned or
   rule-based answers. **Ollama:** fake embeddings endpoint (deterministic hash-based vectors).
-- **Scenario API (Go):** `w.Account("autumn@grove.place").Deliver(msg)`, `.Flag`, `.Move`,
+- **Scenario API (Go):** `w.Account("me@example.com").Deliver(msg)`, `.Flag`, `.Move`,
   `.Expunge`, `.BumpUIDValidity`, `w.Fault(DropConnection{After: 3})`, `w.Clock.Advance(...)`.
   Messages come from a builder (`mailworld.Msg().From(...).Subject(...).HTML(...)`) plus a corpus of
   nasty real-shaped messages in `testdata/`.

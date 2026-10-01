@@ -12,7 +12,7 @@ answer) · `../CLAUDE.md` (rules for agents).
 ## 1. What Ivy is
 
 A self-hosted web mail client for a single operator. It sits in front of existing IMAP/SMTP
-mailboxes (first target: many `@grove.place` addresses on Purelymail), mirrors them into a local
+mailboxes (first target: many addresses on one domain, hosted on Purelymail), mirrors them into a local
 SQLite database so everything is fast and searchable, and adds a calm interface plus careful LLM
 help: it tells you what needs you, tames newsletters, understands receipts, and answers questions
 about your mail with cited sources. A single Go binary with an embedded SvelteKit frontend,
@@ -41,9 +41,8 @@ job); Gmail parity; importing old Proton mail (start fresh; revisit as an option
 ## 2. Prerequisites (before building, after planning)
 
 1. ~~Migrate grove.place mail from Forward Email to Purelymail~~ **DONE 2026-10-01** (details in
-   `qa-log.md` round 15). Users: autumn, hello, dmca, security, dev. Routing rules: alerts/github/
-   legal -> autumn, feedback -> hello; catch-all -> hello. Inbound and outbound confirmed for
-   `autumn@` in Apple Mail. Still to confirm: auth headers, a Grove (Resend) email passing DMARC
+   `qa-log.md` round 15). Several mailbox users, alias routing rules and a catch-all are set up.
+   Inbound and outbound confirmed for the main address in Apple Mail. Still to confirm: auth headers, a Grove (Resend) email passing DMARC
    under `p=reject`, alias/catch-all routing, and send-as from an alias.
 2. A throwaway **`dev@`** Purelymail user for tests (**created**; still needs seeding with sample
    mail, TESTING.md section 7). Its credentials go in a git-ignored local `.env`, never in chat or
@@ -72,7 +71,7 @@ overlay), snooze (local hide-until).
 - **Receipts and invoices:** auto-extracted fields (vendor, amount, date, renewal), a ledger view,
   renewal reminders, and a plain receipt filter as the baseline.
 - **First-class mail types:** contact-form submissions (Reply-To-aware), security/abuse reports
-  (security@, dmca@: priority, LLM off by default), personal correspondence (protected from any
+  (the security and abuse addresses: priority, LLM off by default), personal correspondence (protected from any
   automated handling). Automated notifications get generic triage.
 
 **Spam (settled, round 18: Junk rescue only).** The provider filters first:

@@ -24,7 +24,7 @@ answers get folded into `PLAN.md` / `CLAUDE.md`.
 | Biggest pain points in mail today | Newsletters/noise, not knowing what needs me, receipts/invoices. (Finding old mail was NOT picked, so search is a supporting feature, not the headline.) |
 | Device | Both equally: phone and desktop are first-class layouts. |
 | Sending in v1 | Reply and compose are in v1 (not read-only first). |
-| Accounts | **Multiple, from day 1.** Many `@grove.place` addresses (autumn@, hello@, security@, dmca@, ...). Needs a per-account view AND a combined "all inboxes" view, like Outlook mobile. |
+| Accounts | **Multiple, from day 1.** Many addresses on one domain (a personal one plus several role addresses). Needs a per-account view AND a combined "all inboxes" view, like Outlook mobile. |
 
 Implications noted: multi-account + compose + two first-class layouts makes v1 big; milestones must
 sequence it (reader -> sync -> compose) rather than cut it. Whether the addresses are separate
@@ -38,7 +38,7 @@ login or a recipient filter (open, asked in round 2).
 | How are the grove.place addresses set up? | **Not set up yet.** Currently all in Forward Email; operator will migrate to Purelymail later today. Likely **separate users**. Operator wants help with the migration after planning, before building. |
 | Combined-view address display | Colored badge per address; replies default to the address the mail was sent to. |
 | Newsletters | Separate reading feed, daily digest, one-click unsubscribe (List-Unsubscribe). **Quiet auto-archive = future idea**, not v1. |
-| LLM privacy | **Per-account opt-in**, off by default (security@/dmca@ can stay local-only). Embeddings stay local either way. |
+| LLM privacy | **Per-account opt-in**, off by default (the security and abuse addresses can stay local-only). Embeddings stay local either way. |
 
 ### Research: Purelymail multi-user (answered live, 2026-10-01)
 
@@ -126,7 +126,7 @@ Discovery: Grove's naming doc defines Lattice's Ivy as "Email for Grove... zero-
 | Search | **Hybrid keyword + meaning:** FTS5 for exact words, embeddings for meaning, merged into one ranked list from one search box. |
 | Ask-your-mailbox | **Written answers with cited emails**, every claim linking to real messages (Polaris's "sourcing is the product"). |
 
-Implications: contact-form mail needs Reply-To-aware replies and threading (reply goes to the visitor, not the form's From); security@/dmca@ get priority treatment and default to local-only (already the per-account opt-in default); personal correspondence is protected from any automated handling, including the future quiet-auto-archive idea. **Tension found:** ask-your-mailbox over the combined view would put several accounts' mail in one LLM call, contradicting "one account's mail per LLM call" and per-account opt-in. Embeddings/search can span accounts (local); only the LLM answer step is affected. Asked in round 9.
+Implications: contact-form mail needs Reply-To-aware replies and threading (reply goes to the visitor, not the form's From); the security and abuse addresses get priority treatment and default to local-only (already the per-account opt-in default); personal correspondence is protected from any automated handling, including the future quiet-auto-archive idea. **Tension found:** ask-your-mailbox over the combined view would put several accounts' mail in one LLM call, contradicting "one account's mail per LLM call" and per-account opt-in. Embeddings/search can span accounts (local); only the LLM answer step is affected. Asked in round 9.
 
 ## Round 9 — ask scope, tags/rules, license, interaction (2026-10-01)
 
@@ -138,7 +138,7 @@ Implications: contact-form mail needs Reply-To-aware replies and threading (repl
 | License | **AGPL-3.0**, like Lattice. |
 | Interaction | **Swipe actions, keyboard shortcuts on desktop, snooze.** |
 
-Design consequences: (1) the safety rule is refined to **automated classification stays one account per call; ask-your-mailbox may mix the accounts the operator explicitly selects**, and only accounts with LLM enabled are selectable (security@/dmca@ default to LLM-off and so appear locked, which is distinct from merely unselected); (2) each account has a display name, icon and optional photo (stored locally, resized server-side); (3) snooze, tags, rules, allow-lists and account display settings are **locally owned state**, so a backup path is mandatory and snooze needs a decision (local hide-until vs a server-side Snoozed folder); (4) AGPL-3.0 means a LICENSE file and headers policy at repo creation.
+Design consequences: (1) the safety rule is refined to **automated classification stays one account per call; ask-your-mailbox may mix the accounts the operator explicitly selects**, and only accounts with LLM enabled are selectable (the security and abuse addresses default to LLM-off and so appear locked, which is distinct from merely unselected); (2) each account has a display name, icon and optional photo (stored locally, resized server-side); (3) snooze, tags, rules, allow-lists and account display settings are **locally owned state**, so a backup path is mandatory and snooze needs a decision (local hide-until vs a server-side Snoozed folder); (4) AGPL-3.0 means a LICENSE file and headers policy at repo creation.
 
 ## Round 10 — backup, snooze, extraction, deployment (2026-10-01)
 
@@ -231,21 +231,21 @@ Executed with the operator in Cloudflare DNS and Purelymail's dashboard; checked
   Purelymail ownership TXT; DKIM CNAMEs `purelymail1/2/3._domainkey`; `_dmarc` CNAME ->
   `dmarcroot.purelymail.com` (**p=reject**); autodiscover SRV. Forward Email records removed;
   Resend records untouched.
-- **Forward Email inventory (screenshots):** catch-all (no recipients), alerts->autumn, autumn (IMAP,
-  1.51 MB), dmca (IMAP, 472 KB, no forward), feedback->hello, github->autumn, hello (IMAP, 356 KB, no
-  forward, so NOT forwarded to autumn), legal->autumn, security->autumn (+IMAP), triage->
-  `https://ivy.grove.place/api/webhook/incoming` (old Ivy, never set up, abandoned). Correction to
-  an earlier statement: Forward Email DID store ~2.5 MB of IMAP mail (operator: nothing useful).
+- **Forward Email inventory (screenshots):** a catch-all with no recipients, several aliases
+  forwarding to the main user, a few users with small IMAP stores, and one alias pointing at the old
+  Ivy's webhook (never set up, abandoned). Correction to an earlier statement: Forward Email DID
+  store ~2.5 MB of IMAP mail (operator: nothing useful).
 - **Lattice code search:** nothing live receives mail by Worker/webhook; only the old Ivy in
   `_junkdrawer` did. Lattice only sends (Resend) from many `@grove.place` addresses. The old
   `ivy.grove.place` Worker is still deployed (HTTP 200); harmless, removable later.
-- **Decisions:** users autumn, hello, dmca, security, dev; routing alerts/github/legal -> autumn,
-  feedback -> hello; catch-all -> hello (variant that excludes real users); `triage@` not recreated;
-  "Allow Account Reset" unchecked (Purelymail login is `autumnsgrove@purelymail.com`, off-domain).
+- **Decisions:** separate users per role address plus a `dev` test user; routing rules send the
+  alert/notification aliases to the main user and feedback to the support user; the catch-all goes
+  to the support user (variant that excludes real users); the old webhook alias was not recreated;
+  "Allow Account Reset" unchecked (the Purelymail login is off-domain).
 - **Server facts learned:** Purelymail greylists unknown senders (a bare SMTP RCPT probe got
   `451 4.7.1 greylist`), so a first message from a new sender may arrive minutes late. IMAP 993 and
   SMTP 465/587 reachable. MX priority is 0 (any value works as the only MX).
-- **Result:** `autumn@grove.place` added to Apple Mail only (deliberately; hello/dmca/security stay
+- **Result:** the main address was added to Apple Mail only (deliberately; the role addresses stay
   webmail-only until Ivy). Inbound from pm.me and outbound to pm.me both confirmed working.
 - **Not yet confirmed:** spf/dkim/dmarc=pass in headers; a Grove-sent (Resend) email passing DMARC
   under `p=reject`; alias and catch-all routing; send-as from an alias.
@@ -543,3 +543,14 @@ checklist: **no LICENSE file exists yet**, full-history secret scan, review docs
 (role email addresses, `potato-remote` alias, the candid `qa-log.md`), repo settings, and the
 mockups. Public repos get free Actions minutes, so the earlier minutes concern is moot. The
 workflow files themselves are not written yet.
+
+## Round 27 — going public: addresses removed, LICENSE, README, SECURITY (2026-10-01)
+
+Operator asked to remove the role email addresses now (they stay in git history) and for mockups to
+use a generic address; and to add a brief LICENSE, README and SECURITY file. Done: addresses
+replaced by generic wording in the docs and `CLAUDE.md`, and by `example.com` addresses in the
+mockups (`me@`, `hello@`, `support@`, `alerts@`); the Purelymail login identity removed from the
+migration notes. `LICENSE` is the standard AGPL-3.0 text (SPDX copy; gnu.org was unreachable from
+the sandbox). `SECURITY.md` points to GitHub private vulnerability reporting, which must be switched
+on in the repo settings before going public. `dev@` (the throwaway test user) and the
+`potato-remote` alias are still mentioned and were left as is.

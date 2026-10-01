@@ -6,7 +6,7 @@ detail is in `docs/`; this file is the short version.
 ## The project
 
 Ivy is a self-hosted web mail client: one Go binary with an embedded SvelteKit frontend. It mirrors
-an existing IMAP/SMTP mailbox (first: Purelymail, `autumn@grove.place`) into SQLite and adds fast
+an existing IMAP/SMTP mailbox (first: Purelymail, on the operator's own domain) into SQLite and adds fast
 search, tags and careful LLM features. Single operator, used mostly from Safari on an iPhone and
 iPad over Tailscale (sometimes Firefox), deployed on a Le Potato SBC (aarch64, ~800 MB RAM free).
 Sibling of Polaris in philosophy, fully independent code. No auth for now; it must feel frictionless.
