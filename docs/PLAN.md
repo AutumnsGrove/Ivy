@@ -183,7 +183,8 @@ Every milestone's exit criteria include the TESTING.md definition of done (unit 
 E2E on both viewports + a live check on the dev mailbox/potato).
 
 0. **Harness (settled, round 21).** Before any feature: `internal/mailworld` (fake IMAP/SMTP/
-   OpenRouter/Ollama/clock with fault injection), the `ivy-dev` CLI, the day-one E2E smoke slice
+   OpenRouter/Ollama/clock with fault injection), the **offline seeded local dev stack
+   (`make dev`, `DEV.md`, round 22)**, the `ivy-dev` CLI, the day-one E2E smoke slice
    (boot, `init`, deliver, read, flag, restart; WebKit + Chromium), CI with lint/`-race`/cgo-free
    checks, the OpenAPI + sqlc codegen pipeline, the compression skeleton with its budget tests, and
    `make potato-bench`. *Exit:* smoke slice green in CI and on the potato, benchmarks recorded.

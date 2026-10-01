@@ -23,7 +23,11 @@ slice (`docs/STANDARDS.md` section 3), not features.
 `docs/PLAN.md` product and milestones · `docs/ARCHITECTURE.md` design · `docs/STANDARDS.md`
 engineering standards (read before writing code) · `docs/STACK.md` libraries · `docs/TESTING.md`
 test strategy and definition of done · `docs/PERFORMANCE.md` compression and budgets ·
-`docs/JEV.md` the cheap decision engine · `docs/qa-log.md` every decision, in order.
+`docs/DEV.md` the offline seeded local dev stack (`make dev`) · `docs/JEV.md` the cheap decision
+engine · `docs/qa-log.md` every decision, in order.
+
+All development and UI iteration happens against the local dev stack and mailworld, never a real
+mailbox. Real credentials live only in a git-ignored `.env` and are used only by `live` tests.
 
 ## Non-negotiables
 

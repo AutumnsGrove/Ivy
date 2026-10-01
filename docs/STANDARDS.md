@@ -77,6 +77,7 @@ thing.
   - `ivy-dev scenario run <file.yaml>` replays a scripted scenario (also used by E2E).
   - `ivy-dev seed --messages N`.
   The CLI is a thin client of the same scenario API; it contains no logic of its own.
+  The everyday human entry point is `make dev` (seeded, offline, hot-reloading); see `DEV.md`.
 
 **Day-one E2E smoke slice (written before any feature code):** the stack boots, the first-run `init`
 completes against the mail world, a delivered message appears in the inbox in the browser, opening

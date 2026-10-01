@@ -474,3 +474,14 @@ milestone (`TESTING.md` 7b).
 
 Still open for a later round: lore names; repo visibility; whether to run the Jev/Purelymail spikes
 before or after Milestone 0; offline PWA reading; a `.gitignore` before any secret exists.
+
+## Round 22 — local dev stack (2026-10-01)
+
+Operator: we need a way to start a local dev stack so we can iterate without being connected to a
+real remote mailbox, with pre-filled data via a seeded database. Written as `DEV.md` (one command,
+`make dev`; mailworld + Ivy + Vite HMR; deterministic seed profiles empty/minimal/demo/large;
+`full` mode syncs over real IMAP, `fast` mode seeds SQLite through the real store code; snapshots
+for instant reset; named states for every edge-case screen; safety rails that refuse real hosts and
+real `.env`). Added to Milestone 0. Added a `.gitignore` (`.env`, `.dev/`, SQLite files) before any
+secret exists. Interpretation: "iterate on our own documents" read as iterating on the app/UI
+against realistic mail; say so if it meant something else.
