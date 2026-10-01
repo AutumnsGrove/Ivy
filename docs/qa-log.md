@@ -220,4 +220,39 @@ explicit go-ahead. Executed:
    change, the reverse is not). Lattice's docs link to the `AutumnsGrove/Ivy` URL, which now points at
    this project.
 
+## Round 15 — the Purelymail migration (2026-10-01)
+
+Executed with the operator in Cloudflare DNS and Purelymail's dashboard; checked with `dig`.
+
+- **DNS before:** MX -> Forward Email (priorities 10/20); only root TXT was Forward Email's
+  verification; no SPF, no DMARC; Grove's Resend records (`resend._domainkey`, `send.grove.place`
+  MX/SPF via SES) on separate names.
+- **DNS after (verified):** MX `0 mailserver.purelymail.com`; SPF `v=spf1 include:_spf.purelymail.com ~all`;
+  Purelymail ownership TXT; DKIM CNAMEs `purelymail1/2/3._domainkey`; `_dmarc` CNAME ->
+  `dmarcroot.purelymail.com` (**p=reject**); autodiscover SRV. Forward Email records removed;
+  Resend records untouched.
+- **Forward Email inventory (screenshots):** catch-all (no recipients), alerts->autumn, autumn (IMAP,
+  1.51 MB), dmca (IMAP, 472 KB, no forward), feedback->hello, github->autumn, hello (IMAP, 356 KB, no
+  forward, so NOT forwarded to autumn), legal->autumn, security->autumn (+IMAP), triage->
+  `https://ivy.grove.place/api/webhook/incoming` (old Ivy, never set up, abandoned). Correction to
+  an earlier statement: Forward Email DID store ~2.5 MB of IMAP mail (operator: nothing useful).
+- **Lattice code search:** nothing live receives mail by Worker/webhook; only the old Ivy in
+  `_junkdrawer` did. Lattice only sends (Resend) from many `@grove.place` addresses. The old
+  `ivy.grove.place` Worker is still deployed (HTTP 200); harmless, removable later.
+- **Decisions:** users autumn, hello, dmca, security, dev; routing alerts/github/legal -> autumn,
+  feedback -> hello; catch-all -> hello (variant that excludes real users); `triage@` not recreated;
+  "Allow Account Reset" unchecked (Purelymail login is `autumnsgrove@purelymail.com`, off-domain).
+- **Server facts learned:** Purelymail greylists unknown senders (a bare SMTP RCPT probe got
+  `451 4.7.1 greylist`), so a first message from a new sender may arrive minutes late. IMAP 993 and
+  SMTP 465/587 reachable. MX priority is 0 (any value works as the only MX).
+- **Result:** `autumn@grove.place` added to Apple Mail only (deliberately; hello/dmca/security stay
+  webmail-only until Ivy). Inbound from pm.me and outbound to pm.me both confirmed working.
+- **Not yet confirmed:** spf/dkim/dmarc=pass in headers; a Grove-sent (Resend) email passing DMARC
+  under `p=reject`; alias and catch-all routing; send-as from an alias.
+
+Next session candidates: the confirmations above; a `.gitignore` (with `.env`) and `dev@`
+credentials in a local `.env`; the live IMAP spike on `dev@` (PERMANENTFLAGS, ANNOTATION, folder
+roles, Sent behavior); the Ivy-specific Jev spike (needs the operator's OpenRouter key; ask first);
+the operator's review of the plan docs and the unconfirmed API-design default.
+
 Notes on round 5: the second-stage model sees raw email text, so it's the higher-risk stage: no tools, structured output (`needs_me` bool + short reason), reason rendered as plain text. Configurability needs a deliberate home (config file vs in-app settings with per-account overrides), asked in round 6.

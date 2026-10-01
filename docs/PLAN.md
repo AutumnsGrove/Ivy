@@ -29,10 +29,14 @@ job); Gmail parity; importing old Proton mail (start fresh; revisit as an option
 
 ## 2. Prerequisites (before building, after planning)
 
-1. **Migrate grove.place mail from Forward Email to Purelymail** and create the users (likely one
-   per address: autumn@, hello@, security@, dmca@, ...). The operator wants help with this. Purelymail
-   supports many users on many custom domains at no extra charge, routing rules, and send-as.
-2. A throwaway **`dev@`** Purelymail user for tests, seeded with sample mail (TESTING.md section 7).
+1. ~~Migrate grove.place mail from Forward Email to Purelymail~~ **DONE 2026-10-01** (details in
+   `qa-log.md` round 15). Users: autumn, hello, dmca, security, dev. Routing rules: alerts/github/
+   legal -> autumn, feedback -> hello; catch-all -> hello. Inbound and outbound confirmed for
+   `autumn@` in Apple Mail. Still to confirm: auth headers, a Grove (Resend) email passing DMARC
+   under `p=reject`, alias/catch-all routing, and send-as from an alias.
+2. A throwaway **`dev@`** Purelymail user for tests (**created**; still needs seeding with sample
+   mail, TESTING.md section 7). Its credentials go in a git-ignored local `.env`, never in chat or
+   the repo (the repo has no `.gitignore` yet; add one before any secret exists on disk).
 3. Operator's **OpenRouter key** available for the Jev/chat/vision spikes (ask before using it).
 
 ## 3. Features (settled)
