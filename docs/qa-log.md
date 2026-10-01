@@ -376,6 +376,14 @@ lot of room to extend). Decisions:
   hits, a "similar in meaning" hit) and Tags (your tags with counts, "Placed for you" local tags
   with the firefly dot, Rules and People links). Settings gained photo size and location-removal rows.
 
+**Follow-up (same day):** the gold-and-lilac "Ask Ivy" doorway card in Search was disliked as
+strange; removed. The Ask Ivy switch segment now uses an icon (Lucide message-circle) plus text, like
+Search, and the in-results link is a plain quiet row. **"Recent photos" is not possible from a web
+page:** Safari/PWAs cannot list the photo library, only open the native picker and receive what is
+chosen (sources: web search on iOS Safari file inputs; HEIC conversion in Safari 17+ is a known
+quirk). The attach sheet now shows Photos / Camera / Files (native pickers) and **"From your mail"**
+(attachments already in the mirror, attached server-side).
+
 Open: provider's real max message size (check SMTP `SIZE` live); whether tag colours are free-choice
 or from the palette; how the agent trace behaves while it is still working (streaming state not
 mocked yet); People and Rules screens.

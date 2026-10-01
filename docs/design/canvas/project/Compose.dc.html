@@ -102,16 +102,11 @@ body{margin:0}
         <div class="opt"><svg class="ic" viewBox="0 0 24 24"><path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"></path><circle cx="12" cy="13" r="3"></circle></svg>Camera</div>
         <div class="opt"><svg class="ic" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>Files</div>
       </div>
-      <div style="font-size:11px;font-weight:500;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin:20px 4px 8px">Recent photos</div>
-      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px">
-        <div class="ph sel" style="background:linear-gradient(135deg,#3a6b4a,#0b1a14)"><span class="n">1</span></div>
-        <div class="ph sel" style="background:linear-gradient(135deg,#6b5a8a,#120e22)"><span class="n">2</span></div>
-        <div class="ph" style="background:linear-gradient(135deg,#8a7a4a,#1f1a0c)"></div>
-        <div class="ph" style="background:linear-gradient(135deg,#4a7a8a,#0c1a1f)"></div>
-        <div class="ph" style="background:linear-gradient(135deg,#8a4a6b,#1f0c14)"></div>
-        <div class="ph" style="background:linear-gradient(135deg,#4a8a6b,#0c1f16)"></div>
-        <div class="ph" style="background:linear-gradient(135deg,#7a6b4a,#1a140c)"></div>
-        <div class="ph" style="background:linear-gradient(135deg,#5a4a8a,#140c1f)"></div>
+      <div style="font-size:11px;font-weight:500;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin:20px 4px 8px">From your mail</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="row" style="gap:12px;padding:8px 12px 8px 8px;border-radius:14px;border:1px solid var(--glass-border)"><div style="width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,#3a6b4a,#0b1a14);flex:none"></div><div style="min-width:0;flex-grow:1"><div class="ell" style="font-size:13.5px">blog-home.png</div><div style="font-size:11.5px;color:var(--faint)">Mara Linden · today</div></div></div>
+        <div class="row" style="gap:12px;padding:8px 12px 8px 8px;border-radius:14px;border:1px solid var(--glass-border)"><div style="width:44px;height:44px;border-radius:10px;background:rgba(196,181,253,0.12);display:flex;align-items:center;justify-content:center;flex:none"><svg class="ic" viewBox="0 0 24 24" style="color:var(--accent)"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg></div><div style="min-width:0;flex-grow:1"><div class="ell" style="font-size:13.5px">migration.pdf</div><div style="font-size:11.5px;color:var(--faint)">You sent · last week</div></div></div>
+        <div class="row" style="gap:12px;padding:8px 12px 8px 8px;border-radius:14px;border:1px solid var(--glass-border)"><div style="width:44px;height:44px;border-radius:10px;background:rgba(196,181,253,0.12);display:flex;align-items:center;justify-content:center;flex:none"><svg class="ic" viewBox="0 0 24 24" style="color:var(--accent)"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg></div><div style="min-width:0;flex-grow:1"><div class="ell" style="font-size:13.5px">invoice-0412.pdf</div><div style="font-size:11.5px;color:var(--faint)">Cloudflare · Oct</div></div></div>
       </div>
       <div class="row" style="margin:16px 4px 0;gap:10px">
         <div style="flex-grow:1">
@@ -119,7 +114,6 @@ body{margin:0}
           <div style="font-size:11.5px;color:var(--faint);margin-top:2px">Location is removed from photos</div>
         </div>
         <span style="font-size:13.5px;color:var(--muted)">Large</span>
-        <button style="height:42px;padding:0 20px;border-radius:21px;border:0;background:var(--accent);color:var(--on-accent);font:500 14px 'Lexend',system-ui,sans-serif">Add 2</button>
       </div>
     </div>
   </sc-if>

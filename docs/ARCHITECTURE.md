@@ -137,8 +137,14 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 - **Threading:** JWZ from Message-ID/References/In-Reply-To with a normalized-subject fallback;
   computed on arrival and stored.
 - **Composing with attachments and images (settled need, round 18):** the editor can attach
-  photos and files (phone photo library, camera and Files picker; desktop picker and drag-drop) and
-  place images inline. Uploads go to the server's temp storage and attach to the `send_queue` row;
+  photos and files and place images inline. **Browser limits:** a web page cannot browse the device
+  photo library, so there is no "recent photos" grid. Photos, Camera and Files are buttons that open
+  the phone's own picker (`<input type="file">`, with `accept="image/*"` for the photo/camera sheet;
+  `capture` would force camera-only, so it is used only on the Camera button); the page receives
+  just what the user picks. Desktop adds drag-drop and paste. iOS Safari 17+ may hand back HEIC, so the
+  server converts HEIC to JPEG (verify on the real phone). Separately, a **"From your mail"** list
+  offers attachments already in the mirror (received or sent), attached by a server-side copy with no
+  upload. Uploads go to the server's temp storage and attach to the `send_queue` row;
   enmime's builder emits `multipart/mixed` (+ `multipart/related` with `cid:` for inline images).
   Rules: a total-size limit read from the provider (SMTP `SIZE`; verify Purelymail's live) with a
   clear error before sending, a MIME-type allow/deny list for the dangerous types, **EXIF/location
