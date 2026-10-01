@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Send failed, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.glass-strong{background:var(--glass-strong);border:1px solid var(--glass-border);backdrop-filter:blur(20px) saturate(1.2);-webkit-backdrop-filter:blur(20px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.row{display:flex;align-items:center}
+.fl{display:flex;align-items:center;gap:10px;min-height:46px;border-bottom:1px solid var(--glass-border);font:400 14.5px 'Lexend',system-ui,sans-serif}
+.fl .k{width:52px;color:var(--faint);font-size:13px;flex:none}
+.att{position:relative;width:132px;height:64px;border-radius:12px;border:1px solid var(--glass-border);flex:none;display:flex;align-items:center;gap:8px;padding:0 10px}
+.att.bad{border-color:rgba(242,149,127,0.6);background:rgba(242,149,127,0.08)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:50px;border-radius:25px;font:500 15px 'Lexend',system-ui,sans-serif;border:1px solid var(--glass-border);color:var(--text);background:transparent;width:100%}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:transparent}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass-strong:rgba(10,22,19,0.94);--glass-border:rgba(190,235,208,0.15);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238;--panel:rgba(8,18,15,0.9)">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+
+  <!-- the compose screen, still holding the message -->
+  <div style="position:absolute;left:12px;right:12px;top:68px;bottom:78px;border-radius:26px;background:var(--panel);border:1px solid var(--glass-border);padding:8px 18px;overflow:hidden">
+    <div class="fl"><span class="k">To</span><span>mara@example.com</span></div>
+    <div class="fl"><span class="k">Subject</span><span>Re: Moving my blog over to Grove?</span></div>
+    <div style="margin-top:14px;font-family:'Newsreader',Georgia,serif;font-size:18px;line-height:1.6">Hi Mara, Thank you for writing. Yes, you can bring your old posts over…</div>
+    <div class="row" style="gap:8px;margin-top:18px;overflow:hidden">
+      <div class="att bad"><svg class="ic" viewBox="0 0 24 24" style="color:#f2957f"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg><div style="min-width:0"><div style="font-size:12px">blog-export.zip</div><div style="font-size:11px;color:#f2957f">31 MB</div></div></div>
+    </div>
+  </div>
+  <div style="position:absolute;left:0;top:0;width:390px;height:844px;background:rgba(2,6,5,0.55)"></div>
+
+  <!-- the failure sheet -->
+  <div class="glass-strong" style="position:absolute;left:0;right:0;bottom:0;height:430px;border-radius:28px 28px 0 0;border-bottom:0;padding:10px 22px 26px">
+    <div style="width:40px;height:4px;border-radius:2px;background:rgba(242,237,220,0.25);margin:0 auto 20px"></div>
+    <div class="row" style="gap:14px">
+      <div style="width:48px;height:48px;border-radius:50%;background:rgba(242,149,127,0.12);border:1px solid rgba(242,149,127,0.4);display:flex;align-items:center;justify-content:center;color:#f2957f;flex:none"><svg class="ic" viewBox="0 0 24 24" style="width:24px;height:24px"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg></div>
+      <div><div style="font-family:'Newsreader',Georgia,serif;font-size:24px;font-weight:500">Not sent</div><div style="font-size:13px;color:var(--muted);margin-top:2px">to mara@example.com</div></div>
+    </div>
+    <div style="font-size:14.5px;line-height:1.55;margin-top:18px">Purelymail turned this message away because it is too large: <span style="color:#f2957f">31 MB</span> of a <span style="color:var(--text)">25 MB</span> limit.</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.5;margin-top:10px">Your message is safe in Drafts, and nothing was sent.</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:24px">
+      <button class="btn primary">Remove blog-export.zip and send</button>
+      <button class="btn">Go back and edit</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

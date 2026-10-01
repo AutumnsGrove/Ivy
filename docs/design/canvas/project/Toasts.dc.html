@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Toasts, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.row{display:flex;align-items:center}
+.toast{display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 10px 8px 16px;border-radius:28px;background:rgba(10,22,19,0.92);border:1px solid var(--glass-border);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 10px 30px rgba(0,0,0,0.35);font:400 14px 'Lexend',system-ui,sans-serif}
+.toast .act{height:36px;padding:0 14px;border-radius:18px;border:0;background:var(--accent-soft);color:var(--accent);font:500 13px 'Lexend',system-ui,sans-serif;display:inline-flex;align-items:center}
+.cap{font:500 11px 'Lexend',system-ui,sans-serif;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin:0 8px 8px}
+.glint{width:7px;height:7px;border-radius:50%;background:var(--firefly);box-shadow:0 0 8px 2px var(--firefly-glow);animation:pulse 3.6s ease-in-out infinite;flex:none}
+@keyframes pulse{0%,100%{opacity:0.55}50%{opacity:1}}
+@media (prefers-reduced-motion: reduce){.glint{animation:none}}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass-border:rgba(190,235,208,0.15);--firefly:#f7dc92;--firefly-glow:rgba(247,220,146,0.6);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40)">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+
+  <div style="position:absolute;left:18px;right:18px;top:48px;display:flex;flex-direction:column;gap:22px">
+    <div><div class="cap">Sending, with undo</div>
+      <div class="toast"><svg viewBox="0 0 36 36" style="width:28px;height:28px;flex:none"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="3"></circle><circle cx="18" cy="18" r="15" fill="none" stroke="#c4b5fd" stroke-width="3" stroke-linecap="round" stroke-dasharray="94" stroke-dashoffset="34" transform="rotate(-90 18 18)"></circle></svg><span style="flex-grow:1">Sending to Mara…</span><span class="act">Undo</span></div></div>
+
+    <div><div class="cap">Sent</div>
+      <div class="toast"><svg class="ic" viewBox="0 0 24 24" style="color:#86efac"><path d="M21.801 10A10 10 0 1 1 17 3.335"></path><path d="m9 11 3 3L22 4"></path></svg><span style="flex-grow:1">Sent</span></div></div>
+
+    <div><div class="cap">Done, with undo</div>
+      <div class="toast"><svg class="ic" viewBox="0 0 24 24" style="color:var(--accent)"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg><span style="flex-grow:1">Archived</span><span class="act">Undo</span></div></div>
+
+    <div><div class="cap">Will retry on its own</div>
+      <div class="toast" style="border-color:rgba(245,196,90,0.4)"><svg class="ic" viewBox="0 0 24 24" style="color:#f5c45a"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg><div style="flex-grow:1;min-width:0"><div>Couldn't archive yet</div><div style="font-size:12px;color:var(--muted)">Ivy will keep trying</div></div></div></div>
+
+    <div><div class="cap">Needs you</div>
+      <div class="toast" style="border-color:rgba(242,149,127,0.45)"><svg class="ic" viewBox="0 0 24 24" style="color:#f2957f"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg><div style="flex-grow:1;min-width:0"><div>Not sent</div><div style="font-size:12px;color:var(--muted)">Saved in Drafts</div></div><span class="act">Open</span></div></div>
+
+    <div><div class="cap">Reconnected</div>
+      <div class="toast"><span class="glint"></span><span style="flex-grow:1">Back online. Catching up…</span></div></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

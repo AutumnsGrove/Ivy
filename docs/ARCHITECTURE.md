@@ -196,6 +196,13 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 - **Extraction tiers:** bodies/.ics (0), digital PDFs + OOXML in pure Go (1), vision model (2),
   OCR far-out (3); structured data (schema.org JSON-LD) is tried before any model call for receipts.
 
+- **Rule compiler (round 20):** `rules/compile` turns one plain-text sentence into a validated rule
+  plus any new smart checks with a single structured `complete()` call (see JEV.md 3F). Pipeline:
+  gate -> model -> JSON-schema validate -> vocabulary check (local-only actions, known fields, known
+  accounts) -> dry run -> user review -> store. Rules and checks are stored as data (`rules`,
+  `checks` tables with instruction hash); the engine evaluates header conditions locally and reads
+  check answers from the cached Jev results, so running a rule never calls the compiler.
+
 ## 8. API, frontend, config
 
 - **API:** JSON REST + SSE; one typed client module in the frontend; contract generated or shared so
@@ -227,6 +234,26 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 - **Resource budget (potato, 1.9 GB RAM, ~800 MB free, swap in use):** Ivy target well under
   100 MB resident at idle; embedding and extraction are serialized background jobs; numbers get
   measured and recorded in `docs/perf.md`, not assumed.
+
+## 9b. Failure states (round 20)
+
+Things go wrong in four places; each has a distinct, calm state. Every error carries a stable code,
+and the UI copy answers three questions: what happened, what is safe, what can I do.
+
+| Where | Cause | State the user sees |
+|---|---|---|
+| Phone -> Ivy | Server unreachable (Tailscale off, server down) | Full-screen "Can't reach Ivy" with Try again. v1 has no offline reading (open question: cache recent messages read-only in the PWA) |
+| Ivy -> provider (sync) | Auth failed (`auth_failed`), host unreachable (`unreachable`), other (`error`), backfilling | Amber banner over the inbox naming the account, "your mail is safe, showing what Ivy has", a Fix action; a dot on the account switcher; **Mirror health** screen with per-account status, progress for backfill, Update password / Try again / View log |
+| Message fetch | Body or attachment not downloaded yet or fetch failed | Header and metadata still shown; an inline "This message didn't load" card with Try again and Show what we have; a failing attachment shows its own Retry. Stored as `body_status` so retries back off and survive restarts |
+| Send / write path | SMTP 4xx (transient), 5xx (rejected, e.g. too large), outbox IMAP command failed | Transient: automatic retry with a quiet "will keep trying" toast. Permanent: a **Not sent** sheet with the reason, the draft kept in Drafts, and a concrete fix ("Remove X and send"). Message size is checked against the provider's `SIZE` before sending where known |
+| LLM | Monthly cap reached, provider not responding, gate refusal | Inline card in Ask Ivy ("Ivy is resting", "Ivy can't answer right now") with Raise the limit / Try again / Search instead; smart features degrade to doing nothing, never to blocking mail |
+
+Data model: per account `sync_state` (status, last_ok_at, last_error_code, last_error_detail,
+backfill_done/backfill_total) and per message `body_status`; the SSE hub streams changes so banners
+appear and clear live. Reconnection shows a brief "Back online. Catching up..." toast. Undo and
+retry affordances (Sending with Undo, Archived with Undo) are toasts with a deadline, backed by the
+outbox. Errors never delete anything and never silently drop an action: the outbox keeps it until it
+succeeds or the user dismisses it.
 
 ## 10. Security summary
 

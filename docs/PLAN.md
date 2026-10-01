@@ -102,11 +102,25 @@ mirror (correspondents, recent threads, compose autocomplete).
   ("placed for you": needs you, newsletters, looks real found in Junk) are local and removable.
 - **People:** the Tags tab links to People (often in touch, everyone, search) and a person page
   (name, address, which account they write to, Write, All mail, tags, conversations).
-- **Rules:** shown as plain sentences ("When mail is from Cloudflare, tag it receipts"), each with
-  an on/off switch and a match count. A rule's conditions can include a **plain-language "is about"
-  phrase** that Jev answers; the editor shows how many of the last 200 messages it would have
-  matched before saving. **Rule actions are local only: add a tag, show in Reading, snooze.**
-  Moving, deleting, forwarding and sending are never a rule action (they always ask).
+- **Rules (round 20):** shown as plain sentences ("When mail is from Cloudflare and looks like a
+  receipt, tag it receipts"), each with an on/off switch and a match count. **Rules are written by
+  describing them:** you type one free-form sentence and **one structured generation** turns it into
+  our exact rule format (plus any new smart checks), once; running a rule never calls the generator
+  again. You review a plain restatement and a dry run on your last 200 messages ("5 would be tagged,
+  6 more from Cloudflare left alone") and then turn it on; nothing runs before that. A
+  detail editor stays for tweaking. **Rule actions are local only: add a tag, show in Reading,
+  snooze.** Moving, deleting, forwarding and sending are never a rule action (they always ask).
+- **Smart checks:** user-owned classification questions Jev answers per message ("looks like a
+  receipt", "a job application"), listed on a Smart checks screen alongside the built-ins, each with
+  an editable plain description, a "how sure" setting (Eager / Balanced / Careful), the accounts it
+  runs on (locked for LLM-off accounts) and a try-on-recent-mail action. Details in `JEV.md` 3F.
+
+**Failure states (round 20).** Calm, specific screens and banners for: server unreachable, sync
+problems (auth failed, unreachable, backfilling) with a **Mirror health** screen, a message or
+attachment that failed to load, send failures (too large, rejected, retrying) with the draft kept,
+toasts with undo and "will keep trying", smart-feature limits and provider errors in Ask Ivy, and
+empty/no-result states. Principle: say what happened, what is safe, and what to do; never lose or
+silently drop anything. See `ARCHITECTURE.md` section 9b.
 
 **Compose (built last).** Markdown and a rich-text editor (markdown first), per-address signatures,
 **undo send with a configurable delay** (setting; default 10 s, 0 = off), drafts in the server's

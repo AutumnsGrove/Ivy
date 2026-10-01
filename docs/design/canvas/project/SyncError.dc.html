@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Inbox with a sync error, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.stars{position:absolute;left:0;top:0;width:100%;height:380px;background:url(assets/stars.svg) repeat-x top left;-webkit-mask-image:linear-gradient(#000,transparent);mask-image:linear-gradient(#000,transparent)}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.glass-strong{background:var(--glass-strong);border:1px solid var(--glass-border);backdrop-filter:blur(20px) saturate(1.2);-webkit-backdrop-filter:blur(20px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.row{display:flex;align-items:center}
+.ell{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:1px solid var(--glass-border);background:var(--glass);color:var(--text)}
+.acctbtn{position:relative;display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 14px;border-radius:22px;border:1px solid var(--glass-border);background:var(--glass);color:var(--text);font:400 14px 'Lexend',system-ui,sans-serif}
+.tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:1;height:50px;border:0;background:transparent;color:var(--faint);font:400 10.5px 'Lexend',system-ui,sans-serif;border-radius:18px}
+.tab.on{color:var(--accent)}
+.banner{display:flex;align-items:center;gap:12px;border-radius:18px;padding:12px 14px;background:rgba(245,196,90,0.10);border:1px solid rgba(245,196,90,0.4)}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.58);--glass-strong:rgba(10,22,19,0.86);--glass-border:rgba(190,235,208,0.15);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+  <div class="stars"></div>
+
+  <div style="position:absolute;left:14px;right:14px;top:16px;display:flex;align-items:center;gap:10px">
+    <button class="acctbtn"><span style="width:9px;height:9px;border-radius:50%;background:var(--accent)"></span>All inboxes<svg class="ic ic-sm" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"></path></svg><span style="position:absolute;right:2px;top:2px;width:11px;height:11px;border-radius:50%;background:#f5c45a;border:2px solid #0a1613"></span></button>
+    <span style="flex-grow:1"></span>
+    <button class="iconbtn" aria-label="Search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
+  </div>
+  <div style="position:absolute;left:18px;right:18px;top:74px">
+    <div style="font-size:26px;font-weight:300">Inbox</div>
+  </div>
+
+  <div style="position:absolute;left:14px;right:14px;top:122px;display:flex;flex-direction:column;gap:8px">
+    <!-- the banner: calm amber, says what, what's safe, what to do -->
+    <div class="banner">
+      <svg class="ic" viewBox="0 0 24 24" style="color:#f5c45a"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"></path><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>
+      <div style="flex-grow:1;min-width:0"><div style="font-size:14px;font-weight:500">hello@ can't sign in</div><div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4">Purelymail didn't accept the password. Your mail is safe. Showing what Ivy already has.</div></div>
+      <button style="height:34px;padding:0 14px;border-radius:17px;border:1px solid rgba(245,196,90,0.5);background:transparent;color:#f5c45a;font:500 13px 'Lexend',system-ui,sans-serif">Fix</button>
+    </div>
+
+    <div class="glass" style="border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;gap:3px">
+      <div class="row" style="gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:#f0a6ca"></span><span class="ell" style="font-size:14.5px;font-weight:500;flex-grow:1">Mara Linden</span><span style="font-size:11.5px;color:var(--faint)">9:41</span></div>
+      <div class="ell" style="font-size:14px;font-weight:500">Moving my blog over to Grove?</div>
+      <div class="ell" style="font-size:13px;color:var(--muted)">Hi! A friend pointed me to Grove and I wondered whether I can bring my old posts…</div>
+    </div>
+    <div class="glass" style="border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;gap:3px">
+      <div class="row" style="gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:#7cc4ff"></span><span class="ell" style="font-size:14.5px;font-weight:500;flex-grow:1">GitHub</span><span style="font-size:11.5px;color:var(--faint)">8:12</span></div>
+      <div class="ell" style="font-size:14px">[Lattice] Pull request merged into main</div>
+      <div class="ell" style="font-size:13px;color:var(--muted)">autumnsgrove merged 3 commits. Review the changes…</div>
+    </div>
+    <div class="glass" style="border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;gap:3px">
+      <div class="row" style="gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:#7cc4ff"></span><span class="ell" style="font-size:14.5px;font-weight:500;flex-grow:1">Purelymail</span><span style="font-size:11.5px;color:var(--faint)">Mon</span></div>
+      <div class="ell" style="font-size:14px">Your receipt for this month</div>
+      <div class="ell" style="font-size:13px;color:var(--muted)">Thank you for your payment. This receipt covers…</div>
+    </div>
+  </div>
+
+  <nav class="glass-strong" aria-label="Main" style="position:absolute;left:14px;right:14px;bottom:14px;height:58px;border-radius:24px;display:flex;align-items:center;padding:0 6px">
+    <button class="tab on"><svg class="ic" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>Inbox</button>
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v14"></path><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"></path></svg>Reading</button>
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>Search</button>
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>Tags</button>
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M10 5H3"></path><path d="M12 19H3"></path><path d="M14 3v4"></path><path d="M16 17v4"></path><path d="M21 12h-9"></path><path d="M21 19h-5"></path><path d="M21 5h-7"></path><path d="M8 10v4"></path><path d="M8 12H3"></path></svg>Settings</button>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

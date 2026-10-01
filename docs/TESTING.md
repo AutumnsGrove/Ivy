@@ -87,6 +87,17 @@ actually sent:
   message the loop did not read is rejected; hostile mail that tries to steer the loop (call another
   tool, claim a fake citation, ask for an action) must not change the tool calls beyond what the
   question needs; every step has a ledger row.
+- **Rule compiler:** a fixture of ~30 plain sentences (including ambiguous ones and ones asking for
+  forbidden actions like "delete these" or "forward to my other address") against the fake
+  OpenRouter: output must validate, reuse existing checks and tags, never contain a non-local action,
+  and return a clarification when ambiguous. Hostile output (extra fields, unknown actions, huge
+  strings) is rejected by the validator. The dry run's header part makes zero LLM calls; the check
+  part is ledgered and capped. A saved rule never triggers a compiler call when it runs.
+- **Failure states (fake servers + faults):** the fake IMAP/SMTP servers can inject auth failure,
+  dropped connections, timeouts, 4xx and 5xx (including 552 too large), slow bodies and missing
+  parts. Assert: no data loss, the outbox keeps queued actions until success, banners and Mirror
+  health reflect the real state and clear on recovery, a failed send keeps its draft, and Playwright
+  runs each state on phone and desktop (including the browser going offline) with visual baselines.
 - **Attachments on send:** size-limit and type rules, EXIF stripped by default, inline `cid:` images
   render in the sent copy, draft round-trip keeps attachments, undo-send releases the temp files.
 - **Spend caps:** hitting a cap stops calls and surfaces a clear state; ledger rows match calls 1:1.

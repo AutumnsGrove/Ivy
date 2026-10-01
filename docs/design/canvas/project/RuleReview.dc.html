@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>New rule, check it</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.stars{position:absolute;left:0;top:0;width:100%;height:380px;background:url(assets/stars.svg) repeat-x top left;-webkit-mask-image:linear-gradient(#000,transparent);mask-image:linear-gradient(#000,transparent)}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.row{display:flex;align-items:center}
+.ell{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:0;background:transparent;color:var(--text)}
+.lab{font:500 11px 'Lexend',system-ui,sans-serif;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin:20px 6px 8px}
+.sent{font:400 15px/1.9 'Lexend',system-ui,sans-serif;color:var(--muted)}
+.k{color:var(--faint);font-size:12px;letter-spacing:0.06em;text-transform:uppercase;margin-right:4px}
+.tok{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;border-radius:14px;background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--text);font-size:13.5px;margin:0 2px}
+.new{font-size:10.5px;color:var(--firefly);letter-spacing:0.05em;text-transform:uppercase;margin-left:2px}
+.glint{width:6px;height:6px;border-radius:50%;background:var(--firefly);box-shadow:0 0 8px 2px var(--firefly-glow);animation:pulse 3.6s ease-in-out infinite;flex:none}
+@keyframes pulse{0%,100%{opacity:0.55}50%{opacity:1}}
+@media (prefers-reduced-motion: reduce){.glint{animation:none}}
+.res{display:flex;align-items:center;gap:10px;min-height:48px;padding:6px 0;border-bottom:1px solid var(--glass-border)}
+.res:last-child{border-bottom:0}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:52px;border-radius:26px;font:500 15px 'Lexend',system-ui,sans-serif;border:1px solid var(--glass-border);color:var(--text);background:transparent;flex:1}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:transparent;flex:1.5}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.58);--glass-border:rgba(190,235,208,0.15);--firefly:#f7dc92;--firefly-glow:rgba(247,220,146,0.6);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+  <div class="stars"></div>
+
+  <div style="position:absolute;left:8px;right:14px;top:14px;display:flex;align-items:center;gap:4px">
+    <button class="iconbtn" aria-label="Back"><svg class="ic" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg></button>
+    <div style="flex-grow:1;font-size:20px;font-weight:300">Check your rule</div>
+  </div>
+
+  <div style="position:absolute;left:14px;right:14px;top:66px">
+    <div class="lab" style="margin-top:6px">Here is what I understood</div>
+    <div class="glass" style="border-radius:22px;padding:16px 18px;border-color:var(--accent-line)">
+      <div class="sent"><span class="k">When</span>mail is from<span class="tok">Cloudflare</span>and looks like a<span class="tok"><span class="glint"></span>receipt<span class="new">new</span></span><br><span class="k">Then</span>tag it<span class="tok"><span style="width:8px;height:8px;border-radius:50%;background:#7cc4ff"></span>receipts</span></div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.5;margin-top:10px;padding-top:12px;border-top:1px solid var(--glass-border)">Only real receipts get tagged. Cloudflare's other mail, like announcements, is left alone.</div>
+    </div>
+
+    <div class="lab">On your last 200 messages</div>
+    <div class="glass" style="border-radius:20px;padding:6px 16px">
+      <div class="res"><svg class="ic" viewBox="0 0 24 24" style="color:var(--accent)"><path d="M20 6 9 17l-5-5"></path></svg><div style="min-width:0;flex-grow:1"><div class="ell" style="font-size:14px">Receipt for your renewal</div><div style="font-size:11.5px;color:var(--faint)">Cloudflare · tagged</div></div></div>
+      <div class="res"><svg class="ic" viewBox="0 0 24 24" style="color:var(--accent)"><path d="M20 6 9 17l-5-5"></path></svg><div style="min-width:0;flex-grow:1"><div class="ell" style="font-size:14px">Invoice for your plan</div><div style="font-size:11.5px;color:var(--faint)">Cloudflare · tagged</div></div></div>
+      <div class="res"><svg class="ic" viewBox="0 0 24 24" style="color:var(--faint)"><path d="M5 12h14"></path></svg><div style="min-width:0;flex-grow:1"><div class="ell" style="font-size:14px;color:var(--muted)">Dev Day: save the date</div><div style="font-size:11.5px;color:var(--faint)">Cloudflare · left alone</div></div></div>
+      <div class="res"><svg class="ic" viewBox="0 0 24 24" style="color:var(--faint)"><path d="M5 12h14"></path></svg><div style="min-width:0;flex-grow:1"><div class="ell" style="font-size:14px;color:var(--muted)">What's new this quarter</div><div style="font-size:11.5px;color:var(--faint)">Cloudflare · left alone</div></div></div>
+    </div>
+    <div style="font-size:12.5px;color:var(--muted);margin:10px 8px 0;line-height:1.5">5 would be tagged, 6 more from Cloudflare would be left alone. Does that look right?</div>
+  </div>
+
+  <div class="row" style="position:absolute;left:18px;right:18px;bottom:36px;gap:10px">
+    <button class="btn">Edit details</button>
+    <button class="btn primary">Turn it on</button>
+  </div>
+  <div style="position:absolute;left:0;right:0;bottom:12px;text-align:center;font-size:11.5px;color:var(--faint)">Nothing happens until you turn it on.</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

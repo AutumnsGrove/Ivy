@@ -404,4 +404,36 @@ uses an "is about" phrase behaves on LLM-off accounts (proposal: those condition
 shown locked, like the Ask Ivy account picker); People merging when one person has several
 addresses; desktop versions of Tags, People and Rules.
 
+## Round 20 — smart checks, rule authoring and failure states (2026-10-01)
+
+Operator asked for **smart rules**: a way to add classification options for Jev to check against.
+Motivating case: not everything from Cloudflare is a receipt (Dev Day announcements etc.), so a
+header rule is too blunt; the rule needs "from Cloudflare AND looks like a receipt", which adds a
+classifier step. Operator then proposed the authoring model: **free-form text** ("I want emails from
+Cloudflare that look like receipts tagged as such") compiled by an agent **in one generation** into
+our exact Jev-ready format, so the user just types and the rule is properly made in the background,
+without wasting generations. Rules stay local-only (confirmed).
+
+Decisions: documented in `JEV.md` 3F (compiler contract: no email content as input, reuse existing
+checks and tags, schema + vocabulary validation, local-only actions, one optional clarifying
+question as the only extra call, dry run on the last 200 messages, edit text = new hash), `PLAN.md`
+(Rules and Smart checks), `ARCHITECTURE.md` (rule compiler in the LLM layer) and `TESTING.md`
+(compiler fixture and failure-state fault injection). New mockups: **Rules · Describe it**,
+**Rules · Check it**, **Smart checks** (list), **Smart check detail**; Rule details now uses a check
+chip instead of a free-text "is about" box.
+
+**Edge states requested ("handle all of that"):** mocked **Can't reach Ivy**, **Sync error** banner
+(account can't sign in) and the account-switcher dot, **Mirror health** (per-account status,
+backfill progress, Update password / Try again / View log), **Message failed to load** (plus a
+failed attachment), **Send failed** (too large; draft kept; one-tap fix), **Toasts** (sending with
+undo, sent, archived with undo, will retry, not sent, back online), **Ask Ivy limits and errors**
+(monthly cap reached, provider not responding), **No results**. Error taxonomy and data model in
+`ARCHITECTURE.md` 9b.
+
+Open: offline reading in the PWA (v1 says no; do we want a read-only cache of recent mail?);
+what a rule does when its check's account is LLM-off (proposal: the rule is paused and shown
+locked); whether the compiler runs on the same model as `complete()` or a cheaper one; how far the
+backfill option for a new check should go by default (proposal: new mail only, with an explicit
+"also apply to existing mail" showing a cost estimate).
+
 Notes on round 5: the second-stage model sees raw email text, so it's the higher-risk stage: no tools, structured output (`needs_me` bool + short reason), reason rendered as plain text. Configurability needs a deliberate home (config file vs in-app settings with per-account overrides), asked in round 6.
