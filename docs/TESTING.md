@@ -5,6 +5,12 @@ make untested code hard to merge, in Polaris's live-verification culture. Status
 
 ## 0. Principles
 
+0. **Test-driven, integration-weighted** (full rules in `STANDARDS.md` sections 1-3). Write the test
+   first, watch it fail for the right reason, make it pass, refactor. Most tests drive the real
+   core against the **mail world** fake (`internal/mailworld`, driven from Go, Playwright and the
+   `ivy-dev` CLI); unit tests are for pure branchy logic only. A thin end-to-end smoke slice (boot,
+   `init`, deliver a message, read it, flag it, restart) exists before any feature and grows with
+   each milestone. Performance budgets (`PERFORMANCE.md`) are tests too.
 1. **A feature is done only when it has all its layers**: unit + integration + (UI) end-to-end +
    one live check against real hardware/mail. "Done" is defined per layer in section 9.
 2. **Every bug gets a regression test, and the test must be seen failing without the fix**

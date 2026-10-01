@@ -4,8 +4,10 @@
 0-13 (`qa-log.md`). No implementation starts until this plan is approved.
 
 **Doc map:** `PLAN.md` (this: product, features, milestones, risks) · `ARCHITECTURE.md` (how it's
-built) · `JEV.md` (the cheap decision engine and its question catalog) · `TESTING.md` (how everything
-gets tested) · `qa-log.md` (every question and answer) · `../CLAUDE.md` (settled decisions for agents).
+built) · `STANDARDS.md` (engineering standards, TDD workflow) · `STACK.md` (libraries, pure-Go
+rule) · `PERFORMANCE.md` (compression, budgets) · `JEV.md` (the cheap decision engine and its
+question catalog) · `TESTING.md` (how everything gets tested) · `qa-log.md` (every question and
+answer) · `../CLAUDE.md` (rules for agents).
 
 ## 1. What Ivy is
 

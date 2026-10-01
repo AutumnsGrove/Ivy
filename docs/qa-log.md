@@ -437,3 +437,26 @@ backfill option for a new check should go by default (proposal: new mail only, w
 "also apply to existing mail" showing a cost estimate).
 
 Notes on round 5: the second-stage model sees raw email text, so it's the higher-risk stage: no tools, structured output (`needs_me` bool + short reason), reason rendered as plain text. Configurability needs a deliberate home (config file vs in-app settings with per-account overrides), asked in round 6.
+
+## Round 21 — standards, stack, test philosophy, performance (2026-10-01)
+
+Operator asked for a full-picture review and a standards baseline before implementation. Stated
+requirements: **strict TDD** (write tests first, watch them fail, implement, watch them pass);
+**mostly integration tests** over unit tests, **a few end-to-end tests from the very start**, using
+**full mocks**, including a proper mock of the whole email system, **drivable from a command line**
+(a CLI, rarely used since the real target is a remote deployment); **speed tests** to optimise
+quality; **compression from day one** (Polaris got slow on large data-heavy responses); **modern
+standards and pure-Go libraries, no C**; access from Safari on iPhone and iPad (sometimes Firefox)
+over Tailscale; **no auth model yet, frictionless**; **rewrite `CLAUDE.md`** as general code
+guidelines.
+
+Written: `STANDARDS.md` (TDD workflow, test shape, mail world + `ivy-dev` CLI, Go/frontend/API
+standards, access/exposure), `STACK.md` (libraries, pure-Go rule, open verifications),
+`PERFORMANCE.md` (compression plan, budgets, measurement loop); rewrote `CLAUDE.md`; added TDD and
+integration-first principles to `TESTING.md`. Target hardware confirmed from the vendor page: Le
+Potato AML-S905X-CC, quad Cortex-A53 1.5 GHz, 2 GB DDR3.
+
+Interpretation notes (confirm): "implementation tests" read as **integration** tests; "drive
+cycles" read as **repeatable speed/benchmark cycles**.
+
+Open questions asked this round are recorded with their answers below once given.
