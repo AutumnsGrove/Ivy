@@ -112,8 +112,10 @@ parallel one.
 - **Concurrency:** share by communicating, but a mutex is fine for small state. One SQLite writer
   (a single serialized write connection) and a pool of readers; never hold a transaction across
   network I/O. Run the whole suite under `-race`.
-- **SQL:** parameterised only, never string-built from input. Migrations are append-only and
-  positional (`user_version`); queries live next to their package; every query that can run on a
+- **SQL:** parameterised only, never string-built from input. **`sqlc` generates typed Go from plain
+  `.sql` files (settled, round 21)**: build-time tool, generated code committed with a CI drift
+  check, SQL kept D1-compatible. Migrations are append-only and positional (`user_version`);
+  queries live next to their package; every query that can run on a
   large table has an `EXPLAIN QUERY PLAN` test asserting it uses an index.
 - **Logging:** `slog`, structured, levels used honestly, no secrets, no message bodies or subjects
   at info level (mail is private; the log is a support artifact).
@@ -148,8 +150,11 @@ parallel one.
 
 ## 6. API standards
 
-- JSON REST plus SSE, one version prefix (`/api/v1`) kept internal; the contract is written first
-  and tests are written against it.
+- JSON REST plus SSE, one version prefix (`/api/v1`) kept internal. **The contract is
+  `api/openapi.yaml`, written first (settled, round 21):** Go server types and the TypeScript
+  client types are generated from it (generators are build-time tools, outputs committed, a CI
+  drift check fails if they are stale), and tests are written against the spec. SSE event shapes
+  are documented in the spec's extension section since OpenAPI does not model them natively.
 - Cursor pagination for every list (never offset on mail), stable ordering, explicit `limit` caps.
 - Idempotency keys on mutating requests that can be retried by a phone on a flaky connection
   (send, move, delete); the outbox is the enforcement point.
@@ -178,8 +183,12 @@ Details and budgets live in `PERFORMANCE.md`. The standards:
 
 ## 8. Access and exposure (no auth for now)
 
-- Ivy listens on a configured address (default: the Tailscale interface, never `0.0.0.0` unless
-  asked). Frictionless means no login screen, not no safeguards: reject requests whose `Host` is not
+- **Transport (settled, round 21): HTTPS via `tailscale serve`**, which gives a secure context
+  (service worker, PWA install, WebAuthn later). Ivy itself listens on localhost (or the tailnet
+  interface) and trusts the Tailscale proxy only from there; setup and `ivy doctor` check it. The
+  Host allow-list includes the tailnet name. Verify Add-to-Home-Screen on the iPhone/iPad early.
+- Ivy listens on a configured address (default: localhost behind `tailscale serve`, never
+  `0.0.0.0` unless asked). Frictionless means no login screen, not no safeguards: reject requests whose `Host` is not
   on the allow-list and mutating requests whose `Origin` does not match (blocks DNS rebinding and
   drive-by CSRF from other sites open in the same browser). Both are tested in dev and prod modes.
 - Auth is a seam, not a rewrite: a single middleware slot where passkeys or a token can be added

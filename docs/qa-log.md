@@ -460,3 +460,8 @@ Interpretation notes (confirm): "implementation tests" read as **integration** t
 cycles" read as **repeatable speed/benchmark cycles**.
 
 Open questions asked this round are recorded with their answers below once given.
+
+**Answers (round 21):** API contract = **OpenAPI spec first**, codegen for Go and TS types, CI drift
+check. SQL layer = **sqlc** (build-time, committed output). Transport = **HTTPS via
+`tailscale serve`**. Speed tests = **both**: product benchmarks with budgets and a budget on our own
+test/build loop (`PERFORMANCE.md` 3b). This closes `PLAN.md` section 7 item 1 (API design confirmed).

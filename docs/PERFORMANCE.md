@@ -91,6 +91,16 @@ Conventions:
 - Profiling is first-class: a `/debug/pprof` handler behind a config flag, and `ivy doctor`
   prints heap, goroutines and DB size.
 
+## 3b. Dev-loop budgets (settled, round 21: both product and loop speed)
+
+Our own feedback loop is measured like the product, because slow tests stop being run:
+- Unit + integration `go test ./...` under about 30 s warm on a dev machine; the day-one E2E smoke
+  slice under about 60 s; full Playwright suite parallelised and sharded in CI.
+- CI reports per-package test time and the slowest 10 tests; a test over 2 s needs a reason.
+- Build caches (Go build, pnpm store, Playwright browsers) are cached in CI.
+- A `make check` target runs the fast pre-commit set (format, vet, lint, unit + integration);
+  `make e2e`, `make bench`, `make live` are separate.
+
 ## 4. The measurement loop ("speed cycles")
 
 For each milestone: (1) write the benchmark/budget test, (2) record the baseline on the potato,
