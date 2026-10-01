@@ -182,6 +182,11 @@ Raw RFC 822 messages are stored so everything derived can be rebuilt and exporte
 Every milestone's exit criteria include the TESTING.md definition of done (unit + integration +
 E2E on both viewports + a live check on the dev mailbox/potato).
 
+0. **Harness (settled, round 21).** Before any feature: `internal/mailworld` (fake IMAP/SMTP/
+   OpenRouter/Ollama/clock with fault injection), the `ivy-dev` CLI, the day-one E2E smoke slice
+   (boot, `init`, deliver, read, flag, restart; WebKit + Chromium), CI with lint/`-race`/cgo-free
+   checks, the OpenAPI + sqlc codegen pipeline, the compression skeleton with its budget tests, and
+   `make potato-bench`. *Exit:* smoke slice green in CI and on the potato, benchmarks recorded.
 1. **Read.** Multi-account reader (per-account + combined view with badges), threaded, sanitized
    HTML, remote-image policy, account customization, adaptive phone/desktop layouts, settings
    skeleton, stats panel skeleton, seed tool and fakes. *Exit:* browse a seeded and the real

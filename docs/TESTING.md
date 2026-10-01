@@ -145,6 +145,17 @@ actually sent:
   resident memory under N MB during sync).
 - **Seed tool:** generates large synthetic mailboxes (100k+ messages) for performance and UI tests.
 
+## 7b. Fidelity and browsers (settled, round 21)
+
+- The mail world is the default for every test; the same scenarios run under the `live` tag against
+  the real `dev@` mailbox to surface provider quirks (the fake is a model, not the truth).
+- Playwright runs **WebKit** (closest to iOS/iPadOS Safari, the primary target) and **Chromium**
+  (throttled timing budgets) on every run, and a smaller **Firefox** suite nightly. WebKit on Linux
+  approximates but is not iOS Safari: a short manual pass on the real iPhone/iPad is part of each
+  milestone's exit, recorded in the PR.
+- `make potato-bench`: cross-build for linux/arm64, copy to `ssh potato-remote`, run benchmarks and
+  the memory budget, append results to `docs/perf.md`. Manually triggered, never in default CI.
+
 ## 8. CI
 
 GitHub Actions: `go vet`, `staticcheck`, `go test -race ./...` (fuzz seed corpora included),

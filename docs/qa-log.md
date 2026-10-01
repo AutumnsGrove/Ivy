@@ -465,3 +465,12 @@ Open questions asked this round are recorded with their answers below once given
 check. SQL layer = **sqlc** (build-time, committed output). Transport = **HTTPS via
 `tailscale serve`**. Speed tests = **both**: product benchmarks with budgets and a budget on our own
 test/build loop (`PERFORMANCE.md` 3b). This closes `PLAN.md` section 7 item 1 (API design confirmed).
+
+**Answers (round 21, second batch):** **Milestone 0 (harness first)** added to `PLAN.md` section 5.
+Fake mail world is the default, the same scenarios run live against `dev@` for quirks. Potato
+benchmarks are scripted over `ssh potato-remote` (`make potato-bench`), manually triggered.
+Playwright: WebKit + Chromium every run, Firefox nightly, plus a manual real-device pass per
+milestone (`TESTING.md` 7b).
+
+Still open for a later round: lore names; repo visibility; whether to run the Jev/Purelymail spikes
+before or after Milestone 0; offline PWA reading; a `.gitignore` before any secret exists.
