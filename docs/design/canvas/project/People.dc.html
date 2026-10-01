@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>People, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.stars{position:absolute;left:0;top:0;width:100%;height:380px;background:url(assets/stars.svg) repeat-x top left;-webkit-mask-image:linear-gradient(#000,transparent);mask-image:linear-gradient(#000,transparent)}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.glass-strong{background:var(--glass-strong);border:1px solid var(--glass-border);backdrop-filter:blur(20px) saturate(1.2);-webkit-backdrop-filter:blur(20px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.row{display:flex;align-items:center}
+.ell{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:0;background:transparent;color:var(--text)}
+.av{border-radius:50%;display:flex;align-items:center;justify-content:center;font:500 14px 'Lexend',system-ui,sans-serif;flex:none}
+.lab{font:500 11px 'Lexend',system-ui,sans-serif;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin:18px 6px 8px}
+.prow{display:flex;align-items:center;gap:12px;height:62px;border-bottom:1px solid var(--glass-border)}
+.prow:last-child{border-bottom:0}
+.fire{position:absolute;width:5px;height:5px;border-radius:50%;background:#f7dc92;box-shadow:0 0 10px 3px rgba(247,220,146,0.55);opacity:0.2;animation:drift 9s ease-in-out infinite alternate}
+@keyframes drift{0%{transform:translate(0,0);opacity:0.15}50%{opacity:0.85}100%{transform:translate(20px,-30px);opacity:0.15}}
+@media (prefers-reduced-motion: reduce){.fire{animation:none;opacity:0.4}}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.58);--glass-strong:rgba(10,22,19,0.86);--glass-border:rgba(190,235,208,0.15);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+  <div class="stars"></div>
+  <div class="fire" style="left:350px;top:640px;animation-delay:1s"></div>
+
+  <div style="position:absolute;left:8px;right:14px;top:14px;display:flex;align-items:center;gap:4px">
+    <button class="iconbtn" aria-label="Back"><svg class="ic" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg></button>
+    <div style="flex-grow:1;font-size:22px;font-weight:300">People</div>
+  </div>
+
+  <div class="glass-strong row" style="position:absolute;left:14px;right:14px;top:68px;height:48px;border-radius:24px;gap:10px;padding:0 16px;color:var(--faint);font-size:14.5px">
+    <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>Find someone
+  </div>
+
+  <div style="position:absolute;left:14px;right:14px;top:122px">
+    <div class="lab">Often in touch</div>
+    <div class="row" style="gap:16px;padding:0 6px">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:56px"><div class="av" style="width:52px;height:52px;background:rgba(240,166,202,0.14);border:1px solid rgba(240,166,202,0.45);color:#f0a6ca">ML</div><span style="font-size:11.5px;color:var(--muted)">Mara</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:56px"><div class="av" style="width:52px;height:52px;background:rgba(124,196,255,0.14);border:1px solid rgba(124,196,255,0.45);color:#7cc4ff">JO</div><span style="font-size:11.5px;color:var(--muted)">Jo</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:56px"><div class="av" style="width:52px;height:52px;background:rgba(90,209,200,0.14);border:1px solid rgba(90,209,200,0.45);color:#5ad1c8">TK</div><span style="font-size:11.5px;color:var(--muted)">Taro</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:56px"><div class="av" style="width:52px;height:52px;background:rgba(196,181,253,0.14);border:1px solid rgba(196,181,253,0.45);color:#c4b5fd">PS</div><span style="font-size:11.5px;color:var(--muted)">Priya</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:56px"><div class="av" style="width:52px;height:52px;background:rgba(245,196,90,0.14);border:1px solid rgba(245,196,90,0.45);color:#f5c45a">EB</div><span style="font-size:11.5px;color:var(--muted)">Eli</span></div>
+    </div>
+
+    <div class="lab">Everyone</div>
+    <div class="glass" style="border-radius:20px;padding:2px 14px">
+      <div class="prow"><div class="av" style="width:38px;height:38px;background:rgba(124,196,255,0.14);border:1px solid rgba(124,196,255,0.45);color:#7cc4ff">EB</div><div style="min-width:0;flex-grow:1"><div style="font-size:14.5px">Eli Brandt</div><div class="ell" style="font-size:12px;color:var(--muted)">Re: the garden party</div></div><span style="width:8px;height:8px;border-radius:50%;background:#7cc4ff"></span><span style="font-size:11.5px;color:var(--faint)">Mon</span></div>
+      <div class="prow"><div class="av" style="width:38px;height:38px;background:rgba(124,196,255,0.14);border:1px solid rgba(124,196,255,0.45);color:#7cc4ff">JO</div><div style="min-width:0;flex-grow:1"><div style="font-size:14.5px">Jo Okafor</div><div class="ell" style="font-size:12px;color:var(--muted)">Thanks for the seedlings</div></div><span style="width:8px;height:8px;border-radius:50%;background:#7cc4ff"></span><span style="font-size:11.5px;color:var(--faint)">Sun</span></div>
+      <div class="prow"><div class="av" style="width:38px;height:38px;background:rgba(240,166,202,0.14);border:1px solid rgba(240,166,202,0.45);color:#f0a6ca">ML</div><div style="min-width:0;flex-grow:1"><div style="font-size:14.5px">Mara Linden</div><div class="ell" style="font-size:12px;color:var(--muted)">Moving my blog over to Grove?</div></div><span style="width:8px;height:8px;border-radius:50%;background:#f0a6ca"></span><span style="font-size:11.5px;color:var(--faint)">9:41</span></div>
+      <div class="prow"><div class="av" style="width:38px;height:38px;background:rgba(196,181,253,0.14);border:1px solid rgba(196,181,253,0.45);color:#c4b5fd">PS</div><div style="min-width:0;flex-grow:1"><div style="font-size:14.5px">Priya Shah</div><div class="ell" style="font-size:12px;color:var(--muted)">Notes from Thursday</div></div><span style="width:8px;height:8px;border-radius:50%;background:#7cc4ff"></span><span style="font-size:11.5px;color:var(--faint)">Oct 2</span></div>
+      <div class="prow"><div class="av" style="width:38px;height:38px;background:rgba(90,209,200,0.14);border:1px solid rgba(90,209,200,0.45);color:#5ad1c8">TK</div><div style="min-width:0;flex-grow:1"><div style="font-size:14.5px">Taro Kimura</div><div class="ell" style="font-size:12px;color:var(--muted)">Photos from the greenhouse</div></div><span style="width:8px;height:8px;border-radius:50%;background:#7cc4ff"></span><span style="font-size:11.5px;color:var(--faint)">Sep 28</span></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

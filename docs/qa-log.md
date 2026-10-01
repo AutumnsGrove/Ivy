@@ -388,4 +388,20 @@ Open: provider's real max message size (check SMTP `SIZE` live); whether tag col
 or from the palette; how the agent trace behaves while it is still working (streaming state not
 mocked yet); People and Rules screens.
 
+## Round 19 — tags, people, rules (2026-10-01)
+
+Operator confirmed the tag-colour, tag-creation, People and Rules mockups (offered after the
+attachments discussion). New boards: **O New tag** (sheet: name, 12-colour grid, custom colour,
+"tag matching mail automatically"), **P Tag colours** (edit screen with a Night and Day preview and a
+named palette), **Q People**, **R A person**, **S Rules**, **T New rule**. Decisions recorded in
+`PLAN.md` ("Tags and rules"): palette entries carry a night and a day shade; rules read as plain
+sentences; a rule may use an "is about…" phrase answered by Jev with a "would have matched N of the
+last 200" preview; **rule actions are local only (tag, show in Reading, snooze)**, consistent with the
+safety line (moving, deleting, sending always ask).
+
+Mockup content (names, counts such as "Matched 12 times") is placeholder. Open: how a rule that
+uses an "is about" phrase behaves on LLM-off accounts (proposal: those conditions are unavailable and
+shown locked, like the Ask Ivy account picker); People merging when one person has several
+addresses; desktop versions of Tags, People and Rules.
+
 Notes on round 5: the second-stage model sees raw email text, so it's the higher-risk stage: no tools, structured output (`needs_me` bool + short reason), reason rendered as plain text. Configurability needs a deliberate home (config file vs in-app settings with per-account overrides), asked in round 6.

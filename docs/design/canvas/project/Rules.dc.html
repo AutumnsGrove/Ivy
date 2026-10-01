@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rules, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.stars{position:absolute;left:0;top:0;width:100%;height:380px;background:url(assets/stars.svg) repeat-x top left;-webkit-mask-image:linear-gradient(#000,transparent);mask-image:linear-gradient(#000,transparent)}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.row{display:flex;align-items:center}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:1px solid var(--glass-border);background:var(--glass);color:var(--text)}
+.iconbtn.plain{border:0;background:transparent}
+.tog{position:relative;width:46px;height:28px;border-radius:14px;background:rgba(255,255,255,0.1);border:1px solid var(--glass-border);flex:none}
+.tog i{position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:var(--muted)}
+.tog.on{background:var(--accent-soft);border-color:var(--accent-line)}
+.tog.on i{left:21px;background:var(--accent);box-shadow:0 0 8px var(--accent-line)}
+.rule{border-radius:20px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.sent{font:400 14.5px/1.55 'Lexend',system-ui,sans-serif;color:var(--muted)}
+.k{color:var(--faint);font-size:12px;letter-spacing:0.06em;text-transform:uppercase;margin-right:4px}
+.tok{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:13px;background:var(--accent-soft);border:1px solid var(--accent-line);color:var(--text);font-size:13px;margin:0 2px}
+.tok.tag{gap:6px}
+.quote{font-family:'Newsreader',Georgia,serif;font-style:italic;font-size:16px;color:var(--text);box-shadow:inset 0 -1px 0 var(--accent-line)}
+.meta{font:400 12px 'Lexend',system-ui,sans-serif;color:var(--faint)}
+.fire{position:absolute;width:5px;height:5px;border-radius:50%;background:#f7dc92;box-shadow:0 0 10px 3px rgba(247,220,146,0.55);opacity:0.2;animation:drift 9s ease-in-out infinite alternate}
+@keyframes drift{0%{transform:translate(0,0);opacity:0.15}50%{opacity:0.85}100%{transform:translate(20px,-30px);opacity:0.15}}
+@media (prefers-reduced-motion: reduce){.fire{animation:none;opacity:0.4}}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.58);--glass-border:rgba(190,235,208,0.15);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+  <div class="stars"></div>
+  <div class="fire" style="left:350px;top:620px;animation-delay:2s"></div>
+
+  <div style="position:absolute;left:8px;right:14px;top:14px;display:flex;align-items:center;gap:4px">
+    <button class="iconbtn plain" aria-label="Back"><svg class="ic" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg></button>
+    <div style="flex-grow:1">
+      <div style="font-size:22px;font-weight:300">Rules</div>
+    </div>
+    <button class="iconbtn" aria-label="New rule" style="color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)"><svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></button>
+  </div>
+
+  <div style="position:absolute;left:18px;right:18px;top:68px;font-size:13px;color:var(--muted);line-height:1.5">Small helpers that tidy mail as it arrives.</div>
+
+  <div style="position:absolute;left:14px;right:14px;top:112px;display:flex;flex-direction:column;gap:10px">
+    <div class="glass rule">
+      <div class="row" style="gap:12px;align-items:flex-start">
+        <div class="sent" style="flex-grow:1"><span class="k">When</span>mail is from<span class="tok">Cloudflare</span><br><span class="k">Then</span>tag it<span class="tok tag"><span style="width:8px;height:8px;border-radius:50%;background:#7cc4ff"></span>receipts</span></div>
+        <span class="tog on"><i></i></span>
+      </div>
+      <div class="meta">Matched 12 times</div>
+    </div>
+
+    <div class="glass rule">
+      <div class="row" style="gap:12px;align-items:flex-start">
+        <div class="sent" style="flex-grow:1"><span class="k">When</span>mail is about <span class="quote">a job application</span><br><span class="k">Then</span>tag it<span class="tok tag"><span style="width:8px;height:8px;border-radius:50%;background:#f5c45a"></span>jobs</span></div>
+        <span class="tog on"><i></i></span>
+      </div>
+      <div class="meta">Matched 3 times</div>
+    </div>
+
+    <div class="glass rule">
+      <div class="row" style="gap:12px;align-items:flex-start">
+        <div class="sent" style="flex-grow:1"><span class="k">When</span>mail looks like a newsletter<br><span class="k">Then</span>show it in<span class="tok">Reading</span></div>
+        <span class="tog on"><i></i></span>
+      </div>
+      <div class="meta">Matched 14 times</div>
+    </div>
+
+    <div class="glass rule" style="opacity:0.7">
+      <div class="row" style="gap:12px;align-items:flex-start">
+        <div class="sent" style="flex-grow:1"><span class="k">When</span>mail has an attachment from<span class="tok">Mara Linden</span><br><span class="k">Then</span>tag it<span class="tok tag"><span style="width:8px;height:8px;border-radius:50%;background:#f0a6ca"></span>contact form</span></div>
+        <span class="tog"><i></i></span>
+      </div>
+      <div class="meta">Paused</div>
+    </div>
+  </div>
+
+  <div style="position:absolute;left:18px;right:18px;bottom:36px;font-size:12px;color:var(--faint);line-height:1.5;text-align:center">Rules can tag, sort into Reading, or snooze.<br>Moving, deleting and sending always ask you first.</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

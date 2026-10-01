@@ -19,8 +19,14 @@
     "Welcome.dc.html": { "x": 470, "y": 1928, "w": 390, "h": 844, "title": "L · First run, welcome" },
     "AddAccount.dc.html": { "x": 940, "y": 1928, "w": 390, "h": 844, "title": "M · First run, connect an account" },
     "Settings.dc.html": { "x": 1410, "y": 1928, "w": 390, "h": 1760, "title": "N · Settings" },
-    "Tokens.dc.html": { "x": 0, "y": 3808, "w": 720, "h": 1100, "title": "O · Tokens and type" },
-    "Desktop.dc.html": { "x": 840, "y": 3808, "w": 1440, "h": 860, "title": "P · Desktop three-pane" }
+    "NewTag.dc.html": { "x": 1880, "y": 1928, "w": 390, "h": 844, "title": "O · New tag" },
+    "EditTag.dc.html": { "x": 2350, "y": 1928, "w": 390, "h": 844, "title": "P · Tag colours" },
+    "People.dc.html": { "x": 2820, "y": 1928, "w": 390, "h": 844, "title": "Q · People" },
+    "Person.dc.html": { "x": 1880, "y": 2892, "w": 390, "h": 844, "title": "R · A person" },
+    "Rules.dc.html": { "x": 2350, "y": 2892, "w": 390, "h": 844, "title": "S · Rules" },
+    "RuleEdit.dc.html": { "x": 2820, "y": 2892, "w": 390, "h": 844, "title": "T · New rule" },
+    "Tokens.dc.html": { "x": 0, "y": 3808, "w": 720, "h": 1100, "title": "U · Tokens and type" },
+    "Desktop.dc.html": { "x": 840, "y": 3808, "w": 1440, "h": 860, "title": "V · Desktop three-pane" }
   },
   "order": [
     "Main.dc.html",
@@ -37,6 +43,12 @@
     "Welcome.dc.html",
     "AddAccount.dc.html",
     "Settings.dc.html",
+    "NewTag.dc.html",
+    "EditTag.dc.html",
+    "People.dc.html",
+    "Person.dc.html",
+    "Rules.dc.html",
+    "RuleEdit.dc.html",
     "Tokens.dc.html",
     "Desktop.dc.html"
   ],

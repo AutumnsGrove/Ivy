@@ -95,6 +95,18 @@ in `ARCHITECTURE.md` section 6.
 conditions answered by Jev); model-applied system tags (the only autonomous model write: local and
 reversible). Smart views from saved searches are out of v1. A **People** view derived from the
 mirror (correspondents, recent threads, compose autocomplete).
+- **Tag colours (round 19):** a fixed palette of 12 named colours (Sky, Rose, Teal, Coral, Lilac,
+  Mint, Gold, Sand, Orchid, Fern, Slate, Berry), each stored with a **night shade and a deeper day
+  shade** so tags stay readable in both themes, plus a custom colour. New tag: name, colour, and an
+  optional "tag matching mail automatically" that leads to a new rule. Tags you did not make
+  ("placed for you": needs you, newsletters, looks real found in Junk) are local and removable.
+- **People:** the Tags tab links to People (often in touch, everyone, search) and a person page
+  (name, address, which account they write to, Write, All mail, tags, conversations).
+- **Rules:** shown as plain sentences ("When mail is from Cloudflare, tag it receipts"), each with
+  an on/off switch and a match count. A rule's conditions can include a **plain-language "is about"
+  phrase** that Jev answers; the editor shows how many of the last 200 messages it would have
+  matched before saving. **Rule actions are local only: add a tag, show in Reading, snooze.**
+  Moving, deleting, forwarding and sending are never a rule action (they always ask).
 
 **Compose (built last).** Markdown and a rich-text editor (markdown first), per-address signatures,
 **undo send with a configurable delay** (setting; default 10 s, 0 = off), drafts in the server's
