@@ -105,9 +105,10 @@ at a glance and drillable to individual calls:
 (chosen later, checked against `Lattice/docs/philosophy/grove-naming.md`; Canopy and Rings are
 already taken there) get an entry in the same change that adds them.
 
-**Naming.** Product name **Ivy**. The public repo `AutumnsGrove/Ivy` (Grove's old mail client) will
-be archived and the name reused, at publish time, with the operator's explicit go-ahead then. The
-project stays local until then. License **AGPL-3.0**.
+**Naming.** Product name **Ivy**. The old public repo (Grove's earlier mail client) was renamed
+`AutumnsGrove/Ivy-legacy` and archived on 2026-10-01 (it had 0 stars/forks and 4 stale issues about
+the old TypeScript app); this project now lives at `AutumnsGrove/Ivy`, currently **private**. Making
+it public is the operator's call. License **AGPL-3.0**.
 
 ## 4. Stack and decisions (details in ARCHITECTURE.md)
 
@@ -163,7 +164,7 @@ E2E on both viewports + a live check on the dev mailbox/potato).
 1. **API design (item 6 of the defaults) wasn't explicitly confirmed:** assumed JSON REST + SSE
    with one typed client module. Veto or approve.
 2. **Lore feature names:** deferred. Pick when features exist.
-3. **Archiving `AutumnsGrove/Ivy`:** at publish time, with your go-ahead.
+3. **Repo visibility:** `AutumnsGrove/Ivy` is private for now; decide when to make it public.
 4. **First spike session:** when you're ready, an Ivy-specific Jev spike with your OpenRouter key
    and a small labeled sample (JEV.md section 5), plus the Purelymail live checks once the
    migration and `dev@` exist.

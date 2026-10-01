@@ -206,4 +206,18 @@ live spike write-ups):
 
 Documents written this round: rewritten `PLAN.md`, new `ARCHITECTURE.md`, `TESTING.md`, `JEV.md`.
 
+## Round 14 — commit, push and the repo name (2026-10-01)
+
+Operator asked to commit and push, and chose "archive the old repo and reuse the name" with an
+explicit go-ahead. Executed:
+1. Committed locally (`da60973`).
+2. GitHub makes archived repos read-only and the histories are unrelated, so "archive then push to
+   the same name" is impossible without a destructive force-push. Instead: renamed
+   `AutumnsGrove/Ivy` -> **`AutumnsGrove/Ivy-legacy`**, archived it (0 stars, 0 forks, no open PRs;
+   4 open issues about the old TypeScript app are now frozen read-only), then created a fresh
+   **`AutumnsGrove/Ivy`** and pushed `main`.
+3. The new repo is **private** (visibility wasn't specified; private -> public is a one-way-safe
+   change, the reverse is not). Lattice's docs link to the `AutumnsGrove/Ivy` URL, which now points at
+   this project.
+
 Notes on round 5: the second-stage model sees raw email text, so it's the higher-risk stage: no tools, structured output (`needs_me` bool + short reason), reason rendered as plain text. Configurability needs a deliberate home (config file vs in-app settings with per-account overrides), asked in round 6.
