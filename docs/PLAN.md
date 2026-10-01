@@ -226,7 +226,7 @@ E2E on both viewports + a live check on the dev mailbox/potato).
 | HTML sanitization edge cases and tracker coverage | 1 | Fuzz + XSS corpus + browser checks |
 | Prompt injection via email into stage 2 / ask / vision | 3 | Gate, tripwire, plain-text output, tests |
 | Update flow: build RAM peak, diverged checkout, rollback | 2 | `ivy update` tests with temp repos |
-| Committed frontend build output bloats git history | all | Accepted; CI builds it on merge to main, PRs never touch it (round 24). Option: CI-built arm64 release binary |
+| Committed frontend build output bloats git history | all | Accepted; CI builds it on merge to main, PRs never touch it (round 24). No compiled Go binary is ever committed or released (round 25) |
 | go-imap v2 API vs the v1 snippet seen in the original thread | 1 | Verify before pinning |
 | Locally owned state (and disabled mail) lost if the potato's storage dies | 2 | Rolling backups, 2/day for 30 days, off-device target recommended (settled) |
 
@@ -245,8 +245,8 @@ E2E on both viewports + a live check on the dev mailbox/potato).
 - **Rolling backups:** twice a day, keep 30 days (about 60), prune older; floor of 10 newest.
 - **Disk is not a concern** (256 GB): no storage budget or eviction.
 - **Frontend artifacts are generated in GitHub Actions** (bot commit on merge to main); the potato
-  never builds the frontend. Open sub-option: CI-built arm64 binary so the potato builds nothing
-  (decide after spike S3).
+  never builds the frontend. **The potato builds the Go binary itself** (round 25): nothing compiled
+  is committed or released, so no storage is wasted on binaries.
 
 ## 7. Open items for the operator
 

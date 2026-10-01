@@ -523,3 +523,10 @@ Operator answers to the round 23 gap review:
   moved to Docker built on a GitHub runner in about 2.5-3 minutes. Written as: CI builds on merge to
   main and the bot commits `web/build/`; PRs never touch it. Open sub-option (decide after spike
   S3): CI also publishes a cgo-free arm64 binary so the potato builds nothing.
+
+## Round 25 — the potato builds the Go binary (2026-10-01)
+
+Operator: the potato is strong enough to build the Go binary in a reasonable time; no binary should be
+built in CI and committed or released (a waste of storage). **Withdrew the round 24 "CI-built arm64
+binary" option.** Settled: the potato runs `git pull` and `go build` (the frontend assets still come
+from the Actions bot commit); spike S3 only confirms build time and peak RAM.

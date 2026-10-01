@@ -245,10 +245,10 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   (a CI check rejects a PR that touches `web/build/`); PR CI builds the frontend in a scratch dir to
   test it. A tracked placeholder in `web/build/` keeps `go build` working from a fresh checkout.
   The potato then only runs `git pull` and `go build`. Requires letting the Actions bot push to
-  main (ruleset bypass for that actor). **Option to decide after spike S3:** have CI also
-  cross-compile the cgo-free `linux/arm64` binary with the frontend embedded and publish it as a
-  release asset, so `ivy update` downloads and verifies it and the potato builds nothing (removes
-  the Go-build RAM risk too; changes the settled "the potato builds the binary").
+  main (ruleset bypass for that actor). **The Go binary is never built in CI or committed
+  (settled, round 25):** the potato is strong enough to compile it in reasonable time, so releases
+  carry no binaries and the repo holds no compiled output beyond the frontend assets. Spike S3 still
+  measures the build time and peak RAM to confirm.
 - **`ivy update` (also an in-app button):** verify the remote, `git fetch` + `merge --ff-only`
   (refuse on a diverged checkout), `go build` to a temp file (peak RAM is a known risk: serving
   continues while building), health-check the new binary, swap, restart via systemd, roll back on a
