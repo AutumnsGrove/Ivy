@@ -1,0 +1,13 @@
+# Keep GitHub's language breakdown about the real code.
+
+# Design mockups: large HTML files that are reference material, not source.
+docs/design/** linguist-documentation
+docs/design/** linguist-vendored
+
+# Frontend build output is written by the CI bot, never by hand: exclude it from the language
+# stats and collapse it in diffs.
+web/build/** linguist-generated
+web/build/** -diff
+
+# Normalise line endings so checkouts on any OS match.
+* text=auto eol=lf
