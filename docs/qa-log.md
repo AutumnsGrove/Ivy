@@ -353,4 +353,31 @@ Not decided yet: whether Talk to Ivy is its own screen (as drawn) or reachable f
 the first-run flow beyond two screens (progress while the mailbox is read, the `ivy init` terminal
 side); settings information architecture on desktop.
 
+## Round 18 — decisions after the second mockup pass (2026-10-01)
+
+Operator feedback: the overall design "looks really good"; the settings panel is liked (it leaves a
+lot of room to extend). Decisions:
+
+- **Spam: Junk rescue only.** Jev does not screen the Inbox. (`is_spam` stays an idea.)
+- **Talk to Ivy lives inside the Search page**, behind a Search / Ask Ivy switch at the top, not as
+  its own tab. It is an **agent loop with tools: `search_mail`, `read_mail`, and `think`** (all
+  read-only). Documented in `ARCHITECTURE.md` section 6, `PLAN.md` and `TESTING.md` section 4
+  (read-only tool registry test, locked/withheld mail invisible to tools, step/token caps,
+  citations only to mail the loop read). The mockup shows a short quiet trace of what it did
+  (searched, read, a thinking line) with no AI badge.
+- **Reply note simplified:** drop the "goes to Mara's address, not the form" explanation. Compose just
+  says "Replying to name@domain.com". The Reply-To handling stays underneath.
+- **Images and attachments on outgoing mail are required.** Compose gets an attach button, inline
+  image button and attachment thumbnails/rows, a bottom sheet (Photos, Camera, Files, recent
+  photos, photo size, location removed), and the message view shows attachments (image thumbnails,
+  file rows with download). Rules recorded in `ARCHITECTURE.md` section 5 (size limit from the
+  provider, type rules, EXIF stripped by default, optional downscale, drafts keep attachments).
+- **New boards:** Search (switch, field, quick filters, a doorway to Ask Ivy, highlighted keyword
+  hits, a "similar in meaning" hit) and Tags (your tags with counts, "Placed for you" local tags
+  with the firefly dot, Rules and People links). Settings gained photo size and location-removal rows.
+
+Open: provider's real max message size (check SMTP `SIZE` live); whether tag colours are free-choice
+or from the palette; how the agent trace behaves while it is still working (streaming state not
+mocked yet); People and Rules screens.
+
 Notes on round 5: the second-stage model sees raw email text, so it's the higher-risk stage: no tools, structured output (`needs_me` bool + short reason), reason rendered as plain text. Configurability needs a deliberate home (config file vs in-app settings with per-account overrides), asked in round 6.

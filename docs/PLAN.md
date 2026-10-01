@@ -73,20 +73,23 @@ overlay), snooze (local hide-until).
   (security@, dmca@: priority, LLM off by default), personal correspondence (protected from any
   automated handling). Automated notifications get generic triage.
 
-**Spam (proposed, round 17; not yet confirmed by the operator).** The provider filters first:
+**Spam (settled, round 18: Junk rescue only).** The provider filters first:
 Purelymail runs SpamAssassin (threshold 5), files suspected spam in the Junk folder, rejects
 blocklisted IPs at SMTP, and learns per user from messages you move into and out of Junk (after
 ~200 examples of each). Ivy mirrors Junk like any folder, shows the spam score from the
 `X-Spam-Status` header, and **moving mail to or from Junk in Ivy is an IMAP move, so it trains the
-provider's filter**. Jev is a second layer only: first a **Junk rescue** ("this looks real", a
-quiet chip), later an optional `is_spam` check on mail that reached the Inbox that only adds a
-local tag and soft-folds the message. Never auto-delete or auto-move; a wrong guess must cost
-nothing. See `JEV.md` section 3B and `ARCHITECTURE.md` section 4.
+provider's filter**. Jev's only spam job is **Junk rescue** ("this looks real", a quiet chip with a
+one-tap Not junk). Jev does not screen the Inbox for spam (an `is_spam` check stays an idea, not
+planned). Never auto-delete or auto-move; a wrong guess must cost nothing. See `JEV.md` section 3B and `ARCHITECTURE.md` section 4.
 
 **Search and ask.** One search box: hybrid keyword (FTS5) + meaning (Ollama `nomic-embed-text`,
-optional remote provider), merged into one ranked list. **Ask your mailbox:** a written answer where
-every claim cites verified emails; an account-picker mode (tap the accounts to include, the rest grey
-out; LLM-off accounts are locked, not just unselected).
+optional remote provider), merged into one ranked list, with quick filters (from, account, has
+attachment, date, tag). **Talk to Ivy** lives at the top of the Search page (a Search / Ask Ivy
+switch): an **agent loop with three read-only tools, `search_mail`, `read_mail` and `think`**,
+that writes a plain answer whose claims cite emails it actually read; an account-picker (tap the
+accounts to include; LLM-off accounts are locked, not just unselected); step and spend caps; it can
+suggest an action but never take one. It shows a short, quiet trace of what it looked at. Details
+in `ARCHITECTURE.md` section 6.
 
 **Tags and rules.** Your own tags; automatic rules (if-this-then-that, including fuzzy plain-language
 conditions answered by Jev); model-applied system tags (the only autonomous model write: local and
@@ -95,7 +98,10 @@ mirror (correspondents, recent threads, compose autocomplete).
 
 **Compose (built last).** Markdown and a rich-text editor (markdown first), per-address signatures,
 **undo send with a configurable delay** (setting; default 10 s, 0 = off), drafts in the server's
-Drafts folder (visible in Apple Mail), reply-as-the-right-address.
+Drafts folder (visible in Apple Mail), reply-as-the-right-address. **Images and attachments can be
+added to outgoing mail** (photos, camera, files; inline images; EXIF stripped by default; optional
+photo downscale; size checked against the provider's limit). Replies simply say "Replying to
+name@domain.com" (the contact-form Reply-To case works underneath without extra UI).
 
 **Images and attachments.** Attachments mirrored locally and text-extracted (bodies/.ics, digital
 PDFs and Office files in pure Go). A **vision model** reads images on opted-in accounts (soon):

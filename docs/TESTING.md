@@ -81,6 +81,14 @@ actually sent:
   neither stage 2, ask nor vision.
 - **Injection corpus:** hostile emails must not cause any action beyond local tags; model output is
   rendered as plain text; citations resolve only to verified message ids; no model-invented URLs.
+- **Talk to Ivy (agent loop):** the tools are read-only (a test enumerates the tool registry and
+  fails if one can write); `search_mail`/`read_mail` never return LLM-off, locked or withheld mail
+  even when asked by id; the loop stops at the step and token caps and says so; a citation to a
+  message the loop did not read is rejected; hostile mail that tries to steer the loop (call another
+  tool, claim a fake citation, ask for an action) must not change the tool calls beyond what the
+  question needs; every step has a ledger row.
+- **Attachments on send:** size-limit and type rules, EXIF stripped by default, inline `cid:` images
+  render in the sent copy, draft round-trip keeps attachments, undo-send releases the temp files.
 - **Spend caps:** hitting a cap stops calls and surfaces a clear state; ledger rows match calls 1:1.
 - **Architecture test:** only the `llm`/`jev` packages may talk to the network provider; a test fails
   if another package imports an HTTP client for it (the single chokepoint stays single).

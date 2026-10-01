@@ -62,7 +62,7 @@ body{margin:0}
       <div style="width:40px;height:40px;border-radius:50%;background:rgba(240,166,202,0.16);border:1px solid rgba(240,166,202,0.45);color:#f0a6ca;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;flex:none">ML</div>
       <div style="flex-grow:1;min-width:0">
         <div style="font-size:14.5px;font-weight:500">Mara Linden</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px">to hello@ · 9:41 · replies go to mara@example.com</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">to hello@ · 9:41</div>
       </div>
     </div>
 
@@ -72,10 +72,24 @@ body{margin:0}
       <div style="font-family:'Newsreader',Georgia,serif;font-style:italic;font-size:16.5px;line-height:1.45">Mara wonders if she can bring her old posts and images to Grove. No rush.</div>
     </div>
 
-    <div style="margin-top:20px;font-family:'Newsreader',Georgia,serif;font-size:18px;line-height:1.65">
-      <p style="margin:0 0 14px">Hi there,</p>
-      <p style="margin:0 0 14px">I found Grove through a friend, and I've been writing on a small blog for about six years. Before I set anything up, I wanted to ask whether I can bring my old posts with me, and whether the images come along too.</p>
+    <div style="margin-top:16px;font-family:'Newsreader',Georgia,serif;font-size:17.5px;line-height:1.6">
+      <p style="margin:0 0 10px">Hi there,</p>
+      <p style="margin:0 0 10px">I found Grove through a friend, and I've been writing on a small blog for about six years. Before I set anything up, I wanted to ask whether I can bring my old posts with me, and whether the images come along too.</p>
       <p style="margin:0">No rush at all. Thank you for building something so gentle.</p>
+    </div>
+
+    <!-- attachments: images show as thumbnails, files as rows -->
+    <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px">
+      <div class="row" style="gap:8px">
+        <div style="width:104px;height:78px;border-radius:14px;border:1px solid var(--glass-border);background:linear-gradient(135deg,#3a6b4a 0%,#14301f 55%,#0b1a14 100%);position:relative;overflow:hidden"><span style="position:absolute;left:8px;bottom:6px;font-size:10.5px;color:rgba(242,237,220,0.85)">blog-home.png</span></div>
+        <div style="width:104px;height:78px;border-radius:14px;border:1px solid var(--glass-border);background:linear-gradient(135deg,#6b5a8a 0%,#2b2347 55%,#120e22 100%);position:relative;overflow:hidden"><span style="position:absolute;left:8px;bottom:6px;font-size:10.5px;color:rgba(242,237,220,0.85)">post-photo.jpg</span></div>
+        <div style="flex-grow:1;height:78px;border-radius:14px;border:1px dashed var(--glass-border);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted)">+2 more</div>
+      </div>
+      <div class="row" style="gap:10px;padding:9px 12px;border-radius:14px;border:1px solid var(--glass-border)">
+        <svg class="ic" viewBox="0 0 24 24" style="color:var(--accent)"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>
+        <div style="flex-grow:1;min-width:0"><div style="font-size:13.5px">blog-export.zip</div><div style="font-size:11.5px;color:var(--faint)">2.4 MB</div></div>
+        <svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--faint);width:16px;height:16px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path><path d="M12 15V3"></path></svg>
+      </div>
     </div>
   </div>
 

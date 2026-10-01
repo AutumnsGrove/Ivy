@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Search, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.stars{position:absolute;left:0;top:0;width:100%;height:380px;background:url(assets/stars.svg) repeat-x top left;-webkit-mask-image:linear-gradient(#000,transparent);mask-image:linear-gradient(#000,transparent)}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.glass-strong{background:var(--glass-strong);border:1px solid var(--glass-border);backdrop-filter:blur(20px) saturate(1.2);-webkit-backdrop-filter:blur(20px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.row{display:flex;align-items:center}
+.ell{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.seg{display:flex;gap:4px;padding:4px;border-radius:24px}
+.seg span{flex:1;height:38px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:20px;font:400 14px 'Lexend',system-ui,sans-serif;color:var(--muted)}
+.seg span.on{background:var(--accent-soft);color:var(--text);box-shadow:inset 0 0 0 1px var(--accent-line)}
+.glint{width:6px;height:6px;border-radius:50%;background:var(--firefly);box-shadow:0 0 8px 2px var(--firefly-glow);animation:pulse 3.6s ease-in-out infinite;flex:none}
+@keyframes pulse{0%,100%{opacity:0.55}50%{opacity:1}}
+.fire{position:absolute;width:5px;height:5px;border-radius:50%;background:#f7dc92;box-shadow:0 0 10px 3px rgba(247,220,146,0.55);opacity:0.2;animation:drift 9s ease-in-out infinite alternate}
+@keyframes drift{0%{transform:translate(0,0);opacity:0.15}50%{opacity:0.85}100%{transform:translate(20px,-30px);opacity:0.15}}
+@media (prefers-reduced-motion: reduce){.fire,.glint{animation:none}.fire{opacity:0.4}}
+.filt{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:16px;border:1px solid var(--glass-border);background:var(--glass);color:var(--muted);font:400 12.5px 'Lexend',system-ui,sans-serif;white-space:nowrap;flex:none}
+.filt.on{color:var(--text);background:var(--accent-soft);border-color:var(--accent-line)}
+.hl{background:var(--accent-soft);color:var(--text);border-radius:4px;padding:0 2px;box-shadow:inset 0 -1px 0 var(--accent-line)}
+.pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:999px;font:400 11.5px 'Lexend',system-ui,sans-serif;color:var(--muted);border:1px solid var(--glass-border)}
+.tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:1;height:50px;border:0;background:transparent;color:var(--faint);font:400 10.5px 'Lexend',system-ui,sans-serif;border-radius:18px}
+.tab.on{color:var(--accent)}
+.lab{font:500 11px 'Lexend',system-ui,sans-serif;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin:0 6px 8px}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.58);--glass-strong:rgba(10,22,19,0.86);--glass-border:rgba(190,235,208,0.15);--firefly:#f7dc92;--firefly-glow:rgba(247,220,146,0.6);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+  <div class="stars"></div>
+  <div class="fire" style="left:350px;top:640px;animation-delay:1s"></div>
+
+  <!-- Search / Ask Ivy switch -->
+  <div class="glass seg" style="position:absolute;left:14px;right:14px;top:16px">
+    <span class="on"><svg class="ic ic-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>Search</span>
+    <span><span class="glint" style="width:7px;height:7px"></span>Ask Ivy</span>
+  </div>
+
+  <!-- the field -->
+  <div class="glass-strong" style="position:absolute;left:14px;right:14px;top:76px;height:52px;border-radius:26px;display:flex;align-items:center;gap:10px;padding:0 8px 0 16px">
+    <svg class="ic" viewBox="0 0 24 24" style="color:var(--accent)"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+    <span style="flex-grow:1;font-size:15px">domain renewal</span>
+    <button aria-label="Clear" style="width:36px;height:36px;border-radius:50%;border:0;background:rgba(255,255,255,0.08);color:var(--muted);display:flex;align-items:center;justify-content:center"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+  </div>
+
+  <!-- quick filters -->
+  <div style="position:absolute;left:0;right:0;top:140px;padding:0 14px;display:flex;gap:8px;overflow:hidden">
+    <span class="filt on">All accounts<svg class="ic ic-sm" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="m6 9 6 6 6-6"></path></svg></span>
+    <span class="filt">From<svg class="ic ic-sm" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="m6 9 6 6 6-6"></path></svg></span>
+    <span class="filt"><svg class="ic ic-sm" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>Attachments</span>
+    <span class="filt">Date<svg class="ic ic-sm" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="m6 9 6 6 6-6"></path></svg></span>
+    <span class="filt">Tag<svg class="ic ic-sm" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="m6 9 6 6 6-6"></path></svg></span>
+  </div>
+
+  <!-- results -->
+  <div style="position:absolute;left:14px;right:14px;top:188px;display:flex;flex-direction:column;gap:8px">
+    <!-- a doorway to Ask Ivy, right under the query -->
+    <div class="glass row" style="gap:12px;border-radius:18px;padding:12px 14px;border-color:var(--accent-line);background:linear-gradient(110deg,var(--accent-soft),rgba(247,220,146,0.08))">
+      <span class="glint"></span>
+      <div style="flex-grow:1;min-width:0"><div class="ell" style="font-size:13.5px">Ask Ivy: when does my domain renew?</div></div>
+      <svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--accent)"><path d="m9 18 6-6-6-6"></path></svg>
+    </div>
+
+    <div class="lab" style="margin-top:8px">Best matches · 14</div>
+
+    <div class="glass" style="border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;gap:3px">
+      <div class="row" style="gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:#7cc4ff"></span><span class="ell" style="font-size:14.5px;font-weight:500;flex-grow:1">Cloudflare</span><span style="font-size:11.5px;color:var(--faint)">Tue</span></div>
+      <div class="ell" style="font-size:14px;font-weight:500">Your <span class="hl">domain</span> <span class="hl">renews</span> soon</div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">grove.place will <span class="hl">renew</span> on the 14th. No action is needed unless you want to change the <span class="hl">domain</span> settings…</div>
+    </div>
+
+    <div class="glass" style="border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;gap:3px">
+      <div class="row" style="gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:#7cc4ff"></span><span class="ell" style="font-size:14.5px;font-weight:500;flex-grow:1">Cloudflare</span><svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--faint);width:14px;height:14px"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg><span style="font-size:11.5px;color:var(--faint)">Oct 2025</span></div>
+      <div class="ell" style="font-size:14px;font-weight:500">Receipt for your <span class="hl">renewal</span></div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Thanks for your payment. This receipt is for the <span class="hl">domain</span> grove.place…</div>
+      <div class="row" style="gap:6px;margin-top:5px"><span class="pill">receipt</span></div>
+    </div>
+
+    <!-- found by meaning, not by the words -->
+    <div class="glass" style="border-radius:18px;padding:12px 14px;display:flex;flex-direction:column;gap:3px">
+      <div class="row" style="gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:#7cc4ff"></span><span class="ell" style="font-size:14.5px;font-weight:500;flex-grow:1">Namebase</span><span style="font-size:11.5px;color:var(--faint)">Mar</span></div>
+      <div class="ell" style="font-size:14px;font-weight:500">Your registration is expiring</div>
+      <div class="ell" style="font-size:13px;color:var(--muted)">Keep your name by extending it before the end of the month…</div>
+      <div class="row" style="gap:6px;margin-top:5px;font-size:11.5px;color:var(--faint)"><span class="glint" style="width:5px;height:5px"></span>Similar in meaning</div>
+    </div>
+  </div>
+
+  <nav class="glass-strong" aria-label="Main" style="position:absolute;left:14px;right:14px;bottom:14px;height:58px;border-radius:24px;display:flex;align-items:center;padding:0 6px">
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>Inbox</button>
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v14"></path><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"></path></svg>Reading</button>
+    <button class="tab on"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>Search</button>
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>Tags</button>
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M10 5H3"></path><path d="M12 19H3"></path><path d="M14 3v4"></path><path d="M16 17v4"></path><path d="M21 12h-9"></path><path d="M21 19h-5"></path><path d="M21 5h-7"></path><path d="M8 10v4"></path><path d="M8 12H3"></path></svg>Settings</button>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

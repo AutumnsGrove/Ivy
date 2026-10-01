@@ -19,6 +19,7 @@ body{margin:0}
 .ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
 .ic-sm{width:15px;height:15px}
 .row{display:flex;align-items:center}
+.ell{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:0;background:transparent;color:var(--text)}
 .fl{display:flex;align-items:center;gap:10px;min-height:48px;padding:0 4px;border-bottom:1px solid var(--glass-border);font:400 14.5px 'Lexend',system-ui,sans-serif}
 .fl .k{width:52px;color:var(--faint);font-size:13px;flex:none}
@@ -30,10 +31,17 @@ body{margin:0}
 .caret{display:inline-block;width:2px;height:20px;background:var(--accent);vertical-align:-4px;animation:blink 1.1s steps(1) infinite}
 @keyframes blink{50%{opacity:0}}
 @media (prefers-reduced-motion: reduce){.caret{animation:none}}
+.att{position:relative;width:84px;height:64px;border-radius:12px;border:1px solid var(--glass-border);flex:none;overflow:hidden}
+.att .x{position:absolute;right:4px;top:4px;width:20px;height:20px;border-radius:50%;background:rgba(6,12,10,0.7);color:var(--text);display:flex;align-items:center;justify-content:center}
+.opt{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;flex:1;height:84px;border-radius:18px;border:1px solid var(--glass-border);background:rgba(255,255,255,0.04);font:400 13px 'Lexend',system-ui,sans-serif;color:var(--text)}
+.opt .ic{color:var(--accent);width:24px;height:24px}
+.ph{position:relative;aspect-ratio:1/1;border-radius:10px;border:1px solid var(--glass-border)}
+.ph.sel{box-shadow:0 0 0 2px var(--accent)}
+.ph .n{position:absolute;right:5px;top:5px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--on-accent);font:600 11px 'Lexend',system-ui,sans-serif;display:flex;align-items:center;justify-content:center}
 </style>
 </helmet>
 
-<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.58);--glass-strong:rgba(10,22,19,0.86);--glass-border:rgba(190,235,208,0.15);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238;--panel:rgba(8,18,15,0.9)">
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.58);--glass-strong:rgba(10,22,19,0.88);--glass-border:rgba(190,235,208,0.15);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238;--panel:rgba(8,18,15,0.9)">
   <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
   <div class="stars"></div>
   <div class="fire" style="left:340px;top:700px;animation-delay:2s"></div>
@@ -41,42 +49,87 @@ body{margin:0}
   <!-- top bar -->
   <div style="position:absolute;left:8px;right:14px;top:14px;display:flex;align-items:center;gap:4px">
     <button class="iconbtn" aria-label="Discard"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
-    <div style="flex-grow:1">
+    <div style="flex-grow:1;min-width:0">
       <div style="font-size:18px;font-weight:300">Reply</div>
-      <div style="font-size:11.5px;color:var(--faint)">Saved to Drafts</div>
+      <div style="font-size:11.5px;color:var(--faint)">Replying to mara@example.com</div>
     </div>
-    <button aria-label="Attach" class="iconbtn"><svg class="ic" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg></button>
+    <button aria-label="Attach" class="iconbtn" style="color:var(--accent)"><svg class="ic" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg></button>
     <button style="height:40px;padding:0 18px;border-radius:20px;border:0;background:var(--accent);color:var(--on-accent);font:500 14px 'Lexend',system-ui,sans-serif;display:inline-flex;align-items:center;gap:8px"><svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>Send</button>
   </div>
 
   <!-- editor sheet -->
   <div style="position:absolute;left:12px;right:12px;top:68px;bottom:78px;border-radius:26px;background:var(--panel);border:1px solid var(--glass-border);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);padding:8px 18px 18px;overflow:hidden">
     <div class="fl"><span class="k">From</span><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:50%;background:#f0a6ca"></span>hello@grove.place</span><span style="flex-grow:1"></span><svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--faint)"><path d="m6 9 6 6 6-6"></path></svg></div>
-    <div class="fl"><span class="k">To</span><span class="chip">Mara Linden<svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--muted)"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></span></div>
-    <div style="font-size:11.5px;color:var(--faint);padding:6px 4px 0">Sent to mara@example.com, the address on her message, not the form.</div>
-    <div class="fl" style="margin-top:2px"><span class="k">Subject</span><span>Re: Moving my blog over to Grove?</span></div>
+    <div class="fl"><span class="k">To</span><span class="chip">mara@example.com<svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--muted)"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></span></div>
+    <div class="fl"><span class="k">Subject</span><span>Re: Moving my blog over to Grove?</span></div>
 
     <div style="margin-top:16px;font-family:'Newsreader',Georgia,serif;font-size:18px;line-height:1.65">
       <p style="margin:0 0 12px">Hi Mara,</p>
       <p style="margin:0 0 12px">Thank you for writing. Yes, you can bring your old posts over, and the images come with them<span class="caret"></span></p>
     </div>
-    <div style="position:absolute;left:18px;right:18px;bottom:16px;font-size:12.5px;color:var(--faint);border-top:1px solid var(--glass-border);padding-top:10px">Autumn · Grove</div>
+
+    <!-- attachments -->
+    <div style="position:absolute;left:18px;right:18px;bottom:46px">
+      <div class="row" style="gap:8px;overflow:hidden">
+        <div class="att" style="background:linear-gradient(135deg,#3a6b4a 0%,#14301f 55%,#0b1a14 100%)"><span class="x"><svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></span></div>
+        <div class="att" style="background:linear-gradient(135deg,#6b5a8a 0%,#2b2347 55%,#120e22 100%)"><span class="x"><svg class="ic" viewBox="0 0 24 24" style="width:12px;height:12px"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></span></div>
+        <div class="att row" style="width:132px;gap:8px;padding:0 10px;background:rgba(255,255,255,0.04)"><svg class="ic" viewBox="0 0 24 24" style="color:var(--accent)"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg><div style="min-width:0"><div style="font-size:12px" class="ell">migration.pdf</div><div style="font-size:11px;color:var(--faint)">420 KB</div></div></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--faint);margin-top:8px">3 attachments · 2.1 MB of 25 MB</div>
+    </div>
+    <div style="position:absolute;left:18px;right:18px;bottom:14px;font-size:12.5px;color:var(--faint);border-top:1px solid var(--glass-border);padding-top:8px">Autumn · Grove</div>
   </div>
 
-  <!-- formatting bar and undo hint -->
+  <!-- formatting bar -->
   <div class="glass-strong" style="position:absolute;left:12px;right:12px;bottom:14px;height:56px;border-radius:22px;display:flex;align-items:center;padding:0 8px;gap:2px">
     <button class="fmt" aria-label="Bold"><svg class="ic" viewBox="0 0 24 24"><path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"></path></svg></button>
     <button class="fmt" aria-label="Italic"><svg class="ic" viewBox="0 0 24 24"><path d="M19 4h-9"></path><path d="M14 20H5"></path><path d="M15 4 9 20"></path></svg></button>
     <button class="fmt" aria-label="Link"><svg class="ic" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></button>
     <button class="fmt" aria-label="List"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12h.01"></path><path d="M3 18h.01"></path><path d="M3 6h.01"></path><path d="M8 12h13"></path><path d="M8 18h13"></path><path d="M8 6h13"></path></svg></button>
+    <button class="fmt" aria-label="Insert image" style="color:var(--accent)"><svg class="ic" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg></button>
     <span style="flex-grow:1"></span>
-    <span style="font-size:12px;color:var(--faint);padding-right:8px">Sends after 10 s, undo any time</span>
+    <span style="font-size:12px;color:var(--faint);padding-right:8px">Sends after 10 s</span>
   </div>
+
+  <!-- attach sheet -->
+  <sc-if value="{{sheetOpen}}" hint-placeholder-val="{{false}}">
+    <div style="position:absolute;left:0;top:0;width:390px;height:844px;background:rgba(2,6,5,0.55)"></div>
+    <div class="glass-strong" style="position:absolute;left:0;right:0;bottom:0;height:520px;border-radius:28px 28px 0 0;border-bottom:0;padding:10px 16px 20px">
+      <div style="width:40px;height:4px;border-radius:2px;background:rgba(242,237,220,0.25);margin:0 auto 14px"></div>
+      <div style="font-size:18px;font-weight:300;margin:0 4px 14px">Add to message</div>
+      <div class="row" style="gap:10px">
+        <div class="opt"><svg class="ic" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>Photos</div>
+        <div class="opt"><svg class="ic" viewBox="0 0 24 24"><path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"></path><circle cx="12" cy="13" r="3"></circle></svg>Camera</div>
+        <div class="opt"><svg class="ic" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>Files</div>
+      </div>
+      <div style="font-size:11px;font-weight:500;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin:20px 4px 8px">Recent photos</div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px">
+        <div class="ph sel" style="background:linear-gradient(135deg,#3a6b4a,#0b1a14)"><span class="n">1</span></div>
+        <div class="ph sel" style="background:linear-gradient(135deg,#6b5a8a,#120e22)"><span class="n">2</span></div>
+        <div class="ph" style="background:linear-gradient(135deg,#8a7a4a,#1f1a0c)"></div>
+        <div class="ph" style="background:linear-gradient(135deg,#4a7a8a,#0c1a1f)"></div>
+        <div class="ph" style="background:linear-gradient(135deg,#8a4a6b,#1f0c14)"></div>
+        <div class="ph" style="background:linear-gradient(135deg,#4a8a6b,#0c1f16)"></div>
+        <div class="ph" style="background:linear-gradient(135deg,#7a6b4a,#1a140c)"></div>
+        <div class="ph" style="background:linear-gradient(135deg,#5a4a8a,#140c1f)"></div>
+      </div>
+      <div class="row" style="margin:16px 4px 0;gap:10px">
+        <div style="flex-grow:1">
+          <div style="font-size:14px">Photo size</div>
+          <div style="font-size:11.5px;color:var(--faint);margin-top:2px">Location is removed from photos</div>
+        </div>
+        <span style="font-size:13.5px;color:var(--muted)">Large</span>
+        <button style="height:42px;padding:0 20px;border-radius:21px;border:0;background:var(--accent);color:var(--on-accent);font:500 14px 'Lexend',system-ui,sans-serif">Add 2</button>
+      </div>
+    </div>
+  </sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+<script type="text/x-dc" data-dc-script data-props='{"sheet":{"editor":"enum","default":"closed","options":["closed","open"],"section":"Layout"},"$preview":{"width":390,"height":844}}'>
 class Component extends DCLogic {
-  renderVals() { return {}; }
+  renderVals() {
+    return { sheetOpen: (this.props.sheet ?? 'closed') === 'open' };
+  }
 }
 </script>
 </body>

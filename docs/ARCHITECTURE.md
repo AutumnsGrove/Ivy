@@ -136,6 +136,16 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   real destination before leaving.
 - **Threading:** JWZ from Message-ID/References/In-Reply-To with a normalized-subject fallback;
   computed on arrival and stored.
+- **Composing with attachments and images (settled need, round 18):** the editor can attach
+  photos and files (phone photo library, camera and Files picker; desktop picker and drag-drop) and
+  place images inline. Uploads go to the server's temp storage and attach to the `send_queue` row;
+  enmime's builder emits `multipart/mixed` (+ `multipart/related` with `cid:` for inline images).
+  Rules: a total-size limit read from the provider (SMTP `SIZE`; verify Purelymail's live) with a
+  clear error before sending, a MIME-type allow/deny list for the dangerous types, **EXIF/location
+  stripped from photos by default** (setting), optional downscale of phone photos (Original / Large /
+  Medium, default Large), per-attachment remove, the saved draft in the Drafts folder carries its
+  attachments, and the copy in Sent keeps them. Reply/forward re-attach the original's attachments
+  only when asked.
 - **Auth results:** parse `Authentication-Results` (SPF/DKIM/DMARC) into a trust signal used by
   the phishing question and the spoofed-sender discount.
 
@@ -145,10 +155,21 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   one list from one search box; embeddings from Ollama `nomic-embed-text` on localhost, remote
   OpenAI-compatible embeddings as an optional provider; embedding is a low-priority background
   queue (one job at a time, shared with other CPU-heavy work).
-- **Ask-your-mailbox (settled behavior):** retrieve (local) -> optional Jev `answers_question` filter
-  (JEV.md E) -> chat model writes the answer with citations to message ids -> verify citations
-  against the DB (and optionally Jev `claim_supported`) -> render as plain text. Account-picker
-  controls which accounts are included; LLM-off accounts are locked.
+- **Talk to Ivy (settled, round 18):** reached from the Search page (a Search / Ask Ivy switch at
+  the top). It is an **agent loop with three tools**, all read-only and all executed locally:
+  `search_mail(query, filters, limit)` (the hybrid search above, restricted to the selected
+  accounts), `read_mail(message_id, part?)` (sanitized text of one message, or one attachment's
+  extracted text), and `think(thought)` (a scratchpad the model uses to plan; never shown as
+  authoritative and never executed). The chat model loops until it answers or hits a cap.
+  Guard rails: a max step count and token budget per question, the account picker decides which
+  accounts the tools can see (LLM-off accounts are locked, so the tools never return their mail),
+  withheld mail (tripwire/sensitive) is invisible to the tools, every model call and tool call is a
+  ledger row, and tool results are wrapped as untrusted data. **Citations must point at message ids
+  the loop actually read in this run**, verified against the DB (optionally Jev `claim_supported`
+  per claim); the final answer renders as plain text. No tool can send, move, delete or tag; a
+  proposed action ("archive these") is shown as a button the user must click.
+  The old fixed pipeline (retrieve -> `answers_question` filter -> answer) remains as the cheap
+  fallback for the one-shot case and as the evaluation baseline.
 
 ## 7. LLM layer
 
