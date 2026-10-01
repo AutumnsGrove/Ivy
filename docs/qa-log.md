@@ -530,3 +530,16 @@ Operator: the potato is strong enough to build the Go binary in a reasonable tim
 built in CI and committed or released (a waste of storage). **Withdrew the round 24 "CI-built arm64
 binary" option.** Settled: the potato runs `git pull` and `go build` (the frontend assets still come
 from the Actions bot commit); spike S3 only confirms build time and peak RAM.
+
+## Round 26 — CI plan, repo going public (2026-10-01)
+
+Operator approved the proposed CI and said the repository will be made public, so the plan accounts
+for it. Written as `CI.md`: Phase A now (secret scan + link check), full Phase B at Milestone 0;
+required checks (go, nocgo, drift, web, e2e, guard, deps, codeql), the main-merge frontend bot
+commit, nightly Firefox/fuzz/audit jobs, manual `live` and `evals` in protected environments, and a
+public-repo security section (no `pull_request_target`, least-privilege permissions, SHA-pinned
+actions, never a self-hosted runner such as the potato, no secrets in PR runs). A before-public
+checklist: **no LICENSE file exists yet**, full-history secret scan, review docs for personal detail
+(role email addresses, `potato-remote` alias, the candid `qa-log.md`), repo settings, and the
+mockups. Public repos get free Actions minutes, so the earlier minutes concern is moot. The
+workflow files themselves are not written yet.

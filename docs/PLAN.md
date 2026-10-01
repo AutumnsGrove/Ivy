@@ -6,7 +6,7 @@
 **Doc map:** `PLAN.md` (this: product, features, milestones, risks) · `ARCHITECTURE.md` (how it's
 built) · `STANDARDS.md` (engineering standards, TDD workflow) · `STACK.md` (libraries, pure-Go
 rule) · `PERFORMANCE.md` (compression, budgets) · `JEV.md` (the cheap decision engine and its
-question catalog) · `TESTING.md` (how everything gets tested) · `qa-log.md` (every question and
+question catalog) · `CI.md` (GitHub Actions plan, public-repo security) · `TESTING.md` (how everything gets tested) · `qa-log.md` (every question and
 answer) · `../CLAUDE.md` (rules for agents).
 
 ## 1. What Ivy is

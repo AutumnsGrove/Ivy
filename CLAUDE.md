@@ -25,7 +25,8 @@ on a branch (never directly on main) so it can go up as a PR.
 `docs/PLAN.md` product and milestones · `docs/ARCHITECTURE.md` design · `docs/STANDARDS.md`
 engineering standards (read before writing code) · `docs/STACK.md` libraries · `docs/TESTING.md`
 test strategy and definition of done · `docs/PERFORMANCE.md` compression and budgets ·
-`docs/DEV.md` the offline seeded local dev stack (`make dev`) · `docs/JEV.md` the cheap decision
+`docs/CI.md` GitHub Actions plan (the repo will be public: no secrets in PR workflows, no
+self-hosted runners) · `docs/DEV.md` the offline seeded local dev stack (`make dev`) · `docs/JEV.md` the cheap decision
 engine · `docs/qa-log.md` every decision, in order.
 
 All development and UI iteration happens against the local dev stack and mailworld, never a real
