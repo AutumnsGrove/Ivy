@@ -284,7 +284,37 @@ B amber, C lilac, D daytime, E drawer nav, F reading a message, G tokens and typ
 three-pane. Accessibility notes: accent text colours are chosen to pass on both themes; per-account
 badge colours must also differ in lightness, not hue alone (to revisit).
 
-Open for the next round: pick accent, pick nav, review the garden SVG art style, decide how the
+### Round 16b — operator feedback on the first mockups (2026-10-01)
+
+Operator reviewed the canvas. Decisions:
+
+- **Background:** the glasshouse/foliage scene is out (its lit panes and hard ground band read as a
+  strange box). Use **Grove's vine tile** from Lattice (`libs/engine/.../nature/VineBackground.svelte`,
+  450x450, repeated endlessly, used behind every Grove page) over the night sky. Vendored as
+  `assets/vines.svg` (AGPL-3.0 both sides); stacked 3x at night, 2x by day instead of a second
+  artwork. A sparse starfield fades out in the top ~380px.
+- **Nav:** **option A (bottom tab bar)** wins; the drawer variant is dropped. A **side panel is kept
+  for account switching** (plus folders and tags), opened from an account button in the header, so
+  the account-chip row is gone.
+- **Accent:** **moonlight lilac** (`#c4b5fd` night, `#6d28d9` day). Reason: the chrome already has a
+  lot of green, and lilac contrasts. Amber/green dropped.
+- **Chunkiness:** operator likes it (it keeps focus on content), but chrome was slimmed anyway
+  (card radius 18, tighter padding, 58px tab bar, no chip row). Reassess once they see it.
+- **Light mode:** was "mostly ok", but the background looked dark and contrast was off. Rebuilt on a
+  cream-meadow gradient with a bark text ramp (`#2a2014` / `#54442f`), glass 72% white, vines on top.
+  The background colour is now set per theme in CSS so it can't fall back to the dark base.
+- **Smart chip:** keep the chip at the top of the email but **no "Jev"/AI label, no AI symbol**.
+  It is now a shimmering lilac-and-gold chip with a pulsing firefly dot and one italic serif line.
+  The "needs you" pill uses the same firefly dot instead of an icon. Principle: the LLM layer should
+  feel like a little magic, never a labelled AI feature. (The settings/stats ledger can still say
+  where calls went; this is about the reading surface.)
+- **New: Reading feed** (board E): the newsletter mode, with Today / This week / Saved, a one-line
+  digest chip, serif titles with read time, Read / Save, and one-click Unsubscribe.
+
+Open for the next round: compose, search/ask, settings, empty states, the first-run `init` look,
+and whether the feed gets its own accent or the digest chip moves to the Inbox too.
+
+Earlier open list (partly answered above): pick accent, pick nav, review the garden SVG art style, decide how the
 "needs you" and Jev read-out are labelled (currently "Ivy's read · Jev"), compose and settings
 screens, empty/inbox-zero scene, and whether the day theme needs its own accent.
 

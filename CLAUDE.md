@@ -35,10 +35,12 @@ that produces the plan. Record every answer in `docs/qa-log.md` and fold settled
 - License: AGPL-3.0.
 - Design: fresh from the ground up. Vendored copy of Grove's design tokens is welcome; no runtime
   dependency on Lattice. The old Ivy (`Lattice/_junkdrawer/apps/ivy`) is reference only.
-- Design direction (round 16): "night in a botanical garden": deep green-black sky + stars, glass
-  chrome over an SVG garden scene, calm reading panel; Lexend UI + Newsreader reading; Lucide
-  icons; day theme too; gentle motion. Mockups in `docs/design/canvas/`. Accent colour and phone nav
-  style still open.
+- Design direction (rounds 16/16b): "night in a botanical garden": deep green-black sky + faint
+  stars, **Grove's vine tile** as the repeating background, glass chrome over it, calm reading panel;
+  Lexend UI + Newsreader reading; Lucide icons; day theme too; gentle motion. **Moonlight lilac
+  accent**; **bottom tab bar** on phone with a **side panel for account switching**. LLM output on
+  the reading surface is never labelled as AI (no "Jev"/sparkle marks): a quiet firefly-dot chip.
+  Mockups in `docs/design/canvas/`.
 - LLM layer: `decide()` (classification; default **Jev** via OpenRouter's **`/systemone`** endpoint,
   model `jev-latest`, confirmed live in Polaris's `jev/jev.go`; typed answers + probabilities, no
   explanations, only `choice` questions proven, so yes/no is a `choice`), `complete()` (configurable
