@@ -255,4 +255,37 @@ credentials in a local `.env`; the live IMAP spike on `dev@` (PERMANENTFLAGS, AN
 roles, Sent behavior); the Ivy-specific Jev spike (needs the operator's OpenRouter key; ask first);
 the operator's review of the plan docs and the unconfirmed API-design default.
 
+## Round 16 — design direction (2026-10-01)
+
+Operator wants design ironed out before more backend work. Looked at Lattice's Prism tokens
+(`libs/prism`, `docs/design-system/COLORS.md`): Grove green `#16a34a` (grove-600), cream/bark
+neutrals, Lexend as the house font, glass tokens, Lucide via `@lucide/svelte`. Grove's dark mode is
+warm bark-brown and Midnight Bloom is violet; neither is a night sky, so Ivy gets its own variant.
+Fresh design, vendoring only what helps.
+
+**Concept (operator's words, paraphrased):** a nighttime walk through a botanical garden. You feel
+the plant life around you and see the stars above. Calm over clever. SVG background, glassy
+icons, Lucide for now (Phosphor or other later if needed).
+
+| Question | Answer |
+|---|---|
+| Night base | **Deep green-black** (`#060b10` sky fading to `#0c1f18`), starlight cream text. |
+| Light mode | **Yes: a "daytime garden" counterpart**, following the system setting. Doubles design and baseline work (noted). |
+| Glass vs scene | **Atmosphere around, calm reading surface:** garden shows through frosted chrome (lists, nav); the message body sits on a near-opaque panel. |
+| Motion | **Gently alive:** firefly drift, twinkle, maybe a shooting star on inbox zero. Must honour `prefers-reduced-motion` and pause when hidden. Watch battery and the potato-class phone budget. |
+| Phone nav | Undecided. Operator likes both the **bottom tab bar + account chips** and the **drawer**; both mocked (A and E) to compare. |
+| List density | **Airy 3-line cards** (sender, subject, one-line preview; account dot, unread glow, tags). |
+| Type | **Lexend for UI + Newsreader (serif) for reading.** Self-hosted, embedded. |
+| Accent | Undecided: mocked **luminous green**, **firefly amber** and **moonlight lilac** (A, B, C). Leaning green by default. |
+
+Mockups live in `docs/design/canvas/` (Design canvas source: `project/*.dc.html` plus
+`project/assets/*.svg`), published as the "Ivy Design Mockups" artifact. Boards: A night/green/tabs,
+B amber, C lilac, D daytime, E drawer nav, F reading a message, G tokens and type, H desktop
+three-pane. Accessibility notes: accent text colours are chosen to pass on both themes; per-account
+badge colours must also differ in lightness, not hue alone (to revisit).
+
+Open for the next round: pick accent, pick nav, review the garden SVG art style, decide how the
+"needs you" and Jev read-out are labelled (currently "Ivy's read · Jev"), compose and settings
+screens, empty/inbox-zero scene, and whether the day theme needs its own accent.
+
 Notes on round 5: the second-stage model sees raw email text, so it's the higher-risk stage: no tools, structured output (`needs_me` bool + short reason), reason rendered as plain text. Configurability needs a deliberate home (config file vs in-app settings with per-account overrides), asked in round 6.

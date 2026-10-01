@@ -23,6 +23,13 @@ up and run for themselves, like Polaris.
 **Feel:** calm and quiet. Soft, warm, whitespace, grove-green leaning, nothing shouting for
 attention. Fresh design (the old Lattice Ivy UI is reference only).
 
+**Design direction (round 16, mockups in `design/canvas/`):** a night walk through a botanical
+garden: deep green-black sky with stars, a glasshouse and foliage silhouettes, frosted-glass chrome
+over the scene, and a calm near-opaque reading panel. Lexend for the interface, Newsreader for
+message text, Lucide icons, gentle firefly motion (reduced-motion aware). A daytime-garden light
+theme follows the system setting. Accent colour and phone navigation (tab bar vs drawer) are still
+being chosen from the mockups.
+
 **Non-goals for v1:** calendar-invite RSVP, PGP/S-MIME, CardDAV/CalDAV (all possible later);
 multiple human users (out for now, not on the roadmap); push notifications (Apple Mail keeps that
 job); Gmail parity; importing old Proton mail (start fresh; revisit as an optional one-off).

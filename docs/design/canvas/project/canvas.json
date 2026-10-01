@@ -1,0 +1,31 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-10-01T21:00:00Z" },
+  "title": "Ivy Design Mockups",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": { "x": 0, "y": 0, "w": 390, "h": 844, "title": "A · Night, green accent, tab bar", "is_interactive": false },
+    "InboxAmber.dc.html": { "x": 470, "y": 0, "w": 390, "h": 844, "title": "B · Firefly amber accent" },
+    "InboxLilac.dc.html": { "x": 940, "y": 0, "w": 390, "h": 844, "title": "C · Moonlight lilac accent" },
+    "InboxDay.dc.html": { "x": 1410, "y": 0, "w": 390, "h": 844, "title": "D · Daytime garden" },
+    "InboxDrawer.dc.html": { "x": 0, "y": 964, "w": 390, "h": 844, "title": "E · Drawer navigation" },
+    "Message.dc.html": { "x": 470, "y": 964, "w": 390, "h": 844, "title": "F · Reading a message" },
+    "Tokens.dc.html": { "x": 940, "y": 964, "w": 720, "h": 1100, "title": "G · Tokens and type" },
+    "Desktop.dc.html": { "x": 0, "y": 2184, "w": 1440, "h": 860, "title": "H · Desktop three-pane" }
+  },
+  "order": [
+    "Main.dc.html",
+    "InboxAmber.dc.html",
+    "InboxLilac.dc.html",
+    "InboxDay.dc.html",
+    "InboxDrawer.dc.html",
+    "Message.dc.html",
+    "Tokens.dc.html",
+    "Desktop.dc.html"
+  ],
+  "notes": {
+    "t1": { "x": 0, "y": -300, "text": "Ivy: night in the botanical garden", "kind": "title1", "maxW": 1800 }
+  },
+  "designSystems": []
+}

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Inbox, desktop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.row{display:flex;align-items:center}
+.ell{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.drow{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:12px;color:var(--muted);font:400 14px 'Lexend',system-ui,sans-serif}
+.drow.on{background:var(--accent-soft);color:var(--text)}
+.dlabel{font:500 11px 'Lexend',system-ui,sans-serif;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);padding:0 12px;margin:18px 0 6px}
+.rail{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:14px;color:var(--faint);border:0;background:transparent}
+.rail.on{color:var(--accent);background:var(--accent-soft)}
+.pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:999px;font:400 11.5px 'Lexend',system-ui,sans-serif;color:var(--muted);border:1px solid var(--glass-border)}
+.pill.need{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-line)}
+.item{display:flex;flex-direction:column;gap:3px;padding:13px 14px;border-radius:18px;border:1px solid transparent}
+.item.sel{background:var(--accent-soft);border-color:var(--accent-line)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;border-radius:20px;font:500 14px 'Lexend',system-ui,sans-serif;border:1px solid var(--glass-border);color:var(--text);background:transparent;padding:0 18px}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:transparent}
+.fire{position:absolute;width:5px;height:5px;border-radius:50%;background:#f7dc92;box-shadow:0 0 10px 3px rgba(247,220,146,0.55);opacity:0.2;animation:drift 9s ease-in-out infinite alternate}
+@keyframes drift{0%{transform:translate(0,0);opacity:0.15}50%{opacity:0.85}100%{transform:translate(20px,-30px);opacity:0.15}}
+@media (prefers-reduced-motion: reduce){.fire{animation:none;opacity:0.4}}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:1440px;height:860px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;background:#070d10;color:var(--text);--text:#f2eddc;--muted:#b3c1b6;--faint:#8ba093;--glass:rgba(14,32,26,0.56);--glass-strong:rgba(10,24,19,0.84);--glass-border:rgba(190,235,208,0.15);--accent:#4ade80;--accent-soft:rgba(74,222,128,0.16);--accent-line:rgba(74,222,128,0.38);--on-accent:#06210f;--panel:rgba(9,20,16,0.86)">
+  <img src="assets/night-garden-wide.svg" alt="" style="position:absolute;left:0;top:0;width:1440px;height:860px;object-fit:cover">
+  <div class="fire" style="left:210px;top:760px;animation-delay:0s"></div>
+  <div class="fire" style="left:1220px;top:790px;animation-delay:3s"></div>
+  <div class="fire" style="left:700px;top:810px;animation-delay:6s"></div>
+
+  <!-- rail -->
+  <nav class="glass" aria-label="Main" style="position:absolute;left:16px;top:16px;bottom:16px;width:68px;border-radius:26px;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:8px">
+    <svg class="ic" viewBox="0 0 24 24" style="width:26px;height:26px;color:var(--accent);margin-bottom:10px"><path d="M7 20h10"></path><path d="M10 20c5.5-2.5.8-6.4 3-10"></path><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"></path><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"></path></svg>
+    <button class="rail on" aria-label="Inbox"><svg class="ic" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg></button>
+    <button class="rail" aria-label="Reading feed"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v14"></path><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"></path></svg></button>
+    <button class="rail" aria-label="Search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
+    <button class="rail" aria-label="Tags"><svg class="ic" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg></button>
+    <span style="flex-grow:1"></span>
+    <button class="rail" aria-label="Settings"><svg class="ic" viewBox="0 0 24 24"><path d="M10 5H3"></path><path d="M12 19H3"></path><path d="M14 3v4"></path><path d="M16 17v4"></path><path d="M21 12h-9"></path><path d="M21 19h-5"></path><path d="M21 5h-7"></path><path d="M8 10v4"></path><path d="M8 12H3"></path></svg></button>
+  </nav>
+
+  <!-- accounts and folders -->
+  <aside class="glass" style="position:absolute;left:100px;top:16px;bottom:16px;width:236px;border-radius:26px;padding:18px 12px;display:flex;flex-direction:column">
+    <button class="btn primary" style="width:100%"><svg class="ic" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="m15 5 4 4"></path></svg>Compose</button>
+    <div class="dlabel">Accounts</div>
+    <div class="drow on"><span style="width:10px;height:10px;border-radius:50%;background:#4ade80"></span><span style="flex-grow:1">All inboxes</span><span style="font-size:12px;color:var(--faint)">16</span></div>
+    <div class="drow"><span style="width:10px;height:10px;border-radius:50%;background:#7cc4ff"></span><span style="flex-grow:1">autumn@</span><span style="font-size:12px;color:var(--faint)">9</span></div>
+    <div class="drow"><span style="width:10px;height:10px;border-radius:50%;background:#f0a6ca"></span><span style="flex-grow:1">hello@</span><span style="font-size:12px;color:var(--faint)">5</span></div>
+    <div class="drow"><span style="width:10px;height:10px;border-radius:50%;background:#5ad1c8"></span><span style="flex-grow:1">dmca@</span><span style="font-size:12px;color:var(--faint)">1</span></div>
+    <div class="drow"><span style="width:10px;height:10px;border-radius:50%;background:#f2957f"></span><span style="flex-grow:1">security@</span><span style="font-size:12px;color:var(--faint)">1</span></div>
+    <div class="dlabel">Folders</div>
+    <div class="drow"><svg class="ic" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg>Archive</div>
+    <div class="drow"><svg class="ic" viewBox="0 0 24 24"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>Trash</div>
+    <div class="dlabel">Tags</div>
+    <div class="drow"><span style="color:var(--accent)">#</span>receipts</div>
+    <div class="drow"><span style="color:var(--accent)">#</span>legal</div>
+    <div class="drow"><span style="color:var(--accent)">#</span>contact form</div>
+  </aside>
+
+  <!-- list -->
+  <section class="glass" style="position:absolute;left:352px;top:16px;bottom:16px;width:420px;border-radius:26px;padding:18px 12px;display:flex;flex-direction:column;gap:4px">
+    <div class="row" style="padding:0 8px 10px;gap:10px">
+      <div style="flex-grow:1">
+        <div style="font-size:24px;font-weight:300">Inbox</div>
+        <div style="font-size:12.5px;color:var(--muted);margin-top:2px">2 need you · 16 unread</div>
+      </div>
+      <div class="row" style="gap:8px;height:40px;padding:0 14px;border-radius:20px;border:1px solid var(--glass-border);color:var(--faint);font-size:13px"><svg class="ic ic-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>Search or ask</div>
+    </div>
+
+    <div class="item sel">
+      <div class="row" style="gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:#f0a6ca"></span><span class="ell" style="font-size:14px;font-weight:500;flex-grow:1">Mara Linden</span><span style="font-size:11.5px;color:var(--faint)">9:41</span><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)"></span></div>
+      <div class="ell" style="font-size:14px;font-weight:500">Moving my blog over to Grove?</div>
+      <div class="ell" style="font-size:13px;color:var(--muted)">Hi! A friend pointed me to Grove and I wondered whether I can bring my old posts…</div>
+      <div class="row" style="gap:6px;margin-top:5px"><span class="pill need"><svg class="ic ic-sm" viewBox="0 0 24 24" style="width:13px;height:13px"><path d="M7 20h10"></path><path d="M10 20c5.5-2.5.8-6.4 3-10"></path><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"></path><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"></path></svg>needs you</span><span class="pill">contact form</span></div>
+    </div>
+    <div class="item">
+      <div class="row" style="gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:#5ad1c8"></span><span class="ell" style="font-size:14px;font-weight:500;flex-grow:1">Takedown requests</span><span style="font-size:11.5px;color:var(--faint)">Yesterday</span><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)"></span></div>
+      <div class="ell" style="font-size:14px;font-weight:500">Notice of alleged infringement</div>
+      <div class="ell" style="font-size:13px;color:var(--muted)">We are writing on behalf of a rights holder to notify you of material hosted at…</div>
+      <div class="row" style="gap:6px;margin-top:5px"><span class="pill need">needs you</span><span class="pill">legal</span></div>
+    </div>
+    <div class="item">
+      <div class="row" style="gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:#7cc4ff"></span><span class="ell" style="font-size:14px;font-weight:500;flex-grow:1">GitHub</span><span style="font-size:11.5px;color:var(--faint)">8:12</span></div>
+      <div class="ell" style="font-size:14px">[Lattice] Pull request merged into main</div>
+      <div class="ell" style="font-size:13px;color:var(--muted)">autumnsgrove merged 3 commits. Review the changes and the follow-up checks…</div>
+    </div>
+    <div class="item">
+      <div class="row" style="gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:#7cc4ff"></span><span class="ell" style="font-size:14px;font-weight:500;flex-grow:1">Purelymail</span><span style="font-size:11.5px;color:var(--faint)">Mon</span></div>
+      <div class="ell" style="font-size:14px">Your receipt for this month</div>
+      <div class="ell" style="font-size:13px;color:var(--muted)">Thank you for your payment. This receipt covers your account and its users…</div>
+      <div class="row" style="gap:6px;margin-top:5px"><span class="pill">receipt</span></div>
+    </div>
+    <div class="item">
+      <div class="row" style="gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:#7cc4ff"></span><span class="ell" style="font-size:14px;font-weight:500;flex-grow:1">Wildflower Weekly</span><span style="font-size:11.5px;color:var(--faint)">Mon</span></div>
+      <div class="ell" style="font-size:14px">Ten shade plants that forgive neglect</div>
+      <div class="ell" style="font-size:13px;color:var(--muted)">This week in the garden: ferns, hostas, and the quiet case for moss…</div>
+    </div>
+  </section>
+
+  <!-- reading pane -->
+  <section style="position:absolute;left:788px;top:16px;bottom:16px;right:16px;border-radius:26px;background:var(--panel);border:1px solid var(--glass-border);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);padding:22px 40px;display:flex;flex-direction:column">
+    <div class="row" style="gap:6px;margin:0 -10px 0 -10px;color:var(--muted)">
+      <button class="rail" aria-label="Archive" style="color:var(--muted)"><svg class="ic" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg></button>
+      <button class="rail" aria-label="Delete" style="color:var(--muted)"><svg class="ic" viewBox="0 0 24 24"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg></button>
+      <button class="rail" aria-label="Tag" style="color:var(--muted)"><svg class="ic" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg></button>
+      <span style="flex-grow:1"></span>
+      <button class="rail" aria-label="More" style="color:var(--muted)"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></button>
+    </div>
+    <div style="max-width:560px;margin-top:14px">
+      <div style="font-family:'Newsreader',Georgia,serif;font-size:32px;line-height:1.2;font-weight:500">Moving my blog over to Grove?</div>
+      <div class="row" style="gap:12px;margin-top:20px">
+        <div style="width:42px;height:42px;border-radius:50%;background:rgba(240,166,202,0.18);border:1px solid rgba(240,166,202,0.45);color:#f0a6ca;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:14px">ML</div>
+        <div>
+          <div style="font-size:14.5px;font-weight:500">Mara Linden</div>
+          <div class="row" style="gap:6px;font-size:12px;color:var(--muted);margin-top:2px"><span style="width:7px;height:7px;border-radius:50%;background:#f0a6ca"></span>to hello@grove.place · 9:41 · replies go to mara@example.com</div>
+        </div>
+      </div>
+      <div style="margin-top:18px;padding:12px 14px;border-radius:16px;background:var(--accent-soft);border:1px solid var(--accent-line)">
+        <div style="font-size:11px;font-weight:500;letter-spacing:0.09em;text-transform:uppercase;color:var(--accent)">Ivy's read · Jev</div>
+        <div style="font-size:13.5px;line-height:1.5;margin-top:4px">A person asking about moving posts and images to Grove. No deadline.</div>
+      </div>
+      <div style="margin-top:24px;font-family:'Newsreader',Georgia,serif;font-size:19px;line-height:1.7">
+        <p style="margin:0 0 16px">Hi there,</p>
+        <p style="margin:0 0 16px">I found Grove through a friend, and I've been writing on a small blog for about six years. Before I set anything up, I wanted to ask whether I can bring my old posts with me, and whether the images come along too.</p>
+        <p style="margin:0">No rush at all. Thank you for building something so gentle.</p>
+      </div>
+      <div class="row" style="gap:10px;margin-top:30px">
+        <button class="btn primary"><svg class="ic" viewBox="0 0 24 24"><polyline points="9 17 4 12 9 7"></polyline><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path></svg>Reply</button>
+        <button class="btn">Forward</button>
+      </div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Inbox, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy{box-sizing:border-box}
+.ivy *{box-sizing:border-box}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.glass-strong{background:var(--glass-strong);border:1px solid var(--glass-border);backdrop-filter:blur(20px) saturate(1.2);-webkit-backdrop-filter:blur(20px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.chip{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 14px;border-radius:999px;font:400 13.5px 'Lexend',system-ui,sans-serif;color:var(--muted);background:var(--glass);border:1px solid var(--glass-border);white-space:nowrap;flex:none}
+.chip.on{color:var(--text);background:var(--accent-soft);border-color:var(--accent-line)}
+.chip .n{font-size:11.5px;color:var(--faint)}
+.chip.on .n{color:var(--accent)}
+.pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:999px;font:400 11.5px 'Lexend',system-ui,sans-serif;color:var(--muted);border:1px solid var(--glass-border)}
+.pill.need{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-line)}
+.tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;flex:1;height:56px;border:0;background:transparent;color:var(--faint);font:400 10.5px 'Lexend',system-ui,sans-serif;border-radius:20px}
+.tab.on{color:var(--accent)}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:1px solid var(--glass-border);background:var(--glass);color:var(--text)}
+.row{display:flex;align-items:center}
+.ell{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.drow{display:flex;align-items:center;gap:12px;height:44px;padding:0 12px;border-radius:14px;color:var(--muted);font:400 14.5px 'Lexend',system-ui,sans-serif}
+.drow.on{background:var(--accent-soft);color:var(--text)}
+.dlabel{font:500 11px 'Lexend',system-ui,sans-serif;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);padding:0 12px;margin:18px 0 6px}
+.fire{position:absolute;width:5px;height:5px;border-radius:50%;background:#f7dc92;box-shadow:0 0 10px 3px rgba(247,220,146,0.55);opacity:0.2;animation:drift 9s ease-in-out infinite alternate}
+@keyframes drift{0%{transform:translate(0,0);opacity:0.15}50%{opacity:0.85}100%{transform:translate(20px,-30px);opacity:0.15}}
+@media (prefers-reduced-motion: reduce){.fire{animation:none;opacity:0.4}}
+a{color:inherit}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;background:#070d10;color:var(--text);{{vars}}">
+  <img src="{{bg}}" alt="" style="position:absolute;left:0;top:0;width:390px;height:844px;object-fit:cover">
+
+  <sc-if value="{{isNight}}" hint-placeholder-val="{{true}}">
+    <div class="fire" style="left:58px;top:560px;animation-delay:0s"></div>
+    <div class="fire" style="left:312px;top:610px;animation-delay:2.4s"></div>
+    <div class="fire" style="left:228px;top:690px;animation-delay:5s"></div>
+    <div class="fire" style="left:104px;top:640px;animation-delay:7s"></div>
+  </sc-if>
+
+  <!-- header -->
+  <div style="position:absolute;left:16px;right:16px;top:20px;display:flex;align-items:center;gap:12px">
+    <sc-if value="{{isDrawerNav}}" hint-placeholder-val="{{false}}">
+      <button class="iconbtn" aria-label="Open menu"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12h16"></path><path d="M4 6h16"></path><path d="M4 18h16"></path></svg></button>
+    </sc-if>
+    <div style="flex-grow:1;min-width:0">
+      <div style="font-size:26px;font-weight:300;letter-spacing:-0.01em">{{title}}</div>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:2px">{{subtitle}}</div>
+    </div>
+    <button class="iconbtn" aria-label="Search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
+  </div>
+
+  <!-- account chips -->
+  <sc-if value="{{isTabs}}" hint-placeholder-val="{{true}}">
+    <div style="position:absolute;left:0;right:0;top:92px;padding:0 16px;display:flex;gap:8px;overflow:hidden">
+      <sc-for list="{{chips}}" as="c" hint-placeholder-count="4">
+        <span class="{{c.cls}}"><span style="width:8px;height:8px;border-radius:50%;background:{{c.color}}"></span>{{c.name}}<span class="n">{{c.count}}</span></span>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <!-- message cards -->
+  <div style="position:absolute;left:16px;right:16px;top:{{listTop}}px;display:flex;flex-direction:column;gap:10px">
+    <sc-for list="{{mails}}" as="m" hint-placeholder-count="4">
+      <div class="glass" style="border-radius:22px;padding:14px 16px 14px;display:flex;flex-direction:column;gap:4px">
+        <div class="row" style="gap:8px">
+          <span style="width:8px;height:8px;border-radius:50%;background:{{m.color}};flex:none"></span>
+          <span class="ell" style="font-size:14.5px;font-weight:500;flex-grow:1;min-width:0">{{m.from}}</span>
+          <span style="font-size:11.5px;color:var(--faint);flex:none">{{m.time}}</span>
+          <sc-if value="{{m.unread}}" hint-placeholder-val="{{true}}">
+            <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);flex:none"></span>
+          </sc-if>
+        </div>
+        <div class="ell" style="font-size:14.5px;font-weight:{{m.weight}};color:var(--text)">{{m.subject}}</div>
+        <div class="ell" style="font-size:13px;color:var(--muted)">{{m.preview}}</div>
+        <sc-if value="{{m.hasTags}}" hint-placeholder-val="{{false}}">
+          <div class="row" style="gap:6px;margin-top:6px">
+            <sc-if value="{{m.needs}}" hint-placeholder-val="{{false}}">
+              <span class="pill need"><svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M7 20h10"></path><path d="M10 20c5.5-2.5.8-6.4 3-10"></path><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"></path><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"></path></svg>needs you</span>
+            </sc-if>
+            <span class="pill">{{m.tag}}</span>
+          </div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- compose -->
+  <button aria-label="Compose" style="position:absolute;right:20px;bottom:{{fabBottom}}px;width:56px;height:56px;border-radius:50%;border:0;background:var(--accent);color:var(--on-accent);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,0.35),0 0 0 6px var(--accent-soft)"><svg class="ic" viewBox="0 0 24 24" style="width:22px;height:22px"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="m15 5 4 4"></path></svg></button>
+
+  <!-- bottom tabs -->
+  <sc-if value="{{isTabs}}" hint-placeholder-val="{{true}}">
+    <nav class="glass-strong" aria-label="Main" style="position:absolute;left:16px;right:16px;bottom:16px;height:64px;border-radius:26px;display:flex;align-items:center;padding:0 6px">
+      <button class="tab on"><svg class="ic" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>Inbox</button>
+      <button class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v14"></path><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"></path></svg>Reading</button>
+      <button class="tab"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>Search</button>
+      <button class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>Tags</button>
+      <button class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M10 5H3"></path><path d="M12 19H3"></path><path d="M14 3v4"></path><path d="M16 17v4"></path><path d="M21 12h-9"></path><path d="M21 19h-5"></path><path d="M21 5h-7"></path><path d="M8 10v4"></path><path d="M8 12H3"></path></svg>Settings</button>
+    </nav>
+  </sc-if>
+
+  <!-- drawer -->
+  <sc-if value="{{isDrawerOpen}}" hint-placeholder-val="{{false}}">
+    <div style="position:absolute;left:0;top:0;width:390px;height:844px;background:rgba(2,6,5,0.5)"></div>
+    <aside class="glass-strong" aria-label="Menu" style="position:absolute;left:0;top:0;bottom:0;width:304px;border-radius:0 28px 28px 0;border-left:0;padding:24px 14px;display:flex;flex-direction:column">
+      <div class="row" style="gap:10px;padding:0 12px 6px">
+        <svg class="ic" viewBox="0 0 24 24" style="width:24px;height:24px;color:var(--accent)"><path d="M7 20h10"></path><path d="M10 20c5.5-2.5.8-6.4 3-10"></path><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"></path><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"></path></svg>
+        <span style="font-size:22px;font-weight:300;letter-spacing:0.02em">Ivy</span>
+      </div>
+      <div class="dlabel">Accounts</div>
+      <sc-for list="{{chips}}" as="c" hint-placeholder-count="5">
+        <div class="{{c.drowCls}}"><span style="width:10px;height:10px;border-radius:50%;background:{{c.color}}"></span><span style="flex-grow:1">{{c.longName}}</span><span style="font-size:12px;color:var(--faint)">{{c.count}}</span></div>
+      </sc-for>
+      <div class="dlabel">Folders</div>
+      <div class="drow"><svg class="ic" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>Inbox</div>
+      <div class="drow"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v14"></path><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"></path></svg>Reading</div>
+      <div class="drow"><svg class="ic" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg>Archive</div>
+      <div class="drow"><svg class="ic" viewBox="0 0 24 24"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>Trash</div>
+      <div class="dlabel">Tags</div>
+      <div class="drow"><span style="color:var(--accent)">#</span>receipts</div>
+      <div class="drow"><span style="color:var(--accent)">#</span>legal</div>
+    </aside>
+  </sc-if>
+</div>
+</x-dc>
+
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"enum","default":"green","options":["green","amber","lilac"],"section":"Look"},"theme":{"editor":"enum","default":"night","options":["night","day"],"section":"Look"},"nav":{"editor":"enum","default":"tabs","options":["tabs","drawer"],"section":"Layout"},"drawer":{"editor":"enum","default":"closed","options":["closed","open"],"section":"Layout"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? 'green';
+    const theme = this.props.theme ?? 'night';
+    const nav = this.props.nav ?? 'tabs';
+    const drawer = this.props.drawer ?? 'closed';
+    const night = theme === 'night';
+
+    const accents = night
+      ? { green: ['74,222,128', '#4ade80', '#06210f'], amber: ['245,196,90', '#f5c45a', '#2a1a02'], lilac: ['196,181,253', '#c4b5fd', '#1b1238'] }
+      : { green: ['21,128,61', '#15803d', '#ffffff'], amber: ['180,83,9', '#b45309', '#ffffff'], lilac: ['109,40,217', '#6d28d9', '#ffffff'] };
+    const [rgb, hex, onAccent] = accents[accent];
+
+    const base = night
+      ? '--text:#f2eddc;--muted:#b3c1b6;--faint:#8ba093;--glass:rgba(14,32,26,0.56);--glass-strong:rgba(10,24,19,0.84);--glass-border:rgba(190,235,208,0.15);'
+      : '--text:#2d2216;--muted:#5d4d3a;--faint:#7d6c56;--glass:rgba(255,255,255,0.62);--glass-strong:rgba(255,253,246,0.9);--glass-border:rgba(61,41,20,0.12);';
+    const vars = base
+      + '--accent:' + hex + ';--accent-soft:rgba(' + rgb + ',0.16);--accent-line:rgba(' + rgb + ',0.38);--on-accent:' + onAccent + ';';
+
+    const acct = {
+      autumn: night ? '#7cc4ff' : '#1d6fb8',
+      hello: night ? '#f0a6ca' : '#b83a7a',
+      dmca: night ? '#5ad1c8' : '#0f766e',
+      security: night ? '#f2957f' : '#b4432c',
+    };
+    const chips = [
+      { name: 'All', longName: 'All inboxes', count: '16', color: hex, on: true },
+      { name: 'autumn', longName: 'autumn@', count: '9', color: acct.autumn },
+      { name: 'hello', longName: 'hello@', count: '5', color: acct.hello },
+      { name: 'dmca', longName: 'dmca@', count: '1', color: acct.dmca },
+      { name: 'security', longName: 'security@', count: '1', color: acct.security },
+    ].map(c => ({ ...c, cls: c.on ? 'chip on' : 'chip', drowCls: c.on ? 'drow on' : 'drow' }));
+
+    const mk = (from, color, time, subject, preview, unread, needs, tag) => ({
+      from, color, time, subject, preview, unread, needs, tag,
+      weight: unread ? 500 : 400,
+      hasTags: !!(needs || tag),
+    });
+    const mails = [
+      mk('Mara Linden', acct.hello, '9:41', 'Moving my blog over to Grove?', 'Hi! A friend pointed me to Grove and I wondered whether I can bring my old posts with me…', true, true, 'contact form'),
+      mk('Takedown requests', acct.dmca, 'Yesterday', 'Notice of alleged infringement', 'We are writing on behalf of a rights holder to notify you of material hosted at…', true, true, 'legal'),
+      mk('GitHub', acct.autumn, '8:12', '[Lattice] Pull request merged into main', 'autumnsgrove merged 3 commits. Review the changes and the follow-up checks…', false, false, ''),
+      mk('Purelymail', acct.autumn, 'Mon', 'Your receipt for this month', 'Thank you for your payment. This receipt covers your account and its users…', false, false, 'receipt'),
+      mk('Wildflower Weekly', acct.autumn, 'Mon', 'Ten shade plants that forgive neglect', 'This week in the garden: ferns, hostas, and the quiet case for moss…', false, false, 'newsletter'),
+    ];
+
+    return {
+      vars,
+      bg: night ? 'assets/night-garden.svg' : 'assets/day-garden.svg',
+      isNight: night,
+      isTabs: nav === 'tabs',
+      isDrawerNav: nav === 'drawer',
+      isDrawerOpen: nav === 'drawer' && drawer === 'open',
+      title: nav === 'tabs' ? 'Inbox' : 'All inboxes',
+      subtitle: '2 need you · 16 unread',
+      listTop: nav === 'tabs' ? 146 : 92,
+      fabBottom: nav === 'tabs' ? 92 : 28,
+      chips,
+      mails,
+    };
+  }
+}
+</script>
+</body>
+</html>
