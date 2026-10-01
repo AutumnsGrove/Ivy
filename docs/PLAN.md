@@ -4,13 +4,15 @@
 0-13 (`qa-log.md`). No implementation starts until this plan is approved.
 
 **Doc map:** `PLAN.md` (this: product, features, milestones, risks) · `ARCHITECTURE.md` (how it's
-built) · `JEV.md` (the cheap decision engine and its question catalog) · `TESTING.md` (how everything
-gets tested) · `qa-log.md` (every question and answer) · `../CLAUDE.md` (settled decisions for agents).
+built) · `STANDARDS.md` (engineering standards, TDD workflow) · `STACK.md` (libraries, pure-Go
+rule) · `PERFORMANCE.md` (compression, budgets) · `JEV.md` (the cheap decision engine and its
+question catalog) · `CI.md` (GitHub Actions plan, public-repo security) · `TESTING.md` (how everything gets tested) · `qa-log.md` (every question and
+answer) · `../CLAUDE.md` (rules for agents).
 
 ## 1. What Ivy is
 
 A self-hosted web mail client for a single operator. It sits in front of existing IMAP/SMTP
-mailboxes (first target: many `@grove.place` addresses on Purelymail), mirrors them into a local
+mailboxes (first target: many addresses on one domain, hosted on Purelymail), mirrors them into a local
 SQLite database so everything is fast and searchable, and adds a calm interface plus careful LLM
 help: it tells you what needs you, tames newsletters, understands receipts, and answers questions
 about your mail with cited sources. A single Go binary with an embedded SvelteKit frontend,
@@ -39,9 +41,8 @@ job); Gmail parity; importing old Proton mail (start fresh; revisit as an option
 ## 2. Prerequisites (before building, after planning)
 
 1. ~~Migrate grove.place mail from Forward Email to Purelymail~~ **DONE 2026-10-01** (details in
-   `qa-log.md` round 15). Users: autumn, hello, dmca, security, dev. Routing rules: alerts/github/
-   legal -> autumn, feedback -> hello; catch-all -> hello. Inbound and outbound confirmed for
-   `autumn@` in Apple Mail. Still to confirm: auth headers, a Grove (Resend) email passing DMARC
+   `qa-log.md` round 15). Several mailbox users, alias routing rules and a catch-all are set up.
+   Inbound and outbound confirmed for the main address in Apple Mail. Still to confirm: auth headers, a Grove (Resend) email passing DMARC
    under `p=reject`, alias/catch-all routing, and send-as from an alias.
 2. A throwaway **`dev@`** Purelymail user for tests (**created**; still needs seeding with sample
    mail, TESTING.md section 7). Its credentials go in a git-ignored local `.env`, never in chat or
@@ -70,7 +71,7 @@ overlay), snooze (local hide-until).
 - **Receipts and invoices:** auto-extracted fields (vendor, amount, date, renewal), a ledger view,
   renewal reminders, and a plain receipt filter as the baseline.
 - **First-class mail types:** contact-form submissions (Reply-To-aware), security/abuse reports
-  (security@, dmca@: priority, LLM off by default), personal correspondence (protected from any
+  (the security and abuse addresses: priority, LLM off by default), personal correspondence (protected from any
   automated handling). Automated notifications get generic triage.
 
 **Spam (settled, round 18: Junk rescue only).** The provider filters first:
@@ -140,8 +141,11 @@ unsubscribing always need a click. Model output is plain text; citations are DB-
 ids; automated calls see one account; ask mixes only operator-selected accounts.
 
 **Settings and config.** Lots of behavior is configurable (an explicit operator wish): behavior in
-an in-app settings panel with per-account overrides; secrets in `ivy.yaml`/`.env`. Backup:
-scheduled snapshot of locally owned state to a folder or S3-compatible target, one-line restore.
+an in-app settings panel with per-account overrides; secrets in `ivy.yaml`/`.env`. Backup: **rolling,
+twice a day, 30 days kept (about 60), older pruned**, of locally owned state plus any
+server-deleted ("disabled") messages, to a folder or S3-compatible target (ideally one off the
+potato), one-line restore. **Server-deleted mail is disabled, not erased:** hidden everywhere like a
+deletion, never purged automatically, restorable (`ARCHITECTURE.md` section 4).
 
 **Stats panel (like Polaris's).** One place to see everything the LLM layer did and cost, viewable
 at a glance and drillable to individual calls:
@@ -171,7 +175,7 @@ Go backend; **pure-Go SQLite** (WAL, FTS5; D1-friendly SQL); SvelteKit (`adapter
 pnpm) with **pure CSS, no Tailwind** and vendored Grove design tokens; enmime for MIME; go-imap v2
 for IMAP (verify the v2 API); bluemonday for sanitizing; Ollama for embeddings; OpenRouter for Jev
 (`/systemone`), chat and vision. Bare-metal deployment: the potato builds the binary, the frontend
-build output is committed and embedded, `ivy update` (also an in-app button). Docker is a maybe-later
+build output is built by GitHub Actions on merge to main (bot commit) and embedded, `ivy update` (also an in-app button). Docker is a maybe-later
 path. Access control (passkeys / Face ID, password fallback) is later; Tailscale-only for now.
 Raw RFC 822 messages are stored so everything derived can be rebuilt and exported.
 
@@ -180,6 +184,17 @@ Raw RFC 822 messages are stored so everything derived can be rebuilt and exporte
 Every milestone's exit criteria include the TESTING.md definition of done (unit + integration +
 E2E on both viewports + a live check on the dev mailbox/potato).
 
+-1. **Spikes (settled, round 23): run first, before any build implementation** (`SPIKES.md`,
+   S1-S10: Purelymail live facts, go-imap v2 and its test server, the potato build, Jev, Safari,
+   PDF extraction, compression cost, embeddings, committed-build strategy, disk size). Each ends in
+   a written finding in `docs/spikes/` and doc updates. *Exit:* every spike answered; no settled
+   decision silently contradicted.
+0. **Harness (settled, round 21).** Before any feature: `internal/mailworld` (fake IMAP/SMTP/
+   OpenRouter/Ollama/clock with fault injection), the **offline seeded local dev stack
+   (`make dev`, `DEV.md`, round 22)**, the `ivy-dev` CLI, the day-one E2E smoke slice
+   (boot, `init`, deliver, read, flag, restart; WebKit + Chromium), CI with lint/`-race`/cgo-free
+   checks, the OpenAPI + sqlc codegen pipeline, the compression skeleton with its budget tests, and
+   `make potato-bench`. *Exit:* smoke slice green in CI and on the potato, benchmarks recorded.
 1. **Read.** Multi-account reader (per-account + combined view with badges), threaded, sanitized
    HTML, remote-image policy, account customization, adaptive phone/desktop layouts, settings
    skeleton, stats panel skeleton, seed tool and fakes. *Exit:* browse a seeded and the real
@@ -210,9 +225,27 @@ E2E on both viewports + a live check on the dev mailbox/potato).
 | HTML sanitization edge cases and tracker coverage | 1 | Fuzz + XSS corpus + browser checks |
 | Prompt injection via email into stage 2 / ask / vision | 3 | Gate, tripwire, plain-text output, tests |
 | Update flow: build RAM peak, diverged checkout, rollback | 2 | `ivy update` tests with temp repos |
-| Committed frontend build output bloats git history | all | Accepted for now; CI drift check |
+| Committed frontend build output bloats git history | all | Accepted; CI builds it on merge to main, PRs never touch it (round 24). No compiled Go binary is ever committed or released (round 25) |
 | go-imap v2 API vs the v1 snippet seen in the original thread | 1 | Verify before pinning |
-| Locally owned state loss (tags/rules/snooze) if the SD card dies | 2 | Backup snapshots (settled) |
+| Locally owned state (and disabled mail) lost if the potato's storage dies | 2 | Rolling backups, 2/day for 30 days, off-device target recommended (settled) |
+
+## 6b. Decisions from round 23
+
+- **Spikes before Milestone 0**; PWA is not a goal for now (plain Safari over Tailscale; Firefox
+  occasionally), so "Can't reach Ivy" is the accepted offline behaviour for v1 and offline reading is
+  dropped from the open list. A PWA/push is a possible future.
+- **Dev stack defaults to live OpenRouter** (capped, cached), with a two-account `--pair` preset for
+  testing sends between accounts (`DEV.md`).
+
+## 6c. Decisions from round 24 (all settled)
+
+- **Disabled, not deleted:** server-deleted messages get a `disabled` flag and are hidden as if
+  deleted; never purged automatically; restorable; included in backups.
+- **Rolling backups:** twice a day, keep 30 days (about 60), prune older; floor of 10 newest.
+- **Disk is not a concern** (256 GB): no storage budget or eviction.
+- **Frontend artifacts are generated in GitHub Actions** (bot commit on merge to main); the potato
+  never builds the frontend. **The potato builds the Go binary itself** (round 25): nothing compiled
+  is committed or released, so no storage is wasted on binaries.
 
 ## 7. Open items for the operator
 

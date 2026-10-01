@@ -44,8 +44,9 @@ ivy/
   compose/           MIME build (enmime builder), identities, signatures, undo-send queue
   gateway/           HTTP handlers, SSE hub, stats, settings, update endpoints
   update/            ivy update: ff-only pull, build to temp, swap, restart, rollback
-  backup/            snapshot of locally owned state, restore
-  web/               SvelteKit app; build output committed in web/build and embedded (go:embed)
+  backup/            rolling snapshots (2/day, 30 days) of locally owned state + disabled blobs, restore
+  web/               SvelteKit app; build output in web/build is written by CI (bot commit on main)
+                     and embedded (go:embed); humans and PRs never commit it
   dev/               fake IMAP/OpenRouter helpers, seed tool, stack launcher
   testdata/          fixtures and corpora
   docs/
@@ -116,6 +117,19 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 7. **Write path (settled):** action -> outbox row -> IMAP command (STORE/MOVE/EXPUNGE/APPEND) ->
    on success update the DB; the UI updates optimistically and rolls back on rejection. Outbox
    retries survive restarts and dropped connections.
+   **Disabled, not deleted (settled, round 24):** the mirror may be the only complete copy, so
+   "the DB follows the server" means *behaves as if deleted*, never *erased*. A message that
+   vanishes from the server (expunged elsewhere, a provider mistake, a UIDVALIDITY reset, or an
+   expunge the user did in Ivy) gets `disabled_at` and `disabled_reason` set instead of its row,
+   raw blob and derived data being removed. Disabled messages are hidden from every view, count,
+   search result, rule, digest and LLM tool (the Ask Ivy tools can never see them), and they are
+   **never purged automatically**. If the message reappears on the server (matched by Message-ID +
+   content hash) it is re-enabled with its tags intact. Mirror health shows "N hidden because the
+   server removed them" with **Restore** and an explicit **Purge forever** action. A mass-disable
+   sweep (more than N messages or X% of a folder, including UIDVALIDITY resets) raises a Mirror
+   health alert with a one-click Restore; sync continues because disabling is reversible. Scenario
+   tests: the fake server empties a mailbox, resets UIDVALIDITY, and restores messages. Disabled
+   raw blobs are part of the backups (section 9).
 8. **Events:** every DB change fans out through an SSE hub so open clients update live.
 9. **Spam handling (round 17, proposed):** the provider filters (Purelymail: SpamAssassin, Junk
    folder). Ivy stores the parsed `X-Spam-Status` score/flag on each message, treats the `junk`
@@ -223,17 +237,57 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 ## 9. Deployment, update, backup
 
 - **Bare metal (settled).** systemd unit on the potato; the potato builds the Go binary; the
-  committed `web/build/` is embedded via `go:embed`. Docker is a maybe-later path.
+  frontend build `web/build/` is embedded via `go:embed`. Docker is a maybe-later path.
+- **Frontend artifacts come from CI, never the potato or a contributor (settled, round 24).** The
+  potato cannot rebuild a SvelteKit app reliably. A GitHub Actions job builds the frontend on every
+  merge to main (deterministic: pinned Node/pnpm, lockfile), precompresses the assets (brotli, zstd,
+  gzip), and the bot commits `web/build/` to main with `[skip ci]`. PRs never contain build output
+  (a CI check rejects a PR that touches `web/build/`); PR CI builds the frontend in a scratch dir to
+  test it. A tracked placeholder in `web/build/` keeps `go build` working from a fresh checkout.
+  The potato then only runs `git pull` and `go build`. Requires letting the Actions bot push to
+  main (ruleset bypass for that actor). **The Go binary is never built in CI or committed
+  (settled, round 25):** the potato is strong enough to compile it in reasonable time, so releases
+  carry no binaries and the repo holds no compiled output beyond the frontend assets. Spike S3 still
+  measures the build time and peak RAM to confirm.
 - **`ivy update` (also an in-app button):** verify the remote, `git fetch` + `merge --ff-only`
   (refuse on a diverged checkout), `go build` to a temp file (peak RAM is a known risk: serving
   continues while building), health-check the new binary, swap, restart via systemd, roll back on a
   failed check. Reports progress to the UI over SSE.
-- **Backup (settled):** scheduled snapshot of locally owned state only (not the rebuildable mirror)
-  to a configurable target (folder or S3-compatible), one-line restore; restore followed by a
-  mirror rebuild from IMAP.
+- **Backup (settled, rolling policy round 24):** **twice a day (every 12 h), keep 30 days, about 60
+  backups; prune anything older than 30 days.** Each run takes a consistent online snapshot
+  (SQLite `VACUUM INTO`/backup API) of the **locally owned state** (tags, rules, snoozes, settings,
+  allow-lists, check definitions, accounts without secrets), zstd-compressed, verified
+  (`integrity_check` + open test) before it counts. Disabled messages' raw blobs (the only copy of
+  server-deleted mail) are stored alongside as **content-addressed, de-duplicated, append-only
+  files**, so 60 backups don't mean 60 copies, and these are not pruned by the 30-day rule. The
+  rebuildable mirror itself is not backed up. Safety rules for pruning: only after a new backup
+  has succeeded and verified, and never below a floor of the 10 newest backups (a broken clock or
+  failing backups must not prune everything). Targets: a folder or S3-compatible bucket; **at least
+  one target should be off the potato** (a backup on the same card/disk as the DB does not survive
+  the device dying) and `ivy doctor` warns if every target shares the DB's disk. One-line restore,
+  followed by a mirror rebuild from IMAP. Failures show in Mirror health; the last successful backup
+  time is visible in Settings.
 - **Resource budget (potato, 1.9 GB RAM, ~800 MB free, swap in use):** Ivy target well under
   100 MB resident at idle; embedding and extraction are serialized background jobs; numbers get
   measured and recorded in `docs/perf.md`, not assumed.
+
+## 9a. Operational gaps found in the round 23 review
+
+- **Disk (settled, round 24): not a constraint.** The potato has 256 GB, so there is no storage
+  budget and no raw-blob eviction (disabled messages are kept forever). Still: zstd at rest for
+  speed and fewer flash writes, and `ivy doctor` warns on low free space (for example under 10%).
+  Spike S10 shrinks to projecting database growth and backup sizes.
+- **SQLite on flash:** power loss and card corruption are real. `PRAGMA integrity_check` in
+  `ivy doctor` and at startup after an unclean exit, periodic WAL checkpoints, backups of locally
+  owned state verified by a restore test, and a kill -9 / power-loss test of the outbox and sync
+  checkpoints with the fake server.
+- **Search quality:** FTS5 tokenizer choice (`unicode61` with diacritics folding, possibly trigram
+  for CJK/partial matches) decided with a multilingual test corpus.
+- **Time:** all timestamps UTC in the DB, local zone at the edge, with DST and bad-`Date`-header
+  tests (clock-skewed mail sorts by internal date).
+- **Logs:** journald with size limits so logs don't wear the card; no mail content in logs.
+- **Committed frontend build:** resolved in section 9 (CI builds and bot-commits on merge to main;
+  PRs never touch `web/build/`).
 
 ## 9b. Failure states (round 20)
 

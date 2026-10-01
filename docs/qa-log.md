@@ -24,7 +24,7 @@ answers get folded into `PLAN.md` / `CLAUDE.md`.
 | Biggest pain points in mail today | Newsletters/noise, not knowing what needs me, receipts/invoices. (Finding old mail was NOT picked, so search is a supporting feature, not the headline.) |
 | Device | Both equally: phone and desktop are first-class layouts. |
 | Sending in v1 | Reply and compose are in v1 (not read-only first). |
-| Accounts | **Multiple, from day 1.** Many `@grove.place` addresses (autumn@, hello@, security@, dmca@, ...). Needs a per-account view AND a combined "all inboxes" view, like Outlook mobile. |
+| Accounts | **Multiple, from day 1.** Many addresses on one domain (a personal one plus several role addresses). Needs a per-account view AND a combined "all inboxes" view, like Outlook mobile. |
 
 Implications noted: multi-account + compose + two first-class layouts makes v1 big; milestones must
 sequence it (reader -> sync -> compose) rather than cut it. Whether the addresses are separate
@@ -38,7 +38,7 @@ login or a recipient filter (open, asked in round 2).
 | How are the grove.place addresses set up? | **Not set up yet.** Currently all in Forward Email; operator will migrate to Purelymail later today. Likely **separate users**. Operator wants help with the migration after planning, before building. |
 | Combined-view address display | Colored badge per address; replies default to the address the mail was sent to. |
 | Newsletters | Separate reading feed, daily digest, one-click unsubscribe (List-Unsubscribe). **Quiet auto-archive = future idea**, not v1. |
-| LLM privacy | **Per-account opt-in**, off by default (security@/dmca@ can stay local-only). Embeddings stay local either way. |
+| LLM privacy | **Per-account opt-in**, off by default (the security and abuse addresses can stay local-only). Embeddings stay local either way. |
 
 ### Research: Purelymail multi-user (answered live, 2026-10-01)
 
@@ -126,7 +126,7 @@ Discovery: Grove's naming doc defines Lattice's Ivy as "Email for Grove... zero-
 | Search | **Hybrid keyword + meaning:** FTS5 for exact words, embeddings for meaning, merged into one ranked list from one search box. |
 | Ask-your-mailbox | **Written answers with cited emails**, every claim linking to real messages (Polaris's "sourcing is the product"). |
 
-Implications: contact-form mail needs Reply-To-aware replies and threading (reply goes to the visitor, not the form's From); security@/dmca@ get priority treatment and default to local-only (already the per-account opt-in default); personal correspondence is protected from any automated handling, including the future quiet-auto-archive idea. **Tension found:** ask-your-mailbox over the combined view would put several accounts' mail in one LLM call, contradicting "one account's mail per LLM call" and per-account opt-in. Embeddings/search can span accounts (local); only the LLM answer step is affected. Asked in round 9.
+Implications: contact-form mail needs Reply-To-aware replies and threading (reply goes to the visitor, not the form's From); the security and abuse addresses get priority treatment and default to local-only (already the per-account opt-in default); personal correspondence is protected from any automated handling, including the future quiet-auto-archive idea. **Tension found:** ask-your-mailbox over the combined view would put several accounts' mail in one LLM call, contradicting "one account's mail per LLM call" and per-account opt-in. Embeddings/search can span accounts (local); only the LLM answer step is affected. Asked in round 9.
 
 ## Round 9 — ask scope, tags/rules, license, interaction (2026-10-01)
 
@@ -138,7 +138,7 @@ Implications: contact-form mail needs Reply-To-aware replies and threading (repl
 | License | **AGPL-3.0**, like Lattice. |
 | Interaction | **Swipe actions, keyboard shortcuts on desktop, snooze.** |
 
-Design consequences: (1) the safety rule is refined to **automated classification stays one account per call; ask-your-mailbox may mix the accounts the operator explicitly selects**, and only accounts with LLM enabled are selectable (security@/dmca@ default to LLM-off and so appear locked, which is distinct from merely unselected); (2) each account has a display name, icon and optional photo (stored locally, resized server-side); (3) snooze, tags, rules, allow-lists and account display settings are **locally owned state**, so a backup path is mandatory and snooze needs a decision (local hide-until vs a server-side Snoozed folder); (4) AGPL-3.0 means a LICENSE file and headers policy at repo creation.
+Design consequences: (1) the safety rule is refined to **automated classification stays one account per call; ask-your-mailbox may mix the accounts the operator explicitly selects**, and only accounts with LLM enabled are selectable (the security and abuse addresses default to LLM-off and so appear locked, which is distinct from merely unselected); (2) each account has a display name, icon and optional photo (stored locally, resized server-side); (3) snooze, tags, rules, allow-lists and account display settings are **locally owned state**, so a backup path is mandatory and snooze needs a decision (local hide-until vs a server-side Snoozed folder); (4) AGPL-3.0 means a LICENSE file and headers policy at repo creation.
 
 ## Round 10 — backup, snooze, extraction, deployment (2026-10-01)
 
@@ -231,21 +231,21 @@ Executed with the operator in Cloudflare DNS and Purelymail's dashboard; checked
   Purelymail ownership TXT; DKIM CNAMEs `purelymail1/2/3._domainkey`; `_dmarc` CNAME ->
   `dmarcroot.purelymail.com` (**p=reject**); autodiscover SRV. Forward Email records removed;
   Resend records untouched.
-- **Forward Email inventory (screenshots):** catch-all (no recipients), alerts->autumn, autumn (IMAP,
-  1.51 MB), dmca (IMAP, 472 KB, no forward), feedback->hello, github->autumn, hello (IMAP, 356 KB, no
-  forward, so NOT forwarded to autumn), legal->autumn, security->autumn (+IMAP), triage->
-  `https://ivy.grove.place/api/webhook/incoming` (old Ivy, never set up, abandoned). Correction to
-  an earlier statement: Forward Email DID store ~2.5 MB of IMAP mail (operator: nothing useful).
+- **Forward Email inventory (screenshots):** a catch-all with no recipients, several aliases
+  forwarding to the main user, a few users with small IMAP stores, and one alias pointing at the old
+  Ivy's webhook (never set up, abandoned). Correction to an earlier statement: Forward Email DID
+  store ~2.5 MB of IMAP mail (operator: nothing useful).
 - **Lattice code search:** nothing live receives mail by Worker/webhook; only the old Ivy in
   `_junkdrawer` did. Lattice only sends (Resend) from many `@grove.place` addresses. The old
   `ivy.grove.place` Worker is still deployed (HTTP 200); harmless, removable later.
-- **Decisions:** users autumn, hello, dmca, security, dev; routing alerts/github/legal -> autumn,
-  feedback -> hello; catch-all -> hello (variant that excludes real users); `triage@` not recreated;
-  "Allow Account Reset" unchecked (Purelymail login is `autumnsgrove@purelymail.com`, off-domain).
+- **Decisions:** separate users per role address plus a `dev` test user; routing rules send the
+  alert/notification aliases to the main user and feedback to the support user; the catch-all goes
+  to the support user (variant that excludes real users); the old webhook alias was not recreated;
+  "Allow Account Reset" unchecked (the Purelymail login is off-domain).
 - **Server facts learned:** Purelymail greylists unknown senders (a bare SMTP RCPT probe got
   `451 4.7.1 greylist`), so a first message from a new sender may arrive minutes late. IMAP 993 and
   SMTP 465/587 reachable. MX priority is 0 (any value works as the only MX).
-- **Result:** `autumn@grove.place` added to Apple Mail only (deliberately; hello/dmca/security stay
+- **Result:** the main address was added to Apple Mail only (deliberately; the role addresses stay
   webmail-only until Ivy). Inbound from pm.me and outbound to pm.me both confirmed working.
 - **Not yet confirmed:** spf/dkim/dmarc=pass in headers; a Grove-sent (Resend) email passing DMARC
   under `p=reject`; alias and catch-all routing; send-as from an alias.
@@ -437,3 +437,120 @@ backfill option for a new check should go by default (proposal: new mail only, w
 "also apply to existing mail" showing a cost estimate).
 
 Notes on round 5: the second-stage model sees raw email text, so it's the higher-risk stage: no tools, structured output (`needs_me` bool + short reason), reason rendered as plain text. Configurability needs a deliberate home (config file vs in-app settings with per-account overrides), asked in round 6.
+
+## Round 21 — standards, stack, test philosophy, performance (2026-10-01)
+
+Operator asked for a full-picture review and a standards baseline before implementation. Stated
+requirements: **strict TDD** (write tests first, watch them fail, implement, watch them pass);
+**mostly integration tests** over unit tests, **a few end-to-end tests from the very start**, using
+**full mocks**, including a proper mock of the whole email system, **drivable from a command line**
+(a CLI, rarely used since the real target is a remote deployment); **speed tests** to optimise
+quality; **compression from day one** (Polaris got slow on large data-heavy responses); **modern
+standards and pure-Go libraries, no C**; access from Safari on iPhone and iPad (sometimes Firefox)
+over Tailscale; **no auth model yet, frictionless**; **rewrite `CLAUDE.md`** as general code
+guidelines.
+
+Written: `STANDARDS.md` (TDD workflow, test shape, mail world + `ivy-dev` CLI, Go/frontend/API
+standards, access/exposure), `STACK.md` (libraries, pure-Go rule, open verifications),
+`PERFORMANCE.md` (compression plan, budgets, measurement loop); rewrote `CLAUDE.md`; added TDD and
+integration-first principles to `TESTING.md`. Target hardware confirmed from the vendor page: Le
+Potato AML-S905X-CC, quad Cortex-A53 1.5 GHz, 2 GB DDR3.
+
+Interpretation notes (confirm): "implementation tests" read as **integration** tests; "drive
+cycles" read as **repeatable speed/benchmark cycles**.
+
+Open questions asked this round are recorded with their answers below once given.
+
+**Answers (round 21):** API contract = **OpenAPI spec first**, codegen for Go and TS types, CI drift
+check. SQL layer = **sqlc** (build-time, committed output). Transport = **HTTPS via
+`tailscale serve`**. Speed tests = **both**: product benchmarks with budgets and a budget on our own
+test/build loop (`PERFORMANCE.md` 3b). This closes `PLAN.md` section 7 item 1 (API design confirmed).
+
+**Answers (round 21, second batch):** **Milestone 0 (harness first)** added to `PLAN.md` section 5.
+Fake mail world is the default, the same scenarios run live against `dev@` for quirks. Potato
+benchmarks are scripted over `ssh potato-remote` (`make potato-bench`), manually triggered.
+Playwright: WebKit + Chromium every run, Firefox nightly, plus a manual real-device pass per
+milestone (`TESTING.md` 7b).
+
+Still open for a later round: lore names; repo visibility; whether to run the Jev/Purelymail spikes
+before or after Milestone 0; offline PWA reading; a `.gitignore` before any secret exists.
+
+## Round 22 — local dev stack (2026-10-01)
+
+Operator: we need a way to start a local dev stack so we can iterate without being connected to a
+real remote mailbox, with pre-filled data via a seeded database. Written as `DEV.md` (one command,
+`make dev`; mailworld + Ivy + Vite HMR; deterministic seed profiles empty/minimal/demo/large;
+`full` mode syncs over real IMAP, `fast` mode seeds SQLite through the real store code; snapshots
+for instant reset; named states for every edge-case screen; safety rails that refuse real hosts and
+real `.env`). Added to Milestone 0. Added a `.gitignore` (`.env`, `.dev/`, SQLite files) before any
+secret exists. Interpretation: "iterate on our own documents" read as iterating on the app/UI
+against realistic mail; say so if it meant something else.
+
+## Round 23 — spikes first, live LLM in dev, two-account pair, review (2026-10-01, operator on mobile)
+
+Decisions: **spikes run before Milestone 0** and before any build implementation (`SPIKES.md`,
+S1-S10). **"Can't reach Ivy" is fine** for v1; the operator will use plain Safari (iPhone/iPad,
+sometimes Firefox), not a PWA, maybe later; so `tailscale serve` HTTPS is recommended but optional
+(revises the round 21 transport answer). `.gitignore` added (done). **Dev stack:** seeded database
+with **live OpenRouter as the default** (`--llm live`, key from `.env`, capped, record/replay cache;
+fake only by flag or when no key is found; tests/CI always use the fake). **Demo mode gets a
+two-account `--pair`** with local delivery in mailworld so the operator can test sending between
+accounts (a standing integration/E2E test from Milestone 4). Work moved onto branch
+`docs/standards-baseline` (it had been a detached HEAD) so it can become a PR; no PR opened yet.
+
+Adversarial gap review (done, folded into the docs): mirror-loss protection (soft-delete window and
+mass-deletion circuit breaker), disk budget on the potato's card, SQLite/power-loss safety, FTS
+tokenizer and time-zone tests, log wear, no public exposure or Funnel and the tailnet-wide access
+implication of no-auth, secret file permissions, and how the committed frontend build is produced
+without merge churn. Items needing the operator's yes: soft-delete + breaker, disk eviction policy,
+committed-build strategy.
+
+## Round 24 — disabled messages, rolling backups, disk, CI-built frontend (2026-10-01)
+
+Operator answers to the round 23 gap review:
+- **Server-deleted messages are disabled, not deleted:** a flag hides them as if deleted; the row and
+  raw message stay. (Interpreted as: never purged automatically, restorable, re-enabled if the
+  message reappears, excluded from views/search/LLM tools, included in backups; explicit "Purge
+  forever" is the only way out. The mass-disable case is an alert with one-click Restore, not a sync
+  stop, since the action is reversible.)
+- **Rolling backups:** twice a day, 30 days total (about 60), prune anything older than 30 days.
+  Added safety rules: prune only after a verified new backup, floor of the 10 newest, at least one
+  target off the potato recommended (proposal; veto if unwanted). Disabled-message blobs are kept
+  de-duplicated in the backup target rather than as 60 copies (proposal).
+- **Disk is not a concern** (potato has 256 GB): no storage budget or raw-blob eviction.
+- **Frontend artifacts are generated in GitHub Actions**, preferably. Context: rebuilding on the
+  potato is not realistic; with Polaris, builds were instant on the dev machine and committed, then
+  moved to Docker built on a GitHub runner in about 2.5-3 minutes. Written as: CI builds on merge to
+  main and the bot commits `web/build/`; PRs never touch it. Open sub-option (decide after spike
+  S3): CI also publishes a cgo-free arm64 binary so the potato builds nothing.
+
+## Round 25 — the potato builds the Go binary (2026-10-01)
+
+Operator: the potato is strong enough to build the Go binary in a reasonable time; no binary should be
+built in CI and committed or released (a waste of storage). **Withdrew the round 24 "CI-built arm64
+binary" option.** Settled: the potato runs `git pull` and `go build` (the frontend assets still come
+from the Actions bot commit); spike S3 only confirms build time and peak RAM.
+
+## Round 26 — CI plan, repo going public (2026-10-01)
+
+Operator approved the proposed CI and said the repository will be made public, so the plan accounts
+for it. Written as `CI.md`: Phase A now (secret scan + link check), full Phase B at Milestone 0;
+required checks (go, nocgo, drift, web, e2e, guard, deps, codeql), the main-merge frontend bot
+commit, nightly Firefox/fuzz/audit jobs, manual `live` and `evals` in protected environments, and a
+public-repo security section (no `pull_request_target`, least-privilege permissions, SHA-pinned
+actions, never a self-hosted runner such as the potato, no secrets in PR runs). A before-public
+checklist: **no LICENSE file exists yet**, full-history secret scan, review docs for personal detail
+(role email addresses, `potato-remote` alias, the candid `qa-log.md`), repo settings, and the
+mockups. Public repos get free Actions minutes, so the earlier minutes concern is moot. The
+workflow files themselves are not written yet.
+
+## Round 27 — going public: addresses removed, LICENSE, README, SECURITY (2026-10-01)
+
+Operator asked to remove the role email addresses now (they stay in git history) and for mockups to
+use a generic address; and to add a brief LICENSE, README and SECURITY file. Done: addresses
+replaced by generic wording in the docs and `CLAUDE.md`, and by `example.com` addresses in the
+mockups (`me@`, `hello@`, `support@`, `alerts@`); the Purelymail login identity removed from the
+migration notes. `LICENSE` is the standard AGPL-3.0 text (SPDX copy; gnu.org was unreachable from
+the sandbox). `SECURITY.md` points to GitHub private vulnerability reporting, which must be switched
+on in the repo settings before going public. `dev@` (the throwaway test user) and the
+`potato-remote` alias are still mentioned and were left as is.

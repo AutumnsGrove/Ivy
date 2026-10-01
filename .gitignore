@@ -1,0 +1,19 @@
+# Secrets and local state: never commit
+.env
+.env.*
+!.env.example
+.dev/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+
+# Build and tooling output
+/bin/
+/bench/
+node_modules/
+web/.svelte-kit/
+test-results/
+playwright-report/
+coverage/
+.DS_Store

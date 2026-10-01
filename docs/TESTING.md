@@ -5,6 +5,12 @@ make untested code hard to merge, in Polaris's live-verification culture. Status
 
 ## 0. Principles
 
+0. **Test-driven, integration-weighted** (full rules in `STANDARDS.md` sections 1-3). Write the test
+   first, watch it fail for the right reason, make it pass, refactor. Most tests drive the real
+   core against the **mail world** fake (`internal/mailworld`, driven from Go, Playwright and the
+   `ivy-dev` CLI); unit tests are for pure branchy logic only. A thin end-to-end smoke slice (boot,
+   `init`, deliver a message, read it, flag it, restart) exists before any feature and grows with
+   each milestone. Performance budgets (`PERFORMANCE.md`) are tests too.
 1. **A feature is done only when it has all its layers**: unit + integration + (UI) end-to-end +
    one live check against real hardware/mail. "Done" is defined per layer in section 9.
 2. **Every bug gets a regression test, and the test must be seen failing without the fix**
@@ -122,6 +128,15 @@ actually sent:
 - **Migrations:** append-only (positional `user_version`, per Polaris lesson); a test upgrades a
   snapshot DB from **every** prior schema version to current and checks data survives; a test fails
   if a migration is inserted mid-list or edited.
+- **Disabled messages:** scenario tests with the fake server expunging messages, emptying a
+  mailbox, resetting UIDVALIDITY and restoring messages: the rows and blobs survive, every view,
+  search, rule, digest and Ask Ivy tool excludes them, they re-enable with tags intact when the
+  message reappears, nothing purges without the explicit action, and a mass disable raises the
+  alert. A property test asserts "no sync sequence ever deletes a message row".
+- **Rolling backups:** a fake clock drives 2 backups per day for 45 days: exactly the last 30 days
+  remain, pruning happens only after a verified new backup, the floor of 10 holds when the clock
+  jumps or backups fail, a corrupt snapshot is detected, disabled blobs de-duplicate and are never
+  pruned by age, and restore from any kept snapshot round-trips.
 - **Backup/restore:** snapshot of locally owned state, restore into a fresh instance, mirror
   rebuilds from IMAP, round-trip equality of tags/rules/settings/snooze.
 - **`ivy update`:** temp git repos simulate: clean fast-forward; diverged checkout (refuses);
@@ -139,11 +154,23 @@ actually sent:
   resident memory under N MB during sync).
 - **Seed tool:** generates large synthetic mailboxes (100k+ messages) for performance and UI tests.
 
+## 7b. Fidelity and browsers (settled, round 21)
+
+- The mail world is the default for every test; the same scenarios run under the `live` tag against
+  the real `dev@` mailbox to surface provider quirks (the fake is a model, not the truth).
+- Playwright runs **WebKit** (closest to iOS/iPadOS Safari, the primary target) and **Chromium**
+  (throttled timing budgets) on every run, and a smaller **Firefox** suite nightly. WebKit on Linux
+  approximates but is not iOS Safari: a short manual pass on the real iPhone/iPad is part of each
+  milestone's exit, recorded in the PR.
+- `make potato-bench`: cross-build for linux/arm64, copy to `ssh potato-remote`, run benchmarks and
+  the memory budget, append results to `docs/perf.md`. Manually triggered, never in default CI.
+
 ## 8. CI
 
 GitHub Actions: `go vet`, `staticcheck`, `go test -race ./...` (fuzz seed corpora included),
 frontend lint/typecheck/Vitest, Playwright E2E (both viewports), build of the embedded frontend
-checked against the committed output (a drift check, since the frontend build is committed),
+built in a scratch directory (PRs must not touch the committed `web/build/`, which only the CI bot
+writes on merge to main; a check enforces it) plus codegen drift checks for OpenAPI/sqlc output,
 migration-upgrade tests, license header/AGPL check. Coverage floors on the critical packages
 (sync, sanitize, llm gate, rules, update). Live and eval suites are manual/nightly, never required
 for a merge.

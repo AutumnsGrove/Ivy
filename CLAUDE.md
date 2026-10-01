@@ -1,68 +1,96 @@
 # CLAUDE.md
 
-Guidance for Claude Code (or any agent) working in this repo. Takes precedence over generic/global
-instructions.
+Rules for any agent working in this repo. These override generic or global instructions. Full
+detail is in `docs/`; this file is the short version.
 
-## What this is
+## The project
 
-Ivy is a self-hosted web mail client: a single Go binary (SvelteKit frontend embedded) that sits in
-front of an existing IMAP/SMTP provider (first target: Purelymail on `autumn@grove.place`), mirrors
-the mailbox into a local SQLite database, and layers fast search, tagging and LLM features on top.
-Single-operator tool, primarily used from a phone over Tailscale. Sibling project to Polaris
-(`~/Documents/Projects/Polaris`) in shape and philosophy, but fully independent of it.
+Ivy is a self-hosted web mail client: one Go binary with an embedded SvelteKit frontend. It mirrors
+an existing IMAP/SMTP mailbox (first: Purelymail, on the operator's own domain) into SQLite and adds fast
+search, tags and careful LLM features. Single operator, used mostly from Safari on an iPhone and
+iPad over Tailscale (sometimes Firefox), deployed on a Le Potato SBC (aarch64, ~800 MB RAM free).
+Sibling of Polaris in philosophy, fully independent code. No auth for now; it must feel frictionless.
 
-## Current phase: PLANNING
+## Phase
 
-**No implementation until the operator approves `docs/PLAN.md`.** Work right now is a Q&A session
-that produces the plan. Record every answer in `docs/qa-log.md` and fold settled decisions into
-`docs/PLAN.md` as they land. Don't create code, a Go module or a frontend scaffold yet.
+**Planning, then spikes, then Milestone 0.** No application code, Go module or frontend scaffold
+until the operator approves `docs/PLAN.md`. The next phase is the spikes in `docs/SPIKES.md`
+(throwaway code on `spike/*` branches, findings in `docs/spikes/`), which run before any build
+implementation. Record every Q&A answer in `docs/qa-log.md` and fold settled decisions into the
+docs. Milestone 0 is the test harness, dev stack and day-one E2E slice, not features. Work happens
+on a branch (never directly on main) so it can go up as a PR.
 
-## Settled decisions (don't re-litigate without asking)
+## Doc map
 
-- Name: **Ivy** (grove.place lore). Standalone repo, nothing shared with Polaris.
-- Backend: **Go**. Database: **SQLite** (D1 is SQLite, keeping a far-off, maybe-never Cloudflare
-  "Grove Ivy" cheap; Postgres was considered and rejected for that reason).
-- Frontend: **SvelteKit**, built with `adapter-static`; all backend access through one typed API
-  client module so the frontend stays portable.
-- Mirror model: sync IMAP into SQLite, render from SQLite, the DB follows the server including
-  deletes/moves. **Writes go to IMAP first**, never DB-only. Tags/sorting are the only locally
-  owned state and need a backup path.
-- Embeddings: Ollama `nomic-embed-text` by default (already on the potato), optional remote
-  provider for other people, kept behind an interface (D1 can't load extensions).
-- Easy for strangers to run: single binary + first-run `init`. **Deployment is bare metal**: the
-  target builds the Go binary; the frontend build output is committed and embedded via `go:embed`;
-  updates via `ivy update` (also an in-app settings button). Docker is a maybe-later path.
-- License: AGPL-3.0.
-- Design: fresh from the ground up. Vendored copy of Grove's design tokens is welcome; no runtime
-  dependency on Lattice. The old Ivy (`Lattice/_junkdrawer/apps/ivy`) is reference only.
-- Design direction (rounds 16/16b): "night in a botanical garden": deep green-black sky + faint
-  stars, **Grove's vine tile** as the repeating background, glass chrome over it, calm reading panel;
-  Lexend UI + Newsreader reading; Lucide icons; day theme too; gentle motion. **Moonlight lilac
-  accent**; **bottom tab bar** on phone with a **side panel for account switching**. LLM output on
-  the reading surface is never labelled as AI (no "Jev"/sparkle marks): a quiet firefly-dot chip.
-  Mockups in `docs/design/canvas/`.
-- LLM layer: `decide()` (classification; default **Jev** via OpenRouter's **`/systemone`** endpoint,
-  model `jev-latest`, confirmed live in Polaris's `jev/jev.go`; typed answers + probabilities, no
-  explanations, only `choice` questions proven, so yes/no is a `choice`), `complete()` (configurable
-  OpenAI-compatible chat model for extraction/summaries/drafts), and `see()` (vision model). All
-  calls go through ONE gate (per-account opt-in, caps, ledger). See `docs/JEV.md`.
-- Pure-Go SQLite (`modernc.org/sqlite`), pure CSS with custom properties (no Tailwind), pnpm.
-- **Testing is a hard requirement: test absolutely everything**; see `docs/TESTING.md`'s definition
-  of done. Bugfix tests must be seen failing without the fix.
-- Undo-send delay is a setting; there is a Polaris-style stats panel (per-call ledger of all LLM
-  spend).
-- Email content is untrusted input to any LLM: read-only tools, nothing sends without an explicit
-  confirmation.
+`docs/PLAN.md` product and milestones · `docs/ARCHITECTURE.md` design · `docs/STANDARDS.md`
+engineering standards (read before writing code) · `docs/STACK.md` libraries · `docs/TESTING.md`
+test strategy and definition of done · `docs/PERFORMANCE.md` compression and budgets ·
+`docs/CI.md` GitHub Actions plan (the repo will be public: no secrets in PR workflows, no
+self-hosted runners) · `docs/DEV.md` the offline seeded local dev stack (`make dev`) · `docs/JEV.md` the cheap decision
+engine · `docs/qa-log.md` every decision, in order.
 
-## Production target
+All development and UI iteration happens against the local dev stack and mailworld, never a real
+mailbox. Real credentials live only in a git-ignored `.env` and are used only by `live` tests.
 
-The potato (Le Potato SBC, aarch64, 1.9GB RAM, ~800MB free; `ssh potato-remote`) is the real
-deployment target, so RAM matters. Verify on real hardware, not just mocks — same culture as Polaris.
+## Non-negotiables
 
-## Conventions
+1. **Test first, and watch it fail.** Write the test, run it, see it fail for the right reason,
+   write the minimum code, see it pass, then refactor. Bugfix tests must be seen failing without
+   the fix. Never write implementation before its test.
+2. **Integration over unit.** Most tests run the real core against the fake outside world
+   (`internal/mailworld`: IMAP, SMTP, OpenRouter, Ollama, clock). Do not mock our own packages.
+   Unit tests only for pure branchy logic. A thin end-to-end slice exists from day one.
+3. **Pure Go, no cgo.** `CGO_ENABLED=0` always. Reject any dependency that needs a C toolchain.
+   Standard library first; every other dependency needs an entry in `docs/STACK.md`.
+4. **Compression and bounded data from day one.** Precompressed embedded assets (brotli/zstd/gzip),
+   negotiated per `Accept-Encoding`; compressed dynamic responses; paged lists and threads; no
+   unbounded reads. Performance budgets are tests (`docs/PERFORMANCE.md`).
+5. **Writes go to IMAP first**, never DB-only. The DB follows the server, but nothing is ever
+   erased: server-deleted mail is flagged disabled and hidden. Tags, rules and snoozes
+   are the only locally owned state and are backed up.
+6. **Email is hostile input.** Sanitize server-side, sandbox in the browser, block remote content,
+   guard server-side fetches (SSRF), and keep every LLM call behind the single gate (per-account
+   opt-in, caps, ledger). LLM output on the reading surface is plain text and never labelled as AI.
+   Nothing sends, deletes or moves without an explicit confirmation.
+7. **Measure, don't guess.** Hot paths get benchmarks (`benchstat`); real numbers come from the
+   potato, not mocks.
 
-- `uv`/Python instructions in global CLAUDE.md files don't apply: Go + SvelteKit. Use `go build`,
-  `go test ./...`, `go vet ./...`, and **pnpm** (not npm) for the frontend.
-- Use the Edit/Write tools for file changes, never python/sed scripts.
-- Comments explain *why*, not *what*.
-- Commit at each stage rather than batching; present-tense messages, first line under 50 chars.
+## Settled decisions (don't re-litigate; ask first)
+
+Name Ivy, standalone repo, AGPL-3.0 · Go + pure-Go SQLite (`modernc.org/sqlite`; D1-friendly SQL,
+Postgres rejected) · SvelteKit (`adapter-static`, Svelte 5), pure CSS custom properties (no
+Tailwind), pnpm, one typed API client module · JSON REST + SSE · mirror model with IMAP-first
+writes and an outbox · enmime, go-imap v2, bluemonday · embeddings via Ollama `nomic-embed-text`
+behind an interface · LLM layer `decide()` (Jev via OpenRouter `/systemone`, model `jev-latest`),
+`complete()`, `see()`, all through one gate (`docs/JEV.md`) · bare-metal deploy: the target builds
+the binary, frontend build output is generated by GitHub Actions and bot-committed on merge to main
+(never by humans or PRs) and embedded, `ivy update` · server-deleted mail is disabled (hidden),
+never erased · rolling backups twice a day for 30 days · design: night
+botanical garden, Grove vine tile, moonlight-lilac accent, Lexend + Newsreader, Lucide, bottom tab
+bar on phone (mockups in `docs/design/canvas/`) · undo-send delay is a setting · a Polaris-style
+stats panel of all LLM spend.
+
+## Code conventions (summary of `docs/STANDARDS.md`)
+
+- Go: `gofumpt`, `go vet`, `staticcheck`, `golangci-lint`, `govulncheck`; zero warnings. Errors
+  wrapped with `%w` and context; `context.Context` first on I/O; no goroutine without an owner;
+  injected clock and IDs; `log/slog` with no mail content or secrets in logs; parameterised SQL
+  only; append-only migrations. Small packages, interfaces defined at the point of use, functional
+  core with a thin I/O shell.
+- Frontend: TypeScript strict, pnpm (never npm), no raw px or colour literals outside the token
+  file, no `fetch` outside the API client, accessibility and byte budgets are part of done.
+- Comments explain *why*, never *what*. Don't add abstractions, options or error handling for
+  cases that can't happen.
+- Tools: `go build`, `go test -race ./...`, `go vet ./...`, pnpm. Use Edit/Write for file changes,
+  never python/sed scripts. `uv`/Python guidance in global files doesn't apply here.
+
+## Definition of done
+
+The checklist in `docs/TESTING.md` section 9 plus `docs/STANDARDS.md` section 10: tests first and
+seen failing, integration + (UI) E2E on phone and desktop viewports, live check on the dev mailbox
+or the potato when touching sync/send/update/resources, benchmarks for hot paths, docs updated.
+
+## Commits
+
+Commit at each stage rather than batching. Present tense, first line under 50 characters, the body
+explains why. Never commit secrets, real mail, or `.env`. Don't open a PR unless asked.
