@@ -1,0 +1,171 @@
+# Ivy — Plan
+
+**Status:** DRAFT for operator review (2026-10-01). Product decisions are settled through Q&A rounds
+0-13 (`qa-log.md`). No implementation starts until this plan is approved.
+
+**Doc map:** `PLAN.md` (this: product, features, milestones, risks) · `ARCHITECTURE.md` (how it's
+built) · `JEV.md` (the cheap decision engine and its question catalog) · `TESTING.md` (how everything
+gets tested) · `qa-log.md` (every question and answer) · `../CLAUDE.md` (settled decisions for agents).
+
+## 1. What Ivy is
+
+A self-hosted web mail client for a single operator. It sits in front of existing IMAP/SMTP
+mailboxes (first target: many `@grove.place` addresses on Purelymail), mirrors them into a local
+SQLite database so everything is fast and searchable, and adds a calm interface plus careful LLM
+help: it tells you what needs you, tames newsletters, understands receipts, and answers questions
+about your mail with cited sources. A single Go binary with an embedded SvelteKit frontend,
+bare-metal on a small server (the potato), reached from a phone or desktop over Tailscale.
+
+**Why it exists:** the operator wants a project to build, barely sends mail, mostly receives, and
+wants a mail experience that fits the grove.place world. It must also be easy for a stranger to set
+up and run for themselves, like Polaris.
+
+**Feel:** calm and quiet. Soft, warm, whitespace, grove-green leaning, nothing shouting for
+attention. Fresh design (the old Lattice Ivy UI is reference only).
+
+**Non-goals for v1:** calendar-invite RSVP, PGP/S-MIME, CardDAV/CalDAV (all possible later);
+multiple human users (out for now, not on the roadmap); push notifications (Apple Mail keeps that
+job); Gmail parity; importing old Proton mail (start fresh; revisit as an optional one-off).
+
+## 2. Prerequisites (before building, after planning)
+
+1. **Migrate grove.place mail from Forward Email to Purelymail** and create the users (likely one
+   per address: autumn@, hello@, security@, dmca@, ...). The operator wants help with this. Purelymail
+   supports many users on many custom domains at no extra charge, routing rules, and send-as.
+2. A throwaway **`dev@`** Purelymail user for tests, seeded with sample mail (TESTING.md section 7).
+3. Operator's **OpenRouter key** available for the Jev/chat/vision spikes (ask before using it).
+
+## 3. Features (settled)
+
+**Accounts ("branches" in lore terms, names TBD).** Many accounts from day 1, each its own IMAP
+login. A per-account view and a combined "all inboxes" view, with a colored badge per address;
+replies default to the address the mail was sent to (identities and signatures per address).
+Accounts are customizable in settings: rename, icon, optional photo.
+
+**Reader.** Threaded conversations (local JWZ). Full history mirrored. Sanitized HTML in a sandboxed
+frame; remote images blocked by default with a per-sender allow-list (configurable). Phone and
+desktop are both first-class layouts. Swipe actions, desktop keyboard shortcuts (with a help
+overlay), snooze (local hide-until).
+
+**Triage (Jev + a bigger model; see JEV.md).**
+- **Needs attention:** a dedicated view plus inline markers, each with a one-line reason. Cascade:
+  Jev flags mail that *could* matter (high recall); only flagged mail goes to a bigger chat model
+  that decides and writes the reason.
+- **Newsletters:** a separate reading feed, a daily digest, one-click unsubscribe
+  (`List-Unsubscribe`, executed server-side with SSRF protection). Future idea: quiet auto-archive
+  (must never touch personal correspondence).
+- **Receipts and invoices:** auto-extracted fields (vendor, amount, date, renewal), a ledger view,
+  renewal reminders, and a plain receipt filter as the baseline.
+- **First-class mail types:** contact-form submissions (Reply-To-aware), security/abuse reports
+  (security@, dmca@: priority, LLM off by default), personal correspondence (protected from any
+  automated handling). Automated notifications get generic triage.
+
+**Search and ask.** One search box: hybrid keyword (FTS5) + meaning (Ollama `nomic-embed-text`,
+optional remote provider), merged into one ranked list. **Ask your mailbox:** a written answer where
+every claim cites verified emails; an account-picker mode (tap the accounts to include, the rest grey
+out; LLM-off accounts are locked, not just unselected).
+
+**Tags and rules.** Your own tags; automatic rules (if-this-then-that, including fuzzy plain-language
+conditions answered by Jev); model-applied system tags (the only autonomous model write: local and
+reversible). Smart views from saved searches are out of v1. A **People** view derived from the
+mirror (correspondents, recent threads, compose autocomplete).
+
+**Compose (built last).** Markdown and a rich-text editor (markdown first), per-address signatures,
+**undo send with a configurable delay** (setting; default 10 s, 0 = off), drafts in the server's
+Drafts folder (visible in Apple Mail), reply-as-the-right-address.
+
+**Images and attachments.** Attachments mirrored locally and text-extracted (bodies/.ics, digital
+PDFs and Office files in pure Go). A **vision model** reads images on opted-in accounts (soon):
+automatically only for mail Jev flags, plus an on-demand "read this image" action, with spend
+caps and dedupe. OCR (Tesseract) is far-out, only if the operator finds it useful.
+
+**LLM privacy and safety (settled).** Per-account opt-in, off by default; embeddings always local.
+The model may write local tags automatically; sending, deleting, moving, forwarding and
+unsubscribing always need a click. Model output is plain text; citations are DB-verified message
+ids; automated calls see one account; ask mixes only operator-selected accounts.
+
+**Settings and config.** Lots of behavior is configurable (an explicit operator wish): behavior in
+an in-app settings panel with per-account overrides; secrets in `ivy.yaml`/`.env`. Backup:
+scheduled snapshot of locally owned state to a folder or S3-compatible target, one-line restore.
+
+**Stats panel (like Polaris's).** One place to see everything the LLM layer did and cost, viewable
+at a glance and drillable to individual calls:
+- Totals for today / 7 days / 30 days / all time, broken down by **feature** (needs-me stage 1,
+  stage 2, categories, rules, digest, ask, extraction, vision, embeddings), by **account**, by
+  **provider/model**, with exact costs from provider responses (`usage.cost`).
+- **Per-call log** (the full ledger): time, account, feature, model, tokens, latency, cost, outcome
+  (acted / quiet / error / skipped by gate), filterable and exportable; Jev calls show the
+  probability vector.
+- **Caps and gates:** monthly spend vs caps, and how many calls the gates blocked (opt-in off, cap
+  hit, withheld mail).
+- **Mirror health:** per-account sync state, last sync, backlog, errors, DB size, embedding queue,
+  memory in use.
+
+**In-app help glossary** with plain-English names, as Polaris's help modal does. Lore feature names
+(chosen later, checked against `Lattice/docs/philosophy/grove-naming.md`; Canopy and Rings are
+already taken there) get an entry in the same change that adds them.
+
+**Naming.** Product name **Ivy**. The public repo `AutumnsGrove/Ivy` (Grove's old mail client) will
+be archived and the name reused, at publish time, with the operator's explicit go-ahead then. The
+project stays local until then. License **AGPL-3.0**.
+
+## 4. Stack and decisions (details in ARCHITECTURE.md)
+
+Go backend; **pure-Go SQLite** (WAL, FTS5; D1-friendly SQL); SvelteKit (`adapter-static`, Svelte 5,
+pnpm) with **pure CSS, no Tailwind** and vendored Grove design tokens; enmime for MIME; go-imap v2
+for IMAP (verify the v2 API); bluemonday for sanitizing; Ollama for embeddings; OpenRouter for Jev
+(`/systemone`), chat and vision. Bare-metal deployment: the potato builds the binary, the frontend
+build output is committed and embedded, `ivy update` (also an in-app button). Docker is a maybe-later
+path. Access control (passkeys / Face ID, password fallback) is later; Tailscale-only for now.
+Raw RFC 822 messages are stored so everything derived can be rebuilt and exported.
+
+## 5. Milestones (order settled: read -> sync -> triage -> send)
+
+Every milestone's exit criteria include the TESTING.md definition of done (unit + integration +
+E2E on both viewports + a live check on the dev mailbox/potato).
+
+1. **Read.** Multi-account reader (per-account + combined view with badges), threaded, sanitized
+   HTML, remote-image policy, account customization, adaptive phone/desktop layouts, settings
+   skeleton, stats panel skeleton, seed tool and fakes. *Exit:* browse a seeded and the real
+   dev mailbox on phone and desktop; all security/sanitizer tests green.
+2. **Sync.** The real mirror: full-history backfill, CONDSTORE/QRESYNC/IDLE, write path + outbox
+   (flags, move, archive, delete), tags/rules/snooze, attachments mirrored + tier 0-1 extraction,
+   FTS5 + embeddings + hybrid search, People view, backup/restore, `ivy update`. *Exit:* the
+   convergence property test passes; Apple Mail and Ivy stay in sync on the dev mailbox; potato
+   resource budgets recorded.
+3. **Triage.** Jev layer + question registry, the needs-me cascade, categories, newsletters
+   (feed, digest, unsubscribe), receipts/ledger/renewals, vision, ask-your-mailbox with the account
+   picker, full stats panel and the LLM gate. *Exit:* eval report on a labeled corpus; the safety
+   assertions (opt-in, isolation, injection) green; caps work.
+4. **Send.** Compose (markdown, then rich text), identities/signatures, undo send, drafts, replies
+   (Reply-To aware), SMTP + Sent handling. *Exit:* send-as verified live per address.
+
+## 6. Risks and spikes (each owned by a milestone)
+
+| Risk / spike | Milestone | Notes |
+|---|---|---|
+| `ANNOTATION` or custom keywords as a server-side home for tags; check `PERMANENTFLAGS` | 2 | CAPABILITY already read live; ANNOTATION advertised |
+| Does Purelymail file a copy in Sent, or must Ivy `APPEND`? Send-as from routed addresses | 4 (spike early in 2) | Docs say send-as works; verify live |
+| Purelymail connection limits for N accounts (IDLE + work connections) | 2 | Budget RAM/connections on the potato |
+| Pure-Go SQLite compile time/RAM on the potato; FTS5 availability | 1 | Build while serving is the squeeze; cache warm |
+| Embedding scan cost and memory at 50k-100k messages | 2 | Batch streaming, int8 fallback, measure |
+| Jev `noul`/`score` shapes; accuracy and thresholds per question; per-email cost; injection behavior | 3 | JEV.md section 5; needs the operator's key |
+| Vision: do scanned PDFs go straight to a model? default cheap multimodal model | 3 | Pure Go cannot rasterize PDFs |
+| HTML sanitization edge cases and tracker coverage | 1 | Fuzz + XSS corpus + browser checks |
+| Prompt injection via email into stage 2 / ask / vision | 3 | Gate, tripwire, plain-text output, tests |
+| Update flow: build RAM peak, diverged checkout, rollback | 2 | `ivy update` tests with temp repos |
+| Committed frontend build output bloats git history | all | Accepted for now; CI drift check |
+| go-imap v2 API vs the v1 snippet seen in the original thread | 1 | Verify before pinning |
+| Locally owned state loss (tags/rules/snooze) if the SD card dies | 2 | Backup snapshots (settled) |
+
+## 7. Open items for the operator
+
+1. **API design (item 6 of the defaults) wasn't explicitly confirmed:** assumed JSON REST + SSE
+   with one typed client module. Veto or approve.
+2. **Lore feature names:** deferred. Pick when features exist.
+3. **Archiving `AutumnsGrove/Ivy`:** at publish time, with your go-ahead.
+4. **First spike session:** when you're ready, an Ivy-specific Jev spike with your OpenRouter key
+   and a small labeled sample (JEV.md section 5), plus the Purelymail live checks once the
+   migration and `dev@` exist.
+5. **Review this plan set.** Anything wrong, missing or overbuilt? Then decide: migrate Purelymail
+   next, or run the spikes first.
