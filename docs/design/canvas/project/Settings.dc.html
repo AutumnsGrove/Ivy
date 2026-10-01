@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.row{display:flex;align-items:center}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:0;background:transparent;color:var(--text)}
+.grp{font:500 11px 'Lexend',system-ui,sans-serif;letter-spacing:0.09em;text-transform:uppercase;color:var(--faint);margin:22px 6px 8px}
+.card{border-radius:20px;padding:4px 16px}
+.set{display:flex;align-items:center;gap:12px;min-height:54px;border-bottom:1px solid var(--glass-border);font:400 14.5px 'Lexend',system-ui,sans-serif}
+.set:last-child{border-bottom:0}
+.set .sub{font-size:12px;color:var(--faint);margin-top:2px}
+.val{color:var(--muted);font-size:13.5px;display:inline-flex;align-items:center;gap:6px}
+.tog{position:relative;width:46px;height:28px;border-radius:14px;background:rgba(255,255,255,0.1);border:1px solid var(--glass-border);flex:none}
+.tog i{position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:var(--muted)}
+.tog.on{background:var(--accent-soft);border-color:var(--accent-line)}
+.tog.on i{left:21px;background:var(--accent);box-shadow:0 0 8px var(--accent-line)}
+.seg{display:flex;gap:3px;padding:3px;border-radius:16px;border:1px solid var(--glass-border)}
+.seg span{padding:0 12px;height:30px;display:flex;align-items:center;border-radius:13px;font:400 13px 'Lexend',system-ui,sans-serif;color:var(--muted)}
+.seg span.on{background:var(--accent-soft);color:var(--text);box-shadow:inset 0 0 0 1px var(--accent-line)}
+.av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:500 13px 'Lexend',system-ui,sans-serif;flex:none;background:rgba(255,255,255,0.06)}
+.swatch{width:22px;height:22px;border-radius:50%;border:1px solid var(--glass-border)}
+.swatch.on{box-shadow:0 0 0 2px var(--bg0),0 0 0 4px var(--accent)}
+.fire{position:absolute;width:5px;height:5px;border-radius:50%;background:#f7dc92;box-shadow:0 0 10px 3px rgba(247,220,146,0.55);opacity:0.2;animation:drift 9s ease-in-out infinite alternate}
+@keyframes drift{0%{transform:translate(0,0);opacity:0.15}50%{opacity:0.85}100%{transform:translate(20px,-30px);opacity:0.15}}
+@media (prefers-reduced-motion: reduce){.fire{animation:none;opacity:0.4}}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:1640px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.62);--glass-border:rgba(190,235,208,0.15);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238;--bg0:#08120f">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 30%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+
+  <div style="position:absolute;left:8px;right:14px;top:14px;display:flex;align-items:center;gap:4px">
+    <button class="iconbtn" aria-label="Back"><svg class="ic" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg></button>
+    <div style="font-size:22px;font-weight:300">Settings</div>
+  </div>
+
+  <div style="position:absolute;left:14px;right:14px;top:62px">
+    <div class="grp" style="margin-top:6px">Accounts</div>
+    <div class="glass card">
+      <div class="set"><span class="av" style="border:1px solid #7cc4ff;color:#7cc4ff">A</span><div style="flex-grow:1"><div>autumn@grove.place</div><div class="sub">Tap to rename, change icon or photo</div></div><svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--faint)"><path d="m9 18 6-6-6-6"></path></svg></div>
+      <div class="set"><span class="av" style="border:1px solid #f0a6ca;color:#f0a6ca">H</span><div style="flex-grow:1"><div>hello@grove.place</div></div><svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--faint)"><path d="m9 18 6-6-6-6"></path></svg></div>
+      <div class="set"><span class="av" style="border:1px solid #5ad1c8;color:#5ad1c8">D</span><div style="flex-grow:1"><div>dmca@grove.place</div></div><svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--faint)"><path d="m9 18 6-6-6-6"></path></svg></div>
+      <div class="set"><span class="av" style="border:1px solid #f2957f;color:#f2957f">S</span><div style="flex-grow:1"><div>security@grove.place</div></div><svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--faint)"><path d="m9 18 6-6-6-6"></path></svg></div>
+      <div class="set" style="color:var(--accent)"><svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>Add an account</div>
+    </div>
+
+    <div class="grp">Smart features, per account</div>
+    <div class="glass card">
+      <div class="set"><div style="flex-grow:1">autumn@</div><span class="tog on"><i></i></span></div>
+      <div class="set"><div style="flex-grow:1">hello@</div><span class="tog on"><i></i></span></div>
+      <div class="set"><div style="flex-grow:1">dmca@</div><span class="tog"><i></i></span></div>
+      <div class="set"><div style="flex-grow:1">security@</div><span class="tog"><i></i></span></div>
+    </div>
+    <div style="font-size:12px;color:var(--faint);margin:8px 8px 0;line-height:1.5">Off by default. When off, nothing from that account ever leaves your server.</div>
+
+    <div class="grp">Look</div>
+    <div class="glass card">
+      <div class="set"><div style="flex-grow:1">Theme</div><div class="seg"><span class="on">Night</span><span>Day</span><span>Auto</span></div></div>
+      <div class="set"><div style="flex-grow:1">Motion</div><div class="seg"><span class="on">Gentle</span><span>Still</span></div></div>
+      <div class="set"><div style="flex-grow:1">Accent</div><div class="row" style="gap:12px"><span class="swatch on" style="background:#c4b5fd"></span><span class="swatch" style="background:#86efac"></span><span class="swatch" style="background:#f5c45a"></span><span class="swatch" style="background:#7cc4ff"></span></div></div>
+    </div>
+
+    <div class="grp">Sending</div>
+    <div class="glass card">
+      <div class="set"><div style="flex-grow:1"><div>Undo send</div><div class="sub">A short wait before mail leaves</div></div><span class="val">10 s</span></div>
+      <div class="set"><div style="flex-grow:1"><div>Reply as the address it was sent to</div></div><span class="tog on"><i></i></span></div>
+    </div>
+
+    <div class="grp">Reading</div>
+    <div class="glass card">
+      <div class="set"><div style="flex-grow:1">Remote images</div><span class="val">Ask first<svg class="ic ic-sm" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"></path></svg></span></div>
+      <div class="set"><div style="flex-grow:1">Daily digest of newsletters</div><span class="val">7:00</span></div>
+    </div>
+
+    <div class="grp">Junk</div>
+    <div class="glass card">
+      <div class="set"><div style="flex-grow:1"><div>Look for real mail in Junk</div><div class="sub">Quietly point out anything that looks genuine</div></div><span class="tog on"><i></i></span></div>
+      <div class="set"><div style="flex-grow:1">Show the spam score</div><span class="tog"><i></i></span></div>
+    </div>
+
+    <div class="grp">Care and keeping</div>
+    <div class="glass card">
+      <div class="set"><svg class="ic" viewBox="0 0 24 24" style="color:var(--muted)"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"></path></svg><div style="flex-grow:1">Spend and calls</div><svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--faint)"><path d="m9 18 6-6-6-6"></path></svg></div>
+      <div class="set"><svg class="ic" viewBox="0 0 24 24" style="color:var(--muted)"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg><div style="flex-grow:1"><div>Back up tags and rules</div><div class="sub">Your mail itself stays on the server</div></div><svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--faint)"><path d="m9 18 6-6-6-6"></path></svg></div>
+      <div class="set"><svg class="ic" viewBox="0 0 24 24" style="color:var(--muted)"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path><circle cx="12" cy="12" r="3"></circle></svg><div style="flex-grow:1">Mirror health</div><svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--faint)"><path d="m9 18 6-6-6-6"></path></svg></div>
+    </div>
+
+    <div class="grp">About</div>
+    <div class="glass card">
+      <div class="set"><div style="flex-grow:1"><div>Ivy</div><div class="sub">[version]</div></div><button style="height:36px;padding:0 16px;border-radius:18px;border:1px solid var(--accent-line);background:var(--accent-soft);color:var(--text);font:500 13px 'Lexend',system-ui,sans-serif;display:inline-flex;align-items:center;gap:8px"><svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path><path d="M12 15V3"></path></svg>Update</button></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1640}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

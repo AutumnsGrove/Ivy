@@ -90,6 +90,8 @@ Tiers: **A** ships with triage (milestone 3), **B** is soon after, **C** is idea
 | `injection_tripwire` | no, yes | "Does this text address an AI assistant or try to give it instructions?" If yes, the message is withheld from stage-2/ask/vision and flagged. A cheap tripwire, not a guarantee |
 | `sensitive_content` | none, credentials, financial, health, id_document | Keeps a message out of ask/vision unless explicitly included; pairs with local regex for OTP codes |
 | `attachment_worth_reading` | no, yes | Gate on vision spend, judged from filename + surrounding text + type (Jev sees no pixels) |
+| `junk_rescue` | junk, unsure, looks_real | Runs only on mail the provider put in Junk. `looks_real` (high threshold) shows a "this looks real" chip and a one-tap Not junk; it never moves anything itself. Highest value for hello@ contact forms and legal/abuse mail |
+| `is_spam` | no, maybe, yes | Optional, later; runs on Inbox mail the provider let through. A hit only adds a local "looks like spam" tag and a soft fold, suppresses `needs_me` (rule 6). Skip the call when auth headers already fail hard or `X-Spam-Status` is high, to save spend |
 | `contact_form_quality` | genuine, solicitation, spam | hello@ triage |
 | `cold_outreach` | no, yes | Sales/recruiter/pitch detection, for the quiet-auto-archive idea later |
 
@@ -117,6 +119,33 @@ Tiers: **A** ships with triage (milestone 3), **B** is soon after, **C** is idea
 | `answers_question` | no, partly, yes | **Candidate filter:** after hybrid retrieval, ask Jev per email whether it actually answers the question, and send only the winners to the chat model. Cuts tokens, cost AND the amount of raw untrusted mail the chat model sees |
 | `claim_supported` | supported, partially, contradicted, not_addressed | **Citation verification:** after the chat model writes an answer, check each claim against its cited email (same pattern as Polaris's source verification badge) |
 | `result_relevance` | irrelevant, related, direct | Re-rank borderline hybrid-search hits |
+
+### Spam: what the provider already does (researched 2026-10-01, round 17)
+
+Sources: Purelymail's Spam filtering docs (`purelymail.com/docs/spamFiltering`), Features page and
+the 2026-09-14 platform update.
+
+- **Engine:** SpamAssassin on incoming mail, default threshold **5**, not adjustable in the UI. A
+  webmail/Sieve filter can override the decision by reading the `X-Spam-Status` header.
+- **Disposition:** above threshold, mail is **delivered to the Junk folder** (not rejected). The
+  only SMTP-time rejection is for blocklisted sending IPs, which Ivy never sees. Purelymail adds its
+  own tests (`LARGE_MESSAGE`, `VALID_MESSAGE_ID_REFERENCE`, `PURELYMAIL_IP_REPUTATION`) and
+  **greylists** suspicious senders (matches the 451 greylist seen in round 15).
+- **Learning:** a **per-user** database learns from messages you **move into and out of Junk**; it
+  only activates after about **200 spam and 200 non-spam examples**. So Ivy's Mark spam / Not junk
+  must be real IMAP moves, which also keeps Apple Mail and webmail consistent.
+- **Auth:** SPF, DKIM, DMARC for deliverability; incoming mail now enforces a single `From:` header
+  per RFC 7489 (2026-09-14). Outgoing mail is also SpamAssassin-checked (protects the sender IP).
+- **Unverified:** the exact header set (`X-Spam-Score` vs `X-Spam-Status` only) and the Junk
+  folder's real name/flags; read both live in the `dev@` IMAP spike. This research comes from docs
+  pages, not hands-on testing.
+
+**Ivy's layering (proposed):** provider filter first (free, already there) -> local signals (spam
+score from `X-Spam-Status`, `Authentication-Results`, spoofed sender) -> Jev `junk_rescue` on Junk
+-> optionally Jev `is_spam` on Inbox. Start with `junk_rescue` only: cheapest, most upside, and it
+fixes the failure that actually hurts (a real contact-form or legal message lost in Junk). Spam is
+the highest-volume mail, so both questions respect caps and skip rules, and run only for opted-in
+accounts. Nothing here ever deletes.
 
 ## 4. Boundaries (what Jev cannot do)
 

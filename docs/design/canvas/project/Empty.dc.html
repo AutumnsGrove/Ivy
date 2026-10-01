@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Inbox zero, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.stars{position:absolute;left:0;top:0;width:100%;height:380px;background:url(assets/stars.svg) repeat-x top left;-webkit-mask-image:linear-gradient(#000,transparent);mask-image:linear-gradient(#000,transparent)}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.glass-strong{background:var(--glass-strong);border:1px solid var(--glass-border);backdrop-filter:blur(20px) saturate(1.2);-webkit-backdrop-filter:blur(20px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.row{display:flex;align-items:center}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:1px solid var(--glass-border);background:var(--glass);color:var(--text)}
+.acctbtn{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 14px;border-radius:22px;border:1px solid var(--glass-border);background:var(--glass);color:var(--text);font:400 14px 'Lexend',system-ui,sans-serif}
+.tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:1;height:50px;border:0;background:transparent;color:var(--faint);font:400 10.5px 'Lexend',system-ui,sans-serif;border-radius:18px}
+.tab.on{color:var(--accent)}
+.glint{width:6px;height:6px;border-radius:50%;background:var(--firefly);box-shadow:0 0 8px 2px var(--firefly-glow);animation:pulse 3.6s ease-in-out infinite;flex:none}
+@keyframes pulse{0%,100%{opacity:0.55}50%{opacity:1}}
+.fire{position:absolute;width:5px;height:5px;border-radius:50%;background:#f7dc92;box-shadow:0 0 10px 3px rgba(247,220,146,0.55);opacity:0.2;animation:drift 9s ease-in-out infinite alternate}
+@keyframes drift{0%{transform:translate(0,0);opacity:0.15}50%{opacity:0.85}100%{transform:translate(20px,-30px);opacity:0.15}}
+.shoot{position:absolute;left:60px;top:150px;width:110px;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,#fbf4da);transform:rotate(28deg);transform-origin:right center;animation:shoot 7s ease-in infinite;opacity:0}
+@keyframes shoot{0%{opacity:0;transform:translate(-40px,-20px) rotate(28deg)}6%{opacity:0.95}22%{opacity:0;transform:translate(150px,80px) rotate(28deg)}100%{opacity:0;transform:translate(150px,80px) rotate(28deg)}}
+@media (prefers-reduced-motion: reduce){.fire,.glint{animation:none}.fire{opacity:0.4}.shoot{animation:none;opacity:0.7}}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.58);--glass-strong:rgba(10,22,19,0.86);--glass-border:rgba(190,235,208,0.15);--firefly:#f7dc92;--firefly-glow:rgba(247,220,146,0.6);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+  <div class="stars"></div>
+  <div class="shoot"></div>
+  <div class="fire" style="left:70px;top:420px;animation-delay:0s"></div>
+  <div class="fire" style="left:300px;top:470px;animation-delay:2s"></div>
+  <div class="fire" style="left:190px;top:560px;animation-delay:4s"></div>
+  <div class="fire" style="left:110px;top:640px;animation-delay:6s"></div>
+  <div class="fire" style="left:330px;top:620px;animation-delay:1s"></div>
+
+  <!-- header, same as the inbox -->
+  <div style="position:absolute;left:14px;right:14px;top:16px;display:flex;align-items:center;gap:10px">
+    <button class="acctbtn" aria-label="Switch account"><span style="width:9px;height:9px;border-radius:50%;background:var(--accent)"></span>All inboxes<svg class="ic ic-sm" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"></path></svg></button>
+    <span style="flex-grow:1"></span>
+    <button class="iconbtn" aria-label="Search"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
+  </div>
+
+  <!-- the quiet -->
+  <svg viewBox="0 0 160 160" style="position:absolute;left:115px;top:236px;width:160px;height:160px" aria-hidden="true">
+    <defs>
+      <radialGradient id="mg" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#e9f3dc" stop-opacity="0.28"></stop><stop offset="1" stop-color="#e9f3dc" stop-opacity="0"></stop></radialGradient>
+      <mask id="cr"><rect x="0" y="0" width="160" height="160" fill="#ffffff"></rect><circle cx="94" cy="62" r="30" fill="#000000"></circle></mask>
+    </defs>
+    <circle cx="80" cy="80" r="78" fill="url(#mg)"></circle>
+    <circle cx="76" cy="82" r="34" fill="#efe9d2" opacity="0.9" mask="url(#cr)"></circle>
+  </svg>
+
+  <div style="position:absolute;left:0;right:0;top:420px;text-align:center;padding:0 40px">
+    <div style="font-family:'Newsreader',Georgia,serif;font-size:34px;font-weight:500;letter-spacing:-0.01em">All caught up</div>
+    <div style="font-family:'Newsreader',Georgia,serif;font-style:italic;font-size:18px;line-height:1.5;color:var(--muted);margin-top:10px">Nothing needs you. The garden is quiet.</div>
+  </div>
+
+  <div class="glass" style="position:absolute;left:14px;right:14px;top:588px;border-radius:20px;padding:12px 16px;display:flex;align-items:center;gap:12px">
+    <span class="glint"></span>
+    <div style="flex-grow:1;font-size:13.5px;color:var(--muted)">Three new issues are waiting in Reading</div>
+    <svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--faint)"><path d="m9 18 6-6-6-6"></path></svg>
+  </div>
+
+  <nav class="glass-strong" aria-label="Main" style="position:absolute;left:14px;right:14px;bottom:14px;height:58px;border-radius:24px;display:flex;align-items:center;padding:0 6px">
+    <button class="tab on"><svg class="ic" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>Inbox</button>
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M12 7v14"></path><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"></path></svg>Reading</button>
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>Search</button>
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>Tags</button>
+    <button class="tab"><svg class="ic" viewBox="0 0 24 24"><path d="M10 5H3"></path><path d="M12 19H3"></path><path d="M14 3v4"></path><path d="M16 17v4"></path><path d="M21 12h-9"></path><path d="M21 19h-5"></path><path d="M21 5h-7"></path><path d="M8 10v4"></path><path d="M8 12H3"></path></svg>Settings</button>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

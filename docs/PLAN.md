@@ -73,6 +73,16 @@ overlay), snooze (local hide-until).
   (security@, dmca@: priority, LLM off by default), personal correspondence (protected from any
   automated handling). Automated notifications get generic triage.
 
+**Spam (proposed, round 17; not yet confirmed by the operator).** The provider filters first:
+Purelymail runs SpamAssassin (threshold 5), files suspected spam in the Junk folder, rejects
+blocklisted IPs at SMTP, and learns per user from messages you move into and out of Junk (after
+~200 examples of each). Ivy mirrors Junk like any folder, shows the spam score from the
+`X-Spam-Status` header, and **moving mail to or from Junk in Ivy is an IMAP move, so it trains the
+provider's filter**. Jev is a second layer only: first a **Junk rescue** ("this looks real", a
+quiet chip), later an optional `is_spam` check on mail that reached the Inbox that only adds a
+local tag and soft-folds the message. Never auto-delete or auto-move; a wrong guess must cost
+nothing. See `JEV.md` section 3B and `ARCHITECTURE.md` section 4.
+
 **Search and ask.** One search box: hybrid keyword (FTS5) + meaning (Ollama `nomic-embed-text`,
 optional remote provider), merged into one ranked list. **Ask your mailbox:** a written answer where
 every claim cites verified emails; an account-picker mode (tap the accounts to include, the rest grey

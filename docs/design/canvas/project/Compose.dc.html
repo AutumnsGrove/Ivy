@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Compose, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.stars{position:absolute;left:0;top:0;width:100%;height:380px;background:url(assets/stars.svg) repeat-x top left;-webkit-mask-image:linear-gradient(#000,transparent);mask-image:linear-gradient(#000,transparent)}
+.glass-strong{background:var(--glass-strong);border:1px solid var(--glass-border);backdrop-filter:blur(20px) saturate(1.2);-webkit-backdrop-filter:blur(20px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.row{display:flex;align-items:center}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:0;background:transparent;color:var(--text)}
+.fl{display:flex;align-items:center;gap:10px;min-height:48px;padding:0 4px;border-bottom:1px solid var(--glass-border);font:400 14.5px 'Lexend',system-ui,sans-serif}
+.fl .k{width:52px;color:var(--faint);font-size:13px;flex:none}
+.chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 6px 0 12px;border-radius:15px;background:var(--accent-soft);border:1px solid var(--accent-line);font-size:13.5px}
+.fmt{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;color:var(--muted);border:0;background:transparent}
+.fire{position:absolute;width:5px;height:5px;border-radius:50%;background:#f7dc92;box-shadow:0 0 10px 3px rgba(247,220,146,0.55);opacity:0.2;animation:drift 9s ease-in-out infinite alternate}
+@keyframes drift{0%{transform:translate(0,0);opacity:0.15}50%{opacity:0.85}100%{transform:translate(20px,-30px);opacity:0.15}}
+@media (prefers-reduced-motion: reduce){.fire{animation:none;opacity:0.4}}
+.caret{display:inline-block;width:2px;height:20px;background:var(--accent);vertical-align:-4px;animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion: reduce){.caret{animation:none}}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.58);--glass-strong:rgba(10,22,19,0.86);--glass-border:rgba(190,235,208,0.15);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238;--panel:rgba(8,18,15,0.9)">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+  <div class="stars"></div>
+  <div class="fire" style="left:340px;top:700px;animation-delay:2s"></div>
+
+  <!-- top bar -->
+  <div style="position:absolute;left:8px;right:14px;top:14px;display:flex;align-items:center;gap:4px">
+    <button class="iconbtn" aria-label="Discard"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+    <div style="flex-grow:1">
+      <div style="font-size:18px;font-weight:300">Reply</div>
+      <div style="font-size:11.5px;color:var(--faint)">Saved to Drafts</div>
+    </div>
+    <button aria-label="Attach" class="iconbtn"><svg class="ic" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg></button>
+    <button style="height:40px;padding:0 18px;border-radius:20px;border:0;background:var(--accent);color:var(--on-accent);font:500 14px 'Lexend',system-ui,sans-serif;display:inline-flex;align-items:center;gap:8px"><svg class="ic ic-sm" viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"></path><path d="m21.854 2.147-10.94 10.939"></path></svg>Send</button>
+  </div>
+
+  <!-- editor sheet -->
+  <div style="position:absolute;left:12px;right:12px;top:68px;bottom:78px;border-radius:26px;background:var(--panel);border:1px solid var(--glass-border);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);padding:8px 18px 18px;overflow:hidden">
+    <div class="fl"><span class="k">From</span><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:50%;background:#f0a6ca"></span>hello@grove.place</span><span style="flex-grow:1"></span><svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--faint)"><path d="m6 9 6 6 6-6"></path></svg></div>
+    <div class="fl"><span class="k">To</span><span class="chip">Mara Linden<svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--muted)"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></span></div>
+    <div style="font-size:11.5px;color:var(--faint);padding:6px 4px 0">Sent to mara@example.com, the address on her message, not the form.</div>
+    <div class="fl" style="margin-top:2px"><span class="k">Subject</span><span>Re: Moving my blog over to Grove?</span></div>
+
+    <div style="margin-top:16px;font-family:'Newsreader',Georgia,serif;font-size:18px;line-height:1.65">
+      <p style="margin:0 0 12px">Hi Mara,</p>
+      <p style="margin:0 0 12px">Thank you for writing. Yes, you can bring your old posts over, and the images come with them<span class="caret"></span></p>
+    </div>
+    <div style="position:absolute;left:18px;right:18px;bottom:16px;font-size:12.5px;color:var(--faint);border-top:1px solid var(--glass-border);padding-top:10px">Autumn · Grove</div>
+  </div>
+
+  <!-- formatting bar and undo hint -->
+  <div class="glass-strong" style="position:absolute;left:12px;right:12px;bottom:14px;height:56px;border-radius:22px;display:flex;align-items:center;padding:0 8px;gap:2px">
+    <button class="fmt" aria-label="Bold"><svg class="ic" viewBox="0 0 24 24"><path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"></path></svg></button>
+    <button class="fmt" aria-label="Italic"><svg class="ic" viewBox="0 0 24 24"><path d="M19 4h-9"></path><path d="M14 20H5"></path><path d="M15 4 9 20"></path></svg></button>
+    <button class="fmt" aria-label="Link"><svg class="ic" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></button>
+    <button class="fmt" aria-label="List"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12h.01"></path><path d="M3 18h.01"></path><path d="M3 6h.01"></path><path d="M8 12h13"></path><path d="M8 18h13"></path><path d="M8 6h13"></path></svg></button>
+    <span style="flex-grow:1"></span>
+    <span style="font-size:12px;color:var(--faint);padding-right:8px">Sends after 10 s, undo any time</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

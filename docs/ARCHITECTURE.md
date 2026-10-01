@@ -117,6 +117,11 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
    on success update the DB; the UI updates optimistically and rolls back on rejection. Outbox
    retries survive restarts and dropped connections.
 8. **Events:** every DB change fans out through an SSE hub so open clients update live.
+9. **Spam handling (round 17, proposed):** the provider filters (Purelymail: SpamAssassin, Junk
+   folder). Ivy stores the parsed `X-Spam-Status` score/flag on each message, treats the `junk`
+   folder as a normal mirrored folder, and implements Mark spam / Not junk as IMAP MOVE to and from
+   Junk through the same outbox, because those moves train the provider's per-user filter (it needs
+   ~200 examples each way). Jev spam questions are advisory tags only (JEV.md 3B).
 
 ## 5. Parsing and rendering
 

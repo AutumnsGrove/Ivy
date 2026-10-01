@@ -10,8 +10,14 @@
     "Switcher.dc.html": { "x": 940, "y": 0, "w": 390, "h": 844, "title": "C · Account side panel" },
     "Message.dc.html": { "x": 1410, "y": 0, "w": 390, "h": 844, "title": "D · Reading a message" },
     "Reading.dc.html": { "x": 1880, "y": 0, "w": 390, "h": 844, "title": "E · Reading feed (newsletters)" },
-    "Tokens.dc.html": { "x": 0, "y": 964, "w": 720, "h": 1100, "title": "F · Tokens and type" },
-    "Desktop.dc.html": { "x": 800, "y": 964, "w": 1440, "h": 860, "title": "G · Desktop three-pane" }
+    "Ask.dc.html": { "x": 0, "y": 964, "w": 390, "h": 844, "title": "F · Talk to Ivy" },
+    "Compose.dc.html": { "x": 470, "y": 964, "w": 390, "h": 844, "title": "G · Compose a reply" },
+    "Empty.dc.html": { "x": 940, "y": 964, "w": 390, "h": 844, "title": "H · Inbox zero" },
+    "Welcome.dc.html": { "x": 1410, "y": 964, "w": 390, "h": 844, "title": "I · First run, welcome" },
+    "AddAccount.dc.html": { "x": 1880, "y": 964, "w": 390, "h": 844, "title": "J · First run, connect an account" },
+    "Settings.dc.html": { "x": 0, "y": 1928, "w": 390, "h": 1640, "title": "K · Settings" },
+    "Tokens.dc.html": { "x": 470, "y": 1928, "w": 720, "h": 1100, "title": "L · Tokens and type" },
+    "Desktop.dc.html": { "x": 1270, "y": 1928, "w": 1440, "h": 860, "title": "M · Desktop three-pane" }
   },
   "order": [
     "Main.dc.html",
@@ -19,6 +25,12 @@
     "Switcher.dc.html",
     "Message.dc.html",
     "Reading.dc.html",
+    "Ask.dc.html",
+    "Compose.dc.html",
+    "Empty.dc.html",
+    "Welcome.dc.html",
+    "AddAccount.dc.html",
+    "Settings.dc.html",
     "Tokens.dc.html",
     "Desktop.dc.html"
   ],

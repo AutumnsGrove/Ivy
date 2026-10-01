@@ -318,4 +318,39 @@ Earlier open list (partly answered above): pick accent, pick nav, review the gar
 "needs you" and Jev read-out are labelled (currently "Ivy's read · Jev"), compose and settings
 screens, empty/inbox-zero scene, and whether the day theme needs its own accent.
 
+## Round 17 — spam (2026-10-01)
+
+Operator asked whether spam filtering should run through Jev on inbound, then asked me to research
+Purelymail first. **Findings** (docs only, not hands-on): Purelymail runs SpamAssassin (threshold 5,
+not adjustable), files flagged mail in Junk, rejects only blocklisted IPs at SMTP, greylists
+suspicious senders, adds `X-Spam-Status`, and learns per user from mail moved into/out of Junk
+after ~200 examples of each. Full notes in `JEV.md` ("Spam: what the provider already does").
+
+**Proposed (operator has not yet picked inbox vs Junk vs both):** provider first, local signals,
+then Jev as a second layer. Start with **`junk_rescue`** on the Junk folder (a "looks real" chip and
+one-tap Not junk), optionally `is_spam` on Inbox mail later (tag + soft fold only). Mark spam / Not
+junk are IMAP moves so they train the provider. Never auto-delete or auto-move. Docs updated:
+`PLAN.md` (Spam paragraph), `JEV.md` (catalog + research), `ARCHITECTURE.md` (sync step 9).
+
+Also this round: operator asked for mockups of **Talk to Ivy**, **compose**, **settings**,
+**empty / inbox zero**, and the **first-run** look (see round 17b below).
+
+### Round 17b — more mockups (2026-10-01)
+
+New boards on the canvas (`docs/design/canvas/`): **F Talk to Ivy** (ask-your-mailbox: an "Ivy can
+look in" account row with LLM-off accounts shown locked, a user bubble, a serif answer with numbered
+citation chips and the source emails listed under it, suggestion chips, input bar; the only marker
+is a small firefly dot, no AI badge), **G Compose** (reply as the address it was sent to, Reply-To
+note for contact-form mail, serif editor sheet, formatting bar, "Sends after 10 s, undo any time",
+"Saved to Drafts"), **H Inbox zero** ("All caught up", a moon, a slow shooting star and more
+fireflies, a pointer to new Reading issues), **I First run welcome**, **J First run connect an
+account** (provider auto-detect, app password, Smart features off by default, one-time full-mailbox
+read), **K Settings** (accounts with rename/icon/photo, per-account Smart features, theme / motion /
+accent, undo-send, remote images, digest time, Junk rescue and spam score toggles, spend and calls,
+backup, mirror health, update button). Placeholders ("[version]") mark values we don't have yet.
+
+Not decided yet: whether Talk to Ivy is its own screen (as drawn) or reachable from the search tab;
+the first-run flow beyond two screens (progress while the mailbox is read, the `ivy init` terminal
+side); settings information architecture on desktop.
+
 Notes on round 5: the second-stage model sees raw email text, so it's the higher-risk stage: no tools, structured output (`needs_me` bool + short reason), reason rendered as plain text. Configurability needs a deliberate home (config file vs in-app settings with per-account overrides), asked in round 6.
