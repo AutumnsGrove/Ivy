@@ -270,3 +270,17 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   - Test files are excluded from `gosec`, `noctx` and `bodyclose` only (loopback `httptest`
     servers, background contexts and `t.Cleanup`-closed bodies the analyzers cannot follow);
     `revive`, `exhaustive` and the standard set still apply to tests.
+
+## Frontend toolchain
+
+- **#34** · baseline (`web/`) · `web/package.json`, `web/pnpm-lock.yaml` · **bug (CI)** ·
+  `pnpm check` failed with 9 errors on a clean `pnpm install --frozen-lockfile`: `vite.config.ts`
+  and `src/lib/tokens.test.ts` use Node globals (`process`, `node:fs`, `__dirname`) but
+  `@types/node` was never a dependency, so the CI `web` job (`make web-check`) could not pass.
+  Added `@types/node@^22` (matching the `engines` range). The lockfile was regenerated; the
+  `libc:` selectors on the rolldown and lightningcss native bindings, which this container's pnpm
+  drops, were restored by hand so they are byte-identical to before.
+- Verified here: the production-binary smoke suite (`web/e2e/smoke.spec.ts`) passes 8/8 on
+  Chromium with a desktop viewport and an iPhone 14 viewport emulated on Chromium. **Not**
+  verified: WebKit (not installed in this container), so the real phone project, and the mocked
+  `e2e` suite and visual baselines.
