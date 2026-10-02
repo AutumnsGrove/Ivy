@@ -69,7 +69,10 @@ enforced by tests and CI, not just stated here.
   are over an hour old: crash-leftover `.spool-*` temp files and downloads whose row never landed.
 - **Derived columns have their own setters.** 2d writes `store.SetMessageBodyHTML`, 2e writes
   `store.SetMessageThread`; `UpsertMessage` never overwrites them after the first insert.
-- **Open items** are `N`-numbered in `papercuts.md`: N4/N5 (measure on the potato, held for now).
+- **Open items** are `N`-numbered in `papercuts.md`: N3 (the fake `/systemone` has no `score`
+  questions, chunk 4), N6 (unknown `/api` paths answer the mux's plain-text 404/405, part of 2f),
+  N8 (identical `Message-ID`s share a content key and its tags/verdict; needs a threat-model line).
+  N4/N5 are resolved (laptop numbers in `PERFORMANCE.md`; re-measure on the potato when available).
 
 ## ▶ Now: Chunk 2 (Milestone 1: Read) — 2a-2c done, start 2d
 

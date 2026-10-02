@@ -58,6 +58,15 @@ fingerprinted files, SPA fallback). `internal/webui` embeds `build/`; `make web-
 frontend, copies it in and precompresses it; the gateway mounts it at `/`. Budgets are tests beside
 the middleware (a size-ratio tripwire plus per-coding benchmarks).
 
+**Measured on a laptop (2026-10-02; potato re-measure pending) — N4/N5, `papercuts.md`.** The static
+server now hashes each embedded file once and serves it without copying (`internal/asset`): a 270 KB
+identity asset went 245 µs → 145 µs/op and 1.33 MB → 1.05 MB/op, guarded by
+`BenchmarkFileServerIdentity`/`Zstd`. The pooled zstd encoder uses
+`zstd.WithEncoderConcurrency(1)` (one response streams at a time): one encoder is 2.33 MB / 30
+allocs → 1.76 MB / 17 allocs and is ~35% faster to create, at ~10% single-stream throughput on
+this 8-core laptop (`BenchmarkZstdEncoderAlloc`, `BenchmarkMiddleware`). These are relative
+laptop numbers, not the section 3 budgets; re-check on the potato when it is next available.
+
 ## 2. Frontend load budgets (asserted in CI, after compression)
 
 Initial starting numbers, to tighten once there is something to measure:

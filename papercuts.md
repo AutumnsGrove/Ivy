@@ -411,3 +411,24 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   mailworld), and the updated `TestParseAuthResults`/`TestParseAuthResultsHeader`.
   On Purelymail the signal is now honestly empty and the discount stays off; verifying DKIM
   ourselves is the later feature (`ARCHITECTURE.md` section 5, `next_steps.md`).
+
+## N4 and N5 resolved (measured, then changed)
+
+Both were held for a potato measurement. No potato was available, so these numbers are from a
+laptop (Apple M2, 8 cores) and only the direction is claimed; the potato re-measure is noted in
+`PERFORMANCE.md` and remains a follow-up, not a gate.
+
+- **#43 (resolves N4)** · `d53dc23` · `internal/asset/server.go` · **perf** · every static request
+  copied the whole embedded file (`fs.ReadFile`) and SHA-256'd it for the ETag. The file is now
+  opened and streamed straight through `http.ServeContent` (embed and `fstest.MapFS` files are
+  `io.ReadSeeker`; `TestFileServerServesRanges` proves Range still works), and the ETag is hashed
+  once per served path into a `sync.Map`. A 270 KB identity asset: **245 µs → 145 µs/op, 1.33 MB →
+  1.05 MB/op, 29 → 25 allocs** (the remainder is the `httptest.ResponseRecorder` buffer); the
+  precompressed path went 1.6 µs → 1.44 µs. New `BenchmarkFileServerIdentity`/`BenchmarkFileServerZstd` hold it.
+- **#44 (resolves N5)** · `be808b3` · `internal/compress/middleware.go` · **perf (memory)** · the
+  pooled zstd encoder used the library default concurrency (GOMAXPROCS goroutines and buffers per
+  encoder). One response streams at a time, so the pool now builds encoders with
+  `zstd.WithEncoderConcurrency(1)`. One encoder: **2.33 MB / 30 allocs → 1.76 MB / 17 allocs**, and
+  ~35% faster to create (128 µs → 87 µs). Single-stream throughput cost **12.6 µs → 13.9 µs/op**
+  (~10%) on this 8-core laptop; on the potato's four slow cores the parallel path helps less and
+  the work is I/O-bound. `BenchmarkZstdEncoderAlloc` records the footprint.
