@@ -105,6 +105,32 @@ decisions. Two rules came with it: **each message is embedded once** (keyed by c
 archive and trash never re-embed), and **every embedding is tracked per occurrence** in the cost
 ledger like every other remote API call. Details are in `ARCHITECTURE.md` sections 3 and 6.
 
+## Model chosen: `perplexity/pplx-embed-v1-0.6b` (operator, same day)
+
+The operator picked this model over `bge-m3` for being cheaper with a 32k-token context. It was
+tested against `bge-m3` on the repo's 118 doc chunks (about 1,500 characters each) before being
+adopted, from the dev laptop over the internet:
+
+| | `pplx-embed-v1-0.6b` | `bge-m3` |
+|---|---|---|
+| Speed, 118 chunks in batches of 32 | **50.7 chunks/s** (2.3 s) | 18.3 chunks/s (6.4 s) |
+| Tokens per chunk, cost per 100k chunks | 378, **$0.15** | 457, $0.46 |
+| Dimensions | 1024 | 1024 |
+| Output | **native int8**: every component a multiple of 1/128 (first vector's largest is 0.36, so it uses about 46 of 127 levels) | float, normalised (norm 1.00) |
+| Normalised | **no**, L2 norm 2.84 | yes |
+| Same text twice | identical vector | not identical |
+| Retrieval sanity (6 queries, answer in top 3) | 6/6 | 6/6 |
+| Long input | 7,001 and 28,001 tokens both accepted | 8,192 limit, clean HTTP 400 |
+| One short query | 0.28 s | 0.38 s |
+
+Consequences: store the returned integers as they are (no quantisation step, no loss relative to
+what the provider sends) and keep each vector's norm beside it, since cosine needs it; identical
+output for identical input is useful for tests and for the embed-once rule. Caveats: six
+sanity queries on one corpus is not a quality ranking; behaviour beyond 32k tokens was not tested
+(chunk by token count with margin regardless); one run from the laptop, not the board; the model
+returned about 46 of 127 int8 levels on the sample vector, so effective precision is lower than
+8 bits, which a recall test against float32 neighbours would need to quantify (not run).
+
 ## Not tested
 
 Batch sizes 8 and 32 on the board, throughput under concurrent load, recall on varied real mail,

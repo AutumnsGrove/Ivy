@@ -30,6 +30,8 @@ func main() {
 		embed(os.Args[2], os.Args[3])
 	case "search":
 		search(os.Args[2])
+	case "hosted":
+		hostedMain(os.Args[2], os.Args[3:])
 	}
 }
 

@@ -629,3 +629,13 @@ key, never by mirror row ids, or a mirror rebuild would orphan them. Docs update
 `ARCHITECTURE.md` sections 3, 6 and 9, `PLAN.md`, `STACK.md`, `TESTING.md`, `JEV.md`, `SPIKES.md`,
 `CLAUDE.md`. Also: the operator asked that the board carry no test artifacts; an audit after the
 spikes found none (only the pre-existing `nomic-embed-text` model and unrelated services).
+
+**Embedding model (operator, later the same day):** `perplexity/pplx-embed-v1-0.6b`, replacing the
+proposed `baai/bge-m3`: cheaper and a 32k-token context. Tested before adopting (repo prose only):
+1024 dimensions; **returns native int8 values** (every component a multiple of 1/128) that are
+**not normalised** (L2 norm about 2.8), so vectors are stored as returned with their norm beside
+them; 50.7 chunks/s and $0.15 per 100k email-sized chunks (against 18.3/s and $0.46 for `bge-m3`);
+repeated text gives an identical vector; 6 of 6 sanity queries had their answer in the top 3, the
+same as `bge-m3` (a small test, not a quality ranking); a 28,001-token input was accepted (the
+behaviour past 32k was not tested). The synthetic S10 databases (about 600 MB, `.dev/s10`) were
+deleted at the operator's request.

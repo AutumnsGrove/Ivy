@@ -70,7 +70,7 @@ Name Ivy, standalone repo, AGPL-3.0 · Go + pure-Go SQLite (`modernc.org/sqlite`
 Postgres rejected) · SvelteKit (`adapter-static`, Svelte 5), pure CSS custom properties (no
 Tailwind), pnpm, one typed API client module · JSON REST + SSE · mirror model with IMAP-first
 writes and an outbox · enmime, go-imap v2, bluemonday · embeddings behind an `Embedder`
-interface: OpenRouter by default (`baai/bge-m3`), local Ollama optional, each message embedded
+interface: OpenRouter by default (`perplexity/pplx-embed-v1-0.6b`), local Ollama optional, each message embedded
 once · tags kept both locally and as IMAP keywords · LLM layer `decide()` (Jev via OpenRouter `/systemone`, model `jev-latest`),
 `complete()`, `see()`, all through one gate (`docs/JEV.md`) · container deploy: GitHub Actions
 builds a multi-arch image (frontend and pure-Go binary) on merge to main and publishes it to GHCR,

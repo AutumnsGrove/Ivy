@@ -126,11 +126,15 @@ eligible (the account has smart features on), keyed by (account, content key, ch
 moves, archive, trash, flag and tag changes never embed again, and neither does a UIDVALIDITY
 reset, because the key is the message and not its place. Re-embedding happens only when the
 content or the chosen model changes, started by the operator with a cost estimate and the monthly
-cap applied. The default provider is OpenRouter (`baai/bge-m3`, 1024 dimensions, 8k context), with
-local Ollama optional per account (section 6). Storage is **int8**, one scale for the whole set:
-S8 measured 98.7% top-10 recall against exact float32 at 768 dimensions; at 1024 dimensions the
-vectors are about 98 MiB per 100k messages (the scan time is extrapolated, about 450 ms on the
-potato, not measured). Brute-force cosine in Go, streamed from SQLite in batches (never loaded
+cap applied. The default provider is OpenRouter (`perplexity/pplx-embed-v1-0.6b`, 1024 dimensions, 32k
+context; the operator's choice, round 30), with local Ollama optional per account (section 6).
+Storage is **int8**. That model returns int8 values natively (every component is a multiple of
+1/128, verified), so they are stored exactly as returned, together with each vector's L2 norm
+because the vectors are not normalised (norm about 2.8): cosine is the integer dot product divided
+by the two norms. Vectors from a provider that returns float32 are quantised with one scale for the
+whole set; S8 measured 98.7% top-10 recall against exact float32 at 768 dimensions. At 1024
+dimensions the vectors are about 98 MiB per 100k messages plus about 400 KiB of norms (the scan
+time is extrapolated, about 450 ms on the potato, not measured). Brute-force cosine in Go, streamed from SQLite in batches (never loaded
 whole); embed subject plus the first part of the body per message and per attachment chunk, chunked
 by token count with margin, not by characters. Each vector records its model, so a model change is
 detected rather than silently mixed.
@@ -214,11 +218,11 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 
 - **Hybrid (settled):** FTS5 (BM25) + embedding similarity merged with reciprocal rank fusion into
   one list from one search box. **Embeddings come from OpenRouter by default (settled, round 30;
-  `baai/bge-m3`)**, chosen per account, with a local Ollama endpoint (any host, `nomic-embed-text`)
-  as the private option behind the same `Embedder` interface. Why hosted first: spike S8 measured
-  the potato at 17 s per email-sized chunk and a 36 s cold model load holding about 407 MiB, while
-  OpenRouter embedded about 21 chunks per second and answers a query in 0.2 to 0.4 s, for about
-  $0.42 per 100k messages. Hosted embeddings send message text off the device, so they go through
+  `perplexity/pplx-embed-v1-0.6b`)**, chosen per account, with a local Ollama endpoint (any host,
+  `nomic-embed-text`) as the private option behind the same `Embedder` interface. Why hosted
+  first: spike S8 measured the potato at 17 s per email-sized chunk and a 36 s cold model load
+  holding about 407 MiB, while OpenRouter embedded about 51 chunks per second and answers a query
+  in about 0.3 s, for about $0.15 per 100k messages. Hosted embeddings send message text off the device, so they go through
   the gate (the account must have smart features on, caps apply) and every embedded message is a
   ledger row; an account with smart features off is searched by FTS5 alone, or by local Ollama if
   that is configured for it. Embedding is a low-priority background queue (one job at a time),
@@ -312,7 +316,7 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   that file is about 27 MiB and 15 snapshots about 390 MiB uncompressed. **`mirror.db` is a full
   mirror in its own file and is never backed up**; it is rebuilt from IMAP (about 27 minutes of
   database work per 100k messages on the potato plus the transfer, and re-embedding costs about
-  $0.42 per 100k via the default provider). Disabled messages' raw blobs (the only copy of
+  $0.15 per 100k via the default provider). Disabled messages' raw blobs (the only copy of
   server-deleted mail) are written to a **content-addressed, de-duplicated, append-only file
   store** outside both databases at the moment a message becomes disabled, are included in every
   backup, and are not pruned by the 15-day rule. Safety rules for pruning: only after a new backup

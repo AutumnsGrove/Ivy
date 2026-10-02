@@ -30,7 +30,7 @@ rule from `PLAN.md` section 6: verify before pinning). The constraint: **pure Go
 | MIME parse/build | `jhillyerd/enmime` (**settled**) | Parse and build. Plus `emersion/go-message` where lower-level access is needed. |
 | HTML sanitise | `microcosm-cc/bluemonday` (**settled**) | Strict policy; `golang.org/x/net/html` for text extraction/tokenising. |
 | Compression | `klauspost/compress` (zstd, gzip/flate, `gzhttp`) + `andybalholm/brotli` | All pure Go. Details in `PERFORMANCE.md`. Also zstd for `raw_blob` at rest. |
-| Embeddings | OpenRouter `/embeddings` (default, `baai/bge-m3`) and the Ollama HTTP API (optional, `nomic-embed-text`) behind an `Embedder` interface (**settled**, round 30) | Hosted by default because the potato embeds at 17 s per chunk (S8); every call goes through the gate and is ledgered. |
+| Embeddings | OpenRouter `/embeddings` (default, `perplexity/pplx-embed-v1-0.6b`) and the Ollama HTTP API (optional, `nomic-embed-text`) behind an `Embedder` interface (**settled**, round 30) | Hosted by default because the potato embeds at 17 s per chunk (S8); every call goes through the gate and is ledgered. |
 | LLM calls | stdlib `net/http` client in `llm/` and `jev/` | One gate, one chokepoint (**settled**). No vendor SDK needed. |
 | Attachment text | `golang.org/x/net/html`, `archive/zip` + `encoding/xml` (OOXML), a pure-Go PDF text-layer library (spike, quality uncertain) | PDF library choice is a Milestone 2 spike. |
 | Images | stdlib `image/*`, `golang.org/x/image` | Downscale and EXIF strip in pure Go. **HEIC is the open C-free question:** iOS Safari normally hands back JPEG for `accept="image/*"`; verify on the real phone before adding any decoder (a WASM-based one via `wazero` is the pure-Go fallback). |
