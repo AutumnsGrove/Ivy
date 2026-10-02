@@ -25,6 +25,7 @@ rule from `PLAN.md` section 6: verify before pinning). The constraint: **pure Go
 | Logging | `log/slog` | Structured; JSON in prod, text in dev. |
 | SQLite | `modernc.org/sqlite` (**settled**) | Pure Go, WAL, FTS5 (verify). Plain `database/sql`; hand-rolled positional migrations. |
 | SQL typing | `sqlc` (proposal) | Generates typed Go from `.sql` files, build-time tool only, no runtime dependency. See qa-log round 21. |
+| API contract | `github.com/oapi-codegen/oapi-codegen/v2` (Go types) + `openapi-typescript` (TS types) | `api/openapi.yaml` is the contract; both outputs are committed and `make drift` fails when stale (`STANDARDS.md` 6). Build-time `go tool` only. |
 | IMAP client | `emersion/go-imap/v2` (beta; verify API) | Has CONDSTORE/QRESYNC/IDLE/MOVE. **Test server:** its `imapserver` + `imapmemserver`. Wrapped in our `imap/` package. |
 | SMTP / SASL | `emersion/go-smtp`, `emersion/go-sasl` | Client for sending; server for the mail world. |
 | MIME parse/build | `jhillyerd/enmime` (**settled**) | Parse and build. Plus `emersion/go-message` where lower-level access is needed. |
@@ -59,6 +60,7 @@ rule from `PLAN.md` section 6: verify before pinning). The constraint: **pure Go
 | Unit/component | Vitest + `@testing-library/svelte` |
 | E2E / visual / a11y | `@playwright/test`, screenshot diffs, `@axe-core/playwright` |
 | Lint/format | ESLint, Prettier, `svelte-check` |
+| API types | `openapi-typescript` | Generated from `api/openapi.yaml` into `src/lib/api/schema.d.ts`; `src/lib/types.ts` re-exports it |
 | Build | Vite (via SvelteKit); a post-build step precompresses assets (brotli/zstd/gzip) |
 | Sanitised mail view | Sandboxed iframe fed by server-sanitised HTML (no client sanitiser library) |
 
