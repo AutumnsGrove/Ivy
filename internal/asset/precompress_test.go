@@ -140,3 +140,31 @@ func TestPrecompressIsIdempotent(t *testing.T) {
 		t.Errorf("Precompress recursed onto its own output")
 	}
 }
+
+// A sibling left by an earlier run must not outlive the file it was made from:
+// once the source changes so that a variant no longer pays, the old variant
+// would be served for content it no longer matches.
+func TestPrecompressRemovesStaleSiblings(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := writeFile(t, dir, "app.js", bigJS)
+	if _, err := Precompress(dir); err != nil {
+		t.Fatalf("first Precompress: %v", err)
+	}
+	if _, err := os.Stat(path + brSuffix); err != nil {
+		t.Fatalf("expected a brotli sibling after the first run: %v", err)
+	}
+
+	// Replace the source with something too small for any variant to win.
+	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Precompress(dir); err != nil {
+		t.Fatalf("second Precompress: %v", err)
+	}
+	for _, suffix := range []string{brSuffix, zstSuffix, gzSuffix} {
+		if _, err := os.Stat(path + suffix); !os.IsNotExist(err) {
+			t.Errorf("stale %s sibling survived (stat err = %v)", suffix, err)
+		}
+	}
+}

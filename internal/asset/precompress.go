@@ -5,6 +5,7 @@ package asset
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -64,6 +65,11 @@ func Precompress(dir string) (Stats, error) {
 				return fmt.Errorf("precompress %s as %s: %w", path, variant.suffix, err)
 			}
 			if len(encoded) >= len(data) {
+				// Drop a sibling an earlier run left, or it would be served for
+				// content it no longer matches.
+				if err := os.Remove(path + variant.suffix); err != nil && !errors.Is(err, fs.ErrNotExist) {
+					return err
+				}
 				continue
 			}
 			if err := os.WriteFile(path+variant.suffix, encoded, 0o644); err != nil {
