@@ -75,6 +75,13 @@ func Parse(raw []byte) (p Parsed) {
 		}
 	}()
 
+	if exceedsMultipartDepth(raw) {
+		// Keep the headers (threading, addresses, auth) and skip the body rather
+		// than let enmime spend exponential time on it.
+		raw = headerOnly(raw)
+		p.Errors = append(p.Errors, fmt.Sprintf("multipart nesting deeper than %d: body not parsed", MaxMultipartDepth))
+	}
+
 	env, err := enmime.NewParser(enmime.MaxStoredPartErrors(maxPartErrors)).ReadEnvelope(bytes.NewReader(raw))
 	if err != nil {
 		p.Errors = append(p.Errors, err.Error())
@@ -158,3 +165,10 @@ func partErrors(in []*enmime.Error) []string {
 	}
 	return out
 }
+
+// MaxMultipartDepth is the deepest multipart nesting Parse will hand to enmime.
+// Real mail rarely nests past eight levels. It is a hard cap because enmime's
+// work on an unterminated nest doubles with every level (measured: 20 ms at 16,
+// 5 s at 24, effectively never at 40), so a few KB of hostile input would pin
+// the sync worker.
+const MaxMultipartDepth = 16

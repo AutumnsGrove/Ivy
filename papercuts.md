@@ -218,3 +218,13 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   `fd7f73c`/`48be660`/`a049bfb` (next_steps.md), the remaining `mime` tests and fuzzers, the
   `store` tests and query-plan guard, the golangci-lint wider-set switch (N2), and the
   `web/` changes in `68e5fce`.
+- **#30 (resolves N10)** · `12b1017` · `mime/mime.go`, `mime/depth.go` · **bug (DoS)** · verified:
+  enmime's cost on *unterminated* nested multipart doubles with every level (measured:
+  1.6 ms at depth 12, 20 ms at 16, 307 ms at 20, 4.9 s at 24, no result at 40; well-formed nesting
+  stays linear). A 1.4 KB truncated or hostile message could therefore pin the sync worker for
+  seconds to forever, and `recover()` cannot help because nothing panics. `Parse` now pre-scans
+  the raw lines, tracking open multipart boundaries (quoted, unquoted and folded forms), and past
+  `MaxMultipartDepth = 16` parses only the headers (so threading, addresses and auth survive) and
+  records "multipart nesting deeper than 16: body not parsed". Tests
+  `TestParseBoundsUnterminatedNesting` (hung until its 2 s guard before the fix),
+  `TestParseBoundsFoldedUnquotedNesting`, and `TestParseKeepsRealisticNesting`.

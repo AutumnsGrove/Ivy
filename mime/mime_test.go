@@ -1,10 +1,12 @@
 package mime_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	ivymime "github.com/AutumnsGrove/Ivy/mime"
 )
@@ -453,4 +455,72 @@ func FuzzParseAuthResults(f *testing.F) {
 			}
 		}
 	})
+}
+
+// nestedMultipart builds depth multipart/mixed layers around one text part. An
+// unclosed message models a truncated or hostile one; enmime's cost on those
+// doubles with every level, so depth 40 would run for minutes.
+func nestedMultipart(depth int, closed bool) []byte {
+	var b strings.Builder
+	b.WriteString("From: a@example.com\r\nReferences: <root@example.com>\r\nMIME-Version: 1.0\r\n")
+	for i := 0; i < depth; i++ {
+		fmt.Fprintf(&b, "Content-Type: multipart/mixed; boundary=\"b%d\"\r\n\r\n--b%d\r\n", i, i)
+	}
+	b.WriteString("Content-Type: text/plain\r\n\r\nhi\r\n")
+	if closed {
+		for i := depth - 1; i >= 0; i-- {
+			fmt.Fprintf(&b, "--b%d--\r\n", i)
+		}
+	}
+	return []byte(b.String())
+}
+
+func TestParseBoundsUnterminatedNesting(t *testing.T) {
+	t.Parallel()
+	done := make(chan ivymime.Parsed, 1)
+	go func() { done <- ivymime.Parse(nestedMultipart(40, false)) }()
+
+	select {
+	case p := <-done:
+		if len(p.References) != 1 {
+			t.Errorf("headers were lost: References = %v", p.References)
+		}
+		if len(p.Errors) == 0 {
+			t.Error("a message too deep to parse should record why its body was skipped")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Parse did not return for 40 unterminated multipart levels")
+	}
+}
+
+// Legitimate deep nesting (a message forwarded several times) still parses.
+func TestParseKeepsRealisticNesting(t *testing.T) {
+	t.Parallel()
+	p := ivymime.Parse(nestedMultipart(ivymime.MaxMultipartDepth, true))
+	if p.Text != "hi" || len(p.Errors) != 0 {
+		t.Errorf("depth %d closed: text=%q errors=%v", ivymime.MaxMultipartDepth, p.Text, p.Errors)
+	}
+}
+
+// Mailers routinely fold the boundary parameter onto a continuation line and
+// leave it unquoted; the depth guard must see those too.
+func TestParseBoundsFoldedUnquotedNesting(t *testing.T) {
+	t.Parallel()
+	var b strings.Builder
+	b.WriteString("From: a@example.com\r\nMIME-Version: 1.0\r\n")
+	for i := 0; i < 40; i++ {
+		fmt.Fprintf(&b, "Content-Type: multipart/mixed;\r\n boundary=b%d\r\n\r\n--b%d\r\n", i, i)
+	}
+	b.WriteString("Content-Type: text/plain\r\n\r\nhi\r\n")
+
+	done := make(chan ivymime.Parsed, 1)
+	go func() { done <- ivymime.Parse([]byte(b.String())) }()
+	select {
+	case p := <-done:
+		if len(p.Errors) == 0 {
+			t.Error("expected the depth error to be recorded")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Parse did not return for folded, unquoted unterminated nesting")
+	}
 }
