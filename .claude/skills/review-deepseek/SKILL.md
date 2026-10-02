@@ -172,3 +172,7 @@ followed by a one-line status. At the end, report:
   tests only with the reason written in the config.
 - **A change to a core API** (the store's writer model) is worth doing early at the operator's
   request, but write the failing concurrency test first against the old API so the gain is shown.
+- **Audit against `docs/STANDARDS.md` section 4a** (failure paths are first-class): for each
+  boundary in a commit ask whether it is bounded in size/count/depth/time, whether anything can
+  block without a deadline, whether a failure can be silent, and whether sender-sized data is
+  streamed through disk. A missing row in its limits table is itself a finding.
