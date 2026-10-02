@@ -50,7 +50,13 @@ type Message struct {
 	Flags          []string
 	InternalDate   time.Time
 	HasAttachments bool
+	// RawBlob holds the original bytes of a message small enough to keep in the
+	// database. A larger one lives on disk instead: RawPath is its file, relative
+	// to the data directory, and RawBlob is empty. Neither is set for a message
+	// that was not downloaded (BodyStatus BodyTooLarge).
 	RawBlob        []byte
+	RawPath        string
+	BodyStatus     string
 	BodyText       string
 	BodyHTML       string
 	ThreadID       string
@@ -61,6 +67,18 @@ type Message struct {
 	DisabledReason string
 	Seen           bool
 }
+
+// Body statuses: whether the mirror holds a parsed body for the message.
+const (
+	// BodyOK means the body was downloaded and parsed (the default).
+	BodyOK = "ok"
+	// BodyTooLarge means the message exceeds the download limit, so only its
+	// envelope is mirrored (STANDARDS.md 4a); the UI offers "open in webmail".
+	BodyTooLarge = "too_large"
+	// BodyUnparsed means the body is on disk or in raw_blob but could not be
+	// read into text; the reasons are in ParseErrors.
+	BodyUnparsed = "unparsed"
+)
 
 // UpsertMessage writes a message keyed by (folder, uid), so re-syncing a folder
 // updates rows in place rather than duplicating them. A reappearing message
@@ -103,6 +121,10 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 	if err != nil {
 		return err
 	}
+	bodyStatus := m.BodyStatus
+	if bodyStatus == "" {
+		bodyStatus = BodyOK
+	}
 
 	_, err = d.Mirror.Write.ExecContext(ctx, `
 		INSERT INTO messages (
@@ -110,8 +132,8 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 			refs, subject, from_json, to_json, cc_json, reply_to_json, delivered_to_json,
 			date, size, flags_json, internaldate, has_attachments, raw_blob, body_text,
 			body_html_sanitized, thread_id, snippet, auth_results, parse_errors,
-			disabled_at, disabled_reason, seen)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			disabled_at, disabled_reason, seen, raw_path, body_status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(folder_id, uid) DO UPDATE SET
 			account_id=excluded.account_id, content_key=excluded.content_key,
 			message_id_hdr=excluded.message_id_hdr, in_reply_to=excluded.in_reply_to,
@@ -123,13 +145,14 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 			raw_blob=excluded.raw_blob, body_text=excluded.body_text,
 			snippet=excluded.snippet, auth_results=excluded.auth_results,
 			parse_errors=excluded.parse_errors, disabled_at=excluded.disabled_at,
-			disabled_reason=excluded.disabled_reason, seen=excluded.seen`,
+			disabled_reason=excluded.disabled_reason, seen=excluded.seen,
+			raw_path=excluded.raw_path, body_status=excluded.body_status`,
 		m.ID, m.AccountID, m.FolderID, m.UID, m.ContentKey, m.MessageID, m.InReplyTo,
 		m.References, m.Subject, from, to, cc, replyTo, deliveredTo,
 		nullableTime(m.Date), m.Size, flags, nullableTime(m.InternalDate),
 		m.HasAttachments, m.RawBlob, m.BodyText, m.BodyHTML, m.ThreadID, m.Snippet,
 		authResults, parseErrors, nullableTime(m.DisabledAt), m.DisabledReason,
-		slices.Contains(m.Flags, `\Seen`),
+		slices.Contains(m.Flags, `\Seen`), nullableString(m.RawPath), bodyStatus,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert message %s: %w", m.ID, err)
@@ -237,7 +260,8 @@ const messageSelect = `
 	       COALESCE(body_text, ''), COALESCE(body_html_sanitized, ''),
 	       COALESCE(thread_id, ''), COALESCE(snippet, ''),
 	       COALESCE(auth_results, ''), COALESCE(parse_errors, ''),
-	       COALESCE(disabled_at, ''), COALESCE(disabled_reason, ''), seen
+	       COALESCE(disabled_at, ''), COALESCE(disabled_reason, ''), seen,
+	       COALESCE(raw_path, ''), body_status
 	FROM messages`
 
 func scanMessage(s scanner) (Message, error) {
@@ -258,7 +282,7 @@ func scanMessage(s scanner) (Message, error) {
 		&date, &size, &flagsJSON, &internalDate, &m.HasAttachments, &m.RawBlob,
 		&m.BodyText, &m.BodyHTML, &m.ThreadID, &m.Snippet,
 		&authResultsJSON, &parseErrorsJSON,
-		&disabledAt, &m.DisabledReason, &m.Seen,
+		&disabledAt, &m.DisabledReason, &m.Seen, &m.RawPath, &m.BodyStatus,
 	)
 	if err != nil {
 		return Message{}, err
@@ -317,6 +341,15 @@ func uidFromDB(v int64) (uint32, error) {
 		return 0, fmt.Errorf("stored uid %d is out of the 32-bit range", v)
 	}
 	return uint32(v), nil //nolint:gosec // G115: range checked above
+}
+
+// nullableString stores NULL for an empty string, so an unset path is not a
+// path of "".
+func nullableString(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func marshalAddress(a Address) (any, error) {

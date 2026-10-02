@@ -38,6 +38,8 @@ func TestMessageRoundTrip(t *testing.T) {
 		InternalDate:   date.Add(time.Minute),
 		HasAttachments: true,
 		RawBlob:        []byte("raw bytes"),
+		RawPath:        "spool/acct-1/folder-1-10.eml",
+		BodyStatus:     BodyTooLarge,
 		BodyText:       "hi",
 		BodyHTML:       "<p>hi</p>",
 		ThreadID:       "thread-1",
@@ -276,5 +278,24 @@ func TestSetDerivedColumnsOnMissingMessage(t *testing.T) {
 	}
 	if err := dbs.SetMessageBodyHTML(ctx, "nope", "<p>"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("SetMessageBodyHTML on a missing id = %v, want ErrNotFound", err)
+	}
+}
+
+// A message nobody set a status on is a normal, fully parsed one.
+func TestBodyStatusDefaultsToOK(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct-1")
+	seedFolder(t, dbs, "acct-1", "folder-1")
+	if err := dbs.UpsertMessage(ctx, Message{ID: "m", AccountID: "acct-1", FolderID: "folder-1", UID: 1, ContentKey: "ck"}); err != nil {
+		t.Fatalf("UpsertMessage: %v", err)
+	}
+	got, err := dbs.GetMessage(ctx, "m")
+	if err != nil {
+		t.Fatalf("GetMessage: %v", err)
+	}
+	if got.BodyStatus != BodyOK || got.RawPath != "" {
+		t.Errorf("BodyStatus = %q, RawPath = %q; want %q and empty", got.BodyStatus, got.RawPath, BodyOK)
 	}
 }

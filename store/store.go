@@ -56,6 +56,9 @@ func (d *DB) Ping(ctx context.Context) error {
 type DBs struct {
 	Mirror *DB
 	State  *DB
+	// Dir is the data directory holding both files, so other packages can place
+	// their own files (the message spool) beside them.
+	Dir string
 }
 
 // Open opens both databases under dir, applying the per-connection pragmas and
@@ -73,7 +76,7 @@ func Open(ctx context.Context, dir string) (*DBs, error) {
 		_ = mirror.Close()
 		return nil, fmt.Errorf("state: %w", err)
 	}
-	return &DBs{Mirror: mirror, State: state}, nil
+	return &DBs{Mirror: mirror, State: state, Dir: dir}, nil
 }
 
 // Close closes both databases, returning the first error.

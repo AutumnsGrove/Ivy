@@ -174,6 +174,16 @@ var mirrorMigrations = []migration{
 			`ALTER TABLE messages ADD COLUMN parse_errors TEXT`,
 		},
 	},
+	{
+		version: 4,
+		statements: []string{
+			// A message above the in-memory limit is spooled to disk and referenced
+			// here, so reading its row never loads the bytes (STANDARDS.md 4a).
+			`ALTER TABLE messages ADD COLUMN raw_path TEXT`,
+			// ok, too_large (not downloaded) or unparsed; see store.BodyOK.
+			`ALTER TABLE messages ADD COLUMN body_status TEXT NOT NULL DEFAULT 'ok'`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.

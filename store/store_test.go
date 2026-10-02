@@ -267,3 +267,17 @@ func TestReadsDoNotWaitForAnOpenWriteTransaction(t *testing.T) {
 		t.Errorf("reader saw %d uncommitted rows", n)
 	}
 }
+
+// Sync spools big messages under the data directory, so the store must say where it is.
+func TestOpenRecordsItsDirectory(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	dbs, err := Open(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer dbs.Close()
+	if dbs.Dir != dir {
+		t.Errorf("Dir = %q, want %q", dbs.Dir, dir)
+	}
+}
