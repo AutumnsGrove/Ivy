@@ -46,8 +46,9 @@ ivy/
   gateway/           HTTP handlers, SSE hub, stats, settings, update endpoints
   update/            ivy update: resolve GHCR digest, signal the host watcher, health check, rollback
   backup/            daily snapshots (15 days) of state.db + disabled blobs, restore
-  web/               SvelteKit app; web/build is produced inside the Docker build and embedded
-                     (go:embed); never committed (a tracked placeholder keeps go build working)
+  web/               SvelteKit app; its build is copied into internal/webui/build by
+                     `make web-assets`, precompressed there and embedded (go:embed); never
+                     committed (a tracked placeholder keeps go build working)
   dev/               fake IMAP/OpenRouter helpers, seed tool, stack launcher
   testdata/          fixtures and corpora
   docs/
@@ -299,8 +300,9 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   no QEMU is needed; only the tiny final stage is per-arch. A GitHub Actions job publishes a
   multi-arch (amd64, arm64) image to GHCR on every push to main, tagged `:latest` and the short
   SHA (rollback by name). The workflow uses only `GITHUB_TOKEN` with `packages: write` and never
-  runs on pull requests. Nothing compiled is committed: `web/build/` is git-ignored apart from a
-  tracked placeholder that keeps `go:embed` and `go build` working from a fresh checkout.
+  runs on pull requests. Nothing compiled is committed: `internal/webui/build/` is git-ignored
+  apart from a tracked placeholder that keeps `go:embed` and `go build` working from a fresh
+  checkout.
 - **`ivy update` (also an in-app button):** resolve the digest of `:latest` on GHCR (waiting out an
   in-progress CI build), hand off to a host-side update watcher (the Polaris design, with a signal
   file), which pulls the image, recreates the container, health-checks it, and rolls back to the

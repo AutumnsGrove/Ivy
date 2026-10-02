@@ -44,6 +44,16 @@ even though WireGuard encrypts the link):**
 - IMAP: use **`COMPRESS=DEFLATE`** when the server advertises it (Purelymail does) to shrink sync
   traffic. Verified against the mail world, which can advertise it too.
 
+**Implemented (2026-10-02, chunk 1g).** `internal/compress` owns the per-request side:
+`Negotiate` (q-values, zstd > brotli > gzip) and a middleware that buffers to `DefaultMinSize`
+(1 KB), then streams through pooled zstd (default), brotli 5 and gzip 6 writers, fixing
+`Content-Encoding`, `Content-Length`, a per-coding ETag suffix and `Vary: Accept-Encoding`, with
+`Flush` for SSE. `internal/asset` owns the build-time side (`Precompress`: brotli 11, zstd best,
+gzip 9) and the serving side (`FileServer`: variant negotiation, immutable caching for
+fingerprinted files, SPA fallback). `internal/webui` embeds `build/`; `make web-assets` builds the
+frontend, copies it in and precompresses it; the gateway mounts it at `/`. Budgets are tests beside
+the middleware (a size-ratio tripwire plus per-coding benchmarks).
+
 ## 2. Frontend load budgets (asserted in CI, after compression)
 
 Initial starting numbers, to tighten once there is something to measure:

@@ -25,7 +25,7 @@ ivy-dev seed --profile ... # (re)generate seed data only
    at mailworld, a dev data dir under `.dev/` (git-ignored) and the clock under dev control.
 3. **Vite dev server** with hot module reload, proxying `/api` and SSE to Ivy, so the CSS/Svelte
    edit-save-see loop is instant. (`--no-web` serves the embedded build instead, to check the real
-   artefact.)
+   artefact; run `make web-assets` first to build and precompress it into the binary.)
 4. A printed URL, plus a QR code for the phone when `--expose` is set.
 
 ## 2. Modes

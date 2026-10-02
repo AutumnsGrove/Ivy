@@ -180,8 +180,8 @@ actually sent:
 
 GitHub Actions: `go vet`, `staticcheck`, `go test -race ./...` (fuzz seed corpora included),
 frontend lint/typecheck/Vitest, Playwright E2E (both viewports), build of the embedded frontend
-built in a scratch directory (nothing under `web/build/` but its placeholder is ever committed; a
-check enforces it) plus codegen drift checks for OpenAPI/sqlc output,
+built in a scratch directory (nothing under `internal/webui/build/` but its placeholder is ever
+committed; a check enforces it) plus codegen drift checks for OpenAPI/sqlc output,
 migration-upgrade tests, license header/AGPL check. Coverage floors on the critical packages
 (sync, sanitize, llm gate, rules, update). Live and eval suites are manual/nightly, never required
 for a merge.

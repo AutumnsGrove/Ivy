@@ -37,7 +37,7 @@ rule from `PLAN.md` section 6: verify before pinning). The constraint: **pure Go
 | Images | stdlib `image/*`, `golang.org/x/image` | Downscale and EXIF strip in pure Go. **HEIC is the open C-free question:** iOS Safari normally hands back JPEG for `accept="image/*"`; verify on the real phone before adding any decoder (a WASM-based one via `wazero` is the pure-Go fallback). |
 | Process mgmt | `golang.org/x/sync/errgroup` | Goroutine ownership and shutdown. |
 | Dev QR | `rsc.io/qr` | `ivy-dev up --expose` prints a scannable terminal QR of the tailnet URL; pure Go, no transitive deps, dev-only. |
-| Frontend embedding | `go:embed` of `web/build` with precompressed variants | Built inside the CI Docker build, never committed (**settled**, round 29). |
+| Frontend embedding | `go:embed` of `internal/webui/build` with precompressed brotli/zstd/gzip variants | Built by `make web-assets` (and inside the CI Docker build), never committed; `internal/webui/build/.gitkeep` is the only committed file there (**settled**, round 29). `cmd/ivy-assets` writes the variants. |
 
 ## Go testing and quality tools
 
@@ -62,7 +62,7 @@ rule from `PLAN.md` section 6: verify before pinning). The constraint: **pure Go
 | E2E / visual / a11y | `@playwright/test`, screenshot diffs, `@axe-core/playwright` |
 | Lint/format | ESLint, Prettier, `svelte-check` |
 | API types | `openapi-typescript` | Generated from `api/openapi.yaml` into `src/lib/api/schema.d.ts`; `src/lib/types.ts` re-exports it |
-| Build | Vite (via SvelteKit); a post-build step precompresses assets (brotli/zstd/gzip) |
+| Build | Vite (via SvelteKit); `make web-assets` copies the output into `internal/webui/build` and `cmd/ivy-assets` precompresses it (brotli 11 / zstd / gzip 9) |
 | Sanitised mail view | Sandboxed iframe fed by server-sanitised HTML (no client sanitiser library) |
 
 Pinned in `web/package.json` (2026-10-02, all dev dependencies; the shipped bundle is Svelte's

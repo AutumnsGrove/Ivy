@@ -30,7 +30,7 @@ module cache, pnpm store and Playwright browsers.
 | `drift` | Regenerates OpenAPI (Go and TS types) and `sqlc` output, fails on any diff |
 | `web` | `pnpm install --frozen-lockfile`, `svelte-check`, ESLint, Prettier, Vitest, build in a scratch dir, compressed-size budgets (`PERFORMANCE.md` 2) |
 | `e2e` | Playwright on WebKit and Chromium against `ivy-dev up --llm fake` (never live), sharded; visual baselines, axe; traces, screenshots and videos uploaded on failure |
-| `guard` | Rejects a PR that adds files under `web/build/` other than the placeholder, gitleaks on the diff, AGPL header check, a check that no test path can reach the live LLM provider |
+| `guard` | Rejects a PR that adds files under `internal/webui/build/` other than the placeholder, gitleaks on the diff, AGPL header check, a check that no test path can reach the live LLM provider |
 | `deps` | `dependency-review-action` (new dependencies: licence must be AGPL-compatible, no known vulnerabilities) |
 | `codeql` | CodeQL for Go and JavaScript/TypeScript (free on public repos), also on a weekly schedule |
 | `bench` | Short benchmarks compared with the base commit via `benchstat` in the same job; advisory (comment only) until numbers are trusted, then a regression tripwire |
