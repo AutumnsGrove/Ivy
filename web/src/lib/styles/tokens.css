@@ -17,6 +17,7 @@
 	--fs-aside: 13px;
 	--fs-ui: 14px;
 	--fs-ui-lg: 14.5px;
+	--fs-input: 15px;
 	--fs-lead: 16px;
 	--fs-title: 26px;
 	--fs-title-lg: 30px;
@@ -30,23 +31,48 @@
 	--sp-4: 4px;
 	--sp-5: 5px;
 	--sp-6: 6px;
+	--sp-7: 7px;
 	--sp-8: 8px;
 	--sp-9: 9px;
 	--sp-10: 10px;
+	--sp-11: 11px;
 	--sp-12: 12px;
+	--sp-13: 13px;
 	--sp-14: 14px;
 	--sp-15: 15px;
 	--sp-16: 16px;
+	--sp-17: 17px;
 	--sp-18: 18px;
 	--sp-19: 19px;
 	--sp-20: 20px;
 	--sp-22: 22px;
 	--sp-24: 24px;
+	--sp-26: 26px;
 	--sp-28: 28px;
+	--sp-30: 30px;
+	--sp-32: 32px;
 	--sp-34: 34px;
+	--sp-36: 36px;
+	--sp-38: 38px;
 	--sp-40: 40px;
+	--sp-42: 42px;
+	--sp-44: 44px;
+	--sp-46: 46px;
+	--sp-48: 48px;
 	--sp-50: 50px;
+	--sp-52: 52px;
+	--sp-54: 54px;
+	--sp-56: 56px;
 	--sp-58: 58px;
+	--sp-62: 62px;
+	--sp-64: 64px;
+	--sp-68: 68px;
+	--sp-72: 72px;
+	--sp-84: 84px;
+	--sp-90: 90px;
+	--sp-110: 110px;
+	--sp-132: 132px;
+	--sp-160: 160px;
 
 	/* effects */
 	--blur-glass: blur(14px) saturate(1.2);
@@ -105,7 +131,12 @@
 	--glass-strong: rgba(10, 22, 19, 0.86);
 	--glass-border: rgba(190, 235, 208, 0.15);
 	--panel: rgba(8, 18, 15, 0.88);
-	--scrim: rgba(2, 6, 5, 0.5);
+	--scrim: rgba(2, 6, 5, 0.55);
+	--wash: rgba(255, 255, 255, 0.08);
+	--wash-soft: rgba(255, 255, 255, 0.04);
+	--handle: rgba(242, 237, 220, 0.25);
+	--toast-bg: rgba(10, 22, 19, 0.92);
+	--shadow-toast: 0 10px 30px rgba(0, 0, 0, 0.35);
 	--firefly: #f7dc92;
 	--firefly-glow: rgba(247, 220, 146, 0.6);
 	--firefly-wash: rgba(247, 220, 146, 0.1);
@@ -118,7 +149,7 @@
 	--danger: #f2957f;
 	--danger-soft: rgba(242, 149, 127, 0.14);
 	--danger-line: rgba(242, 149, 127, 0.42);
-	--ok: #5ad1c8;
+	--ok: #86efac;
 	--warn: #f5c45a;
 	--warn-soft: rgba(245, 196, 90, 0.14);
 	--warn-line: rgba(245, 196, 90, 0.4);
@@ -130,17 +161,17 @@
 	--acct-5: #c9d98a;
 
 	--tag-sky: #7cc4ff;
-	--tag-rose: #f48fb1;
+	--tag-rose: #f0a6ca;
 	--tag-teal: #5ad1c8;
 	--tag-coral: #f2957f;
 	--tag-lilac: #c4b5fd;
-	--tag-mint: #8ee3b0;
+	--tag-mint: #86efac;
 	--tag-gold: #f5c45a;
-	--tag-sand: #d9c7a0;
-	--tag-orchid: #e08fe0;
-	--tag-fern: #9fd37a;
-	--tag-slate: #9fb2c4;
-	--tag-berry: #d96b9a;
+	--tag-sand: #e5d3a8;
+	--tag-orchid: #e9a8f0;
+	--tag-fern: #a3c97a;
+	--tag-slate: #a9b8c6;
+	--tag-berry: #e07a9b;
 
 	--attach-a: linear-gradient(135deg, #3a6b4a 0%, #14301f 55%, #0b1a14 100%);
 	--attach-b: linear-gradient(135deg, #6b5a8a 0%, #2b2347 55%, #120e22 100%);
@@ -157,7 +188,12 @@
 	--glass-strong: rgba(255, 253, 247, 0.92);
 	--glass-border: rgba(61, 41, 20, 0.14);
 	--panel: rgba(255, 253, 247, 0.94);
-	--scrim: rgba(40, 30, 15, 0.25);
+	--scrim: rgba(40, 30, 15, 0.3);
+	--wash: rgba(61, 41, 20, 0.07);
+	--wash-soft: rgba(61, 41, 20, 0.035);
+	--handle: rgba(61, 41, 20, 0.25);
+	--toast-bg: rgba(255, 253, 247, 0.96);
+	--shadow-toast: 0 10px 30px rgba(61, 41, 20, 0.18);
 	--firefly: #c98a12;
 	--firefly-glow: rgba(201, 138, 18, 0.35);
 	--firefly-wash: rgba(201, 138, 18, 0.08);
@@ -170,7 +206,7 @@
 	--danger: #b4432c;
 	--danger-soft: rgba(180, 67, 44, 0.1);
 	--danger-line: rgba(180, 67, 44, 0.35);
-	--ok: #0f766e;
+	--ok: #15803d;
 	--warn: #b45309;
 	--warn-soft: rgba(180, 83, 9, 0.1);
 	--warn-line: rgba(180, 83, 9, 0.35);
@@ -182,17 +218,17 @@
 	--acct-5: #5b7a1c;
 
 	--tag-sky: #1d6fb8;
-	--tag-rose: #b8325f;
+	--tag-rose: #a8326f;
 	--tag-teal: #0f766e;
 	--tag-coral: #b4432c;
 	--tag-lilac: #6d28d9;
 	--tag-mint: #15803d;
 	--tag-gold: #a16207;
-	--tag-sand: #7a6335;
-	--tag-orchid: #a21caf;
-	--tag-fern: #3f7d1f;
-	--tag-slate: #475b70;
-	--tag-berry: #9d174d;
+	--tag-sand: #7a6a3c;
+	--tag-orchid: #86198f;
+	--tag-fern: #3f6212;
+	--tag-slate: #475569;
+	--tag-berry: #9f1239;
 
 	--attach-label: rgba(255, 255, 255, 0.92);
 }
