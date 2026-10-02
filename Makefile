@@ -2,7 +2,7 @@
 GO        ?= go
 GENERATED := api/api.gen.go web/src/lib/api/schema.d.ts
 
-.PHONY: check generate drift fmt vet lint test web-check dev dev-fake web-assets e2e smoke guard golangci
+.PHONY: check generate drift fmt vet lint test web-check dev dev-fake web-assets e2e smoke guard golangci web-budget
 
 # Local dev stack: mailworld + Ivy + Vite against seeded, offline-safe data.
 dev:
@@ -46,6 +46,10 @@ test:
 
 web-check:
 	cd web && pnpm check && pnpm test
+
+# Production build plus the frontend load budgets (PERFORMANCE.md section 2).
+web-budget:
+	cd web && pnpm build && pnpm budget
 
 # Browser end-to-end against Vite + the mock client (playwright.config.ts).
 e2e:

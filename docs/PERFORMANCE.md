@@ -72,6 +72,13 @@ mail world. Route-level code splitting keeps rarely used screens (Settings, Stat
 critical path. `webkit` runs for layout; WebKit throttling is limited, so byte budgets are asserted
 directly and timing budgets on Chromium.
 
+**Implemented (2026-10-02, chunk 1h).** `web/scripts/size-budget.mjs` (run by `make web-budget`,
+and by the `web` CI job after the production build) parses `build/index.html` and asserts the
+brotli size of the critical-path JS (budget 80 KiB, currently ~50) and CSS (budget 20 KiB, currently
+~6), and fails if the shell references a missing asset. The limits were proved failing when lowered.
+Still open: fonts are 303 KiB unsubsetted against the 60 KiB target (and not preloaded), and the
+CDP-throttled timing budgets; both tracked in `next_steps.md`.
+
 ## 3. Backend budgets (benchmarks that fail when exceeded)
 
 Starting targets on the potato with a seeded **100k-message** mailbox (laptop numbers are only a

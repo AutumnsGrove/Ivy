@@ -114,9 +114,8 @@ jobs:
         working-directory: web
       - name: typecheck and unit tests
         run: make web-check
-      - name: production build
-        run: pnpm build
-        working-directory: web
+      - name: production build and load budgets
+        run: make web-budget
 
   e2e:
     name: e2e
