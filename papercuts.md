@@ -365,3 +365,19 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
 - **N12 (open, for chunk 3)** · `sync/spool.go` · spool files are never deleted by sync. When
   chunk 3 disables or expunges a message it must also remove `raw_path`; until then an expunged
   message's file stays on disk (bounded by the 64 MiB cap per message, and the target has 256 GB).
+
+## N12 resolved (and my own guidance corrected)
+
+- **#40 (resolves N12; corrects #39)** · `sync/spool.go`, `store/messages.go`, `next_steps.md` ·
+  **risk, plus an error in my earlier note** · N12 said chunk 3 must delete a spool file when it
+  disables or expunges a message. That was wrong: CLAUDE.md 5 and ARCHITECTURE 9a say disabled
+  mail is kept forever, so a disabled message keeps its file as it keeps its row. The note (and
+  the matching line in `next_steps.md`, which DeepSeek reads) is corrected. The real leaks were
+  smaller: a crash between `CreateTemp` and the rename left a `.spool-*` file forever, and a
+  download whose row never landed left an unowned `.eml`. `sync.SweepSpool` now removes exactly
+  those: files no row owns (`store.SpooledPaths` includes disabled rows) and that are over an
+  hour old, so an in-flight download is never taken; it runs at the start of every `Fetch`.
+  Tests: `TestSweepSpoolRemovesOnlyOrphans` (keeps owned, disabled-owned, in-flight and
+  non-spool files; removes the orphan and the stale temp), `TestSweepSpoolWithNoSpoolIsFine`,
+  `TestFetchSweepsOrphansFirst`, `TestSpooledPathsIncludesDisabledMessages`. The sweep's
+  stub-then-implement red step was observed; `SpooledPaths` and its test were written together.

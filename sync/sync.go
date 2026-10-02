@@ -124,6 +124,10 @@ func NewFetcher(dbs *store.DBs, opts ...Option) *Fetcher {
 // message first. A message the mirror already holds is skipped, so a resumed
 // run never re-downloads and never duplicates.
 func (f *Fetcher) Fetch(ctx context.Context, acct Account) (Result, error) {
+	// Housekeeping first, so leftovers from a crashed run never outlive the next.
+	if _, err := SweepSpool(ctx, f.dbs, f.now()); err != nil {
+		return Result{}, fmt.Errorf("sync account %s: %w", acct.ID, err)
+	}
 	if err := f.ensureAccount(ctx, acct); err != nil {
 		return Result{}, fmt.Errorf("sync account %s: %w", acct.ID, err)
 	}

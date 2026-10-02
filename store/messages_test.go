@@ -299,3 +299,32 @@ func TestBodyStatusDefaultsToOK(t *testing.T) {
 		t.Errorf("BodyStatus = %q, RawPath = %q; want %q and empty", got.BodyStatus, got.RawPath, BodyOK)
 	}
 }
+
+// The sweep that removes orphaned spool files must treat a disabled message's
+// file as owned: nothing is ever erased (CLAUDE.md 5).
+func TestSpooledPathsIncludesDisabledMessages(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct-1")
+	seedFolder(t, dbs, "acct-1", "folder-1")
+	rows := []Message{
+		{ID: "a", UID: 1, RawPath: "spool/folder-1/1.eml"},
+		{ID: "b", UID: 2, RawPath: "spool/folder-1/2.eml", DisabledAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), DisabledReason: "expunged"},
+		{ID: "c", UID: 3}, // in the database, no file
+	}
+	for _, m := range rows {
+		m.AccountID, m.FolderID, m.ContentKey = "acct-1", "folder-1", "ck"+m.ID
+		if err := dbs.UpsertMessage(ctx, m); err != nil {
+			t.Fatalf("UpsertMessage %s: %v", m.ID, err)
+		}
+	}
+
+	got, err := dbs.SpooledPaths(ctx)
+	if err != nil {
+		t.Fatalf("SpooledPaths: %v", err)
+	}
+	if len(got) != 2 || !got["spool/folder-1/1.eml"] || !got["spool/folder-1/2.eml"] {
+		t.Errorf("SpooledPaths = %v, want both files including the disabled message's", got)
+	}
+}

@@ -90,7 +90,9 @@ Mirror tables (`mirror.db`, rebuildable from IMAP):
   small parts in memory and records the rest as `PartInfo`; an attachment is served by
   `mime.CopyPart`, which decodes it from the file straight to the response in a fixed buffer, so
   attachments are never held in memory. The spool is part of the mirror (rebuildable from IMAP,
-  not backed up). `thread_id` and `body_html_sanitized` are written by their own layers
+  not backed up). A disabled message keeps its file like its row; `sync.SweepSpool` removes only
+  files no row owns (crash-leftover temp files, downloads whose row never landed) once they are
+  over an hour old. `thread_id` and `body_html_sanitized` are written by their own layers
   (`SetMessageThread`, `SetMessageBodyHTML`) and are not touched by a re-sync.
 - `threads` (id, account_id, root_message_id, subject_norm, last_date, message_count)
 - `attachments` (id, message_id, filename, mime, size, content_hash, cid, storage_path)

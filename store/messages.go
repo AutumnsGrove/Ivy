@@ -417,3 +417,28 @@ func decodeJSON[T any](raw string, dest *T) error {
 	}
 	return json.Unmarshal([]byte(raw), dest)
 }
+
+// SpooledPaths returns every raw_path the mirror owns, disabled messages
+// included: a message that vanished from the server keeps its file along with its
+// row (nothing is ever erased), so a sweep for orphans must not touch it. Only
+// messages above the in-memory size have a path, so the set stays small.
+func (d *DBs) SpooledPaths(ctx context.Context) (map[string]bool, error) {
+	rows, err := d.Mirror.Read.QueryContext(ctx, `SELECT raw_path FROM messages WHERE raw_path IS NOT NULL`)
+	if err != nil {
+		return nil, fmt.Errorf("spooled paths: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	paths := make(map[string]bool)
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, fmt.Errorf("spooled paths: %w", err)
+		}
+		paths[p] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("spooled paths: %w", err)
+	}
+	return paths, nil
+}

@@ -726,3 +726,104 @@ func TestFetchSpoolPathCannotEscapeTheDataDir(t *testing.T) {
 	}
 	_ = spoolFile(t, dbs, m)
 }
+
+// writeOld writes a file under the spool and backdates it.
+func writeOld(t *testing.T, path string, age time.Duration) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	when := time.Now().Add(-age)
+	if err := os.Chtimes(path, when, when); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// A crash between creating a temp file and renaming it, or a download whose row
+// was never written, leaves a file nothing points at. The sweep removes those,
+// and only those: a file a row owns is kept even when its message is disabled,
+// because nothing is ever erased.
+func TestSweepSpoolRemovesOnlyOrphans(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := newStore(t)
+	seedAccountRow(t, dbs, store.Account{ID: "acct-1", Address: "me@grove.test"})
+	if err := dbs.UpsertFolder(ctx, store.Folder{ID: "f1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox}); err != nil {
+		t.Fatal(err)
+	}
+	spool := filepath.Join(dbs.Dir, "spool", "f1")
+	long := 3 * time.Hour
+
+	owned := filepath.Join(spool, "1.eml")
+	disabled := filepath.Join(spool, "2.eml")
+	orphan := filepath.Join(spool, "3.eml")
+	staleTemp := filepath.Join(spool, ".spool-123456")
+	inFlight := filepath.Join(spool, "4.eml")          // written moments ago, row not stored yet
+	inFlightTemp := filepath.Join(spool, ".spool-999") // a download in progress
+	elsewhere := filepath.Join(dbs.Dir, "mirror-notes.txt")
+	for _, p := range []string{owned, disabled, orphan, staleTemp} {
+		writeOld(t, p, long)
+	}
+	writeOld(t, inFlight, time.Minute)
+	writeOld(t, inFlightTemp, time.Minute)
+	writeOld(t, elsewhere, long)
+
+	for _, m := range []store.Message{
+		{ID: "m1", UID: 1, RawPath: "spool/f1/1.eml"},
+		{ID: "m2", UID: 2, RawPath: "spool/f1/2.eml", DisabledAt: time.Now(), DisabledReason: "expunged"},
+	} {
+		m.AccountID, m.FolderID, m.ContentKey = "acct-1", "f1", "ck"+m.ID
+		if err := dbs.UpsertMessage(ctx, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	removed, err := ivysync.SweepSpool(ctx, dbs, time.Now())
+	if err != nil {
+		t.Fatalf("SweepSpool: %v", err)
+	}
+	if removed != 2 {
+		t.Errorf("removed = %d, want 2 (the orphan and the stale temp file)", removed)
+	}
+	for path, want := range map[string]bool{
+		owned: true, disabled: true, orphan: false, staleTemp: false,
+		inFlight: true, inFlightTemp: true, elsewhere: true,
+	} {
+		if got := exists(path); got != want {
+			t.Errorf("%s exists = %v, want %v", filepath.Base(path), got, want)
+		}
+	}
+}
+
+func TestSweepSpoolWithNoSpoolIsFine(t *testing.T) {
+	t.Parallel()
+	removed, err := ivysync.SweepSpool(context.Background(), newStore(t), time.Now())
+	if err != nil || removed != 0 {
+		t.Errorf("SweepSpool on a fresh store = %d, %v; want 0, nil", removed, err)
+	}
+}
+
+// Fetch sweeps before it downloads, so leftovers never outlive the next run.
+func TestFetchSweepsOrphansFirst(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+	stale := filepath.Join(dbs.Dir, "spool", "gone", ".spool-1")
+	writeOld(t, stale, 5*time.Hour)
+
+	if _, err := ivysync.NewFetcher(dbs).Fetch(context.Background(), accountFor(t, w, "acct-1", "me@grove.test", "secret")); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if exists(stale) {
+		t.Error("a stale spool temp file survived a sync run")
+	}
+}

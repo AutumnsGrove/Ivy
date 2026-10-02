@@ -56,8 +56,10 @@ enforced by tests and CI, not just stated here.
   downloaded (`body_status = too_large`). **2f/2d must use `mime.CopyPart(file, partPath, w)` to
   serve an attachment and `mime.ParseStream` to read a spooled message; never `os.ReadFile` a
   spooled message or read `raw_blob` to render a big one.** `PartInfo.Path` is the part path.
-  Sync never deletes spool files; chunk 3's disable-and-rebuild sweep must remove the file when it
-  disables or expunges a message.
+  **A disabled or server-deleted message keeps its spool file, exactly as it keeps its row**
+  (nothing is ever erased); chunk 3 must not delete `raw_path` when it disables a message.
+  `sync.SweepSpool` (run at the start of every `Fetch`) removes only files no row owns and that
+  are over an hour old: crash-leftover `.spool-*` temp files and downloads whose row never landed.
 - **Derived columns have their own setters.** 2d writes `store.SetMessageBodyHTML`, 2e writes
   `store.SetMessageThread`; `UpsertMessage` never overwrites them after the first insert.
 - **Open items that need a decision** are `N`-numbered in `papercuts.md`: N9 (trusting
