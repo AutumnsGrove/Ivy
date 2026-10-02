@@ -349,10 +349,14 @@ const needsMeV2 = "Would a busy person need to personally read this and respond 
 // against `choice` on the same emails and wording. score is the expected level index (0 to 2).
 func scorecmp() {
 	qs := map[string]any{
-		"needs_me": map[string]any{"type": "score", "instructions": needsMeV2,
-			"criteria": []string{"bulk or automated mail, or a message that needs no response or action", "possibly worth a look, but unclear whether a response or action is needed", "a person is waiting for a reply or action, or a problem or deadline needs the recipient"}},
-		"phishing": map[string]any{"type": "score", "instructions": "Does this email look like phishing or a scam?",
-			"criteria": []string{"no sign of phishing", "some signs of phishing", "clearly a phishing or scam attempt"}},
+		"needs_me": map[string]any{
+			"type": "score", "instructions": needsMeV2,
+			"criteria": []string{"bulk or automated mail, or a message that needs no response or action", "possibly worth a look, but unclear whether a response or action is needed", "a person is waiting for a reply or action, or a problem or deadline needs the recipient"},
+		},
+		"phishing": map[string]any{
+			"type": "score", "instructions": "Does this email look like phishing or a scam?",
+			"criteria": []string{"no sign of phishing", "some signs of phishing", "clearly a phishing or scam attempt"},
+		},
 	}
 	type row struct {
 		e      email

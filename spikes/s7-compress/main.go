@@ -49,8 +49,10 @@ func zs(name string, level zstd.EncoderLevel) codec {
 }
 
 func codecs() []codec {
-	return []codec{gz(1), gz(6), gz(9), br(1), br(4), br(5), br(6), br(9), br(11),
-		zs("fastest", zstd.SpeedFastest), zs("default", zstd.SpeedDefault), zs("better", zstd.SpeedBetterCompression), zs("best", zstd.SpeedBestCompression)}
+	return []codec{
+		gz(1), gz(6), gz(9), br(1), br(4), br(5), br(6), br(9), br(11),
+		zs("fastest", zstd.SpeedFastest), zs("default", zstd.SpeedDefault), zs("better", zstd.SpeedBetterCompression), zs("best", zstd.SpeedBestCompression),
+	}
 }
 
 func main() {

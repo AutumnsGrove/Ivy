@@ -8,6 +8,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	_ "modernc.org/sqlite"
@@ -22,6 +23,9 @@ type DBs struct {
 // Open opens both databases under dir, applying the per-connection pragmas and
 // any pending migrations. Opening an already-current directory is a no-op.
 func Open(dir string) (*DBs, error) {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, fmt.Errorf("create data dir: %w", err)
+	}
 	mirror, err := openDB(filepath.Join(dir, "mirror.db"))
 	if err != nil {
 		return nil, fmt.Errorf("open mirror: %w", err)

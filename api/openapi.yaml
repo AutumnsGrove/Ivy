@@ -1,0 +1,721 @@
+openapi: 3.1.0
+info:
+  title: Ivy API
+  version: 0.0.1
+  description: >
+    The typed contract shared by the Go server and the SvelteKit client
+    (STANDARDS.md section 6). Go and TypeScript code are generated from this
+    file; committed outputs are drift-checked in CI. Only the read surface the
+    frontend already calls is described so far; mutations and SSE event bodies
+    are added per milestone. SSE event shapes are an extension because OpenAPI
+    does not model them natively.
+servers:
+  - url: /api/v1
+paths:
+  /version:
+    get:
+      operationId: getVersion
+      summary: The running build version
+      responses:
+        "200":
+          description: Build info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Version"
+  /health:
+    get:
+      operationId: getLiveness
+      summary: Process and database liveness
+      responses:
+        "200":
+          description: All databases reachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Liveness"
+        "503":
+          description: One or more databases unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Liveness"
+  /accounts:
+    get:
+      operationId: listAccounts
+      summary: Configured accounts
+      responses:
+        "200":
+          description: Accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Account"
+  /inbox:
+    get:
+      operationId: listInbox
+      summary: Inbox summaries, newest first
+      parameters:
+        - name: account_id
+          in: query
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A page of the inbox
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inbox"
+  /messages/{id}:
+    get:
+      operationId: getMessage
+      summary: One message with its sanitized body
+      parameters:
+        - $ref: "#/components/parameters/MessageID"
+      responses:
+        "200":
+          description: The message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MailMessage"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /messages/{id}/summary:
+    get:
+      operationId: getMessageSummary
+      summary: The header alone, for a failed body
+      parameters:
+        - $ref: "#/components/parameters/MessageID"
+      responses:
+        "200":
+          description: The summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MailSummary"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /reading:
+    get:
+      operationId: listReading
+      summary: The Reading feed and its digest
+      responses:
+        "200":
+          description: The feed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadingFeed"
+  /search:
+    get:
+      operationId: search
+      summary: Hybrid keyword plus meaning search
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Ranked hits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResults"
+  /ask:
+    post:
+      operationId: ask
+      summary: Ask Ivy a question about the selected accounts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AskRequest"
+      responses:
+        "200":
+          description: A cited answer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AskAnswer"
+        "429":
+          description: The monthly cap is reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: The provider is unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /tags:
+    get:
+      operationId: listTags
+      summary: User tags and placed tags
+      responses:
+        "200":
+          description: Tags
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagsOverview"
+  /people:
+    get:
+      operationId: listPeople
+      summary: Correspondents derived from the mirror
+      responses:
+        "200":
+          description: People
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Person"
+  /people/{id}:
+    get:
+      operationId: getPerson
+      summary: One correspondent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Person"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /rules:
+    get:
+      operationId: listRules
+      summary: Rules as plain sentences
+      responses:
+        "200":
+          description: Rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Rule"
+  /rules/{id}:
+    get:
+      operationId: getRule
+      summary: One rule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rule"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /checks:
+    get:
+      operationId: listChecks
+      summary: Smart checks
+      responses:
+        "200":
+          description: Checks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Check"
+  /checks/{id}:
+    get:
+      operationId: getCheck
+      summary: One smart check
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The check
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /mirror/health:
+    get:
+      operationId: getMirrorHealth
+      summary: Per-account sync state and index health
+      responses:
+        "200":
+          description: Health overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthOverview"
+components:
+  parameters:
+    MessageID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    NotFound:
+      description: No such resource
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Stable code the UI maps to its own copy
+        message:
+          type: string
+        detail:
+          type: string
+    Version:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: string
+    Liveness:
+      type: object
+      required: [status, version, databases]
+      properties:
+        status:
+          type: string
+          enum: [ok, unavailable]
+        version:
+          type: string
+        databases:
+          type: object
+          additionalProperties:
+            type: string
+    TagColor:
+      type: string
+      enum: [sky, rose, teal, coral, lilac, mint, gold, sand, orchid, fern, slate, berry]
+    AccountSlot:
+      type: integer
+      enum: [1, 2, 3, 4, 5]
+    SyncState:
+      type: string
+      enum: [ok, syncing, auth-failed, unreachable]
+    Account:
+      type: object
+      required: [id, address, short, initial, slot, unread, smart, sync, syncNote]
+      properties:
+        id:
+          type: string
+        address:
+          type: string
+        short:
+          type: string
+        initial:
+          type: string
+        slot:
+          $ref: "#/components/schemas/AccountSlot"
+        unread:
+          type: integer
+        smart:
+          type: boolean
+        sync:
+          $ref: "#/components/schemas/SyncState"
+        syncNote:
+          type: string
+        progress:
+          type: number
+          minimum: 0
+          maximum: 1
+    Attachment:
+      type: object
+      required: [id, name, size, kind]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        size:
+          type: string
+        kind:
+          type: string
+          enum: [image, file]
+        tone:
+          type: string
+          enum: [a, b]
+        failed:
+          type: boolean
+    MailSummary:
+      type: object
+      required: [id, accountId, from, initials, time, subject, preview, unread, needs]
+      properties:
+        id:
+          type: string
+        accountId:
+          type: string
+        from:
+          type: string
+        initials:
+          type: string
+        time:
+          type: string
+        subject:
+          type: string
+        preview:
+          type: string
+        unread:
+          type: boolean
+        needs:
+          type: boolean
+        tag:
+          type: string
+    MailMessage:
+      type: object
+      required:
+        [id, accountId, from, initials, time, subject, preview, unread, needs,
+         toShort, toFull, paragraphs, attachments]
+      properties:
+        id:
+          type: string
+        accountId:
+          type: string
+        from:
+          type: string
+        initials:
+          type: string
+        time:
+          type: string
+        subject:
+          type: string
+        preview:
+          type: string
+        unread:
+          type: boolean
+        needs:
+          type: boolean
+        tag:
+          type: string
+        toShort:
+          type: string
+        toFull:
+          type: string
+        summary:
+          type: string
+        paragraphs:
+          type: array
+          items:
+            type: string
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Attachment"
+    Inbox:
+      type: object
+      required: [items, needCount, unreadCount, readingWaiting]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MailSummary"
+        needCount:
+          type: integer
+        unreadCount:
+          type: integer
+        readingWaiting:
+          type: integer
+        nextCursor:
+          type: string
+    Issue:
+      type: object
+      required: [id, sender, initials, read, title]
+      properties:
+        id:
+          type: string
+        sender:
+          type: string
+        initials:
+          type: string
+        minutes:
+          type: integer
+        read:
+          type: boolean
+        title:
+          type: string
+        blurb:
+          type: string
+    ReadingFeed:
+      type: object
+      required: [digest, issues]
+      properties:
+        digest:
+          type: string
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/Issue"
+    SearchHit:
+      type: object
+      required: [id, accountId, from, time, subject, preview]
+      properties:
+        id:
+          type: string
+        accountId:
+          type: string
+        from:
+          type: string
+        time:
+          type: string
+        subject:
+          type: string
+        preview:
+          type: string
+        hasAttachment:
+          type: boolean
+        tag:
+          type: string
+        semantic:
+          type: boolean
+    SearchResults:
+      type: object
+      required: [query, total, hits]
+      properties:
+        query:
+          type: string
+        total:
+          type: integer
+        hits:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchHit"
+        nextCursor:
+          type: string
+    AskRequest:
+      type: object
+      required: [question]
+      properties:
+        question:
+          type: string
+        accountIds:
+          type: array
+          items:
+            type: string
+    AskStep:
+      type: object
+      required: [kind, text]
+      properties:
+        kind:
+          type: string
+          enum: [search, read, think]
+        text:
+          type: string
+    AskSource:
+      type: object
+      required: [n, subject, meta]
+      properties:
+        n:
+          type: integer
+        subject:
+          type: string
+        meta:
+          type: string
+    AskAnswer:
+      type: object
+      required: [question, steps, answer, sources]
+      properties:
+        question:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/AskStep"
+        answer:
+          type: array
+          items:
+            type: string
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/AskSource"
+    UserTag:
+      type: object
+      required: [id, name, color, count]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          $ref: "#/components/schemas/TagColor"
+        count:
+          type: integer
+    PlacedTag:
+      type: object
+      required: [id, name, count]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        count:
+          type: integer
+    TagsOverview:
+      type: object
+      required: [mine, placed, activeRules]
+      properties:
+        mine:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserTag"
+        placed:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlacedTag"
+        activeRules:
+          type: integer
+    Conversation:
+      type: object
+      required: [id, subject, preview, when]
+      properties:
+        id:
+          type: string
+        subject:
+          type: string
+        preview:
+          type: string
+        when:
+          type: string
+        unread:
+          type: boolean
+    Person:
+      type: object
+      required: [id, name, initials, email, slot, latest, when, writesTo, since, tags, conversations]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        initials:
+          type: string
+        email:
+          type: string
+        slot:
+          $ref: "#/components/schemas/AccountSlot"
+        latest:
+          type: string
+        when:
+          type: string
+        writesTo:
+          type: string
+        since:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        conversations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Conversation"
+    Rule:
+      type: object
+      required: [id, when, then, thenToken, matches, on]
+      properties:
+        id:
+          type: string
+        when:
+          type: string
+        whenToken:
+          type: string
+        whenTail:
+          type: string
+        then:
+          type: string
+        thenToken:
+          type: string
+        thenColor:
+          $ref: "#/components/schemas/TagColor"
+        matches:
+          type: integer
+        on:
+          type: boolean
+    Check:
+      type: object
+      required: [id, name, description, builtIn, on]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        builtIn:
+          type: boolean
+        on:
+          type: boolean
+    CheckDetail:
+      allOf:
+        - $ref: "#/components/schemas/Check"
+        - type: object
+          required: [prompt, sureness, runsOn, usedBy]
+          properties:
+            prompt:
+              type: string
+            sureness:
+              type: string
+              enum: [eager, balanced, careful]
+            runsOn:
+              type: array
+              items:
+                type: string
+            usedBy:
+              type: string
+    HealthOverview:
+      type: object
+      required: [accounts, searchIndex, meaningSearch, storage]
+      properties:
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Account"
+        searchIndex:
+          type: string
+        meaningSearch:
+          type: string
+        storage:
+          type: string
