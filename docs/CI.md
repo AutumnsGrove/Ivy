@@ -1,6 +1,6 @@
 # CI plan
 
-Status: DRAFT (2026-10-01), round 26. GitHub Actions. **Written for a public repository** (the
+Status: DRAFT (2026-10-01), round 26; the Milestone 0 pipeline landed round 31 (see section 0). GitHub Actions. **Written for a public repository** (the
 operator plans to make `AutumnsGrove/Ivy` public), which gives free Actions minutes but also means
 strangers can open PRs and read every workflow, log and doc, so the security rules in section 5 are
 part of the plan, not an afterthought.
@@ -8,6 +8,26 @@ part of the plan, not an afterthought.
 Principles: CI runs exactly what `make check` runs locally (no CI-only magic); every required check
 must have been seen failing once (the red step of TDD applies to CI itself); fast feedback (target
 under 5 minutes for a PR); secrets only reach manual, maintainer-approved workflows.
+
+## 0. Status (2026-10-02, round 31)
+
+`.github/workflows/ci.yml` runs the section 2 jobs the tree supports today, every
+action pinned to a full commit SHA and no job able to read a secret: `go`,
+`nocgo`, `drift`, `web`, `e2e`, `smoke`, `guard`, `deps` and `codeql`.
+`docs.yml` checks local markdown links offline. `guard.sh` is the first three
+`guard` checks and runs as `make guard`; the generated-asset and
+no-live-provider checks were proved failing on deliberately bad input before
+landing. The `smoke` job (`make smoke`) is the day-one gate: the compiled binary
+serving the embedded, precompressed frontend on WebKit phone and Chromium
+desktop, behind mailworld.
+
+Not yet wired, with the reason: the advisory `bench` job waits until the numbers
+are trusted; `nightly.yml` and the manual `live`/`evals` workflows wait for
+protected Environments and credentials; `docker-publish.yml` waits for the
+Dockerfile (chunk 1/3). The AGPL header check exists in `guard.sh` but is gated
+behind `IVY_LICENCE_HEADERS=1` until the sources carry the SPDX line (section
+6). Path filtering, E2E sharding, the frontend byte budgets and visual/axe
+baselines arrive with the layers they measure.
 
 ## 1. Phases
 
@@ -110,8 +130,16 @@ summary, and treat a PR run over 10 minutes as a bug to fix.
 
 ## 8. Definition of done for CI (Milestone 0)
 
-- [ ] Every required check has been seen failing on a purpose-built bad commit, then passing.
-- [ ] `make check` and CI run the same commands.
+- [x] Every required check has been seen failing on a purpose-built bad commit, then passing. —
+      partial: the `guard` checks were probed with bad input (round 31); the `go`, `web`, `drift`,
+      `nocgo`, `e2e` and `smoke` jobs are the existing test suites, run through `make`, seen red
+      during their own TDD. GitHub cannot execute workflows locally, so the first real run is the
+      first push.
+- [x] `make check` and CI run the same commands. — CI composes the same `make` targets; `make drift`,
+      `web-check`, `e2e` and `smoke` are all available locally.
 - [ ] The image publish workflow works once end to end, and the board pulls and runs the arm64 image.
-- [ ] Section 5 rules are in place and verified from a fork (no secrets reachable).
-- [ ] Nightly and manual workflows run green once.
+      — waits for the Dockerfile (chunk 1/3).
+- [ ] Section 5 rules are in place and verified from a fork (no secrets reachable). — the workflows
+      are written to the rules (pinned SHAs, read-only permissions, no fork secrets); the GitHub
+      settings and a fork test are the operator's checklist in section 6.
+- [ ] Nightly and manual workflows run green once. — not written yet (section 0).
