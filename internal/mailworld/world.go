@@ -19,11 +19,12 @@ import (
 
 // World owns the fake servers, the accounts and the injected faults.
 type World struct {
-	imapAddr string
-	ln       net.Listener
-	srv      *imapserver.Server
-	mem      *imapmemserver.Server
-	clock    *Clock
+	imapAddr  string
+	ln        net.Listener
+	srv       *imapserver.Server
+	mem       *imapmemserver.Server
+	clock     *Clock
+	condStore bool
 
 	mu       sync.Mutex
 	faults   []Fault
@@ -33,9 +34,10 @@ type World struct {
 // New starts the fake IMAP server on a random loopback port. Close releases it.
 func New(opts ...Option) (*World, error) {
 	w := &World{
-		mem:      imapmemserver.New(),
-		clock:    newClock(),
-		accounts: make(map[string]*Account),
+		mem:       imapmemserver.New(),
+		clock:     newClock(),
+		condStore: true,
+		accounts:  make(map[string]*Account),
 	}
 	for _, opt := range opts {
 		opt(w)
@@ -49,7 +51,7 @@ func New(opts ...Option) (*World, error) {
 			}
 			return sess, nil, nil
 		},
-		Caps:         imapCapabilities(),
+		Caps:         imapCapabilities(w.condStore),
 		InsecureAuth: true,
 		Logger:       log.New(io.Discard, "", 0),
 	})
@@ -66,6 +68,12 @@ func New(opts ...Option) (*World, error) {
 
 // Option customises a World.
 type Option func(*World)
+
+// WithoutCondStore removes the CONDSTORE/QRESYNC capabilities and behaviour,
+// so tests can exercise Ivy's fallback to UID/flags comparison.
+func WithoutCondStore() Option {
+	return func(w *World) { w.condStore = false }
+}
 
 // IMAPAddr is the host:port the fake IMAP server listens on.
 func (w *World) IMAPAddr() string { return w.imapAddr }
@@ -147,8 +155,8 @@ type authFailSession struct{ imapserver.Session }
 
 func (authFailSession) Login(string, string) error { return imapserver.ErrAuthFailed }
 
-func imapCapabilities() imap.CapSet {
-	return imap.CapSet{
+func imapCapabilities(condStore bool) imap.CapSet {
+	caps := imap.CapSet{
 		imap.CapIMAP4rev1:   {},
 		imap.CapIdle:        {},
 		imap.CapUIDPlus:     {},
@@ -162,4 +170,9 @@ func imapCapabilities() imap.CapSet {
 		imap.CapMove:        {},
 		imap.CapChildren:    {},
 	}
+	if condStore {
+		caps[imap.CapCondStore] = struct{}{}
+		caps[imap.CapQResync] = struct{}{}
+	}
+	return caps
 }

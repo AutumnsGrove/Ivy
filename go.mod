@@ -53,3 +53,7 @@ tool (
 	honnef.co/go/tools/cmd/staticcheck
 	mvdan.cc/gofumpt
 )
+
+// Fork of go-imap v2 (upstream PR #756) adding server-side CONDSTORE/QRESYNC.
+// See docs/STACK.md and next_steps.md; retire when #756 lands upstream.
+replace github.com/emersion/go-imap/v2 => github.com/AutumnsGrove/go-imap/v2 v2.0.0-beta.8-ivy.2

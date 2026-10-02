@@ -639,3 +639,25 @@ repeated text gives an identical vector; 6 of 6 sanity queries had their answer 
 same as `bge-m3` (a small test, not a quality ranking); a 28,001-token input was accepted (the
 behaviour past 32k was not tested). The synthetic S10 databases (about 600 MB, `.dev/s10`) were
 deleted at the operator's request.
+
+## Round 31 — pin go-imap/v2 to a fork for server-side CONDSTORE/QRESYNC (2026-10-02)
+
+Chunk 1b needed mailworld to serve CONDSTORE/QRESYNC so Ivy's sync path can be tested offline.
+Reading `go-imap/v2@v2.0.0-beta.8` showed the gap is structural: `imapserver` parses the wire
+protocol itself and has no CONDSTORE/QRESYNC cases, and its parser is built on the unexported
+`internal/imapwire`, so the module cannot be extended from outside. The client side is better:
+it has CONDSTORE (`MODSEQ`, `CHANGEDSINCE`, `HIGHESTMODSEQ`, `UNCHANGEDSINCE`) but no QRESYNC.
+
+Operator first approved vendoring a fork into the repo, then asked why we were copying code in and
+whether a third-party module could not be used. Findings: upstream has 40 open PRs and 79 open
+issues; **PR #756** (`parisxmas`, May 2026, one commit, +574/−14, mergeable) already implements
+server-side CONDSTORE + QRESYNC plus the client pieces and cherry-picks cleanly onto beta.8, while
+a competing PR #690 has sat since Jun 2025 and now conflicts. Upstream review is not a reliable
+timeline.
+
+**Settled (operator):** do not vendor and do not block on upstream. Fork `emersion/go-imap` to
+`github.com/AutumnsGrove/go-imap`, branch `ivy-beta8-condstore`, tag `v2.0.0-beta.8-ivy.N`, and pin
+Ivy with a `replace` in `go.mod`. The fork is beta.8 + a cherry-pick of #756 + a modseq backend for
+`imapmemserver` (mailworld's `Account.Deliver` mutates the memory store directly, so the backend is
+where modseq must live). Retire the fork when #756 lands upstream. Nothing is vendored into this
+repo. Recorded in `docs/STACK.md`, `next_steps.md`.

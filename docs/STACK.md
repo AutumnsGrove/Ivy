@@ -26,7 +26,7 @@ rule from `PLAN.md` section 6: verify before pinning). The constraint: **pure Go
 | SQLite | `modernc.org/sqlite` (**settled**) | Pure Go, WAL, FTS5 (verify). Plain `database/sql`; hand-rolled positional migrations. |
 | SQL typing | `sqlc` (proposal) | Generates typed Go from `.sql` files, build-time tool only, no runtime dependency. See qa-log round 21. |
 | API contract | `github.com/oapi-codegen/oapi-codegen/v2` (Go types) + `openapi-typescript` (TS types) | `api/openapi.yaml` is the contract; both outputs are committed and `make drift` fails when stale (`STANDARDS.md` 6). Build-time `go tool` only. |
-| IMAP client | `emersion/go-imap/v2` (beta; verify API) | Has CONDSTORE/QRESYNC/IDLE/MOVE. **Test server:** its `imapserver` + `imapmemserver`. Wrapped in our `imap/` package. |
+| IMAP client + test server | `emersion/go-imap/v2`, **pinned to our fork** `github.com/AutumnsGrove/go-imap/v2` at `v2.0.0-beta.8-ivy.N` via a `replace` in `go.mod` | Client has CONDSTORE/QRESYNC/IDLE/MOVE. Upstream `imapserver` has no server-side CONDSTORE/QRESYNC and its wire parser is an `internal` package, so it cannot be extended from outside; the fork is beta.8 + upstream PR #756 (framework + client) + a modseq backend for `imapmemserver`. Nothing is vendored into this repo; retire the fork when #756 lands upstream. Wrapped in our `imap/` package. |
 | SMTP / SASL | `emersion/go-smtp`, `emersion/go-sasl` | Client for sending; server for the mail world. |
 | MIME parse/build | `jhillyerd/enmime` (**settled**) | Parse and build. Plus `emersion/go-message` where lower-level access is needed. |
 | HTML sanitise | `microcosm-cc/bluemonday` (**settled**) | Strict policy; `golang.org/x/net/html` for text extraction/tokenising. |
@@ -82,8 +82,10 @@ Anything else is justified here with its compressed size.
 
 ## Open verifications (each becomes a spike or a pinned fact)
 
-1. go-imap v2 beta API stability for QRESYNC and IDLE, and that `imapmemserver` supports enough
-   (CONDSTORE/QRESYNC/MOVE) to test sync; if not, extend it in `mailworld`.
+1. ~~go-imap v2 beta API stability for QRESYNC and IDLE, and that `imapmemserver` supports enough
+   (CONDSTORE/QRESYNC/MOVE) to test sync.~~ Done (S2 + round 31): upstream's server lacks it and
+   cannot be extended, so `go-imap/v2` is pinned to our fork (see the IMAP row above); mailworld
+   supplies the modseq backend.
 2. ~~`modernc.org/sqlite` FTS5 availability, `go build` time and peak RAM on the potato.~~ Done
    (S3): FTS5 works; a cold build peaks near 730 MiB, so it is cross-compiled in CI.
 3. Safari zstd `Content-Encoding` support on the operator's iOS/iPadOS versions (brotli is the
