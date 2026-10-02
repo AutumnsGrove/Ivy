@@ -203,13 +203,30 @@ func TestSeedCommandPrintsResult(t *testing.T) {
 	}
 }
 
-func TestResetCommandRemovesDevDir(t *testing.T) {
+func TestResetCommandRemovesBuiltState(t *testing.T) {
 	_, root := prepared(t)
 	if _, err := runCLI(t, root, "reset"); err != nil {
 		t.Fatalf("reset: %v", err)
 	}
-	if _, err := os.Stat(devstack.DevDir(root)); !os.IsNotExist(err) {
-		t.Fatalf("dev dir survived reset: %v", err)
+	if _, err := os.Stat(devstack.DataDir(root)); !os.IsNotExist(err) {
+		t.Fatalf("data dir survived reset: %v", err)
+	}
+}
+
+func TestSnapshotCommands(t *testing.T) {
+	_, root := prepared(t)
+	if _, err := runCLI(t, root, "snapshot", "save", "nightly"); err != nil {
+		t.Fatalf("snapshot save: %v", err)
+	}
+	out, err := runCLI(t, root, "snapshot", "list")
+	if err != nil {
+		t.Fatalf("snapshot list: %v", err)
+	}
+	if !strings.Contains(out, "nightly") {
+		t.Fatalf("snapshot list = %q", out)
+	}
+	if _, err := runCLI(t, root, "snapshot", "restore", "nightly"); err != nil {
+		t.Fatalf("snapshot restore: %v", err)
 	}
 }
 

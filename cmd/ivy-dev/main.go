@@ -45,6 +45,7 @@ func newRootCommand() *cobra.Command {
 		upCmd(&root),
 		seedCmd(&root),
 		resetCmd(&root),
+		snapshotCmd(&root),
 		deliverCmd(&root),
 		flagCmd(&root),
 		moveCmd(&root),
@@ -66,6 +67,7 @@ func upCmd(root *string) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts.Root = *root
+			applyRecipe(cmd, &opts)
 			return runUp(cmd, opts, noWeb)
 		},
 	}
@@ -196,19 +198,99 @@ func seedCmd(root *string) *cobra.Command {
 	return cmd
 }
 
+// applyRecipe folds a recorded snapshot into the flags the user did not set,
+// so `snapshot restore` followed by `up` reproduces that mailbox.
+func applyRecipe(cmd *cobra.Command, opts *devstack.Options) {
+	r, err := devstack.LoadRecipe(opts.Root)
+	if err != nil {
+		return
+	}
+	f := cmd.Flags()
+	if !f.Changed("profile") {
+		opts.Profile = r.Profile
+	}
+	if !f.Changed("seed") {
+		opts.Seed = r.Seed
+	}
+	if !f.Changed("mode") {
+		opts.Mode = r.Mode
+	}
+	if !f.Changed("llm") {
+		opts.LLM = r.LLM
+	}
+	if !f.Changed("accounts") {
+		opts.Accounts = r.Accounts
+	}
+	if !f.Changed("pair") {
+		opts.Pair = r.Pair
+	}
+	if !f.Changed("llm-cap") {
+		opts.LLMCap = r.LLMCap
+	}
+}
+
 func resetCmd(root *string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "reset",
-		Short: "Throw away the dev state under .dev/",
+		Short: "Throw away the built dev state (snapshots and the recipe stay)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := devstack.Reset(*root); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "reset %s\n", devstack.DevDir(*root))
+			fmt.Fprintf(cmd.OutOrStdout(), "reset built state under %s\n", devstack.DevDir(*root))
 			return nil
 		},
 	}
+}
+
+func snapshotCmd(root *string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "snapshot",
+		Short: "Save, restore or list the stack's launch recipe",
+	}
+	cmd.AddCommand(&cobra.Command{
+		Use:   "save <name>",
+		Short: "Record the current launch recipe",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := devstack.SaveSnapshot(*root, args[0]); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "saved %s\n", args[0])
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "restore <name>",
+		Short: "Make a snapshot the current recipe",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			r, err := devstack.RestoreSnapshot(*root, args[0])
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "restored %s (profile %s seed %d hash %s)\n",
+				args[0], r.Profile, r.Seed, shortHash(r.Hash))
+			return nil
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List saved snapshots",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			names, err := devstack.Snapshots(*root)
+			if err != nil {
+				return err
+			}
+			for _, name := range names {
+				fmt.Fprintln(cmd.OutOrStdout(), name)
+			}
+			return nil
+		},
+	})
+	return cmd
 }
 
 func control(root string) (*devstack.Client, error) {

@@ -115,8 +115,8 @@ func TestResetRemovesDevState(t *testing.T) {
 	if err := devstack.Reset(opts.Root); err != nil {
 		t.Fatalf("Reset: %v", err)
 	}
-	if _, err := os.Stat(devstack.DevDir(opts.Root)); !os.IsNotExist(err) {
-		t.Fatalf("dev dir survived Reset: %v", err)
+	if _, err := os.Stat(devstack.DataDir(opts.Root)); !os.IsNotExist(err) {
+		t.Fatalf("data dir survived Reset: %v", err)
 	}
 }
 

@@ -67,6 +67,21 @@ func Prepare(opts Options) (*Stack, error) {
 		_ = w.Close()
 		return nil, err
 	}
+	recipe := Recipe{
+		Profile:  opts.Profile,
+		Seed:     opts.Seed,
+		Mode:     opts.Mode,
+		LLM:      opts.LLM,
+		Accounts: opts.Accounts,
+		Pair:     opts.Pair,
+		LLMCap:   opts.LLMCap,
+		Hash:     res.Hash,
+	}
+	if err := writeRecipe(RecipePath(opts.Root), recipe); err != nil {
+		_ = srv.Close()
+		_ = w.Close()
+		return nil, err
+	}
 	return &Stack{World: w, Config: cfg, Seed: res, Root: opts.Root, control: srv}, nil
 }
 
@@ -85,11 +100,14 @@ func (s *Stack) Close() error {
 	return errors.Join(s.control.Close(), s.World.Close())
 }
 
-// Reset removes every dev artefact under root, the "throw it away" half of
-// ivy-dev reset.
+// Reset removes the built dev state (databases, config and control socket) but
+// keeps the recipe and snapshots, so a restore or the next up rebuilds from
+// the same seed in seconds (DEV.md section 8).
 func Reset(root string) error {
-	if err := os.RemoveAll(DevDir(root)); err != nil {
-		return fmt.Errorf("devstack: reset %s: %w", DevDir(root), err)
+	for _, path := range []string{DataDir(root), ConfigPath(root), ControlPath(root)} {
+		if err := os.RemoveAll(path); err != nil {
+			return fmt.Errorf("devstack: reset %s: %w", path, err)
+		}
 	}
 	return nil
 }
