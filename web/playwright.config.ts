@@ -5,6 +5,9 @@ const PORT = 4173;
 
 export default defineConfig({
 	testDir: 'e2e',
+	// smoke.spec.ts runs the real binary through playwright.smoke.config.ts, not
+	// against this Vite + mock server.
+	testIgnore: ['smoke.spec.ts'],
 	fullyParallel: true,
 	reporter: 'list',
 	use: { baseURL: `http://localhost:${PORT}`, trace: 'retain-on-failure' },
