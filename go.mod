@@ -3,14 +3,17 @@ module github.com/AutumnsGrove/Ivy
 go 1.26.1
 
 require (
+	github.com/andybalholm/brotli v1.2.6
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6
 	github.com/emersion/go-smtp v0.25.0
 	github.com/goccy/go-yaml v1.19.2
 	github.com/joho/godotenv v1.5.1
+	github.com/klauspost/compress v1.20.1
 	github.com/spf13/cobra v1.10.2
 	go.uber.org/goleak v1.3.0
 	modernc.org/sqlite v1.60.1
+	rsc.io/qr v0.2.0
 )
 
 require (
@@ -47,7 +50,6 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 	mvdan.cc/gofumpt v0.12.0 // indirect
-	rsc.io/qr v0.2.0 // indirect
 )
 
 tool (
