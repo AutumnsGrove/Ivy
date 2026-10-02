@@ -91,9 +91,6 @@ func TestSupervisorRestartsOnGoChange(t *testing.T) {
 	go func() { done <- sup.Run(ctx) }()
 
 	waitFor(t, "first start", func() bool { return startsCount(&mu, &starts) == 1 })
-	// Let the supervisor capture its baseline before editing, or the change is
-	// absorbed into it.
-	time.Sleep(3 * sup.PollInterval)
 	if err := os.WriteFile(file, []byte("package main\n// changed\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

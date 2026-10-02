@@ -153,3 +153,22 @@ followed by a one-line status. At the end, report:
   involving goroutines.
 - Do not let a green suite end the review of a file: several defects here (never-healing fault,
   vacuous budget, stale precompressed siblings) passed every existing test.
+
+## Added after the first audit
+
+- **Run the project's own whole gate at the end**: `make check`, the documented linter set at
+  the CI-pinned version, `govulncheck` on the newest patch toolchain
+  (`GOTOOLCHAIN=go1.26.N go run golang.org/x/vuln/cmd/govulncheck@<pin> ./...`; older patches
+  report stdlib CVEs that are not the code's), and a smoke run of the real binary.
+- **Measure growth, not one point**, when a parser looks slow: run depths or sizes
+  1, 4, 8, 12, 16, 20 with a hard `timeout`. Super-linear growth is the finding.
+- **A fuzz target without a time bound cannot find a denial of service.** Add a duration
+  assertion and seed the shape you just found.
+- **Generated files**: regenerate with the tool, then diff. If your local tool version rewrites
+  unrelated metadata (pnpm's `libc:` selectors), restore it before committing; never hand-merge
+  a patch into a lockfile, verify with a frozen install.
+- **Lint staging**: change the config first and list every finding; fix real defects at the
+  source, keep `//nolint` for deliberate code with a same-line reason, and exclude a linter for
+  tests only with the reason written in the config.
+- **A change to a core API** (the store's writer model) is worth doing early at the operator's
+  request, but write the failing concurrency test first against the old API so the gain is shown.

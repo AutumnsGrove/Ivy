@@ -311,3 +311,6 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   fetched at or above the patched version everywhere. `golangci-lint` v2.12.1, vet, staticcheck,
   the race suite and `make drift` were re-run on it. **Operator note:** this will need a bump
   every time `govulncheck` reports a newer stdlib fix; consider a scheduled job that opens that PR.
+- **#37** · `a49bfb`-era test · `internal/devstack/supervisor_test.go` · **nit** · a
+  `time.Sleep(3 * PollInterval)` existed only to dodge the baseline race fixed in #15; removed.
+  Ten repeated `-race` runs of the supervisor tests pass.
