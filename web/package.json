@@ -11,6 +11,8 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "vitest run",
+		"e2e": "playwright test",
+		"smoke": "playwright test --config playwright.smoke.config.ts",
 		"lint": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings"
 	},
 	"devDependencies": {

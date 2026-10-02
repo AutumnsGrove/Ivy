@@ -2,7 +2,7 @@
 GO        ?= go
 GENERATED := api/api.gen.go web/src/lib/api/schema.d.ts
 
-.PHONY: check generate drift fmt vet lint test web-check dev dev-fake web-assets
+.PHONY: check generate drift fmt vet lint test web-check dev dev-fake web-assets e2e smoke guard
 
 # Local dev stack: mailworld + Ivy + Vite against seeded, offline-safe data.
 dev:
@@ -41,6 +41,20 @@ test:
 
 web-check:
 	cd web && pnpm check && pnpm test
+
+# Browser end-to-end against Vite + the mock client (playwright.config.ts).
+e2e:
+	cd web && pnpm exec playwright test
+
+# The day-one smoke slice against the real binary serving the embedded build
+# (playwright.smoke.config.ts). Builds the frontend first, like the image does.
+smoke: web-assets
+	cd web && pnpm exec playwright test --config playwright.smoke.config.ts
+
+# Repo hygiene checks CI also runs: no generated assets committed, AGPL headers,
+# and no test that could reach a live provider (CI.md section 2).
+guard:
+	bash .github/scripts/guard.sh
 
 # Build the frontend into the embed directory and precompress it (brotli 11,
 # zstd, gzip 9). The generated files are git-ignored; only the placeholder is
