@@ -30,7 +30,7 @@ module cache, pnpm store and Playwright browsers.
 | `drift` | Regenerates OpenAPI (Go and TS types) and `sqlc` output, fails on any diff |
 | `web` | `pnpm install --frozen-lockfile`, `svelte-check`, ESLint, Prettier, Vitest, build in a scratch dir, compressed-size budgets (`PERFORMANCE.md` 2) |
 | `e2e` | Playwright on WebKit and Chromium against `ivy-dev up --llm fake` (never live), sharded; visual baselines, axe; traces, screenshots and videos uploaded on failure |
-| `guard` | Rejects a PR that touches `web/build/` (only the CI bot may), gitleaks on the diff, AGPL header check, a check that no test path can reach the live LLM provider |
+| `guard` | Rejects a PR that adds files under `web/build/` other than the placeholder, gitleaks on the diff, AGPL header check, a check that no test path can reach the live LLM provider |
 | `deps` | `dependency-review-action` (new dependencies: licence must be AGPL-compatible, no known vulnerabilities) |
 | `codeql` | CodeQL for Go and JavaScript/TypeScript (free on public repos), also on a weekly schedule |
 | `bench` | Short benchmarks compared with the base commit via `benchstat` in the same job; advisory (comment only) until numbers are trusted, then a regression tripwire |
@@ -38,13 +38,15 @@ module cache, pnpm store and Playwright browsers.
 Required status checks on main (ruleset): `go`, `nocgo`, `drift`, `web`, `e2e`, `guard`, `deps`,
 `codeql`. `bench` stays advisory.
 
-## 3. On merge to main (`web-build.yml`)
+## 3. On merge to main (`docker-publish.yml`)
 
-Builds the frontend deterministically (pinned Node and pnpm, lockfile), precompresses assets
-(brotli, zstd, gzip), and the bot commits `web/build/` to main with `[skip ci]` (loop-free: the job
-ignores pushes authored by the bot). It runs only on `push` to main, with `contents: write` for
-that single job and nothing else. Needs a ruleset bypass for the bot actor. Spike S9 proves it
-before it is relied on. The Go binary is never built or published by CI (the potato builds it).
+Builds the multi-arch image (amd64, arm64) from the multi-stage `Dockerfile` (frontend with pinned
+Node and pnpm, precompressed assets, and the pure-Go binary cross-compiled, all pinned to
+`$BUILDPLATFORM` so only the final stage is per-arch) and pushes it to GHCR as `:latest` and the
+short SHA. It runs only on `push` to main, with `contents: read` and `packages: write` and nothing
+else, uses the GHA build cache, and queues instead of cancelling so a push is never interrupted
+(an interrupted push can leave a partial manifest). No repository write access, no bot commits, no
+ruleset bypass. The target pulls the image; it compiles nothing. Modelled on Polaris's workflow.
 
 ## 4. Nightly, manual and local
 
@@ -110,6 +112,6 @@ summary, and treat a PR run over 10 minutes as a bug to fix.
 
 - [ ] Every required check has been seen failing on a purpose-built bad commit, then passing.
 - [ ] `make check` and CI run the same commands.
-- [ ] The bot commit workflow works once end to end and cannot loop.
+- [ ] The image publish workflow works once end to end, and the board pulls and runs the arm64 image.
 - [ ] Section 5 rules are in place and verified from a fork (no secrets reachable).
 - [ ] Nightly and manual workflows run green once.

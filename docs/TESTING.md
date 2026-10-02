@@ -139,8 +139,9 @@ actually sent:
   pruned by age, and restore from any kept snapshot round-trips.
 - **Backup/restore:** snapshot of locally owned state, restore into a fresh instance, mirror
   rebuilds from IMAP, round-trip equality of tags/rules/settings/snooze.
-- **`ivy update`:** temp git repos simulate: clean fast-forward; diverged checkout (refuses);
-  failed build (old binary keeps running); failed health check (rolls back); in-app button path.
+- **`ivy update`:** a fake registry and watcher simulate: new digest (pulls and swaps); same digest
+  (no-op); CI build still in progress (waits); failed pull (old container keeps running); failed
+  health check (rolls back to the previous digest); in-app button path.
 - **Config:** every setting has a default test, an invalid-value test and a hot-reload test.
 
 ## 7. Live and performance verification
@@ -169,8 +170,8 @@ actually sent:
 
 GitHub Actions: `go vet`, `staticcheck`, `go test -race ./...` (fuzz seed corpora included),
 frontend lint/typecheck/Vitest, Playwright E2E (both viewports), build of the embedded frontend
-built in a scratch directory (PRs must not touch the committed `web/build/`, which only the CI bot
-writes on merge to main; a check enforces it) plus codegen drift checks for OpenAPI/sqlc output,
+built in a scratch directory (nothing under `web/build/` but its placeholder is ever committed; a
+check enforces it) plus codegen drift checks for OpenAPI/sqlc output,
 migration-upgrade tests, license header/AGPL check. Coverage floors on the critical packages
 (sync, sanitize, llm gate, rules, update). Live and eval suites are manual/nightly, never required
 for a merge.

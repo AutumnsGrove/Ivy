@@ -174,9 +174,9 @@ it public is the operator's call. License **AGPL-3.0**.
 Go backend; **pure-Go SQLite** (WAL, FTS5; D1-friendly SQL); SvelteKit (`adapter-static`, Svelte 5,
 pnpm) with **pure CSS, no Tailwind** and vendored Grove design tokens; enmime for MIME; go-imap v2
 for IMAP (verify the v2 API); bluemonday for sanitizing; Ollama for embeddings; OpenRouter for Jev
-(`/systemone`), chat and vision. Bare-metal deployment: the potato builds the binary, the frontend
-build output is built by GitHub Actions on merge to main (bot commit) and embedded, `ivy update` (also an in-app button). Docker is a maybe-later
-path. Access control (passkeys / Face ID, password fallback) is later; Tailscale-only for now.
+(`/systemone`), chat and vision. Deployment: GitHub Actions builds a multi-arch container image
+(frontend and Go binary) on merge to main and publishes it to GHCR; the potato only pulls it, via a
+host-side update watcher (`ivy update`, also an in-app button). Access control (passkeys / Face ID, password fallback) is later; Tailscale-only for now.
 Raw RFC 822 messages are stored so everything derived can be rebuilt and exported.
 
 ## 5. Milestones (order settled: read -> sync -> triage -> send)
@@ -224,7 +224,7 @@ E2E on both viewports + a live check on the dev mailbox/potato).
 | Vision: do scanned PDFs go straight to a model? default cheap multimodal model | 3 | Pure Go cannot rasterize PDFs |
 | HTML sanitization edge cases and tracker coverage | 1 | Fuzz + XSS corpus + browser checks |
 | Prompt injection via email into stage 2 / ask / vision | 3 | Gate, tripwire, plain-text output, tests |
-| Update flow: build RAM peak, diverged checkout, rollback | 2 | `ivy update` tests with temp repos |
+| Update flow: digest resolve, CI race, health check, rollback | 2 | `ivy update` tests with a fake registry and watcher |
 | Committed frontend build output bloats git history | all | Accepted; CI builds it on merge to main, PRs never touch it (round 24). No compiled Go binary is ever committed or released (round 25) |
 | go-imap v2 API vs the v1 snippet seen in the original thread | 1 | Verify before pinning |
 | Locally owned state (and disabled mail) lost if the potato's storage dies | 2 | Rolling backups, 2/day for 30 days, off-device target recommended (settled) |
@@ -243,9 +243,9 @@ E2E on both viewports + a live check on the dev mailbox/potato).
   deleted; never purged automatically; restorable; included in backups.
 - **Rolling backups:** twice a day, keep 30 days (about 60), prune older; floor of 10 newest.
 - **Disk is not a concern** (256 GB): no storage budget or eviction.
-- **Frontend artifacts are generated in GitHub Actions** (bot commit on merge to main); the potato
-  never builds the frontend. **The potato builds the Go binary itself** (round 25): nothing compiled
-  is committed or released, so no storage is wasted on binaries.
+- **Everything is compiled in GitHub Actions** and shipped as a container image (round 29); the
+  potato builds nothing (a cold Go build there exhausts swap, spike S3). Nothing compiled is
+  committed to the repo.
 
 ## 7. Open items for the operator
 

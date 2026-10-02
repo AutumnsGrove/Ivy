@@ -585,3 +585,25 @@ unless `cookie` is a direct devDependency (fixed); `error()` now takes `(status,
 proposed prompt. Cut out to a transparent squircle, plus an opaque full-bleed version for iOS;
 favicon, touch icon, manifest and in-app logo derived from it (`docs/design/brand/README.md`). It
 replaces the Lucide sprout in the rail and welcome screen and SvelteKit's default favicon.
+
+## Round 29 — CI-built container image replaces building on the potato (2026-10-02)
+
+Spikes S2 and S3 ran (`docs/spikes/`). S2: `imapmemserver` covers APPEND, flags and keywords, MOVE,
+UID EXPUNGE and IDLE but has no CONDSTORE/QRESYNC, so `mailworld` adds those only if S1 shows the
+real server offers them. S3: FTS5 works, but a cold `go build` of `modernc.org/sqlite` on the potato
+takes 154 to 190 s, peaks near 730 MiB and exhausts swap beside the live services (a GC-limited
+build was 249 s and 477 MiB). That contradicts the round 25 assumption that the potato can build
+the binary comfortably.
+
+Operator, shown how the sibling project Polaris ships (multi-arch image to GHCR from Actions, a
+host-side update watcher on the target): **do that.** Settled: a multi-stage Dockerfile builds the
+frontend and cross-compiles the pure-Go binary in CI, pinned to `$BUILDPLATFORM` (no QEMU for those
+stages); publish to GHCR on every push to main (`:latest` and short SHA); `ivy update` resolves the
+digest and signals the host watcher, which pulls, health-checks and rolls back. The target compiles
+nothing. **Supersedes** round 24 (bot-committed `web/build/`, no ruleset bypass or loop guard any
+more, spike S9 moot) and round 25 (the potato builds the Go binary). Docs updated: `ARCHITECTURE.md`
+section 9, `CI.md`, `PLAN.md`, `STACK.md`, `TESTING.md`, `SPIKES.md`, `CLAUDE.md`.
+
+Also: spike code now lives under `spikes/<name>/` on main (its own Go module), not on `spike/*`
+branches. `.env` (git-ignored) holds the dev mailbox, board alias and OpenRouter key for spikes and
+`live` tests.

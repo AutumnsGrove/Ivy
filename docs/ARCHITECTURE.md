@@ -19,7 +19,7 @@ the testing strategy in `TESTING.md`.
    Purelymail (per-user)   nomic-embed-text            Jev / chat / vision      folder or S3/R2
 ```
 
-- **Go backend, SQLite, SvelteKit frontend (settled).** Single operator, bare-metal on the potato.
+- **Go backend, SQLite, SvelteKit frontend (settled).** Single operator, one container on the potato.
 - **Mirror model (settled):** the DB follows the IMAP server (deletes, moves, archives included);
   **writes go to IMAP first.** The DB exists for speed, search, tags, rules and triage.
 
@@ -43,10 +43,10 @@ ivy/
   triage/            needs-me cascade, categories, receipts/ledger, newsletter feed/digest, rules
   compose/           MIME build (enmime builder), identities, signatures, undo-send queue
   gateway/           HTTP handlers, SSE hub, stats, settings, update endpoints
-  update/            ivy update: ff-only pull, build to temp, swap, restart, rollback
+  update/            ivy update: resolve GHCR digest, signal the host watcher, health check, rollback
   backup/            rolling snapshots (2/day, 30 days) of locally owned state + disabled blobs, restore
-  web/               SvelteKit app; build output in web/build is written by CI (bot commit on main)
-                     and embedded (go:embed); humans and PRs never commit it
+  web/               SvelteKit app; web/build is produced inside the Docker build and embedded
+                     (go:embed); never committed (a tracked placeholder keeps go build working)
   dev/               fake IMAP/OpenRouter helpers, seed tool, stack launcher
   testdata/          fixtures and corpora
   docs/
@@ -56,7 +56,7 @@ ivy/
 
 Pragmas: WAL, `synchronous=NORMAL`, `foreign_keys=ON`; sync writes are batched in transactions to
 limit flash wear on the potato's SD/eMMC. **Pure-Go driver (settled):** `modernc.org/sqlite` (verify
-FTS5 is available; time `go build` on the real potato and keep the build cache warm).
+FTS5 is available, confirmed by spike S3; it is cross-compiled in CI, never on the potato).
 
 Mirror tables (rebuildable from IMAP):
 - `accounts` (id, address, imap/smtp host+port, username, display_name, icon, photo_blob,
@@ -236,23 +236,21 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 
 ## 9. Deployment, update, backup
 
-- **Bare metal (settled).** systemd unit on the potato; the potato builds the Go binary; the
-  frontend build `web/build/` is embedded via `go:embed`. Docker is a maybe-later path.
-- **Frontend artifacts come from CI, never the potato or a contributor (settled, round 24).** The
-  potato cannot rebuild a SvelteKit app reliably. A GitHub Actions job builds the frontend on every
-  merge to main (deterministic: pinned Node/pnpm, lockfile), precompresses the assets (brotli, zstd,
-  gzip), and the bot commits `web/build/` to main with `[skip ci]`. PRs never contain build output
-  (a CI check rejects a PR that touches `web/build/`); PR CI builds the frontend in a scratch dir to
-  test it. A tracked placeholder in `web/build/` keeps `go build` working from a fresh checkout.
-  The potato then only runs `git pull` and `go build`. Requires letting the Actions bot push to
-  main (ruleset bypass for that actor). **The Go binary is never built in CI or committed
-  (settled, round 25):** the potato is strong enough to compile it in reasonable time, so releases
-  carry no binaries and the repo holds no compiled output beyond the frontend assets. Spike S3 still
-  measures the build time and peak RAM to confirm.
-- **`ivy update` (also an in-app button):** verify the remote, `git fetch` + `merge --ff-only`
-  (refuse on a diverged checkout), `go build` to a temp file (peak RAM is a known risk: serving
-  continues while building), health-check the new binary, swap, restart via systemd, roll back on a
-  failed check. Reports progress to the UI over SSE.
+- **Container image, built in CI (settled, round 29; supersedes rounds 24 and 25).** The potato
+  never compiles anything: spike S3 measured a cold `modernc.org/sqlite` build at about 730 MiB
+  peak and exhausted swap beside the live services. A multi-stage `Dockerfile` builds the frontend
+  (pinned Node/pnpm, lockfile, precompressed brotli/zstd/gzip) and cross-compiles the Go binary
+  (`CGO_ENABLED=0`, `GOARCH=$TARGETARCH`) on the runner, both stages pinned to `$BUILDPLATFORM` so
+  no QEMU is needed; only the tiny final stage is per-arch. A GitHub Actions job publishes a
+  multi-arch (amd64, arm64) image to GHCR on every push to main, tagged `:latest` and the short
+  SHA (rollback by name). The workflow uses only `GITHUB_TOKEN` with `packages: write` and never
+  runs on pull requests. Nothing compiled is committed: `web/build/` is git-ignored apart from a
+  tracked placeholder that keeps `go:embed` and `go build` working from a fresh checkout.
+- **`ivy update` (also an in-app button):** resolve the digest of `:latest` on GHCR (waiting out an
+  in-progress CI build), hand off to a host-side update watcher (the Polaris design, with a signal
+  file), which pulls the image, recreates the container, health-checks it, and rolls back to the
+  previous digest on failure. The data directory is a bind-mounted volume, so the SQLite file and
+  backups survive image swaps. Progress reaches the UI over SSE.
 - **Backup (settled, rolling policy round 24):** **twice a day (every 12 h), keep 30 days, about 60
   backups; prune anything older than 30 days.** Each run takes a consistent online snapshot
   (SQLite `VACUUM INTO`/backup API) of the **locally owned state** (tags, rules, snoozes, settings,
@@ -286,8 +284,7 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 - **Time:** all timestamps UTC in the DB, local zone at the edge, with DST and bad-`Date`-header
   tests (clock-skewed mail sorts by internal date).
 - **Logs:** journald with size limits so logs don't wear the card; no mail content in logs.
-- **Committed frontend build:** resolved in section 9 (CI builds and bot-commits on merge to main;
-  PRs never touch `web/build/`).
+- **Frontend build and delivery:** resolved in section 9 (built inside the CI-published image).
 
 ## 9b. Failure states (round 20)
 

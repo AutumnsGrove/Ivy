@@ -35,7 +35,7 @@ rule from `PLAN.md` section 6: verify before pinning). The constraint: **pure Go
 | Attachment text | `golang.org/x/net/html`, `archive/zip` + `encoding/xml` (OOXML), a pure-Go PDF text-layer library (spike, quality uncertain) | PDF library choice is a Milestone 2 spike. |
 | Images | stdlib `image/*`, `golang.org/x/image` | Downscale and EXIF strip in pure Go. **HEIC is the open C-free question:** iOS Safari normally hands back JPEG for `accept="image/*"`; verify on the real phone before adding any decoder (a WASM-based one via `wazero` is the pure-Go fallback). |
 | Process mgmt | `golang.org/x/sync/errgroup` | Goroutine ownership and shutdown. |
-| Frontend embedding | `go:embed` of `web/build` with precompressed variants | Committed build output (**settled**). |
+| Frontend embedding | `go:embed` of `web/build` with precompressed variants | Built inside the CI Docker build, never committed (**settled**, round 29). |
 
 ## Go testing and quality tools
 
@@ -82,7 +82,8 @@ Anything else is justified here with its compressed size.
 
 1. go-imap v2 beta API stability for QRESYNC and IDLE, and that `imapmemserver` supports enough
    (CONDSTORE/QRESYNC/MOVE) to test sync; if not, extend it in `mailworld`.
-2. `modernc.org/sqlite` FTS5 availability, `go build` time and peak RAM on the potato.
+2. ~~`modernc.org/sqlite` FTS5 availability, `go build` time and peak RAM on the potato.~~ Done
+   (S3): FTS5 works; a cold build peaks near 730 MiB, so it is cross-compiled in CI.
 3. Safari zstd `Content-Encoding` support on the operator's iOS/iPadOS versions (brotli is the
    Safari default; see `PERFORMANCE.md`).
 4. Pure-Go PDF text extraction quality.
