@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"time"
 )
@@ -180,7 +181,11 @@ func (d *DBs) MessageUIDs(ctx context.Context, folderID string) ([]uint32, error
 		if err := rows.Scan(&uid); err != nil {
 			return nil, fmt.Errorf("message uids for %s: %w", folderID, err)
 		}
-		uids = append(uids, uint32(uid))
+		u, err := uidFromDB(uid)
+		if err != nil {
+			return nil, fmt.Errorf("message uids for %s: %w", folderID, err)
+		}
+		uids = append(uids, u)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("message uids for %s: %w", folderID, err)
@@ -225,7 +230,9 @@ func scanMessage(s scanner) (Message, error) {
 	if err != nil {
 		return Message{}, err
 	}
-	m.UID = uint32(uid)
+	if m.UID, err = uidFromDB(uid); err != nil {
+		return Message{}, err
+	}
 	m.Size = size
 
 	if err := decodeJSON(fromJSON, &m.From); err != nil {
@@ -267,6 +274,16 @@ func scanMessage(s scanner) (Message, error) {
 		*tc.dest = t
 	}
 	return m, nil
+}
+
+// uidFromDB narrows a stored UID. IMAP UIDs are 32-bit, so a value outside that
+// range means the row is corrupt; wrapping it would point sync at the wrong
+// message.
+func uidFromDB(v int64) (uint32, error) {
+	if v < 0 || v > math.MaxUint32 {
+		return 0, fmt.Errorf("stored uid %d is out of the 32-bit range", v)
+	}
+	return uint32(v), nil //nolint:gosec // G115: range checked above
 }
 
 func marshalAddress(a Address) (any, error) {

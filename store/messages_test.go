@@ -202,3 +202,25 @@ func seedFolder(t *testing.T, dbs *DBs, accountID, folderID string) {
 		t.Fatalf("seedFolder(%s): %v", folderID, err)
 	}
 }
+
+// UIDs are 32-bit. A stored value outside that range means the row is corrupt,
+// and wrapping it to some other UID would let sync skip or refetch the wrong
+// message, so it must surface as an error.
+func TestCorruptUIDIsAnErrorNotAWrap(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedInbox(t, dbs, "acct-1", "inbox-1")
+	_, err := dbs.Mirror.Write.ExecContext(ctx,
+		`INSERT INTO messages (id, account_id, folder_id, uid, content_key) VALUES ('bad', 'acct-1', 'inbox-1', -5, 'ck')`)
+	if err != nil {
+		t.Fatalf("insert corrupt row: %v", err)
+	}
+
+	if m, err := dbs.GetMessage(ctx, "bad"); err == nil {
+		t.Errorf("GetMessage returned UID %d for a corrupt row", m.UID)
+	}
+	if uids, err := dbs.MessageUIDs(ctx, "inbox-1"); err == nil {
+		t.Errorf("MessageUIDs returned %v for a corrupt row", uids)
+	}
+}
