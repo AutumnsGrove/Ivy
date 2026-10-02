@@ -85,7 +85,7 @@ func (c *Client) Do(req ControlRequest) (ControlResponse, error) {
 	if err != nil {
 		return ControlResponse{}, fmt.Errorf("devstack: dial control: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	if err := json.NewEncoder(conn).Encode(req); err != nil {
 		return ControlResponse{}, fmt.Errorf("devstack: send %s: %w", req.Op, err)
 	}
@@ -186,7 +186,7 @@ func (s *ControlServer) accept() {
 }
 
 func (s *ControlServer) handle(conn *net.UnixConn) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	var req ControlRequest
 	if err := json.NewDecoder(conn).Decode(&req); err != nil {
 		_ = json.NewEncoder(conn).Encode(ControlResponse{Error: "bad request: " + err.Error()})

@@ -32,14 +32,14 @@ func migrate(db *sql.DB, migrations []migration) error {
 		}
 		for _, stmt := range m.statements {
 			if _, err := tx.Exec(stmt); err != nil {
-				tx.Rollback()
+				_ = tx.Rollback()
 				return fmt.Errorf("migration %d: %w", m.version, err)
 			}
 		}
 		// PRAGMA user_version cannot be parameterised; m.version is a literal
 		// from our own code, never user input.
 		if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d", m.version)); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("set user_version %d: %w", m.version, err)
 		}
 		if err := tx.Commit(); err != nil {

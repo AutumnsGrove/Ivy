@@ -31,18 +31,18 @@ func Open(dir string) (*DBs, error) {
 		return nil, fmt.Errorf("open mirror: %w", err)
 	}
 	if err := migrate(mirror, mirrorMigrations); err != nil {
-		mirror.Close()
+		_ = mirror.Close()
 		return nil, fmt.Errorf("migrate mirror: %w", err)
 	}
 
 	state, err := openDB(filepath.Join(dir, "state.db"))
 	if err != nil {
-		mirror.Close()
+		_ = mirror.Close()
 		return nil, fmt.Errorf("open state: %w", err)
 	}
 	if err := migrate(state, stateMigrations); err != nil {
-		mirror.Close()
-		state.Close()
+		_ = mirror.Close()
+		_ = state.Close()
 		return nil, fmt.Errorf("migrate state: %w", err)
 	}
 
@@ -71,7 +71,7 @@ func openDB(path string) (*sql.DB, error) {
 		return nil, err
 	}
 	if err := db.Ping(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 	return db, nil

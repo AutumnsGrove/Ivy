@@ -60,7 +60,7 @@ func (c *dropConn) Read(p []byte) (int, error) {
 		drop := c.lines >= c.after
 		c.mu.Unlock()
 		if drop {
-			_ = c.Conn.Close()
+			_ = c.Close()
 			if err == nil {
 				err = io.EOF
 			}

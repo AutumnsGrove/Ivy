@@ -2,7 +2,7 @@
 GO        ?= go
 GENERATED := api/api.gen.go web/src/lib/api/schema.d.ts
 
-.PHONY: check generate drift fmt vet lint test web-check dev dev-fake web-assets e2e smoke guard
+.PHONY: check generate drift fmt vet lint test web-check dev dev-fake web-assets e2e smoke guard golangci
 
 # Local dev stack: mailworld + Ivy + Vite against seeded, offline-safe data.
 dev:
@@ -35,6 +35,11 @@ vet:
 
 lint:
 	$(GO) tool staticcheck ./...
+
+# Wider aggregate linter (CI.md section 2); needs golangci-lint on PATH. The CI
+# `go` job installs the pinned release through the official action.
+golangci:
+	golangci-lint run ./...
 
 test:
 	CGO_ENABLED=0 $(GO) test -race ./...

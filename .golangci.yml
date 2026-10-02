@@ -1,0 +1,28 @@
+# golangci-lint aggregate config (CI.md section 2). `make lint` keeps staticcheck
+# as the fast local loop; CI runs this wider set through the pinned action.
+#
+# Two deliberate relaxations: errcheck does not police `fmt.Fprint*` to a CLI
+# writer (cobra reports the error), and does not police anything in tests, where
+# a failed cleanup is not a result. Everything else must be clean.
+version: "2"
+
+linters:
+  default: standard
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fprint
+        # A Close error in a defer is real but nearly always secondary to the
+        # work's error; callers that must care check it explicitly.
+        - (io.Closer).Close
+        - (*github.com/AutumnsGrove/Ivy/store.DBs).Close
+        - (*github.com/AutumnsGrove/Ivy/internal/devstack.Stack).Close
+        - (*github.com/AutumnsGrove/Ivy/internal/devstack.Client).Close
+        - (*github.com/emersion/go-imap/v2/imapclient.Client).Close
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
