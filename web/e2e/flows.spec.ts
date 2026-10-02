@@ -83,3 +83,43 @@ test.describe('tags', () => {
 		await expect(page.getByRole('status').filter({ hasText: 'created' })).toBeVisible();
 	});
 });
+
+test.describe('resizable panes (desktop)', () => {
+	test.skip(({ viewport }) => (viewport?.width ?? 0) < 900, 'desktop only');
+
+	const width = async (page: import('@playwright/test').Page, name: string) =>
+		(await page.getByRole('region', { name, exact: true }).boundingBox())!.width;
+
+	test('dragging the handle resizes the message list and the choice survives a reload', async ({ page }) => {
+		await page.goto('/');
+		const before = await width(page, 'Messages');
+		const handle = page.getByRole('separator', { name: 'Resize message list' });
+		const box = (await handle.boundingBox())!;
+		await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2, { steps: 5 });
+		await page.mouse.up();
+		expect(await width(page, 'Messages')).toBeGreaterThan(before + 60);
+
+		await page.reload();
+		expect(await width(page, 'Messages')).toBeGreaterThan(before + 60);
+	});
+
+	test('keyboard resizes and double-click resets', async ({ page }) => {
+		await page.goto('/');
+		const handle = page.getByRole('separator', { name: 'Resize accounts pane' });
+		await handle.focus();
+		await page.keyboard.press('ArrowRight');
+		await expect(handle).toHaveAttribute('aria-valuenow', '252');
+		await handle.dblclick();
+		await expect(handle).toHaveAttribute('aria-valuenow', '236');
+	});
+
+	test('the message pane keeps a readable width however far the list is dragged', async ({ page }) => {
+		await page.goto('/');
+		const handle = page.getByRole('separator', { name: 'Resize message list' });
+		await handle.focus();
+		await page.keyboard.press('End');
+		expect(await width(page, 'Message')).toBeGreaterThanOrEqual(360);
+	});
+});

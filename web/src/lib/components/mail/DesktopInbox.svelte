@@ -2,6 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { withScenario, type Scenario } from '#lib/api/scenario.js';
 	import { Search } from '#lib/icons.js';
+	import { LIMITS, panes } from '#lib/panes.svelte.js';
+	import ResizeHandle from '../ui/ResizeHandle.svelte';
 	import type { Account, Inbox } from '#lib/types.js';
 	import Banner from '../ui/Banner.svelte';
 	import Glass from '../ui/Glass.svelte';
@@ -24,12 +26,33 @@
 	const openId = $derived(selectedId ?? inbox.items[0]?.id);
 	const failing = $derived(accounts.find((a) => a.sync === 'auth-failed'));
 	const subtitle = $derived(`${inbox.needCount} need you · ${inbox.unreadCount} unread`);
+
+	// Width of the whole pane area, so a shrinking window re-clamps the panes instead of squeezing the message.
+	let total = $state(0);
+	$effect(() => {
+		if (!total) return;
+		panes.set('nav', panes.nav, total);
+		panes.set('list', panes.list, total);
+	});
 </script>
 
-<div class="panes">
+<div
+	class="panes"
+	bind:clientWidth={total}
+	style:grid-template-columns="{panes.nav}px var(--handle-w) {panes.list}px var(--handle-w) minmax(0, 1fr)"
+>
 	<Glass radius="panel" as="aside" class="nav" aria-label="Accounts and folders">
 		<NavPanel {accounts} selectedId={accountId} {tags} compose />
 	</Glass>
+
+	<ResizeHandle
+		label="Resize accounts pane"
+		value={panes.nav}
+		min={LIMITS.nav.min}
+		max={LIMITS.nav.max}
+		onresize={(px) => panes.set('nav', px, total)}
+		onreset={() => panes.reset('nav')}
+	/>
 
 	<Glass radius="panel" as="section" class="list" aria-label="Messages">
 		<header class="head">
@@ -58,6 +81,15 @@
 		</div>
 	</Glass>
 
+	<ResizeHandle
+		label="Resize message list"
+		value={panes.list}
+		min={LIMITS.list.min}
+		max={LIMITS.list.max}
+		onresize={(px) => panes.set('list', px, total)}
+		onreset={() => panes.reset('list')}
+	/>
+
 	{#if openId}
 		<ReaderPane id={openId} {accounts} {scenario} />
 	{:else}
@@ -68,8 +100,6 @@
 <style>
 	.panes {
 		display: grid;
-		grid-template-columns: var(--nav-col) var(--list-col) minmax(0, 1fr);
-		gap: var(--sp-16);
 		height: 100%;
 	}
 	.panes :global(.nav) {
