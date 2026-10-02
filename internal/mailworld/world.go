@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http/httptest"
 	"strings"
 	"sync"
 
@@ -21,24 +22,30 @@ import (
 
 // World owns the fake servers, the accounts and the injected faults.
 type World struct {
-	imapAddr  string
-	ln        net.Listener
-	srv       *imapserver.Server
-	smtpAddr  string
-	smtpLn    net.Listener
-	smtpSrv   *smtp.Server
-	mem       *imapmemserver.Server
-	clock     *Clock
-	condStore bool
+	imapAddr   string
+	ln         net.Listener
+	srv        *imapserver.Server
+	smtpAddr   string
+	smtpLn     net.Listener
+	smtpSrv    *smtp.Server
+	openRouter *httptest.Server
+	ollama     *httptest.Server
+	mem        *imapmemserver.Server
+	clock      *Clock
+	condStore  bool
 
-	mu       sync.Mutex
-	faults   []Fault
-	accounts map[string]*Account
-	sent     []SentMessage
+	mu        sync.Mutex
+	faults    []Fault
+	accounts  map[string]*Account
+	sent      []SentMessage
+	calls     []LLMCall
+	chatQueue []string
+	jevQueue  []map[string]JevAnswer
+	embedDims int
 }
 
-// New starts the fake IMAP and SMTP servers on random loopback ports. Close
-// releases them.
+// New starts the fake IMAP, SMTP and LLM provider servers on random loopback
+// ports. Close releases them.
 func New(opts ...Option) (*World, error) {
 	w := &World{
 		mem:       imapmemserver.New(),
@@ -83,6 +90,10 @@ func New(opts ...Option) (*World, error) {
 	w.smtpAddr = smtpLn.Addr().String()
 	w.smtpLn = smtpLn
 	go func() { _ = w.smtpSrv.Serve(smtpLn) }()
+
+	w.embedDims = DefaultEmbeddingDims
+	w.openRouter = httptest.NewServer(w.openRouterMux())
+	w.ollama = httptest.NewServer(w.ollamaMux())
 	return w, nil
 }
 
@@ -100,6 +111,8 @@ func (w *World) IMAPAddr() string { return w.imapAddr }
 
 // Close stops every listener and connection.
 func (w *World) Close() error {
+	w.openRouter.Close()
+	w.ollama.Close()
 	_ = w.smtpSrv.Close()
 	// Serve may not have registered the listener with the server yet, so close
 	// it directly too: otherwise its Accept loop leaks (caught by goleak).
