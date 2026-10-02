@@ -19,6 +19,7 @@
 	--fs-ui-lg: 14.5px;
 	--fs-input: 15px;
 	--fs-lead: 16px;
+	--fs-top: 22px;
 	--fs-title: 26px;
 	--fs-title-lg: 30px;
 	--fs-read-sm: 17.5px;
@@ -80,18 +81,29 @@
 	--blur-panel: blur(22px);
 	--glow-firefly: 0 0 8px 2px var(--firefly-glow);
 	--glow-accent: 0 0 8px var(--accent);
+	--glow-wanderer: 0 0 10px 3px var(--firefly-glow);
 	--drift-x: 20px;
 	--drift-y: -30px;
 	--fs-tab: 10.5px;
 
 	/* radii */
+	--radius-tile: 9px;
 	--radius-sm: 12px;
 	--radius-md: 14px;
 	--radius-chip: 16px;
 	--radius-card: 18px;
+	--radius-group: 20px;
+	--radius-note: 22px;
 	--radius-bar: 24px;
 	--radius-panel: 26px;
+	--radius-sheet: 28px;
 	--radius-pill: 999px;
+
+	/* scene */
+	--vine: url('/garden/vines.svg');
+	--stars: url('/garden/stars.svg');
+	--vine-size: 450px;
+	--stars-height: 380px;
 
 	/* touch targets */
 	--hit: 44px;
@@ -145,6 +157,11 @@
 	--sky-mid: #0a1613;
 	--sky-low: #0c1f18;
 	--sky-base: #070d11;
+	--scene-image:
+		var(--vine), var(--vine), var(--vine), linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 50%, var(--sky-low) 100%);
+	--scene-size: var(--vine-size) var(--vine-size), var(--vine-size) var(--vine-size),
+		var(--vine-size) var(--vine-size), 100% 100%;
+	--scene-repeat: repeat, repeat, repeat, no-repeat;
 	--stars-opacity: 1;
 	--danger: #f2957f;
 	--danger-soft: rgba(242, 149, 127, 0.14);
@@ -202,6 +219,10 @@
 	--sky-mid: #eef3e2;
 	--sky-low: #dfeacf;
 	--sky-base: #eef3e2;
+	--scene-image:
+		var(--vine), var(--vine), linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 55%, var(--sky-low) 100%);
+	--scene-size: var(--vine-size) var(--vine-size), var(--vine-size) var(--vine-size), 100% 100%;
+	--scene-repeat: repeat, repeat, no-repeat;
 	--stars-opacity: 0;
 	--danger: #b4432c;
 	--danger-soft: rgba(180, 67, 44, 0.1);
