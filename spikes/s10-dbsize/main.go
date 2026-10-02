@@ -22,6 +22,12 @@ import (
 )
 
 func main() {
+	if os.Args[1] == "state" { // s10 state <messages> <work-dir>
+		var m int
+		fmt.Sscan(os.Args[2], &m)
+		stateMain(os.Args[3], m)
+		return
+	}
 	docs, work := os.Args[1], os.Args[3]
 	var n int
 	fmt.Sscan(os.Args[2], &n)
