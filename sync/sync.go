@@ -29,6 +29,7 @@ import (
 	"github.com/emersion/go-imap/v2/imapclient"
 
 	mailmime "github.com/AutumnsGrove/Ivy/mime"
+	"github.com/AutumnsGrove/Ivy/render"
 	"github.com/AutumnsGrove/Ivy/store"
 )
 
@@ -363,8 +364,13 @@ func (f *Fetcher) fetchInline(ctx context.Context, c *imapclient.Client, acct Ac
 		m := f.baseMessage(acct, folderID, meta)
 		m.RawBlob = raw
 		m.ContentKey = store.ContentKey(m.MessageID, headerBlock(raw))
-		applyParsed(&m, mailmime.Parse(raw, acct.TrustedAuthservIDs...))
+		parsed := mailmime.Parse(raw, acct.TrustedAuthservIDs...)
+		applyParsed(&m, parsed)
 		if err := f.dbs.UpsertMessage(ctx, m); err != nil {
+			_ = cmd.Close()
+			return stored, err
+		}
+		if err := f.storeRendered(ctx, m, parsed); err != nil {
 			_ = cmd.Close()
 			return stored, err
 		}
@@ -426,7 +432,26 @@ func (f *Fetcher) fetchSpooled(ctx context.Context, c *imapclient.Client, acct A
 	if parsed.BodySkipped {
 		m.BodyStatus = store.BodyUnparsed
 	}
-	return true, f.dbs.UpsertMessage(ctx, m)
+	if err := f.dbs.UpsertMessage(ctx, m); err != nil {
+		return true, err
+	}
+	return true, f.storeRendered(ctx, m, parsed)
+}
+
+// storeRendered sanitises a parsed body and writes the derived column through
+// its own setter, which UpsertMessage deliberately never touches
+// (ARCHITECTURE.md section 3). The default policy blocks remote images and
+// strips tracking pixels; an operator allow-list is served by re-rendering from
+// the raw message, so the cached copy never carries live remote content.
+func (f *Fetcher) storeRendered(ctx context.Context, m store.Message, parsed mailmime.Parsed) error {
+	if parsed.HTML == "" {
+		return nil
+	}
+	res := render.Body(parsed, render.Options{MessageID: m.ID})
+	if res.HTML == "" {
+		return nil
+	}
+	return f.dbs.SetMessageBodyHTML(ctx, m.ID, res.HTML)
 }
 
 // parseSpooled reads a spooled message from disk in a single pass, returning the

@@ -271,6 +271,28 @@ func TestSanitizeHugeHTMLFallsBackToText(t *testing.T) {
 	}
 }
 
+func TestContentSecurityPolicy(t *testing.T) {
+	t.Parallel()
+	blocked := render.ContentSecurityPolicy(render.Options{})
+	if !strings.Contains(blocked, "default-src 'none'") {
+		t.Errorf("policy allows something by default:\n%s", blocked)
+	}
+	if !strings.Contains(blocked, "img-src 'self'") || strings.Contains(blocked, "https:") {
+		t.Errorf("default policy should load only inline images:\n%s", blocked)
+	}
+	if strings.Contains(blocked, "unsafe-eval") || strings.Contains(blocked, "script-src") {
+		t.Errorf("policy must not enable scripts:\n%s", blocked)
+	}
+
+	allowed := render.ContentSecurityPolicy(render.Options{AllowRemoteImages: true})
+	if !strings.Contains(allowed, "img-src 'self' https:") {
+		t.Errorf("allow-listed policy should permit https images:\n%s", allowed)
+	}
+	if strings.Contains(allowed, "http:") {
+		t.Errorf("allow-listed policy should not permit plaintext images:\n%s", allowed)
+	}
+}
+
 func FuzzSanitize(f *testing.F) {
 	for _, s := range []string{
 		"<p>hi</p>",

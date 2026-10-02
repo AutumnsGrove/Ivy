@@ -393,8 +393,8 @@ func TestFetchParsesRawBodies(t *testing.T) {
 	if !m.HasAttachments {
 		t.Error("HasAttachments = false, want true")
 	}
-	if m.BodyHTML != "" {
-		t.Errorf("BodyHTML = %q, want empty until render/ sanitises (2d)", m.BodyHTML)
+	if !strings.Contains(m.BodyHTML, "<p>html body</p>") {
+		t.Errorf("BodyHTML = %q, want the sanitised html part", m.BodyHTML)
 	}
 	if m.References != "<root@grove.test> <parent@grove.test>" {
 		t.Errorf("References = %q, want both ids", m.References)
@@ -416,6 +416,50 @@ func TestFetchParsesRawBodies(t *testing.T) {
 	}
 	if len(m.ParseErrors) != 0 {
 		t.Errorf("ParseErrors = %v, want none", m.ParseErrors)
+	}
+}
+
+// TestFetchSanitizesHostileHTML is the 2d end-to-end slice: the body stored by
+// sync is already safe (no script, no event handler, no remote beacon) and its
+// cid: images point at the local inline endpoint.
+func TestFetchSanitizesHostileHTML(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+	seedAccountRow(t, dbs, store.Account{ID: "acct-1", Address: "me@grove.test"})
+
+	t1 := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	raw := mailworld.Msg().
+		From("Attacker <bad@evil.test>").
+		To("me@grove.test").
+		Subject("Reset your password").
+		Date(t1).
+		MessageID("<nasty-1@grove.test>").
+		HTML(`<p>click <a href="javascript:alert(1)">here</a></p>`+
+			`<script>alert(2)</script>`+
+			`<img src=x onerror="alert(3)">`+
+			`<img src="https://tracker.example/pixel.gif" width="1" height="1">`+
+			`<img src="cid:chart.png" alt="chart">`).
+		Inline("chart.png", "image/png", []byte("pngdata")).
+		Build()
+	uid := acc.Deliver("INBOX", raw)
+
+	if _, err := ivysync.NewFetcher(dbs).Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret")); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	inbox := mustFolder(t, dbs, "acct-1", "INBOX")
+	m := mustMessage(t, dbs, inbox.ID, uid)
+
+	for _, bad := range []string{"<script", "onerror", "javascript:", "tracker.example"} {
+		if strings.Contains(m.BodyHTML, bad) {
+			t.Errorf("BodyHTML kept %q:\n%s", bad, m.BodyHTML)
+		}
+	}
+	wantInline := "/api/v1/messages/" + m.ID + "/inline/chart.png"
+	if !strings.Contains(m.BodyHTML, wantInline) {
+		t.Errorf("BodyHTML = %q, want the cid rewritten to %q", m.BodyHTML, wantInline)
 	}
 }
 

@@ -22,6 +22,31 @@ const MaxHTMLBytes = 8 << 20
 
 const tooLargeText = "[This message is too large to display here. Open it in a mail app to read it.]"
 
+// IframeSandbox is the sandbox attribute for the reader's body frame. Scripts
+// are forbidden by the sanitizer and the CSP, so allow-scripts is absent (that
+// flag is what a same-origin sandbox escape needs); the same-origin flag keeps
+// the relative inline-image URLs working.
+const IframeSandbox = "allow-same-origin"
+
+// ContentSecurityPolicy is the header for the document that displays a
+// rendered body. It is deliberately tiny: no script, no frames, no forms and
+// no network beyond inline parts (ARCHITECTURE.md section 5).
+func ContentSecurityPolicy(opts Options) string {
+	img := "img-src 'self'"
+	if opts.AllowRemoteImages {
+		img = "img-src 'self' https:"
+	}
+	return strings.Join([]string{
+		"default-src 'none'",
+		img,
+		"style-src 'unsafe-inline'",
+		"font-src 'self'",
+		"base-uri 'none'",
+		"form-action 'none'",
+		"frame-ancestors 'self'",
+	}, "; ")
+}
+
 // trackerRe matches URLs that are almost always beacons rather than content.
 // It is anchored on separators so a real "tracking.co" domain is not caught by
 // the substring alone.
