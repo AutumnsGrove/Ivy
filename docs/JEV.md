@@ -21,8 +21,10 @@ These come from live calls Polaris already made, so they outrank anything read f
 - **Parallel and isolated:** every question in one call is evaluated independently against the same
   state. Fan out many questions in one call (20 questions: p50 ~250 ms, max 1.5 s; 8 questions: 419 ms).
 - **Cost:** `usage.cost` in the response is the exact dollar cost; `$0.042/M` input tokens, free output.
-  Per-email cost is dominated by the state, so batching all questions in one call is the cheap way
-  (verify per-question overhead in Ivy's own spike).
+  Batching all questions in one call is still the cheap way, but **question text counts as input**:
+  S4 measured about 90 to 110 tokens (about $0.000004) per question, so for short mail the question
+  set dominates the cost (9 questions: about $0.00005 per email); for long mail the state does.
+  Latency stays flat at 220 to 330 ms from 1 to 18 questions.
 - **Hard limits:** 32k-token context. Overrun is a clean `400 max_tokens_exceeded`, NOT silent
   truncation, so Ivy must truncate/chunk itself.
 - **Behavior found live:** confidence genuinely varies (0.35-1.0), so confidence-gating is a real
@@ -36,8 +38,12 @@ These come from live calls Polaris already made, so they outrank anything read f
 - **Caveats:** "cannot hallucinate" only means type-safe (the answer is one of your options);
   calibration holds across groups of predictions, not for any single answer. Beta, proprietary,
   company is new. Treat as optional and nil-client-safe: an outage means no triage, never a broken app.
-- **NOT verified anywhere yet:** `noul` and `score` question types (Polaris only uses `choice`). Until
-  Ivy spikes them, **model yes/no as a `choice` with `yes`/`no` (+ `none`) options.**
+- **`noul` and `score` (verified by Ivy's S4 spike, 2026-10-02, `docs/spikes/s4-jev.md`):** `noul`
+  takes `{type, instructions}` and answers `{noul: p}`, the probability the statement is true.
+  `score` takes `criteria` as an **ordered array** of levels and answers `{score, legend,
+  probabilities, confidence}` where `score` is the expected level index (not normalised). Their
+  calibration on real mail is not yet measured, so **model yes/no as a `choice` with `yes`/`no`
+  (+ `none`) options** until it is.
 
 ## 2. How Ivy wraps it (design rules, copied from what worked in Polaris)
 
@@ -194,6 +200,12 @@ accounts. Nothing here ever deletes.
 - Beta/proprietary: the interface must tolerate it disappearing.
 
 ## 5. Spikes to run before building on it (cost: cents; needs the operator's OpenRouter key, ask first)
+
+**Status (2026-10-02):** run on a synthetic corpus, results in `docs/spikes/s4-jev.md`. Items 1, 2,
+4, 5 and 6 are answered (item 6 only up to 18 questions); item 3 (accuracy) was done on
+synthetic mail only and still needs the operator-labelled real sample. Key finding: instruction
+wording moves `needs_me` precision a lot (0.73 to the 0.9s at a 0.75 threshold), so write each
+instruction as what does not count, then the exceptions.
 
 1. `noul` and `score` shapes and behavior (`choice` yes/no is the fallback).
 2. Per-email token cost with realistic emails; does adding questions change cost (expect ~no)?
