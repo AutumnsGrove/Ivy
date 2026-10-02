@@ -37,9 +37,13 @@ even though WireGuard encrypts the link):**
 
 **At rest (flash is the scarce resource):**
 
-- `raw_blob` and attachment bytes are stored **zstd-compressed** (default level, tunable); the
-  sanitised HTML and extracted text likewise if measurement says it pays. Embedding vectors stay
-  uncompressed (int8 quantisation is the size lever, `ARCHITECTURE.md` section 3).
+- **Raw mail is tiered by size before it is compressed** (`ARCHITECTURE.md` section 3,
+  `STANDARDS.md` 4a): up to 2 MiB a message lives in `raw_blob` (zstd at rest is still deferred and
+  now has far less to compress); from 2 MiB to 64 MiB it is a plain `.eml` file in the spool
+  (`raw_path`), read from disk in bounded buffers so it is never held in memory; above 64 MiB only
+  the envelope is mirrored. Attachments are decoded from the spool file when served, never stored
+  decoded. The sanitised HTML and extracted text likewise if measurement says it pays. Embedding
+  vectors stay uncompressed (int8 quantisation is the size lever, `ARCHITECTURE.md` section 3).
 - Backups are zstd-compressed.
 - IMAP: use **`COMPRESS=DEFLATE`** when the server advertises it (Purelymail does) to shrink sync
   traffic. Verified against the mail world, which can advertise it too.

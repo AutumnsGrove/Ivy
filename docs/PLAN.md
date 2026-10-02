@@ -1,7 +1,8 @@
 # Ivy — Plan
 
-**Status:** DRAFT for operator review (2026-10-01). Product decisions are settled through Q&A rounds
-0-13 (`qa-log.md`). No implementation starts until this plan is approved.
+**Status:** approved 2026-10-02 (`qa-log.md` round 28); product decisions settled through round 31.
+Work goes directly on `main` for this phase. Milestone 1 (Read) is in progress: 2a-2c done, 2d next
+(`next_steps.md`).
 
 **Doc map:** `PLAN.md` (this: product, features, milestones, risks) · `ARCHITECTURE.md` (how it's
 built) · `STANDARDS.md` (engineering standards, TDD workflow) · `STACK.md` (libraries, pure-Go

@@ -672,3 +672,32 @@ showed up in the dependency graph and Dependabot alerts once the repo became pub
 `STANDARDS.md` section 1 already says spikes do not live on `main`. Follow-ups that still want the
 code (S4 on a real corpus, S10 on a real mailbox, S5 on an iPhone) restore it from that commit or
 start a fresh `spike/` branch.
+
+## Audit of chunks 1-2c and the resulting ground rules (2026-10-02, operator)
+
+Before 2d, an independent commit-by-commit audit of everything from `aa0e438` (Go module and store)
+through `a049bfb` (2c complete) ran and was merged to `main`. Every defect was reproduced with a
+failing test before its fix, in its own commit; the full log is `papercuts.md` (41 numbered findings
+plus open N-items) and the method is `.claude/skills/review-deepseek/SKILL.md`. The recurring
+pattern - the happy path was well covered while the second attempt, a stalled peer, huge or hostile
+input and silent failures were not - became a rule.
+
+**Settled (operator) on top of the fixes:**
+
+- **Single-writer SQLite.** Each database is now a `store.DB{Read, Write}`: a `query_only` read pool
+  and exactly one write connection that begins transactions `IMMEDIATE`, so writers queue in Go and
+  a read-then-write transaction can never fail with `SQLITE_BUSY`. Replaces the unbounded pooled
+  handle that failed 7 of 8 concurrent workers.
+- **Raw mail is tiered by size; big messages never sit in memory.** Up to 2 MiB in `raw_blob`; 2-64
+  MiB streamed to `spool/<folder id>/<uid>.eml` and parsed by `mime.ParseStream`; above 64 MiB only
+  the envelope, with `body_status = too_large` and an "open in webmail" state. Attachments are
+  served by `mime.CopyPart` decoding from the file. A disabled message keeps its spool file exactly
+  as it keeps its row (nothing is ever erased).
+- **Failure paths are first-class.** `STANDARDS.md` section 4a and `CLAUDE.md` non-negotiable 8:
+  every input has a documented maximum with a defined outcome above it, nothing blocks without a
+  deadline, no failure is silent, and the failure tests are written with the success test. The
+  limits table in 4a is the source of truth.
+
+These were folded into `CLAUDE.md`, `docs/STANDARDS.md` (4a), `docs/ARCHITECTURE.md` (section 3),
+`docs/CI.md`, `docs/TESTING.md`, `docs/PERFORMANCE.md` (section 1), `docs/STACK.md` and
+`next_steps.md`. The spike code was removed in the same pass (entry above).

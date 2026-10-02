@@ -5,8 +5,9 @@ It **is tracked in git** so every step is recoverable. **Update this file and co
 stage at the end of every sub-chunk (not just every chunk)** so the next session can pick up cleanly
 after a context clear.
 
-Last updated: 2026-10-02, after Chunk 2 sub-chunk 2c (the `mime/` parser and its wiring into
-`sync/`) is complete. Chunk 1 (1a-1h) and 2a-2c are done; 2d is next.
+Last updated: 2026-10-02, after the audit of chunks 1-2c was merged to `main` (PR #3,
+`papercuts.md`) on top of Chunk 2 sub-chunk 2c (the `mime/` parser and its wiring into `sync/`).
+Chunk 1 (1a-1h) and 2a-2c are done; 2d is next. The audit's ground rules are below.
 
 ## How to run a chunk (read this first)
 
