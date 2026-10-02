@@ -63,6 +63,12 @@ mailbox. Real credentials live only in a git-ignored `.env` and are used only by
    Nothing sends, deletes or moves without an explicit confirmation.
 7. **Measure, don't guess.** Hot paths get benchmarks (`benchstat`); real numbers come from the
    potato, not mocks.
+8. **Failure paths are first-class.** The happy path passing is not done. Every input has a
+   documented maximum (size, count, depth, time) with a defined outcome above it; nothing blocks
+   without a deadline or context; no failure is silent; anything sized by the sender (bodies,
+   attachments) is streamed to and from disk, never held whole in memory; and the second attempt,
+   a stalled peer, cancellation and hostile or huge input are tested alongside the success case.
+   Full rules and the limits table: `docs/STANDARDS.md` section 4a.
 
 ## Settled decisions (don't re-litigate; ask first)
 

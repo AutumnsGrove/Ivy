@@ -314,3 +314,13 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
 - **#37** · `53bac38` · `internal/devstack/supervisor_test.go` · **nit** · a
   `time.Sleep(3 * PollInterval)` existed only to dodge the baseline race fixed in #15; removed.
   Ten repeated `-race` runs of the supervisor tests pass.
+
+## Standards: failure paths are first-class
+
+- **S1** · `docs/STANDARDS.md` 4a, `CLAUDE.md` non-negotiable 8, `docs/TESTING.md` 9 · the audit's
+  recurring finding, written down as a rule so new code is built to it from the start: the happy
+  path was well covered while the second attempt, the stalled peer, the huge or hostile input and
+  the silent failure were not. The rule bounds size/count/depth/time with a limits table, forbids
+  blocking without a deadline and silent failure, requires sender-sized data to stream through disk,
+  and lists the boundary tests every change owes. The limits table is the source of truth for the
+  caps implemented in N11 and N7's follow-up commits.

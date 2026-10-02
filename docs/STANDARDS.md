@@ -132,6 +132,59 @@ parallel one.
   secrets only from env/files and never in the DB, logs or error text; `Host`/`Origin` checks on the
   API (see section 8); server-side fetches go through the SSRF guard.
 
+## 4a. Failure paths are first-class
+
+A feature is specified, built and tested for how it behaves when things are slow, wrong, repeated,
+huge or never finish, **at the same time as** when they go well. A change is not done because the
+happy path passes; most real defects live on the other paths, and they are the ones a green suite
+hides. Write the failure tests in the same red-green step as the success test (section 1), not
+afterwards.
+
+1. **Bound everything: size, count, depth and time.** Every input has a documented maximum (the
+   table below), enforced at the edge, with a defined outcome above it (refuse, keep the headers
+   only, truncate and flag). "Unbounded" and "silently truncated" are both bugs. A new limit gets a
+   row in the table in the commit that introduces it.
+2. **Nothing blocks without a deadline.** Every network call, child process, lock wait and channel
+   receive honours a `context` or has a timeout. A library call that takes no context is made
+   interruptible by closing what it waits on (`context.AfterFunc` closing the connection), and a
+   test proves a stalled peer cannot hang the caller.
+3. **No silent failure.** An error is returned, or recorded where the operator will see it (a status
+   column, `ivy doctor`, a UI state with a stable code), never dropped. `_ =` on anything that can
+   matter needs a reason on the line. A check, budget or gate must be able to fail: one that passes
+   on empty input (a scan that matched nothing, a test that asserts nothing) is a defect. "I found
+   nothing" and "I could not look" are different results and must be distinguishable.
+4. **Large data never sits whole in memory.** Anything whose size the sender controls (a message
+   body, an attachment, a response) is streamed to or from disk with a bounded buffer. Attachments
+   are never loaded into memory: they are read from disk each time they are served.
+5. **Repeat, resume and recover.** Operations are idempotent. The second attempt, the attempt after
+   partial progress and the attempt after a crash are tested, not just the first. A fault that models
+   an outage (unreachable, auth failed, provider down) lasts until it is cleared; a one-shot fault
+   only tests that retrying works.
+6. **Hostile input costs bounded time and memory.** Parsers have depth, count and size caps, and a
+   fuzz target for every parser asserts both that it returns and that it returns in time.
+7. **The zero value is the safe one.** Defaults fail closed (TLS on, loopback only, nothing cached,
+   unknown config keys rejected). A flag is named for the unsafe thing (`Insecure`), never the safe one.
+8. **Slow is a state, not an error.** A slow or stalled dependency produces a defined, visible state
+   (progress, retry with backoff, "unreachable") and is tested with the mail world's latency and
+   unreachable faults.
+
+For every new boundary (IMAP, SMTP, HTTP, disk, parser, LLM call) the tests cover, where they
+apply: **error or timeout, second call, limit exceeded, cancellation, hostile or huge input.**
+
+### Limits
+
+| Limit | Value | Above it |
+|---|---|---|
+| Message fetched into memory (`InlineMessageBytes`) | 2 MiB | streamed to a spool file on disk, parsed as a skeleton (below) |
+| Message downloaded at all (`MaxMessageBytes`) | 64 MiB | not downloaded; headers kept, `body_status = too_large`, UI offers "open in webmail" |
+| Body part kept in memory while parsing a spooled message (`MaxBodyPartBytes`) | 256 KiB | the part is recorded (name, type, size) and left on disk |
+| Multipart nesting (`mime.MaxMultipartDepth`) | 16 | body not parsed, headers kept, error recorded |
+| Parts per message (`mime.MaxParts`) | 1000 | body not parsed, headers kept, error recorded |
+| Non-fatal parse errors kept per message | 20 | dropped after the 20th |
+| Inbox page (`maxInboxLimit`) | 200 | clamped |
+| IMAP dial and TLS handshake | 15 s | error, retried by the caller |
+| Dev control-socket call | 30 s | error |
+
 ## 5. Frontend standards
 
 - SvelteKit + Svelte 5 (runes), `adapter-static`, **TypeScript strict**, **pnpm** with a committed
@@ -219,6 +272,9 @@ Details and budgets live in `PERFORMANCE.md`. The standards:
 The per-layer checklist in `TESTING.md` section 9 applies to every change, plus:
 
 - [ ] Test was written first and seen failing (noted in the commit).
+- [ ] Failure paths are covered (section 4a): limits enforced and in the table, deadlines and
+      cancellation, no silent error, and the second attempt, a stalled peer and hostile or huge
+      input tested where the change touches a boundary.
 - [ ] Linters, `-race` tests, frontend checks all pass locally (`CGO_ENABLED=0` for builds; `make test` sets cgo on for `-race` only).
 - [ ] No new dependency without a `STACK.md` entry.
 - [ ] Hot-path changes carry a benchmark before/after.

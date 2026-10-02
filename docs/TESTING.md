@@ -189,6 +189,9 @@ for a merge.
 ## 9. Definition of done (per change)
 
 - [ ] Unit tests for new logic; table cases include the failure modes, not just the happy path.
+- [ ] Failure paths at every boundary the change touches (`STANDARDS.md` 4a): error or timeout, a
+      second call, a limit exceeded, cancellation, and hostile or huge input. Outage faults in the
+      mail world are sticky; a test that only passes on the first attempt does not count.
 - [ ] Integration test through the real component boundary (IMAP/SQLite/HTTP), not only mocks.
 - [ ] For UI: Playwright flow on phone and desktop viewports + visual baseline.
 - [ ] For anything LLM-touching: fake-OpenRouter plumbing test + safety assertions (section 4);
