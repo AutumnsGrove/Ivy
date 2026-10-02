@@ -28,10 +28,9 @@ the server; do not use it to decide what the client may try.
   must add CONDSTORE and QRESYNC itself (a fork or a wrapper around the `imapserver` package's
   command parsing), including per-message mod-sequences, `HIGHESTMODSEQ`, `VANISHED (EARLIER)` and
   `CHANGEDSINCE`.
-- **Sequencing:** whether Ivy needs QRESYNC at all depends on S1 (does Purelymail advertise
-  CONDSTORE/QRESYNC?). Build that part of `mailworld` only if it does; otherwise `mailworld` should
-  match the real server and the sync falls back to UID/flags comparison. Do not invest in the fake
-  before S1 answers.
+- **Sequencing, resolved by S1:** Purelymail advertises CONDSTORE and QRESYNC
+  (`s1-purelymail.md`), so `mailworld` must implement them to test the real sync path, alongside
+  the fallback UID/flags comparison used after a UIDVALIDITY change.
 - Everything else Ivy's Milestone 0 needs (APPEND, flags and keywords, MOVE, EXPUNGE, IDLE) is
   already usable from the memory server, which is a sound base for the day-one end-to-end slice.
 
