@@ -80,7 +80,7 @@ Mirror tables (`mirror.db`, rebuildable from IMAP):
 - `messages` (id, account_id, folder_id, uid, content_key, message_id_hdr, in_reply_to, references, subject,
   from/to/cc/reply_to/delivered_to JSON, date, size, flags JSON, internaldate, auth_results JSON,
   has_attachments, raw_blob (zstd/gzip, nullable until fetched), body_text, body_html_sanitized,
-  thread_id, snippet). Unique (folder_id, uid).
+  thread_id, snippet, parse_errors JSON). Unique (folder_id, uid).
 - `threads` (id, account_id, root_message_id, subject_norm, last_date, message_count)
 - `attachments` (id, message_id, filename, mime, size, content_hash, cid, storage_path)
 - `extracted_text` (attachment_id | message_id, tier, text, status)
@@ -186,7 +186,9 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 ## 5. Parsing and rendering
 
 - **Parse:** `jhillyerd/enmime` (settled: import, don't build) -> text, HTML, inlines, attachments,
-  charset handling and a list of non-fatal errors that are stored on the message.
+  charset handling, `Authentication-Results` and threading headers, plus a bounded list of
+  non-fatal errors stored on the message. Parsing never aborts a sync: a hostile or malformed
+  message keeps its raw blob and its recorded errors (`mime/`, chunk 2c).
 - **Sanitize:** `bluemonday` strict policy server-side; strip scripts, forms, event handlers,
   `javascript:`/`data:` abuse, `<base>`, `<meta refresh>`; rewrite `cid:` to local attachment URLs;
   neutralize/remove remote images and CSS URLs unless the sender is allow-listed (configurable);
