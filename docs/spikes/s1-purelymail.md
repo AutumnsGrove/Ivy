@@ -58,7 +58,7 @@ the header check.
 - **Send to a routed alias:** a second message, addressed to a routed alias on the operator's
   domain, was accepted by SMTP; the Sent folder again stayed empty (the no-Sent-copy result held
   twice). The alias routes to a different user, so arrival is not visible from the dev mailbox;
-  the operator confirms delivery out of band.
+  the operator confirmed it arrived, so **alias routing works** for mail submitted by the dev user.
 
 ## Resend and DMARC: skipped
 
