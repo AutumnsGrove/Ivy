@@ -5,11 +5,12 @@
 	import Pill from '../ui/Pill.svelte';
 	import SmartChip from '../ui/SmartChip.svelte';
 	import AttachmentGroup from './AttachmentGroup.svelte';
+	import MessageBody from './MessageBody.svelte';
 
 	type Props = {
 		message: Pick<
 			MailMessage,
-			'subject' | 'from' | 'initials' | 'time' | 'toShort' | 'needs' | 'tag' | 'summary' | 'paragraphs' | 'attachments'
+			'subject' | 'from' | 'initials' | 'time' | 'toShort' | 'needs' | 'tag' | 'summary' | 'html' | 'paragraphs' | 'attachments'
 		>;
 		/** The account colour for the sender avatar and dot. */
 		color: string;
@@ -42,7 +43,11 @@
 	{/if}
 
 	<div class="body">
-		{#each message.paragraphs as p}<p>{p}</p>{/each}
+		{#if message.html}
+			<MessageBody html={message.html} />
+		{:else}
+			{#each message.paragraphs as p}<p>{p}</p>{/each}
+		{/if}
 	</div>
 
 	{#if message.attachments.length}

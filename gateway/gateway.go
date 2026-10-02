@@ -44,7 +44,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/health", s.handleHealth)
 
 	root := http.NewServeMux()
-	root.Handle("/api/", noStore(compress.Middleware(api)))
+	root.Handle("/api/", noStore(apiCSP(compress.Middleware(api))))
 	if s.static != nil {
 		root.Handle("/", asset.FileServer(s.static))
 	} else {
@@ -65,6 +65,17 @@ func hardened(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "no-referrer")
 		// SAMEORIGIN, not DENY: the reader frames its own sanitised bodies.
 		h.Set("X-Frame-Options", "SAMEORIGIN")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// apiCSP is a deny-all policy for API replies. It is inert on JSON and blocks
+// everything if a response is ever loaded as a document. The strict policy for
+// the reader's body document is render.ContentSecurityPolicy in Go and the
+// frame's sandbox in the web app.
+func apiCSP(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'self'")
 		next.ServeHTTP(w, r)
 	})
 }

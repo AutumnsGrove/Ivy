@@ -9,6 +9,10 @@ for (const [name, path] of Object.entries(ROUTES)) {
 			if (m.type() !== 'error') return;
 			// The not-found screen is reached through a real 404, which the browser always logs.
 			if (name === 'not-found' && /status of 404/.test(m.text())) return;
+			// The reader's body frame is deliberately script-less (sandbox without
+			// allow-scripts); the script WebKit blocks here is Playwright's own
+			// frame instrumentation, not page content.
+			if (/Blocked script execution.*about:srcdoc/.test(m.text())) return;
 			problems.push(`console: ${m.text()}`);
 		});
 

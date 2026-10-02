@@ -148,6 +148,7 @@ const maraBody: Omit<MailMessage, keyof MailSummary> = {
 	toShort: 'hello@',
 	toFull: 'hello@example.com',
 	summary: 'Mara wonders if she can bring her old posts and images to Grove. No rush.',
+	html: '<p>Hi there,</p><p>I found Grove through a friend, and I&#39;ve been writing on a small blog for about six years. Before I set anything up, I wanted to ask whether I can bring my old posts with me, and whether the images come along too.</p><p>No rush at all. Thank you for building something so gentle.</p><img src="/favicon.ico" alt="inline logo" width="32" height="32">',
 	paragraphs: [
 		'Hi there,',
 		"I found Grove through a friend, and I've been writing on a small blog for about six years. Before I set anything up, I wanted to ask whether I can bring my old posts with me, and whether the images come along too.",
@@ -166,6 +167,7 @@ export function messageBody(id: string): Omit<MailMessage, keyof MailSummary> {
 	return {
 		toShort: 'me@',
 		toFull: 'me@example.com',
+		html: `<p>${m?.preview.replace(/…$/, '.') ?? ''}</p><p>The rest of this message is a placeholder.</p>`,
 		paragraphs: [m?.preview.replace(/…$/, '.') ?? '', 'The rest of this message is a placeholder.'],
 		attachments: []
 	};

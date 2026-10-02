@@ -437,6 +437,11 @@ components:
           type: string
         summary:
           type: string
+        html:
+          type: string
+          description: >-
+            Server-sanitised HTML body, safe to place in the reader's sandboxed
+            frame. Empty for a message with no HTML part; use paragraphs then.
         paragraphs:
           type: array
           items:

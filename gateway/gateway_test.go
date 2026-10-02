@@ -190,3 +190,20 @@ func TestAPIResponsesAreNotCached(t *testing.T) {
 		t.Errorf("Cache-Control = %q, want no-store", got)
 	}
 }
+
+// API replies are served with a deny-all policy: harmless on JSON, and a second
+// layer if a response is ever loaded as a document. The body document's own
+// policy (render.ContentSecurityPolicy) arrives with the read handlers (2f).
+func TestAPIResponsesCarryCSP(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t)
+
+	resp, err := http.Get(srv.URL + "/api/v1/version")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if got := resp.Header.Get("Content-Security-Policy"); got != "default-src 'none'; frame-ancestors 'self'" {
+		t.Errorf("Content-Security-Policy = %q, want the deny-all API policy", got)
+	}
+}

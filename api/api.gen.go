@@ -346,18 +346,21 @@ type MailMessage struct {
 	AccountId   string       `json:"accountId"`
 	Attachments []Attachment `json:"attachments"`
 	From        string       `json:"from"`
-	Id          string       `json:"id"`
-	Initials    string       `json:"initials"`
-	Needs       bool         `json:"needs"`
-	Paragraphs  []string     `json:"paragraphs"`
-	Preview     string       `json:"preview"`
-	Subject     string       `json:"subject"`
-	Summary     *string      `json:"summary,omitempty"`
-	Tag         *string      `json:"tag,omitempty"`
-	Time        string       `json:"time"`
-	ToFull      string       `json:"toFull"`
-	ToShort     string       `json:"toShort"`
-	Unread      bool         `json:"unread"`
+
+	// Html Server-sanitised HTML body, safe to place in the reader's sandboxed frame. Empty for a message with no HTML part; use paragraphs then.
+	Html       *string  `json:"html,omitempty"`
+	Id         string   `json:"id"`
+	Initials   string   `json:"initials"`
+	Needs      bool     `json:"needs"`
+	Paragraphs []string `json:"paragraphs"`
+	Preview    string   `json:"preview"`
+	Subject    string   `json:"subject"`
+	Summary    *string  `json:"summary,omitempty"`
+	Tag        *string  `json:"tag,omitempty"`
+	Time       string   `json:"time"`
+	ToFull     string   `json:"toFull"`
+	ToShort    string   `json:"toShort"`
+	Unread     bool     `json:"unread"`
 }
 
 // MailSummary defines model for MailSummary.
