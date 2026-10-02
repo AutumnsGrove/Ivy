@@ -219,7 +219,7 @@ E2E on both viewports + a live check on the dev mailbox/potato).
 | ~~Does Purelymail file a copy in Sent, or must Ivy `APPEND`?~~ Answered by S1: it does not, Ivy `APPEND`s. Send-as from a routed alias works (S1c); its exact scope is unprobed | 4 (spike early in 2) | Docs say send-as works; verify live |
 | Purelymail connection limits for N accounts (IDLE + work connections) | 2 | Budget RAM/connections on the potato |
 | Pure-Go SQLite compile time/RAM on the potato; FTS5 availability | 1 | Build while serving is the squeeze; cache warm |
-| Embedding scan cost and memory at 50k-100k messages | 2 | Batch streaming, int8 fallback, measure |
+| Embedding scan cost and memory at 50k-100k messages | 2 | Measured (S8): int8 768d, 73 MiB and 340 ms at 100k on the potato. Embedding itself is 17 s per chunk there, so backfill runs on a faster host (configurable endpoint) |
 | Jev `noul`/`score` shapes; accuracy and thresholds per question; per-email cost; injection behavior | 3 | JEV.md section 5; needs the operator's key |
 | Vision: do scanned PDFs go straight to a model? default cheap multimodal model | 3 | Pure Go cannot rasterize PDFs |
 | HTML sanitization edge cases and tracker coverage | 1 | Fuzz + XSS corpus + browser checks |
