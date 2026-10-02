@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"os"
@@ -30,6 +31,10 @@ func main() {
 		_ = os.Remove(dbPath + s)
 	}
 
+	attRate := 0.12
+	if v := os.Getenv("S10_ATT"); v != "" {
+		fmt.Sscan(v, &attRate)
+	}
 	words := loadWords(docs)
 	db, err := sql.Open("sqlite", "file:"+dbPath+"?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)")
 	if err != nil {
@@ -67,7 +72,7 @@ func main() {
 		var raw bytes.Buffer
 		fmt.Fprintf(&raw, "From: %s\r\nTo: me@example.com\r\nSubject: %s\r\nDate: Mon, 01 Jan 2024 10:00:00 +0000\r\nMessage-ID: <%d@example.com>\r\nMIME-Version: 1.0\r\n", from, subject, i)
 		hasAtt := 0
-		if r.Float64() < 0.12 { // 12% carry an attachment: random bytes, like a compressed PDF or JPEG
+		if r.Float64() < attRate { // by default 12% carry an attachment: random bytes, like a compressed PDF or JPEG
 			hasAtt = 1
 			attCount++
 			sz := int(math.Exp(r.NormFloat64()*1.1 + math.Log(150000)))
@@ -144,10 +149,16 @@ func main() {
 	}
 	vac := time.Since(t0)
 	sfi, _ := os.Stat(snap)
-	in, _ := os.ReadFile(snap)
+	// Stream the snapshot through zstd into a counter: reading it whole would need as much RAM
+	// again as the DB, which the board does not have.
+	sf, _ := os.Open(snap)
+	cw := &countWriter{}
+	zw, _ := zstd.NewWriter(cw, zstd.WithEncoderLevel(zstd.SpeedDefault), zstd.WithEncoderConcurrency(1))
 	t1 := time.Now()
-	zsnap := enc.EncodeAll(in, nil)
-	fmt.Printf("VACUUM INTO: %v (%.1f MiB snapshot); zstd of snapshot: %.1f MiB (%.0f%%) in %v\n", vac.Round(time.Millisecond), float64(sfi.Size())/(1<<20), float64(len(zsnap))/(1<<20), 100*float64(len(zsnap))/float64(len(in)), time.Since(t1).Round(time.Millisecond))
+	_, _ = io.Copy(zw, sf)
+	_ = zw.Close()
+	sf.Close()
+	fmt.Printf("VACUUM INTO: %v (%.1f MiB snapshot); zstd of snapshot: %.1f MiB (%.0f%%) in %v\n", vac.Round(time.Millisecond), float64(sfi.Size())/(1<<20), float64(cw.n)/(1<<20), 100*float64(cw.n)/float64(sfi.Size()), time.Since(t1).Round(time.Millisecond))
 
 	// Query sanity at this size: FTS and a list page.
 	t2 := time.Now()
@@ -162,6 +173,10 @@ func main() {
 	fmt.Printf("list page (50 newest): %v\n", time.Since(t3).Round(time.Microsecond))
 	_ = os.Remove(snap)
 }
+
+type countWriter struct{ n int64 }
+
+func (c *countWriter) Write(p []byte) (int, error) { c.n += int64(len(p)); return len(p), nil }
 
 func loadWords(dir string) []string {
 	var w []string
