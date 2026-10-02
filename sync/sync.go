@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -31,6 +32,10 @@ import (
 // unbounded read (STANDARDS.md section 7).
 const defaultBatchSize = 200
 
+// maxDateSkew is how far ahead of now a Date header may be before it is treated
+// as wrong; senders' clocks drift, but a message cannot be dated tomorrow-plus.
+const maxDateSkew = 24 * time.Hour
+
 // Account is the connection descriptor for one mirror account. Password comes
 // from the environment, is never persisted and never logged.
 type Account struct {
@@ -42,7 +47,10 @@ type Account struct {
 	SMTPPort int
 	Username string
 	Password string
-	TLS      bool
+	// Insecure sends the login in plaintext. It exists for the loopback fake
+	// mail world only; the zero value is implicit TLS so a forgotten field can
+	// never put a real password on the wire unencrypted.
+	Insecure bool
 }
 
 // Result summarizes one read fetch.
@@ -93,12 +101,26 @@ func (f *Fetcher) Fetch(ctx context.Context, acct Account) (Result, error) {
 	if err := f.ensureAccount(ctx, acct); err != nil {
 		return Result{}, fmt.Errorf("sync account %s: %w", acct.ID, err)
 	}
-	c, err := dial(acct)
+	c, err := dial(ctx, acct)
 	if err != nil {
 		return Result{}, fmt.Errorf("sync account %s: dial: %w", acct.ID, err)
 	}
 	defer func() { _ = c.Close() }()
+	// The IMAP client's commands take no context, so a server that goes quiet
+	// would block them forever. Closing the connection is what unblocks them.
+	stop := context.AfterFunc(ctx, func() { _ = c.Close() })
+	defer stop()
 
+	res, err := f.fetchAll(ctx, c, acct)
+	if err != nil && ctx.Err() != nil {
+		// The connection error is a symptom; report the cancellation that caused it.
+		return res, fmt.Errorf("sync account %s: %w", acct.ID, ctx.Err())
+	}
+	return res, err
+}
+
+// fetchAll logs in on an open connection and mirrors every selectable mailbox.
+func (f *Fetcher) fetchAll(ctx context.Context, c *imapclient.Client, acct Account) (Result, error) {
 	if err := c.Login(acct.Username, acct.Password).Wait(); err != nil {
 		return Result{}, fmt.Errorf("sync account %s: login: %w", acct.ID, err)
 	}
@@ -151,7 +173,9 @@ func (f *Fetcher) ensureAccount(ctx context.Context, acct Account) error {
 // mirror does not already hold, newest UID first. It returns how many messages
 // it stored and how many it skipped because the mirror already had them.
 func (f *Fetcher) fetchFolder(ctx context.Context, c *imapclient.Client, acct Account, mb *imap.ListData) (int, int, error) {
-	data, err := c.Select(mb.Mailbox, nil).Wait()
+	// Read-only (EXAMINE): this path never writes to the server, and chunk 3's
+	// writes will select read-write on their own.
+	data, err := c.Select(mb.Mailbox, &imap.SelectOptions{ReadOnly: true}).Wait()
 	if err != nil {
 		return 0, 0, fmt.Errorf("select %s: %w", mb.Mailbox, err)
 	}
@@ -243,7 +267,7 @@ func (f *Fetcher) fetchBatch(ctx context.Context, c *imapclient.Client, acct Acc
 			_ = cmd.Close()
 			return stored, fmt.Errorf("fetch body: %w", err)
 		}
-		if err := f.dbs.UpsertMessage(ctx, messageFrom(acct, folderID, buf, section)); err != nil {
+		if err := f.dbs.UpsertMessage(ctx, messageFrom(acct, folderID, buf, section, f.now())); err != nil {
 			_ = cmd.Close()
 			return stored, err
 		}
@@ -259,7 +283,7 @@ func (f *Fetcher) fetchBatch(ctx context.Context, c *imapclient.Client, acct Acc
 // supplies the cheap header fields; the raw body is decoded here so the mirror
 // holds the text, snippet, threading headers and auth signal. Sanitising the
 // HTML is render/'s job (chunk 2d), so body_html is left for it.
-func messageFrom(acct Account, folderID string, buf *imapclient.FetchMessageBuffer, section *imap.FetchItemBodySection) store.Message {
+func messageFrom(acct Account, folderID string, buf *imapclient.FetchMessageBuffer, section *imap.FetchItemBodySection, now time.Time) store.Message {
 	raw := buf.FindBodySection(section)
 	uid := uint32(buf.UID)
 	m := store.Message{
@@ -283,9 +307,10 @@ func messageFrom(acct Account, folderID string, buf *imapclient.FetchMessageBuff
 		m.CC = addresses(env.Cc)
 		m.Date = env.Date
 	}
-	if m.Date.IsZero() {
-		// A missing or unparsable Date header sorts by internal date so a
-		// clock-skewed message does not jump the inbox (ARCHITECTURE.md 9a).
+	if m.Date.IsZero() || m.Date.After(now.Add(maxDateSkew)) {
+		// A missing, unparsable or future-dated Date header sorts by internal
+		// date so a clock-skewed message does not pin itself to the top of the
+		// inbox (ARCHITECTURE.md 9a).
 		m.Date = buf.InternalDate
 	}
 	m.ContentKey = store.ContentKey(messageID, headerBlock(raw))
@@ -330,12 +355,34 @@ func selectable(mb *imap.ListData) bool {
 	return true
 }
 
-func dial(acct Account) (*imapclient.Client, error) {
+// dialTimeout bounds connecting and the TLS handshake to a host that does not
+// answer; the context can end it sooner.
+const dialTimeout = 15 * time.Second
+
+// dial opens the IMAP connection under ctx. It does not use imapclient.Dial*,
+// which take no context, so cancellation also reaches the connect and handshake.
+func dial(ctx context.Context, acct Account) (*imapclient.Client, error) {
 	addr := net.JoinHostPort(acct.IMAPHost, strconv.Itoa(acct.IMAPPort))
-	if acct.TLS {
-		return imapclient.DialTLS(addr, nil)
+	d := net.Dialer{Timeout: dialTimeout}
+	conn, err := d.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return nil, err
 	}
-	return imapclient.DialInsecure(addr, nil)
+	if acct.Insecure {
+		return imapclient.New(conn, nil), nil
+	}
+	tlsConn := tls.Client(conn, &tls.Config{
+		ServerName: acct.IMAPHost,
+		MinVersion: tls.VersionTLS12,
+		NextProtos: []string{"imap"},
+	})
+	hsCtx, cancel := context.WithTimeout(ctx, dialTimeout)
+	defer cancel()
+	if err := tlsConn.HandshakeContext(hsCtx); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return imapclient.New(tlsConn, nil), nil
 }
 
 // folderRowID is the stable mirror id for a mailbox, derived from its account

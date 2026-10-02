@@ -157,3 +157,36 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   outright when it finds no critical-path JS, so an empty scan can no longer look like a fast page.
 - Reviewed with no change needed: `ci.yml` (read-only token, SHA-pinned actions, no secrets, fork
   PRs safe), `docs.yml`, `guard.sh`, the smoke spec and its config, `web-assets` in the Makefile.
+
+## `42f86f3`..`c89c7ac` store (2a), `f7eb3f5` sync (2b)
+
+- **#24** · `f7eb3f5` · `sync/sync.go` · **bug** · only a *missing* `Date` fell back to the
+  internal date, but ARCHITECTURE.md 9a says clock-skewed mail sorts by internal date. A spam mail
+  dated 2099 would sit at the top of the inbox forever. A `Date` more than 24 h ahead of now now
+  falls back too. Test `TestFetchSortsFutureDatedMailByInternalDate`.
+- **#25** · `f7eb3f5` · `sync/sync.go` · **bug** · `Fetch(ctx, ...)` ignored its context once
+  connected: the IMAP client's commands take none, and `dial` had no timeout or context, so a
+  server that went quiet (phone asleep, VPN down) blocked the sync forever and cancellation did
+  nothing. `dial` now uses `DialContext` with a 15 s timeout and a context-bound TLS handshake,
+  and `context.AfterFunc` closes the connection when the context ends. The error reports the
+  cancellation, not the resulting I/O error. Test
+  `TestFetchStopsWhenContextEndsWhileServerStalls` (timed out before the fix).
+- **#26** · `f7eb3f5` · `sync/sync.go` · **standards** · `Account.TLS` defaulted to `false`, i.e.
+  plaintext, so a caller that forgot the field would send the real password unencrypted. Inverted
+  to `Insecure bool` (zero value = implicit TLS, TLS 1.2+, SNI = IMAP host); only the loopback
+  fake sets it. Test `TestFetchDefaultsToTLS`.
+- **#27** · `f7eb3f5` · `sync/sync.go` · **nit** · the read path `SELECT`ed read-write though it
+  never writes; it now uses `EXAMINE` (`ReadOnly: true`), so it cannot touch server state.
+- **#28** · `13411f5` · `internal/mailworld/imap.go` · **bug (fake)** · `slowConn.Read` used an
+  uninterruptible `time.Sleep`, so a client hanging up left a sleeping server goroutine that
+  goleak reported at exit. The delay now aborts when the connection closes.
+- **N7 (open, for 2d/2e)** · `42f86f3` · `store/messages.go` · `UpsertMessage` overwrites
+  `thread_id` and `body_html_sanitized` with whatever the caller holds on conflict. Today only new
+  rows are upserted (a repeat sync skips known UIDs), but chunk 3's flag/move updates and any
+  re-sync would blank the sanitised HTML 2d writes and the thread ids 2e writes. Give those
+  columns targeted `UPDATE`s (or leave them out of the conflict set) when they land.
+- **N8 (open, design)** · `efbeb2f` · `store/contentkey.go` · identical `Message-ID`s share a
+  content key by design (a message in two folders is one message), but derived state
+  (`needs_me`, tags) keys on `(account_id, content_key)`, so a hostile sender who copies a victim
+  message's `Message-ID` inherits its verdict and tags. Fine for a single operator today; worth a
+  line in the threat model before tags and triage write anything.

@@ -56,6 +56,7 @@ func accountFor(t *testing.T, w *mailworld.World, id, address, password string) 
 		ID: id, Address: address,
 		IMAPHost: host, IMAPPort: port,
 		Username: address, Password: password,
+		Insecure: true, // the fake world speaks plaintext on loopback
 	}
 }
 
@@ -500,5 +501,74 @@ func TestFetchAccountNotFoundStillWorks(t *testing.T) {
 	}
 	if _, err := ivysync.NewFetcher(dbs).Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret")); err != nil {
 		t.Fatalf("Fetch: %v", err)
+	}
+}
+
+// A Date header far in the future (clock-skewed sender or spam) would pin the
+// message to the top of the inbox forever, so it sorts by when it arrived
+// instead (ARCHITECTURE.md 9a).
+func TestFetchSortsFutureDatedMailByInternalDate(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+
+	skewed := mailworld.Msg().From("spam@example.com").To("me@grove.test").Subject("Win").Text("x").
+		Date(time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)).Build()
+	uid := acc.Deliver("INBOX", skewed)
+
+	acct := accountFor(t, w, "acct-1", "me@grove.test", "secret")
+	if _, err := ivysync.NewFetcher(dbs).Fetch(ctx, acct); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	m := mustMessage(t, dbs, mustFolder(t, dbs, "acct-1", "INBOX").ID, uid)
+	if !m.Date.Equal(m.InternalDate) {
+		t.Errorf("Date = %v, want the internal date %v for a future-dated message", m.Date, m.InternalDate)
+	}
+}
+
+// Fetch's context must be able to end a sync whose server has gone quiet; the
+// IMAP client itself takes no context, so cancellation has to close the
+// connection under it.
+func TestFetchStopsWhenContextEndsWhileServerStalls(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	w.Account("me@grove.test", "secret")
+	// Every server read takes a second, so an uncancelled sync needs several.
+	w.Fault(mailworld.Latency{Delay: time.Second})
+	dbs := newStore(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := ivysync.NewFetcher(dbs).Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret"))
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("Fetch succeeded against a stalled server")
+		}
+	case <-time.After(1500 * time.Millisecond):
+		t.Fatal("Fetch ignored its context while the server was stalled")
+	}
+}
+
+// The zero value of Account must never send a password in the clear: against a
+// plaintext server the TLS handshake fails before any login is attempted.
+func TestFetchDefaultsToTLS(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+
+	acct := accountFor(t, w, "acct-1", "me@grove.test", "secret")
+	acct.Insecure = false
+	if _, err := ivysync.NewFetcher(dbs).Fetch(context.Background(), acct); err == nil {
+		t.Fatal("Fetch logged in over plaintext without Insecure being set")
 	}
 }
