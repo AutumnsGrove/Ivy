@@ -138,8 +138,10 @@
 }
 
 /* ───────── night (default) ───────── */
+/* data-force pins one subtree to a theme, e.g. the tag editor's side-by-side night and day previews */
 :root,
-:root[data-theme='night'] {
+:root[data-theme='night'],
+[data-force='night'] {
 	color-scheme: dark;
 	--text: #f2eddc;
 	--muted: #b9c6bc;
@@ -204,7 +206,8 @@
 }
 
 /* ───────── day (daytime garden) ───────── */
-:root[data-theme='day'] {
+:root[data-theme='day'],
+[data-force='day'] {
 	color-scheme: light;
 	--text: #2a2014;
 	--muted: #54442f;
