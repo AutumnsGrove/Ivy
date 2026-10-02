@@ -16,6 +16,7 @@ type Account struct {
 	user     *imapmemserver.User
 	address  string
 	password string
+	sentCopy SentCopy
 }
 
 // Address is the account's email address (also its IMAP/SMTP username).

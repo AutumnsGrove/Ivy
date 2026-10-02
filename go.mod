@@ -4,6 +4,8 @@ go 1.26.1
 
 require (
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
+	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6
+	github.com/emersion/go-smtp v0.25.0
 	github.com/goccy/go-yaml v1.19.2
 	github.com/joho/godotenv v1.5.1
 	github.com/spf13/cobra v1.10.2
@@ -16,7 +18,6 @@ require (
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emersion/go-message v0.18.2 // indirect
-	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6 // indirect
 	github.com/getkin/kin-openapi v0.142.0 // indirect
 	github.com/go-openapi/jsonpointer v0.23.1 // indirect
 	github.com/go-openapi/swag/jsonname v0.26.0 // indirect

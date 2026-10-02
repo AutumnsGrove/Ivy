@@ -10,11 +10,13 @@ import (
 	"io"
 	"log"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/emersion/go-imap/v2/imapserver/imapmemserver"
+	"github.com/emersion/go-smtp"
 )
 
 // World owns the fake servers, the accounts and the injected faults.
@@ -22,6 +24,9 @@ type World struct {
 	imapAddr  string
 	ln        net.Listener
 	srv       *imapserver.Server
+	smtpAddr  string
+	smtpLn    net.Listener
+	smtpSrv   *smtp.Server
 	mem       *imapmemserver.Server
 	clock     *Clock
 	condStore bool
@@ -29,9 +34,11 @@ type World struct {
 	mu       sync.Mutex
 	faults   []Fault
 	accounts map[string]*Account
+	sent     []SentMessage
 }
 
-// New starts the fake IMAP server on a random loopback port. Close releases it.
+// New starts the fake IMAP and SMTP servers on random loopback ports. Close
+// releases them.
 func New(opts ...Option) (*World, error) {
 	w := &World{
 		mem:       imapmemserver.New(),
@@ -63,6 +70,19 @@ func New(opts ...Option) (*World, error) {
 	w.ln = &faultListener{Listener: ln, w: w}
 	w.imapAddr = ln.Addr().String()
 	go func() { _ = w.srv.Serve(w.ln) }()
+
+	w.smtpSrv = smtp.NewServer(&smtpBackend{w: w})
+	w.smtpSrv.Domain = "mailworld"
+	w.smtpSrv.AllowInsecureAuth = true
+	w.smtpSrv.ErrorLog = log.New(io.Discard, "", 0)
+	smtpLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		_ = w.srv.Close()
+		return nil, err
+	}
+	w.smtpAddr = smtpLn.Addr().String()
+	w.smtpLn = smtpLn
+	go func() { _ = w.smtpSrv.Serve(smtpLn) }()
 	return w, nil
 }
 
@@ -79,7 +99,13 @@ func WithoutCondStore() Option {
 func (w *World) IMAPAddr() string { return w.imapAddr }
 
 // Close stops every listener and connection.
-func (w *World) Close() error { return w.srv.Close() }
+func (w *World) Close() error {
+	_ = w.smtpSrv.Close()
+	// Serve may not have registered the listener with the server yet, so close
+	// it directly too: otherwise its Accept loop leaks (caught by goleak).
+	_ = w.smtpLn.Close()
+	return w.srv.Close()
+}
 
 // Clock is the injected clock every fake uses.
 func (w *World) Clock() *Clock { return w.clock }
@@ -89,14 +115,15 @@ func (w *World) Clock() *Clock { return w.clock }
 func (w *World) Account(address, password string) *Account {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if a, ok := w.accounts[address]; ok {
+	key := strings.ToLower(address)
+	if a, ok := w.accounts[key]; ok {
 		return a
 	}
 	user := imapmemserver.NewUser(address, password)
 	w.mem.AddUser(user)
 	a := &Account{world: w, user: user, address: address, password: password}
 	_ = a.CreateMailbox("INBOX")
-	w.accounts[address] = a
+	w.accounts[key] = a
 	return a
 }
 
@@ -136,6 +163,28 @@ func (w *World) takeDropFault() (DropConnection, bool) {
 		}
 	}
 	return DropConnection{}, false
+}
+
+// takeSMTPReject removes and returns the first SMTPReject fault, if any, so a
+// single armed rejection models a one-off transient failure.
+func (w *World) takeSMTPReject() (SMTPReject, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for i, f := range w.faults {
+		if rej, ok := f.(SMTPReject); ok {
+			w.faults = append(w.faults[:i], w.faults[i+1:]...)
+			return rej, true
+		}
+	}
+	return SMTPReject{}, false
+}
+
+// accountByAddress returns the account for a local address, or nil when the
+// address is outside the fake world.
+func (w *World) accountByAddress(address string) *Account {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.accounts[strings.ToLower(address)]
 }
 
 // Fault is a scenario-armed failure the fake servers inject.
