@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -185,8 +187,9 @@ func TestFetchNewestFirstAndResumes(t *testing.T) {
 	}
 	fetcher := ivysync.NewFetcher(dbs, ivysync.WithBatchSize(1))
 
-	// LOGIN, LIST, SELECT, FETCH #1, then the connection drops on FETCH #2.
-	w.Fault(mailworld.DropConnection{After: 5})
+	// LOGIN, LIST, SELECT, then message 1's metadata FETCH and body FETCH, and the
+	// connection drops on message 2's metadata FETCH (the sixth command).
+	w.Fault(mailworld.DropConnection{After: 6})
 	if _, err := fetcher.Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret")); err == nil {
 		t.Fatal("first Fetch succeeded despite the armed drop, want a partial failure")
 	}
@@ -571,4 +574,155 @@ func TestFetchDefaultsToTLS(t *testing.T) {
 	if _, err := ivysync.NewFetcher(dbs).Fetch(context.Background(), acct); err == nil {
 		t.Fatal("Fetch logged in over plaintext without Insecure being set")
 	}
+}
+
+// attachmentMessage builds a text message with one attachment of n bytes.
+func attachmentMessage(subject string, n int) []byte {
+	return mailworld.Msg().From("Alice <alice@example.com>").To("me@grove.test").Subject(subject).
+		Text("the readable part").
+		Attach("big.bin", "application/octet-stream", bytes.Repeat([]byte{0x5a}, n)).Build()
+}
+
+func spoolFile(t *testing.T, dbs *store.DBs, m store.Message) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dbs.Dir, filepath.FromSlash(m.RawPath)))
+	if err != nil {
+		t.Fatalf("read spool file %q: %v", m.RawPath, err)
+	}
+	return data
+}
+
+// A message too big for memory but within the download limit is streamed to a
+// file; the database row points at it and holds no raw bytes, and the readable
+// text is still parsed out of it.
+func TestFetchSpoolsAMidSizeMessageToDisk(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+
+	raw := attachmentMessage("mid", 100_000)
+	uid := acc.Deliver("INBOX", raw)
+
+	f := ivysync.NewFetcher(dbs, ivysync.WithMessageLimits(4<<10, 1<<20))
+	if _, err := f.Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret")); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	m := mustMessage(t, dbs, mustFolder(t, dbs, "acct-1", "INBOX").ID, uid)
+	if m.RawPath == "" || len(m.RawBlob) != 0 {
+		t.Fatalf("RawPath = %q, len(RawBlob) = %d; want the message on disk and not in the row", m.RawPath, len(m.RawBlob))
+	}
+	if !bytes.Equal(spoolFile(t, dbs, m), raw) {
+		t.Error("the spooled file is not the message the server holds")
+	}
+	if m.BodyStatus != store.BodyOK || !m.HasAttachments {
+		t.Errorf("BodyStatus = %q, HasAttachments = %v", m.BodyStatus, m.HasAttachments)
+	}
+	if !strings.Contains(m.BodyText, "the readable part") {
+		t.Errorf("BodyText = %q, want the text parsed out of the spooled file", m.BodyText)
+	}
+	if m.Subject != "mid" || m.From.Address != "alice@example.com" {
+		t.Errorf("envelope fields lost: %+v", m)
+	}
+}
+
+// Above the download limit the body is never requested: the envelope is
+// mirrored, the row says why there is no body, and a repeat run leaves it alone.
+func TestFetchDoesNotDownloadAnOversizeMessage(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+
+	uid := acc.Deliver("INBOX", attachmentMessage("too big", 200_000))
+	f := ivysync.NewFetcher(dbs, ivysync.WithMessageLimits(4<<10, 50<<10))
+	acct := accountFor(t, w, "acct-1", "me@grove.test", "secret")
+	if _, err := f.Fetch(ctx, acct); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	m := mustMessage(t, dbs, mustFolder(t, dbs, "acct-1", "INBOX").ID, uid)
+	if m.BodyStatus != store.BodyTooLarge {
+		t.Errorf("BodyStatus = %q, want %q", m.BodyStatus, store.BodyTooLarge)
+	}
+	if m.RawPath != "" || len(m.RawBlob) != 0 || m.BodyText != "" {
+		t.Errorf("an undownloaded message has a body: path=%q blob=%d text=%q", m.RawPath, len(m.RawBlob), m.BodyText)
+	}
+	if m.Subject != "too big" || m.From.Address != "alice@example.com" || m.Size < 200_000 {
+		t.Errorf("envelope fields missing: %+v", m)
+	}
+	if m.ContentKey == "" {
+		t.Error("ContentKey is empty; the message needs a stable identity")
+	}
+	if _, err := os.Stat(filepath.Join(dbs.Dir, "spool")); err == nil {
+		entries, _ := os.ReadDir(filepath.Join(dbs.Dir, "spool"))
+		if len(entries) != 0 {
+			t.Errorf("an oversize message left spool entries: %v", entries)
+		}
+	}
+
+	res, err := f.Fetch(ctx, acct)
+	if err != nil {
+		t.Fatalf("second Fetch: %v", err)
+	}
+	if res.Stored != 0 || res.Skipped != 1 {
+		t.Errorf("second run = %+v, want the message skipped", res)
+	}
+}
+
+// All three tiers in one folder and one batch.
+func TestFetchHandlesEveryTierInOneBatch(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+
+	small := acc.Deliver("INBOX", mailworld.Msg().From("a@example.com").To("me@grove.test").Subject("small").Text("tiny").Build())
+	mid := acc.Deliver("INBOX", attachmentMessage("mid", 30_000))
+	huge := acc.Deliver("INBOX", attachmentMessage("huge", 300_000))
+
+	f := ivysync.NewFetcher(dbs, ivysync.WithMessageLimits(4<<10, 100<<10))
+	res, err := f.Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret"))
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if res.Stored != 3 {
+		t.Errorf("Stored = %d, want 3", res.Stored)
+	}
+	folder := mustFolder(t, dbs, "acct-1", "INBOX").ID
+	ms, mm, mh := mustMessage(t, dbs, folder, small), mustMessage(t, dbs, folder, mid), mustMessage(t, dbs, folder, huge)
+	if len(ms.RawBlob) == 0 || ms.RawPath != "" || ms.BodyStatus != store.BodyOK {
+		t.Errorf("small: blob=%d path=%q status=%q; want it in the database", len(ms.RawBlob), ms.RawPath, ms.BodyStatus)
+	}
+	if mm.RawPath == "" || len(mm.RawBlob) != 0 || mm.BodyStatus != store.BodyOK {
+		t.Errorf("mid: blob=%d path=%q status=%q; want it on disk", len(mm.RawBlob), mm.RawPath, mm.BodyStatus)
+	}
+	if mh.BodyStatus != store.BodyTooLarge || mh.RawPath != "" || len(mh.RawBlob) != 0 {
+		t.Errorf("huge: blob=%d path=%q status=%q; want it not downloaded", len(mh.RawBlob), mh.RawPath, mh.BodyStatus)
+	}
+}
+
+// The spool path is built from the folder row id (a hash) and the UID, never
+// from the account id, which the operator can set to anything.
+func TestFetchSpoolPathCannotEscapeTheDataDir(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+
+	uid := acc.Deliver("INBOX", attachmentMessage("mid", 30_000))
+	f := ivysync.NewFetcher(dbs, ivysync.WithMessageLimits(4<<10, 1<<20))
+	if _, err := f.Fetch(ctx, accountFor(t, w, "../../evil", "me@grove.test", "secret")); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	m := mustMessage(t, dbs, mustFolder(t, dbs, "../../evil", "INBOX").ID, uid)
+	if strings.Contains(m.RawPath, "..") || !strings.HasPrefix(m.RawPath, "spool/") {
+		t.Errorf("RawPath = %q, want a path under spool/ with no parent references", m.RawPath)
+	}
+	_ = spoolFile(t, dbs, m)
 }

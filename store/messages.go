@@ -164,25 +164,25 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 // It is its own statement, not part of UpsertMessage, so a later sync of the
 // same message cannot blank it.
 func (d *DBs) SetMessageThread(ctx context.Context, id, threadID string) error {
-	return d.setMessageColumn(ctx, id, "thread_id", threadID)
+	return d.setMessageColumn(ctx, `UPDATE messages SET thread_id = ? WHERE id = ?`, id, threadID)
 }
 
 // SetMessageBodyHTML stores the server-sanitised HTML for a message (chunk 2d),
 // for the same reason as SetMessageThread.
 func (d *DBs) SetMessageBodyHTML(ctx context.Context, id, html string) error {
-	return d.setMessageColumn(ctx, id, "body_html_sanitized", html)
+	return d.setMessageColumn(ctx, `UPDATE messages SET body_html_sanitized = ? WHERE id = ?`, id, html)
 }
 
-// setMessageColumn updates one derived column. column is a literal from this
-// file, never input, so building the statement from it is safe.
-func (d *DBs) setMessageColumn(ctx context.Context, id, column, value string) error {
-	res, err := d.Mirror.Write.ExecContext(ctx, `UPDATE messages SET `+column+` = ? WHERE id = ?`, value, id)
+// setMessageColumn runs one of the fixed single-column UPDATE statements above,
+// which take the new value first and the message id second.
+func (d *DBs) setMessageColumn(ctx context.Context, update, id, value string) error {
+	res, err := d.Mirror.Write.ExecContext(ctx, update, value, id)
 	if err != nil {
-		return fmt.Errorf("set %s on message %s: %w", column, id, err)
+		return fmt.Errorf("update derived column of message %s: %w", id, err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("set %s on message %s: %w", column, id, err)
+		return fmt.Errorf("update derived column of message %s: %w", id, err)
 	}
 	if n == 0 {
 		return ErrNotFound

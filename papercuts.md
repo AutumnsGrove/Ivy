@@ -334,3 +334,34 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   written on the first insert only, and owned by `SetMessageThread` and `SetMessageBodyHTML`
   (each `ErrNotFound` on a missing id). Tests `TestUpsertKeepsDerivedColumns` (failed with both
   fields empty before the fix) and `TestSetDerivedColumnsOnMissingMessage`.
+
+## N11 resolved: big messages and attachments never sit in memory
+
+- **#39 (resolves N11)** · `f7eb3f5` · `sync/`, `mime/`, `store/` · **risk (memory)** · the fetch
+  asked for the size and the body in one command and collected each message whole, so a 100 MB
+  mail was downloaded, held in memory (raw plus decoded attachments) and stored as a database
+  blob, on a board with ~800 MB free. Now, at the operator's direction (large attachments must
+  never go into memory):
+  - Sync fetches envelope, flags and size first (small whatever the messages weigh), then routes
+    each message by size: up to `InlineMessageBytes` (2 MiB) as before; up to `MaxMessageBytes`
+    (64 MiB) streamed from the IMAP literal to `spool/<folder row id>/<uid>.eml` through an
+    atomic temp-file-and-rename writer that cleans up on any failure and enforces the limit on
+    the bytes that actually arrive (a server may send more than it announced); above that the
+    body is never requested and the row is `body_status = too_large`.
+  - `mime.ParseStream` walks a spooled message once in a fixed buffer, keeping headers, inline
+    text up to 2 MiB, other parts up to 64 KiB and at most 8 MiB in total; every bigger part is
+    read through and recorded as a `PartInfo` (path, name, type, size). Depth, part count and
+    header size are capped; a body that cannot be walked yields the headers with `BodySkipped`.
+  - `mime.CopyPart` decodes one part from the file straight to a writer, so an attachment is
+    read from disk each time it is served.
+  - Store migration 4 adds `raw_path` and `body_status`; `DBs.Dir` locates the spool. The spool
+    path is built from the folder row id (a hash) and the UID, never the account id, which the
+    operator can set to anything.
+  - Tests: a 100 MiB message parses and a 100 MiB attachment is served while allocating under
+    32 MiB (they would need over 100 MiB if buffered); mid-size, oversize, mixed-tier and
+    path-escape cases through the real IMAP client; the spool writer's partial-failure,
+    over-limit and replace cases; a time-bounded fuzz target for the new parser (60 s clean).
+  - Limits are in the table in `STANDARDS.md` 4a.
+- **N12 (open, for chunk 3)** · `sync/spool.go` · spool files are never deleted by sync. When
+  chunk 3 disables or expunges a message it must also remove `raw_path`; until then an expunged
+  message's file stays on disk (bounded by the 64 MiB cap per message, and the target has 256 GB).

@@ -79,8 +79,19 @@ Mirror tables (`mirror.db`, rebuildable from IMAP):
   highestmodseq, last_sync_at)
 - `messages` (id, account_id, folder_id, uid, content_key, message_id_hdr, in_reply_to, references, subject,
   from/to/cc/reply_to/delivered_to JSON, date, size, flags JSON, internaldate, auth_results JSON,
-  has_attachments, raw_blob (zstd/gzip, nullable until fetched), body_text, body_html_sanitized,
+  has_attachments, raw_blob, raw_path, body_status, body_text, body_html_sanitized,
   thread_id, snippet, parse_errors JSON). Unique (folder_id, uid).
+  **Where the raw message lives depends on its size** (limits in `STANDARDS.md` 4a): up to 2 MiB
+  it is `raw_blob` in the row; from 2 MiB to 64 MiB it is a file at `raw_path` (relative to the data
+  directory, `spool/<folder row id>/<uid>.eml`, mode 0600, written atomically) and `raw_blob` is
+  empty, so reading a row never loads the bytes; above 64 MiB it is not downloaded at all and
+  `body_status` is `too_large` (the envelope is mirrored and the UI offers "open in webmail").
+  A spooled message is parsed by `mime.ParseStream`, which keeps only headers, text bodies and
+  small parts in memory and records the rest as `PartInfo`; an attachment is served by
+  `mime.CopyPart`, which decodes it from the file straight to the response in a fixed buffer, so
+  attachments are never held in memory. The spool is part of the mirror (rebuildable from IMAP,
+  not backed up). `thread_id` and `body_html_sanitized` are written by their own layers
+  (`SetMessageThread`, `SetMessageBodyHTML`) and are not touched by a re-sync.
 - `threads` (id, account_id, root_message_id, subject_norm, last_date, message_count)
 - `attachments` (id, message_id, filename, mime, size, content_hash, cid, storage_path)
 - `extracted_text` (attachment_id | message_id, tier, text, status)

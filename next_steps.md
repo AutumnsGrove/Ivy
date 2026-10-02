@@ -50,10 +50,19 @@ enforced by tests and CI, not just stated here.
 - **Config and scenario YAML are strict** (unknown keys fail). Keep new keys in the structs.
 - **API responses carry** `Cache-Control: no-store`, and every response `nosniff`,
   `Referrer-Policy: no-referrer` and `X-Frame-Options: SAMEORIGIN`. 2d adds the CSP.
+- **Failure paths are first-class** (`STANDARDS.md` 4a, with a limits table). Anything sized by the
+  sender is bounded and streamed through disk. Sync tiers a message by size: up to 2 MiB in
+  `raw_blob`, up to 64 MiB streamed to `spool/<folder>/<uid>.eml` (`raw_path`), above that not
+  downloaded (`body_status = too_large`). **2f/2d must use `mime.CopyPart(file, partPath, w)` to
+  serve an attachment and `mime.ParseStream` to read a spooled message; never `os.ReadFile` a
+  spooled message or read `raw_blob` to render a big one.** `PartInfo.Path` is the part path.
+  Sync never deletes spool files; chunk 3's disable-and-rebuild sweep must remove the file when it
+  disables or expunges a message.
+- **Derived columns have their own setters.** 2d writes `store.SetMessageBodyHTML`, 2e writes
+  `store.SetMessageThread`; `UpsertMessage` never overwrites them after the first insert.
 - **Open items that need a decision** are `N`-numbered in `papercuts.md`: N9 (trusting
-  `Authentication-Results` needs an `authserv-id` allowlist), N7 (`UpsertMessage` overwrites
-  `thread_id` and the sanitised HTML on conflict, so 2d/2e need targeted updates), N11 (no
-  per-message size cap in the fetch), N4/N5 (measure on the potato).
+  `Authentication-Results` needs an `authserv-id` allowlist) and N4/N5 (measure on the potato,
+  held for now).
 
 ## ▶ Now: Chunk 2 (Milestone 1: Read) — 2a-2c done, start 2d
 

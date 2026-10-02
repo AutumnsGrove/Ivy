@@ -16,7 +16,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net"
+	"os"
+	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -63,9 +67,31 @@ type Result struct {
 // Fetcher mirrors accounts into the store. It is stateless between runs, so a
 // crashed run resumes by asking the store which UIDs it already holds.
 type Fetcher struct {
-	dbs   *store.DBs
-	now   func() time.Time
-	batch int
+	dbs    *store.DBs
+	now    func() time.Time
+	batch  int
+	inline int64 // largest message fetched into memory
+	max    int64 // largest message downloaded at all
+}
+
+// Message size limits (STANDARDS.md 4a). A message up to InlineMessageBytes is
+// fetched into memory and kept in the database. Up to MaxMessageBytes it is
+// streamed to a file in the spool directory and parsed from there, so neither
+// the message nor its attachments are ever held whole in memory. Above that it
+// is not downloaded: the envelope is mirrored with body_status too_large.
+const (
+	InlineMessageBytes = 2 << 20
+	MaxMessageBytes    = 64 << 20
+)
+
+// WithMessageLimits overrides the size tiers; tests use small ones so a few
+// kilobytes exercise every path.
+func WithMessageLimits(inlineBytes, maxBytes int64) Option {
+	return func(f *Fetcher) {
+		if inlineBytes > 0 && maxBytes >= inlineBytes {
+			f.inline, f.max = inlineBytes, maxBytes
+		}
+	}
 }
 
 // Option customises a Fetcher.
@@ -87,7 +113,7 @@ func WithBatchSize(n int) Option {
 
 // NewFetcher builds a Fetcher over the mirror.
 func NewFetcher(dbs *store.DBs, opts ...Option) *Fetcher {
-	f := &Fetcher{dbs: dbs, now: time.Now, batch: defaultBatchSize}
+	f := &Fetcher{dbs: dbs, now: time.Now, batch: defaultBatchSize, inline: InlineMessageBytes, max: MaxMessageBytes}
 	for _, opt := range opts {
 		opt(f)
 	}
@@ -243,19 +269,72 @@ func (f *Fetcher) fetchFolder(ctx context.Context, c *imapclient.Client, acct Ac
 	return stored, len(have), nil
 }
 
-// fetchBatch streams one UID set's envelope, flags and raw body and upserts
-// each message as it arrives, so a dropped connection keeps the progress it
-// made rather than losing the whole batch.
+// fetchBatch mirrors one UID set. It first asks for every message's envelope,
+// flags and size, which is small whatever the messages weigh, then fetches each
+// body by size tier (see InlineMessageBytes). Each message is upserted as soon as
+// it is complete, so a dropped connection keeps the progress it made rather than
+// losing the whole batch.
 func (f *Fetcher) fetchBatch(ctx context.Context, c *imapclient.Client, acct Account, folderID string, set imap.UIDSet) (int, error) {
-	section := &imap.FetchItemBodySection{Peek: true}
-	cmd := c.Fetch(set, &imap.FetchOptions{
+	metas, err := c.Fetch(set, &imap.FetchOptions{
 		UID:          true,
 		Flags:        true,
 		Envelope:     true,
 		InternalDate: true,
 		RFC822Size:   true,
-		BodySection:  []*imap.FetchItemBodySection{section},
-	})
+	}).Collect()
+	if err != nil {
+		return 0, fmt.Errorf("fetch envelopes: %w", err)
+	}
+
+	var inline imap.UIDSet
+	var spooled []*imapclient.FetchMessageBuffer
+	byUID := make(map[imap.UID]*imapclient.FetchMessageBuffer, len(metas))
+	stored := 0
+	for _, meta := range metas {
+		byUID[meta.UID] = meta
+		switch {
+		case meta.RFC822Size > f.max:
+			if err := f.dbs.UpsertMessage(ctx, f.envelopeOnly(acct, folderID, meta)); err != nil {
+				return stored, err
+			}
+			stored++
+		case meta.RFC822Size > 0 && meta.RFC822Size <= f.inline:
+			inline.AddNum(meta.UID)
+		default:
+			// Includes a size the server did not report: the spool path is the one
+			// that is safe whatever the message turns out to weigh.
+			spooled = append(spooled, meta)
+		}
+	}
+
+	n, err := f.fetchInline(ctx, c, acct, folderID, inline, byUID)
+	stored += n
+	if err != nil {
+		return stored, err
+	}
+	for _, meta := range spooled {
+		if err := ctx.Err(); err != nil {
+			return stored, err
+		}
+		ok, err := f.fetchSpooled(ctx, c, acct, folderID, meta)
+		if err != nil {
+			return stored, err
+		}
+		if ok {
+			stored++
+		}
+	}
+	return stored, nil
+}
+
+// fetchInline fetches the bodies of small messages in one command, collecting
+// each into memory, and stores the raw bytes in the row.
+func (f *Fetcher) fetchInline(ctx context.Context, c *imapclient.Client, acct Account, folderID string, set imap.UIDSet, byUID map[imap.UID]*imapclient.FetchMessageBuffer) (int, error) {
+	if len(set) == 0 {
+		return 0, nil
+	}
+	section := &imap.FetchItemBodySection{Peek: true}
+	cmd := c.Fetch(set, &imap.FetchOptions{UID: true, BodySection: []*imap.FetchItemBodySection{section}})
 	stored := 0
 	for {
 		data := cmd.Next()
@@ -267,7 +346,16 @@ func (f *Fetcher) fetchBatch(ctx context.Context, c *imapclient.Client, acct Acc
 			_ = cmd.Close()
 			return stored, fmt.Errorf("fetch body: %w", err)
 		}
-		if err := f.dbs.UpsertMessage(ctx, messageFrom(acct, folderID, buf, section, f.now())); err != nil {
+		meta, ok := byUID[buf.UID]
+		if !ok {
+			continue // the server sent a message we did not ask about
+		}
+		raw := buf.FindBodySection(section)
+		m := f.baseMessage(acct, folderID, meta)
+		m.RawBlob = raw
+		m.ContentKey = store.ContentKey(m.MessageID, headerBlock(raw))
+		applyParsed(&m, mailmime.Parse(raw))
+		if err := f.dbs.UpsertMessage(ctx, m); err != nil {
 			_ = cmd.Close()
 			return stored, err
 		}
@@ -279,12 +367,95 @@ func (f *Fetcher) fetchBatch(ctx context.Context, c *imapclient.Client, acct Acc
 	return stored, nil
 }
 
-// messageFrom projects one FETCH response into a mirror row. The envelope
-// supplies the cheap header fields; the raw body is decoded here so the mirror
-// holds the text, snippet, threading headers and auth signal. Sanitising the
-// HTML is render/'s job (chunk 2d), so body_html is left for it.
-func messageFrom(acct Account, folderID string, buf *imapclient.FetchMessageBuffer, section *imap.FetchItemBodySection, now time.Time) store.Message {
-	raw := buf.FindBodySection(section)
+// fetchSpooled streams one message's body to a file under the data directory
+// and parses it from there, so the message and its attachments are never held
+// whole in memory. It reports whether a row was stored; a message that expunged
+// itself between the two commands, or that delivered more than the limit, is not
+// an error for the run.
+func (f *Fetcher) fetchSpooled(ctx context.Context, c *imapclient.Client, acct Account, folderID string, meta *imapclient.FetchMessageBuffer) (bool, error) {
+	section := &imap.FetchItemBodySection{Peek: true}
+	cmd := c.Fetch(imap.UIDSetNum(meta.UID), &imap.FetchOptions{UID: true, BodySection: []*imap.FetchItemBodySection{section}})
+
+	rel := path.Join("spool", folderID, strconv.FormatUint(uint64(meta.UID), 10)+".eml")
+	var spoolErr error
+	got := false
+	for msg := cmd.Next(); msg != nil; msg = cmd.Next() {
+		for item := msg.Next(); item != nil; item = msg.Next() {
+			body, ok := item.(imapclient.FetchItemDataBodySection)
+			if !ok || got || spoolErr != nil {
+				continue // the client discards what we do not read
+			}
+			if _, err := writeSpool(filepath.Join(f.dbs.Dir, filepath.FromSlash(rel)), body.Literal, f.max); err != nil {
+				spoolErr = err
+				continue
+			}
+			got = true
+		}
+	}
+	if err := cmd.Close(); err != nil {
+		return false, fmt.Errorf("fetch body %d: %w", meta.UID, err)
+	}
+	switch {
+	case errors.Is(spoolErr, errSpoolTooLarge):
+		// The server announced a size within the limit and sent more. Treat it as
+		// over the limit rather than trust either number.
+		return true, f.dbs.UpsertMessage(ctx, f.envelopeOnly(acct, folderID, meta))
+	case spoolErr != nil:
+		return false, spoolErr
+	case !got:
+		return false, nil
+	}
+
+	m := f.baseMessage(acct, folderID, meta)
+	m.RawPath = rel
+	parsed, header, err := parseSpooled(filepath.Join(f.dbs.Dir, filepath.FromSlash(rel)))
+	if err != nil {
+		return false, err
+	}
+	m.ContentKey = store.ContentKey(m.MessageID, headerBlock(header))
+	applyParsed(&m, parsed)
+	if parsed.BodySkipped {
+		m.BodyStatus = store.BodyUnparsed
+	}
+	return true, f.dbs.UpsertMessage(ctx, m)
+}
+
+// parseSpooled reads a spooled message from disk in a single pass, returning the
+// parsed fields and the header block (the content key needs it when a message has
+// no Message-ID).
+func parseSpooled(file string) (mailmime.Parsed, []byte, error) {
+	fh, err := os.Open(file) //nolint:gosec // G304: a path this package built from a folder id and a UID
+	if err != nil {
+		return mailmime.Parsed{}, nil, fmt.Errorf("open spooled message: %w", err)
+	}
+	defer func() { _ = fh.Close() }()
+	header, err := mailmime.HeaderBlock(fh)
+	if err != nil {
+		header = nil // an oversize header block is reported by ParseStream below
+	}
+	if _, err := fh.Seek(0, io.SeekStart); err != nil {
+		return mailmime.Parsed{}, nil, fmt.Errorf("rewind spooled message: %w", err)
+	}
+	return mailmime.ParseStream(fh), header, nil
+}
+
+// envelopeOnly builds the row for a message that is not downloaded: the
+// envelope fields the first FETCH returned, an explicit status, and a content
+// key made from the envelope since there is no header block to hash.
+func (f *Fetcher) envelopeOnly(acct Account, folderID string, meta *imapclient.FetchMessageBuffer) store.Message {
+	m := f.baseMessage(acct, folderID, meta)
+	m.BodyStatus = store.BodyTooLarge
+	// No UID in the fallback: the key must survive a move to another folder.
+	m.ContentKey = store.ContentKey(m.MessageID, fmt.Appendf(nil, "%d|%s|%s|%s",
+		meta.RFC822Size, meta.InternalDate.UTC().Format(time.RFC3339), m.From.Address, m.Subject))
+	return m
+}
+
+// baseMessage projects the metadata FETCH (envelope, flags, size, internal
+// date) into a mirror row. Every tier starts here; the body fields are filled in
+// afterwards by applyParsed, or left empty for a message that is not downloaded.
+// Sanitising the HTML is render/'s job (chunk 2d), so body_html is left for it.
+func (f *Fetcher) baseMessage(acct Account, folderID string, buf *imapclient.FetchMessageBuffer) store.Message {
 	uid := uint32(buf.UID)
 	m := store.Message{
 		ID:           messageRowID(folderID, uid),
@@ -293,13 +464,10 @@ func messageFrom(acct Account, folderID string, buf *imapclient.FetchMessageBuff
 		UID:          uid,
 		Size:         buf.RFC822Size,
 		InternalDate: buf.InternalDate,
-		RawBlob:      raw,
 		Flags:        flagStrings(buf.Flags),
 	}
-	var messageID string
 	if env := buf.Envelope; env != nil {
-		messageID = env.MessageID
-		m.MessageID = wrapMessageID(messageID)
+		m.MessageID = wrapMessageID(env.MessageID)
 		m.Subject = env.Subject
 		m.InReplyTo = joinMessageIDs(env.InReplyTo)
 		m.From = firstAddress(env.From)
@@ -307,18 +475,20 @@ func messageFrom(acct Account, folderID string, buf *imapclient.FetchMessageBuff
 		m.CC = addresses(env.Cc)
 		m.Date = env.Date
 	}
-	if m.Date.IsZero() || m.Date.After(now.Add(maxDateSkew)) {
+	if m.Date.IsZero() || m.Date.After(f.now().Add(maxDateSkew)) {
 		// A missing, unparsable or future-dated Date header sorts by internal
 		// date so a clock-skewed message does not pin itself to the top of the
 		// inbox (ARCHITECTURE.md 9a).
 		m.Date = buf.InternalDate
 	}
-	m.ContentKey = store.ContentKey(messageID, headerBlock(raw))
+	return m
+}
 
-	parsed := mailmime.Parse(raw)
+// applyParsed copies what the parser read from the body into the row.
+func applyParsed(m *store.Message, parsed mailmime.Parsed) {
 	m.BodyText = parsed.Text
 	m.Snippet = parsed.Snippet
-	m.HasAttachments = len(parsed.Attachments) > 0
+	m.HasAttachments = len(parsed.Attachments) > 0 || hasLargeAttachment(parsed.Large)
 	m.References = strings.Join(parsed.References, " ")
 	if len(parsed.InReplyTo) > 0 {
 		// Prefer the raw header; ENVELOPE is the fallback when it is absent.
@@ -330,7 +500,17 @@ func messageFrom(acct Account, folderID string, buf *imapclient.FetchMessageBuff
 		SPF: parsed.Auth.SPF, DKIM: parsed.Auth.DKIM, DMARC: parsed.Auth.DMARC, Raw: parsed.Auth.Raw,
 	}
 	m.ParseErrors = parsed.Errors
-	return m
+}
+
+// hasLargeAttachment reports whether any part left on disk is a file, as
+// opposed to a very large inline text body.
+func hasLargeAttachment(large []mailmime.PartInfo) bool {
+	for _, l := range large {
+		if l.Attachment {
+			return true
+		}
+	}
+	return false
 }
 
 // parsedAddresses converts the parser's own address type to the mirror's.

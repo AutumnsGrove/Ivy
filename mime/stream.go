@@ -380,3 +380,10 @@ func joinPath(parent string, index int) string {
 	}
 	return parent + "." + strconv.Itoa(index)
 }
+
+// HeaderBlock returns the header block of the message in r, through the blank
+// line and bounded by MaxHeaderBytes. Callers use it where only the headers are
+// needed, such as deriving an identity for a message without a Message-ID.
+func HeaderBlock(r io.Reader) ([]byte, error) {
+	return readHeaderBlock(bufio.NewReaderSize(r, 64<<10))
+}

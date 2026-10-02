@@ -20,8 +20,9 @@ const (
 	b64Line        = "QUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJD\r\n"
 	b64LineWire    = len(b64Line)
 	b64LineDecoded = (b64LineWire - 2) / 4 * 3
-	// aboutHugeLines is enough lines for roughly 300 MiB on the wire.
-	aboutHugeLines = int64((300 << 20) / b64LineWire)
+	// aboutHugeLines is enough lines for roughly 100 MiB on the wire: three times
+	// the allocation the tests allow, so only a streaming parser passes.
+	aboutHugeLines = int64((100 << 20) / b64LineWire)
 )
 
 // repeatLines yields b64Line count times without ever holding them all.
@@ -92,7 +93,7 @@ func TestParseStreamNeverHoldsLargeAttachment(t *testing.T) {
 	})
 
 	if alloc > 32<<20 {
-		t.Errorf("parsing a 300 MiB message allocated %d MiB; it must stream", alloc>>20)
+		t.Errorf("parsing a 100 MiB message allocated %d MiB; it must stream", alloc>>20)
 	}
 	if elapsed > 20*time.Second {
 		t.Errorf("parsing took %v", elapsed)
@@ -269,7 +270,7 @@ func TestCopyPartStreamsAHugeAttachment(t *testing.T) {
 		}
 	})
 	if alloc > 32<<20 {
-		t.Errorf("serving a 300 MiB attachment allocated %d MiB; it must stream", alloc>>20)
+		t.Errorf("serving a 100 MiB attachment allocated %d MiB; it must stream", alloc>>20)
 	}
 	if want := lines * int64(b64LineDecoded); n != want {
 		t.Errorf("decoded %d bytes, want %d", n, want)
