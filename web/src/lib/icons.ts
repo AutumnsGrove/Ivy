@@ -1,0 +1,20 @@
+// One place for icon imports: each is a separate module so unused icons never ship.
+export { default as Inbox } from '@lucide/svelte/icons/inbox';
+export { default as BookOpen } from '@lucide/svelte/icons/book-open';
+export { default as Search } from '@lucide/svelte/icons/search';
+export { default as Tag } from '@lucide/svelte/icons/tag';
+export { default as SlidersHorizontal } from '@lucide/svelte/icons/sliders-horizontal';
+export { default as ChevronDown } from '@lucide/svelte/icons/chevron-down';
+export { default as ChevronRight } from '@lucide/svelte/icons/chevron-right';
+export { default as ArrowLeft } from '@lucide/svelte/icons/arrow-left';
+export { default as Archive } from '@lucide/svelte/icons/archive';
+export { default as Trash2 } from '@lucide/svelte/icons/trash-2';
+export { default as Ellipsis } from '@lucide/svelte/icons/ellipsis';
+export { default as PenLine } from '@lucide/svelte/icons/pen-line';
+export { default as Reply } from '@lucide/svelte/icons/reply';
+export { default as FileText } from '@lucide/svelte/icons/file-text';
+export { default as Download } from '@lucide/svelte/icons/download';
+export { default as Sprout } from '@lucide/svelte/icons/sprout';
+export { default as Check } from '@lucide/svelte/icons/check';
+export { default as X } from '@lucide/svelte/icons/x';
+export { default as Plus } from '@lucide/svelte/icons/plus';
