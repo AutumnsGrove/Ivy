@@ -2,7 +2,6 @@
 package gateway
 
 import (
-	"database/sql"
 	"encoding/json"
 	"io/fs"
 	"net/http"
@@ -99,8 +98,8 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, status, healthResponse{Status: overall, Version: s.version, Databases: dbs})
 }
 
-func dbStatus(r *http.Request, db *sql.DB) string {
-	if err := db.PingContext(r.Context()); err != nil {
+func dbStatus(r *http.Request, db *store.DB) string {
+	if err := db.Ping(r.Context()); err != nil {
 		return "error"
 	}
 	return "ok"

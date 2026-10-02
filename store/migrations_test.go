@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"path/filepath"
@@ -31,14 +32,11 @@ func TestMirrorUpgradeFromV1PreservesData(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 
-	v1, err := openDB(filepath.Join(dir, "mirror.db"))
-	if err != nil {
-		t.Fatalf("open mirror: %v", err)
-	}
-	if err := migrate(v1, mirrorMigrations[:1]); err != nil {
+	v1 := rawPool(t, filepath.Join(dir, "mirror.db"))
+	if err := migrate(context.Background(), v1, mirrorMigrations[:1]); err != nil {
 		t.Fatalf("apply v1: %v", err)
 	}
-	_, err = v1.Exec(
+	_, err := v1.ExecContext(context.Background(),
 		`INSERT INTO accounts (id, address, imap_host, imap_port, smtp_host, smtp_port, username, created_at)
 		 VALUES ('acct-1', 'me@example.test', 'imap.test', 993, 'smtp.test', 465, 'me', '2026-10-02T00:00:00Z')`,
 	)
@@ -49,21 +47,21 @@ func TestMirrorUpgradeFromV1PreservesData(t *testing.T) {
 		t.Fatalf("close v1: %v", err)
 	}
 
-	dbs, err := Open(dir)
+	dbs, err := Open(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("Open upgrade: %v", err)
 	}
 	defer dbs.Close()
 
-	if got := userVersion(t, dbs.Mirror); got != len(mirrorMigrations) {
+	if got := userVersion(t, dbs.Mirror.Read); got != len(mirrorMigrations) {
 		t.Errorf("mirror user_version = %d, want %d", got, len(mirrorMigrations))
 	}
-	if !tableExists(t, dbs.Mirror, "threads") {
+	if !tableExists(t, dbs.Mirror.Read, "threads") {
 		t.Error("threads table missing after upgrade")
 	}
 
 	var address string
-	if err := dbs.Mirror.QueryRow(`SELECT address FROM accounts WHERE id='acct-1'`).Scan(&address); err != nil {
+	if err := dbs.Mirror.Read.QueryRow(`SELECT address FROM accounts WHERE id='acct-1'`).Scan(&address); err != nil {
 		t.Fatalf("read upgraded account: %v", err)
 	}
 	if address != "me@example.test" {
@@ -81,11 +79,8 @@ func TestMirrorUpgradeFromEveryPriorVersion(t *testing.T) {
 		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
-			db, err := openDB(filepath.Join(dir, "mirror.db"))
-			if err != nil {
-				t.Fatalf("open mirror: %v", err)
-			}
-			if err := migrate(db, mirrorMigrations[:version]); err != nil {
+			db := rawPool(t, filepath.Join(dir, "mirror.db"))
+			if err := migrate(context.Background(), db, mirrorMigrations[:version]); err != nil {
 				t.Fatalf("apply v%d: %v", version, err)
 			}
 			seedSQL := []string{
@@ -96,7 +91,7 @@ func TestMirrorUpgradeFromEveryPriorVersion(t *testing.T) {
 				 VALUES ('msg-1', 'acct-1', 'folder-1', 1, 'ck', 'survives')`,
 			}
 			for _, stmt := range seedSQL {
-				if _, err := db.Exec(stmt); err != nil {
+				if _, err := db.ExecContext(context.Background(), stmt); err != nil {
 					t.Fatalf("seed v%d: %v", version, err)
 				}
 			}
@@ -104,17 +99,17 @@ func TestMirrorUpgradeFromEveryPriorVersion(t *testing.T) {
 				t.Fatalf("close v%d: %v", version, err)
 			}
 
-			dbs, err := Open(dir)
+			dbs, err := Open(context.Background(), dir)
 			if err != nil {
 				t.Fatalf("Open upgrade from v%d: %v", version, err)
 			}
 			defer dbs.Close()
 
-			if got := userVersion(t, dbs.Mirror); got != len(mirrorMigrations) {
+			if got := userVersion(t, dbs.Mirror.Read); got != len(mirrorMigrations) {
 				t.Errorf("user_version = %d, want %d", got, len(mirrorMigrations))
 			}
 			var subject string
-			if err := dbs.Mirror.QueryRow(`SELECT subject FROM messages WHERE id='msg-1'`).Scan(&subject); err != nil {
+			if err := dbs.Mirror.Read.QueryRow(`SELECT subject FROM messages WHERE id='msg-1'`).Scan(&subject); err != nil {
 				t.Fatalf("read message after v%d upgrade: %v", version, err)
 			}
 			if subject != "survives" {
@@ -127,14 +122,14 @@ func TestMirrorUpgradeFromEveryPriorVersion(t *testing.T) {
 // TestMirrorReadSchema covers the tables and columns the read path queries.
 func TestMirrorReadSchema(t *testing.T) {
 	t.Parallel()
-	dbs, err := Open(t.TempDir())
+	dbs, err := Open(context.Background(), t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	defer dbs.Close()
 
 	for _, table := range []string{"threads", "attachments", "needs_me"} {
-		if !tableExists(t, dbs.Mirror, table) {
+		if !tableExists(t, dbs.Mirror.Read, table) {
 			t.Errorf("mirror table %s missing", table)
 		}
 	}
@@ -144,7 +139,7 @@ func TestMirrorReadSchema(t *testing.T) {
 	}
 	for table, columns := range wantColumns {
 		for _, column := range columns {
-			if !columnExists(t, dbs.Mirror, table, column) {
+			if !columnExists(t, dbs.Mirror.Read, table, column) {
 				t.Errorf("mirror table %s missing column %s", table, column)
 			}
 		}
@@ -171,4 +166,15 @@ func columnExists(t *testing.T, db *sql.DB, table, column string) bool {
 		t.Fatalf("iterate columns: %v", err)
 	}
 	return false
+}
+
+// rawPool opens a plain read-write handle on path, for tests that build a
+// database at an old schema version before Open upgrades it.
+func rawPool(t *testing.T, path string) *sql.DB {
+	t.Helper()
+	db, err := openPool(context.Background(), path, "")
+	if err != nil {
+		t.Fatalf("open %s: %v", path, err)
+	}
+	return db
 }

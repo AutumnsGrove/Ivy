@@ -47,7 +47,7 @@ func initCmd(configPath *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			dbs, err := store.Open(cfg.DataDir)
+			dbs, err := store.Open(cmd.Context(), cfg.DataDir)
 			if err != nil {
 				return err
 			}
@@ -68,7 +68,7 @@ func runCmd(configPath *string, version string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			dbs, err := store.Open(cfg.DataDir)
+			dbs, err := store.Open(cmd.Context(), cfg.DataDir)
 			if err != nil {
 				return err
 			}
@@ -117,7 +117,7 @@ func doctorCmd(configPath *string, version string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			dbs, err := store.Open(cfg.DataDir)
+			dbs, err := store.Open(cmd.Context(), cfg.DataDir)
 			if err != nil {
 				return err
 			}

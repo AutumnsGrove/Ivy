@@ -116,7 +116,7 @@ func TestGetAccountMissing(t *testing.T) {
 
 func openTemp(t *testing.T) *DBs {
 	t.Helper()
-	dbs, err := Open(t.TempDir())
+	dbs, err := Open(context.Background(), t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}

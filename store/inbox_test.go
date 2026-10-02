@@ -131,7 +131,7 @@ func TestListInboxCountsNeeds(t *testing.T) {
 	seedMessage(t, dbs, "acct-1", "inbox-1", "m1", base.Add(1*time.Hour), false)
 	seedMessage(t, dbs, "acct-1", "inbox-1", "m2", base, false)
 
-	_, err := dbs.Mirror.ExecContext(ctx,
+	_, err := dbs.Mirror.Write.ExecContext(ctx,
 		`INSERT INTO needs_me (account_id, content_key, verdict, reason, state) VALUES (?,?,?,?,?)`,
 		"acct-1", "ck:m1", "needs", "asks a question", "new")
 	if err != nil {

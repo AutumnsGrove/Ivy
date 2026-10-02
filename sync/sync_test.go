@@ -34,7 +34,7 @@ func newWorld(t *testing.T) *mailworld.World {
 
 func newStore(t *testing.T) *store.DBs {
 	t.Helper()
-	dbs, err := store.Open(t.TempDir())
+	dbs, err := store.Open(context.Background(), t.TempDir())
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

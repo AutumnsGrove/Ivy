@@ -35,7 +35,7 @@ type Folder struct {
 // UpsertFolder writes a folder keyed by (account, name), so a reconnect never
 // duplicates it; UIDValidity and HighestModSeq are refreshed in place.
 func (d *DBs) UpsertFolder(ctx context.Context, f Folder) error {
-	_, err := d.Mirror.ExecContext(ctx, `
+	_, err := d.Mirror.Write.ExecContext(ctx, `
 		INSERT INTO folders (id, account_id, name, role, uidvalidity, highestmodseq, last_sync_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(account_id, name) DO UPDATE SET
@@ -51,7 +51,7 @@ func (d *DBs) UpsertFolder(ctx context.Context, f Folder) error {
 
 // GetFolderByName returns one folder or ErrNotFound.
 func (d *DBs) GetFolderByName(ctx context.Context, accountID, name string) (Folder, error) {
-	row := d.Mirror.QueryRowContext(ctx, folderSelect+` WHERE account_id=? AND name=?`, accountID, name)
+	row := d.Mirror.Read.QueryRowContext(ctx, folderSelect+` WHERE account_id=? AND name=?`, accountID, name)
 	f, err := scanFolder(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Folder{}, ErrNotFound
@@ -64,7 +64,7 @@ func (d *DBs) GetFolderByName(ctx context.Context, accountID, name string) (Fold
 
 // ListFolders returns one account's folders, ordered by name.
 func (d *DBs) ListFolders(ctx context.Context, accountID string) ([]Folder, error) {
-	rows, err := d.Mirror.QueryContext(ctx, folderSelect+` WHERE account_id=? ORDER BY name`, accountID)
+	rows, err := d.Mirror.Read.QueryContext(ctx, folderSelect+` WHERE account_id=? ORDER BY name`, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("list folders for %s: %w", accountID, err)
 	}

@@ -31,7 +31,7 @@ type Account struct {
 // UpsertAccount writes an account, preserving the original created_at on
 // update so a config reload never resets it.
 func (d *DBs) UpsertAccount(ctx context.Context, a Account) error {
-	_, err := d.Mirror.ExecContext(ctx, `
+	_, err := d.Mirror.Write.ExecContext(ctx, `
 		INSERT INTO accounts (
 			id, address, display_name, icon, color, sort_order, llm_enabled,
 			vision_enabled, photo_blob, imap_host, imap_port, smtp_host,
@@ -56,7 +56,7 @@ func (d *DBs) UpsertAccount(ctx context.Context, a Account) error {
 
 // GetAccount returns one account or ErrNotFound.
 func (d *DBs) GetAccount(ctx context.Context, id string) (Account, error) {
-	row := d.Mirror.QueryRowContext(ctx, accountSelect+` WHERE id = ?`, id)
+	row := d.Mirror.Read.QueryRowContext(ctx, accountSelect+` WHERE id = ?`, id)
 	a, err := scanAccount(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, ErrNotFound
@@ -69,7 +69,7 @@ func (d *DBs) GetAccount(ctx context.Context, id string) (Account, error) {
 
 // ListAccounts returns every account in display order.
 func (d *DBs) ListAccounts(ctx context.Context) ([]Account, error) {
-	rows, err := d.Mirror.QueryContext(ctx, accountSelect+` ORDER BY sort_order, address`)
+	rows, err := d.Mirror.Read.QueryContext(ctx, accountSelect+` ORDER BY sort_order, address`)
 	if err != nil {
 		return nil, fmt.Errorf("list accounts: %w", err)
 	}

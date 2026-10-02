@@ -168,7 +168,7 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
 	}
 	defer stack.Close()
 
-	dbs, err := store.Open(stack.Config.DataDir)
+	dbs, err := store.Open(cmd.Context(), stack.Config.DataDir)
 	if err != nil {
 		return err
 	}

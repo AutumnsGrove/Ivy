@@ -63,7 +63,7 @@ func (d *DBs) ListInbox(ctx context.Context, q InboxQuery) (InboxPage, error) {
 		return InboxPage{}, err
 	}
 
-	rows, err := d.Mirror.QueryContext(ctx, inboxSelect,
+	rows, err := d.Mirror.Read.QueryContext(ctx, inboxSelect,
 		q.AccountID, q.AccountID, cursorDate, cursorDate, cursorID, limit)
 	if err != nil {
 		return InboxPage{}, fmt.Errorf("list inbox: %w", err)
@@ -89,7 +89,7 @@ func (d *DBs) ListInbox(ctx context.Context, q InboxQuery) (InboxPage, error) {
 
 func (d *DBs) scanInboxCounts(ctx context.Context, accountID string, page *InboxPage) error {
 	var seen, need int64
-	err := d.Mirror.QueryRowContext(ctx, inboxCountsSelect, accountID, accountID).
+	err := d.Mirror.Read.QueryRowContext(ctx, inboxCountsSelect, accountID, accountID).
 		Scan(&seen, &need)
 	if err != nil {
 		return fmt.Errorf("inbox counts: %w", err)

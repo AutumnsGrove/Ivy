@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 )
@@ -16,9 +17,9 @@ type migration struct {
 // migrate applies every migration newer than the database's user_version, each
 // in its own transaction. Migrations are idempotent by construction: a database
 // already at the current version runs nothing.
-func migrate(db *sql.DB, migrations []migration) error {
+func migrate(ctx context.Context, db *sql.DB, migrations []migration) error {
 	var current int
-	if err := db.QueryRow("PRAGMA user_version").Scan(&current); err != nil {
+	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&current); err != nil {
 		return fmt.Errorf("read user_version: %w", err)
 	}
 
@@ -26,19 +27,19 @@ func migrate(db *sql.DB, migrations []migration) error {
 		if m.version <= current {
 			continue
 		}
-		tx, err := db.Begin()
+		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("begin migration %d: %w", m.version, err)
 		}
 		for _, stmt := range m.statements {
-			if _, err := tx.Exec(stmt); err != nil {
+			if _, err := tx.ExecContext(ctx, stmt); err != nil {
 				_ = tx.Rollback()
 				return fmt.Errorf("migration %d: %w", m.version, err)
 			}
 		}
 		// PRAGMA user_version cannot be parameterised; m.version is a literal
 		// from our own code, never user input.
-		if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d", m.version)); err != nil {
+		if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", m.version)); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("set user_version %d: %w", m.version, err)
 		}

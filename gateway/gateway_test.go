@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -20,7 +21,7 @@ func testStaticFS() fstest.MapFS {
 
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
-	dbs, err := store.Open(t.TempDir())
+	dbs, err := store.Open(context.Background(), t.TempDir())
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}
@@ -76,7 +77,7 @@ func TestHealthOK(t *testing.T) {
 
 func TestHealthUnavailableWhenDatabaseClosed(t *testing.T) {
 	t.Parallel()
-	dbs, err := store.Open(t.TempDir())
+	dbs, err := store.Open(context.Background(), t.TempDir())
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}

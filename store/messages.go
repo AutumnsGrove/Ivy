@@ -99,7 +99,7 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 		return err
 	}
 
-	_, err = d.Mirror.ExecContext(ctx, `
+	_, err = d.Mirror.Write.ExecContext(ctx, `
 		INSERT INTO messages (
 			id, account_id, folder_id, uid, content_key, message_id_hdr, in_reply_to,
 			refs, subject, from_json, to_json, cc_json, reply_to_json, delivered_to_json,
@@ -136,7 +136,7 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 // GetMessage returns one visible message or ErrNotFound. Disabled messages are
 // hidden everywhere until they are restored.
 func (d *DBs) GetMessage(ctx context.Context, id string) (Message, error) {
-	row := d.Mirror.QueryRowContext(ctx, messageSelect+` WHERE id = ? AND disabled_at IS NULL`, id)
+	row := d.Mirror.Read.QueryRowContext(ctx, messageSelect+` WHERE id = ? AND disabled_at IS NULL`, id)
 	m, err := scanMessage(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Message{}, ErrNotFound
@@ -150,7 +150,7 @@ func (d *DBs) GetMessage(ctx context.Context, id string) (Message, error) {
 // GetMessageByUID returns one visible message by its folder's unique key, the
 // identity sync upserts on (ARCHITECTURE.md 3). Disabled messages are hidden.
 func (d *DBs) GetMessageByUID(ctx context.Context, folderID string, uid uint32) (Message, error) {
-	row := d.Mirror.QueryRowContext(ctx,
+	row := d.Mirror.Read.QueryRowContext(ctx,
 		messageSelect+` WHERE folder_id = ? AND uid = ? AND disabled_at IS NULL`, folderID, uid)
 	m, err := scanMessage(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -167,7 +167,7 @@ func (d *DBs) GetMessageByUID(ctx context.Context, folderID string, uid uint32) 
 // rows are excluded: if the server has the message again, a fresh fetch must
 // upsert it and clear the disabled state.
 func (d *DBs) MessageUIDs(ctx context.Context, folderID string) ([]uint32, error) {
-	rows, err := d.Mirror.QueryContext(ctx,
+	rows, err := d.Mirror.Read.QueryContext(ctx,
 		`SELECT uid FROM messages WHERE folder_id = ? AND disabled_at IS NULL`, folderID)
 	if err != nil {
 		return nil, fmt.Errorf("message uids for %s: %w", folderID, err)

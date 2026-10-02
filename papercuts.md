@@ -228,3 +228,18 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   records "multipart nesting deeper than 16: body not parsed". Tests
   `TestParseBoundsUnterminatedNesting` (hung until its 2 s guard before the fix),
   `TestParseBoundsFoldedUnquotedNesting`, and `TestParseKeepsRealisticNesting`.
+
+## Single-writer model (resolves N1)
+
+- **#31 (resolves N1)** · `aa0e438` · `store/store.go` and every store query · **risk → fixed at
+  the operator's request** · each database is now a `store.DB{Read, Write}`: a read pool (4
+  connections, opened `query_only`, so a stray write through it fails) and exactly one write
+  connection with `_txlock=immediate`. Writers queue in Go rather than racing for SQLite's write
+  lock. Before the change a pooled handle with deferred transactions failed 7 of 8 workers
+  immediately with `SQLITE_BUSY` on a read-then-write transaction, ignoring the 5 s
+  `busy_timeout`; `TestConcurrentReadModifyWriteNeverBusy` runs 8 workers x 25 read-modify-writes
+  and checks no increment is lost. Also covered: `TestReadHandleRejectsWrites` and
+  `TestReadsDoNotWaitForAnOpenWriteTransaction` (WAL readers do not queue behind a sync). The
+  health check pings the read side only, since a long batch holds the writer. `Open` and
+  `migrate` now take a context (STANDARDS: context first on I/O), so no store call lacks one. The
+  one rule for callers: never keep a `Rows` open on `Write`.

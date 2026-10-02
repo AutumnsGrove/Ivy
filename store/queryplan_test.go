@@ -25,7 +25,7 @@ func TestReadQueriesUseIndexes(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			plan := explain(t, dbs.Mirror, tc.query, tc.args...)
+			plan := explain(t, dbs.Mirror.Read,tc.query, tc.args...)
 			if strings.Contains(plan, "SCAN m ") || strings.Contains(plan, "SCAN messages") {
 				t.Errorf("full table scan of messages:\n%s", plan)
 			}
