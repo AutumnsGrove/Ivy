@@ -16,17 +16,27 @@ type faultListener struct {
 }
 
 func (l *faultListener) Accept() (net.Conn, error) {
-	c, err := l.Listener.Accept()
-	if err != nil {
-		return nil, err
+	for {
+		c, err := l.Listener.Accept()
+		if err != nil {
+			return nil, err
+		}
+		if l.w.hasFault(Unreachable{}) {
+			_ = c.Close()
+			continue
+		}
+		return l.wrap(c), nil
 	}
+}
+
+func (l *faultListener) wrap(c net.Conn) net.Conn {
 	if drop, ok := l.w.takeDropFault(); ok {
-		return &dropConn{Conn: c, after: drop.After}, nil
+		return &dropConn{Conn: c, after: drop.After}
 	}
 	if delay, ok := l.w.latency(); ok {
-		return &slowConn{Conn: c, delay: delay}, nil
+		return &slowConn{Conn: c, delay: delay}
 	}
-	return c, nil
+	return c
 }
 
 // slowConn delays every read, modelling a server that is still backfilling so

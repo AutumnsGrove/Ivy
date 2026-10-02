@@ -70,7 +70,7 @@ func ParseScenario(path string) (Scenario, error) {
 		return Scenario{}, fmt.Errorf("devstack: read scenario %s: %w", path, err)
 	}
 	var s Scenario
-	if err := yaml.Unmarshal(data, &s); err != nil {
+	if err := yaml.UnmarshalWithOptions(data, &s, yaml.Strict()); err != nil {
 		return Scenario{}, fmt.Errorf("devstack: parse scenario %s: %w", path, err)
 	}
 	return s, nil

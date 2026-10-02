@@ -25,11 +25,21 @@ func (a *Account) Address() string { return a.address }
 // Deliver appends raw to mailbox and returns its new UID. It panics if the
 // mailbox does not exist, which is a test setup bug rather than a scenario.
 func (a *Account) Deliver(mailbox string, raw []byte) uint32 {
-	data, err := a.user.Append(mailbox, newLiteral(raw), &imap.AppendOptions{Time: a.world.Clock().Now()})
+	uid, err := a.Append(mailbox, raw)
 	if err != nil {
 		panic("mailworld: deliver to " + mailbox + ": " + err.Error())
 	}
-	return uint32(data.UID)
+	return uid
+}
+
+// Append is Deliver for callers whose mailbox name comes from an operator
+// rather than from test setup, so a typo is an error instead of a panic.
+func (a *Account) Append(mailbox string, raw []byte) (uint32, error) {
+	data, err := a.user.Append(mailbox, newLiteral(raw), &imap.AppendOptions{Time: a.world.Clock().Now()})
+	if err != nil {
+		return 0, err
+	}
+	return uint32(data.UID), nil
 }
 
 // CreateMailbox creates a mailbox, e.g. "Archive" or "Sent".

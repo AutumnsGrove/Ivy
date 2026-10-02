@@ -21,8 +21,8 @@ var states = []State{
 	{"sync-auth-failed", "IMAP login is rejected", func(w *mailworld.World) {
 		w.Fault(mailworld.AuthFail{})
 	}},
-	{"unreachable", "connections drop immediately", func(w *mailworld.World) {
-		w.Fault(mailworld.DropConnection{After: 0})
+	{"unreachable", "every connection is dropped immediately", func(w *mailworld.World) {
+		w.Fault(mailworld.Unreachable{})
 	}},
 	{"backfilling", "IMAP responses are slow, as while a sync runs", func(w *mailworld.World) {
 		w.Fault(mailworld.Latency{Delay: 100 * time.Millisecond})
@@ -43,7 +43,7 @@ var states = []State{
 		w.Fault(mailworld.LLMDown{})
 	}},
 	{"offline", "the provider is unreachable", func(w *mailworld.World) {
-		w.Fault(mailworld.DropConnection{After: 0})
+		w.Fault(mailworld.Unreachable{})
 	}},
 	{"mirror-healthy", "clear every fault, the happy path", func(*mailworld.World) {}},
 }

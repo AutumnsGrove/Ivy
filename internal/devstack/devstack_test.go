@@ -281,3 +281,24 @@ func TestAccountsFrom(t *testing.T) {
 		t.Fatal("expected an error for more accounts than the profile seeds")
 	}
 }
+
+// The fake provider exists so LLM features can be exercised offline, so the
+// per-account opt-in must be on in both modes; with it off, E2E and the
+// llm-cap-reached scenario would never reach the fake at all.
+func TestBuildConfigOptsAccountsIntoLLMForEitherProvider(t *testing.T) {
+	t.Parallel()
+	w, res := seededAccounts(t)
+	for _, llm := range []devstack.LLM{devstack.LLMLive, devstack.LLMFake} {
+		opts := buildOpts(t, 3, false)
+		opts.LLM = llm
+		cfg, err := devstack.BuildConfig(w.IMAPAddr(), w.SMTPAddr(), res.Accounts, opts)
+		if err != nil {
+			t.Fatalf("BuildConfig(%s): %v", llm, err)
+		}
+		for _, a := range cfg.Accounts {
+			if !a.LLMEnabled {
+				t.Errorf("llm=%s: account %s has the LLM opt-in off", llm, a.ID)
+			}
+		}
+	}
+}

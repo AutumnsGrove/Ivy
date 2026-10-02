@@ -50,6 +50,8 @@ func (s FaultSpec) fault() (mailworld.Fault, error) {
 	switch s.Kind {
 	case "drop":
 		return mailworld.DropConnection{After: s.After}, nil
+	case "unreachable":
+		return mailworld.Unreachable{}, nil
 	case "auth-fail":
 		return mailworld.AuthFail{}, nil
 	case "smtp-reject":
@@ -141,6 +143,9 @@ func (c *Client) AdvanceClock(d time.Duration) error {
 	return err
 }
 
+// requestReadTimeout bounds how long a connection may take to send its one request.
+const requestReadTimeout = 10 * time.Second
+
 // ControlServer serves the control protocol over a unix socket. One request is
 // handled per connection: the CLI dials, asks, reads the reply and exits, so
 // there is no session state to keep.
@@ -187,6 +192,9 @@ func (s *ControlServer) accept() {
 
 func (s *ControlServer) handle(conn *net.UnixConn) {
 	defer func() { _ = conn.Close() }()
+	// A client that connects and says nothing must not pin this goroutine, or
+	// Close would wait on it forever.
+	_ = conn.SetReadDeadline(time.Now().Add(requestReadTimeout))
 	var req ControlRequest
 	if err := json.NewDecoder(conn).Decode(&req); err != nil {
 		_ = json.NewEncoder(conn).Encode(ControlResponse{Error: "bad request: " + err.Error()})
@@ -202,7 +210,11 @@ func (s *ControlServer) dispatch(req ControlRequest) ControlResponse {
 	}
 	switch req.Op {
 	case "deliver":
-		return ControlResponse{UID: acc().Deliver(req.Mailbox, req.Raw)}
+		uid, err := acc().Append(req.Mailbox, req.Raw)
+		if err != nil {
+			return ControlResponse{Error: err.Error()}
+		}
+		return ControlResponse{UID: uid}
 	case "flag":
 		flags := make([]imap.Flag, len(req.Flags))
 		for i, f := range req.Flags {

@@ -212,6 +212,11 @@ type Fault interface{ isFault() }
 // DropConnection closes a connection after it has read After client commands.
 type DropConnection struct{ After int }
 
+// Unreachable closes every IMAP connection as it is accepted and keeps doing so
+// until the faults are cleared, unlike DropConnection which is spent by one
+// connection. It models a host that is down or off the network.
+type Unreachable struct{}
+
 // AuthFail makes every login fail.
 type AuthFail struct{}
 
@@ -230,6 +235,7 @@ type LLMDown struct{}
 type LLMCapReached struct{}
 
 func (DropConnection) isFault() {}
+func (Unreachable) isFault()    {}
 func (AuthFail) isFault()       {}
 func (FailFetch) isFault()      {}
 func (Latency) isFault()        {}

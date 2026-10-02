@@ -81,9 +81,18 @@ func TestApplyStateUnreachable(t *testing.T) {
 	if err := devstack.ApplyState(w, "unreachable"); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
-	c := dialIMAP(t, w)
-	if err := c.Login("ivy@grove.test", mailworld.SeedPassword).Wait(); err == nil {
-		t.Fatal("login succeeded while unreachable")
+	// Unreachable is a lasting condition: every retry must fail, not just the
+	// first connection, or the sync-state screen would recover by itself.
+	for attempt := 1; attempt <= 3; attempt++ {
+		c, err := imapclient.DialInsecure(w.IMAPAddr(), nil)
+		if err != nil {
+			continue
+		}
+		loginErr := c.Login("ivy@grove.test", mailworld.SeedPassword).Wait()
+		_ = c.Close()
+		if loginErr == nil {
+			t.Fatalf("login succeeded on attempt %d while unreachable", attempt)
+		}
 	}
 }
 

@@ -221,14 +221,15 @@ func BuildConfig(imapAddr, smtpAddr string, accounts []mailworld.SeedAccount, op
 	}
 	for _, sa := range selected {
 		cfg.Accounts = append(cfg.Accounts, config.Account{
-			ID:         accountID(sa.Address),
-			Address:    sa.Address,
-			IMAPHost:   imapHost,
-			IMAPPort:   imapPort,
-			SMTPHost:   smtpHost,
-			SMTPPort:   smtpPort,
-			Username:   sa.Address,
-			LLMEnabled: opts.LLM == LLMLive,
+			ID:       accountID(sa.Address),
+			Address:  sa.Address,
+			IMAPHost: imapHost,
+			IMAPPort: imapPort,
+			SMTPHost: smtpHost,
+			SMTPPort: smtpPort,
+			Username: sa.Address,
+			// On for both providers: the fake exists to serve these features offline.
+			LLMEnabled: true,
 			Password:   sa.Password,
 		})
 	}

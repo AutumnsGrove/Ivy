@@ -193,3 +193,18 @@ func TestControlUnknownOpFails(t *testing.T) {
 		t.Fatal("expected an error for an unknown op")
 	}
 }
+
+// A typo'd mailbox from the CLI is an operator mistake, not a reason to take
+// the whole dev stack down: the control server must answer with an error.
+func TestControlDeliverToMissingMailboxIsAnError(t *testing.T) {
+	_, client := startControl(t)
+
+	raw := mailworld.Msg().From("a@example.com").To("ivy-a@grove.test").Subject("x").Text("x").Build()
+	if _, err := client.Deliver("ivy@grove.test", "NoSuchMailbox", raw); err == nil {
+		t.Fatal("Deliver to a missing mailbox succeeded")
+	}
+	// The server is still serving afterwards.
+	if _, err := client.Deliver("ivy@grove.test", "INBOX", raw); err != nil {
+		t.Fatalf("control server did not survive: %v", err)
+	}
+}

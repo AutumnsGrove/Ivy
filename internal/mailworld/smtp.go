@@ -129,12 +129,16 @@ func (s *smtpSession) Data(r io.Reader) error {
 
 	for _, to := range s.rcpts {
 		if dest := s.w.accountByAddress(to); dest != nil {
-			dest.Deliver("INBOX", raw)
+			if _, err := dest.Append("INBOX", raw); err != nil {
+				return &smtp.SMTPError{Code: 451, EnhancedCode: smtp.EnhancedCode{4, 3, 0}, Message: "local delivery failed: " + err.Error()}
+			}
 		}
 	}
 	if s.account.sentCopy == SentCopyAuto {
 		_ = s.account.CreateMailbox("Sent")
-		s.account.Deliver("Sent", raw)
+		if _, err := s.account.Append("Sent", raw); err != nil {
+			return &smtp.SMTPError{Code: 451, EnhancedCode: smtp.EnhancedCode{4, 3, 0}, Message: "sent copy failed: " + err.Error()}
+		}
 	}
 	s.Reset()
 	return nil

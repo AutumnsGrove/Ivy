@@ -121,3 +121,17 @@ func TestRunScenarioDeliversFromFile(t *testing.T) {
 		t.Fatalf("Archive has %d messages, want 1", n)
 	}
 }
+
+// A misspelt field would otherwise parse to a half-empty step that does
+// something other than what the author wrote.
+func TestParseScenarioRejectsUnknownFields(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "scenario.yaml")
+	body := "steps:\n  - deliver:\n      account: ivy@grove.test\n      subjct: typo\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := devstack.ParseScenario(path); err == nil {
+		t.Fatal("ParseScenario accepted an unknown field")
+	}
+}

@@ -61,3 +61,36 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   `standard` set, so CI is green while 69 findings exist under the documented set (3 bodyclose,
   4 exhaustive, 23 gosec, 27 noctx, 12 revive; most in tests and the fakes). Real ones are fixed
   as the files come up in this review; the config switch happens at the end.
+
+## `846bd1e`..`46880e3` dev stack (rails, control protocol, CLI, states, snapshots, scenarios)
+
+- **#9** · `e04edda` · `internal/devstack/control.go`, `internal/mailworld/account.go` ·
+  **bug** · the control server's `deliver` op called `Account.Deliver`, which panics on a missing
+  mailbox, from a bare connection goroutine. One typo'd `ivy-dev deliver --mailbox Nope` crashed
+  the whole dev stack (reproduced: the test binary died with the panic). Added
+  `Account.Append(mailbox, raw) (uint32, error)`; `Deliver` is now a thin panicking wrapper for test
+  setup, and the control op returns the error. Test `TestControlDeliverToMissingMailboxIsAnError`.
+- **#10** · `5f0aa66` · `internal/mailworld/smtp.go` · **risk** · the SMTP fake had the same
+  `Deliver` panic inside a go-smtp session goroutine (local delivery and the auto Sent copy). It
+  now answers a transient `451 4.3.0` instead.
+- **#11** · `e04edda` · `internal/devstack/control.go` · **risk** · a client that connected to
+  the control socket and sent nothing pinned its goroutine forever, and `ControlServer.Close`
+  waits on every goroutine, so shutdown hung. Added a 10 s request read deadline.
+- **#12** · `a2e4e07` · `internal/devstack/state.go`, `internal/mailworld` · **bug** · the
+  `unreachable` and `offline` states armed `DropConnection{After: 0}`, which `takeDropFault`
+  consumes, so only the first IMAP connection dropped and every retry succeeded: the unreachable
+  screen would have healed on its own. Added a sticky `mailworld.Unreachable` fault (closes each
+  connection at accept until faults are cleared), used by both states and by the `unreachable`
+  fault kind. `TestApplyStateUnreachable` now makes three attempts and failed on the second before
+  the fix.
+- **#13** · `846bd1e` · `internal/devstack/devstack.go` · **bug** · `BuildConfig` set
+  `LLMEnabled: opts.LLM == LLMLive`, so `--llm fake` opted every account out of the LLM and the
+  fake provider (and the `llm-cap-reached` state) could never be reached. Opt-in is now on for
+  both providers; test `TestBuildConfigOptsAccountsIntoLLMForEitherProvider`.
+- **#14** · `46880e3` · `internal/devstack/scenario.go` · **risk** · scenario YAML was parsed
+  non-strictly, so a misspelt field (`subjct:`) silently produced a different step. Now strict;
+  test `TestParseScenarioRejectsUnknownFields`.
+- **N3 (nit, mailworld)** · `ef8382b` · `internal/mailworld/llm.go` · the fake `/systemone`
+  models only choice-style `criteria` (a map); the real API's `score` questions send a list
+  (see `spikes/s4-jev`), which the fake silently answers with an empty answer. Add score support
+  when the real Jev client lands in chunk 4.
