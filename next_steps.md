@@ -5,9 +5,8 @@ It **is tracked in git** so every step is recoverable. **Update this file and co
 stage at the end of every sub-chunk (not just every chunk)** so the next session can pick up cleanly
 after a context clear.
 
-Last updated: 2026-10-02, after Chunk 1 is complete (1a-1e mailworld, 1f `internal/devstack` +
-`cmd/ivy-dev` + `make dev`, 1g compression skeleton, 1h CI + the real-binary smoke) and Chunk 2 is
-split into sub-chunks 2a-2h before starting.
+Last updated: 2026-10-02, after Chunk 2 sub-chunk 2a (mirror schema + store query layer) is
+complete. Chunk 1 (1a-1h) and 2a are done; 2b is next.
 
 ## How to run a chunk (read this first)
 
@@ -27,21 +26,21 @@ split into sub-chunks 2a-2h before starting.
    "Now" section with exactly where the next session resumes, fold any new decisions into the docs,
    and commit `next_steps.md` with the work.
 
-## ▶ Now: Chunk 2 (Milestone 1: Read), split into 2a-2h
+## ▶ Now: Chunk 2 (Milestone 1: Read) — 2a done, start 2b
 
 Chunk 1's sub-chunks (1a-1h) are **complete** and the day-one smoke slice is the gate that passed,
-so Chunk 2 is unblocked. **Decision (this session): Chunk 2 is too large for one pass and is split
-into 2a-2h at chunk 1's granularity.** It is a full feature milestone spanning eight layers — store,
-IMAP read fetch, MIME parse, sanitize/render, JWZ threading, REST handlers, frontend swap, state
-seeder — each with its own TDD loop and its own definition-of-done layers, and the dependency chain
-is strictly sequential. Start at **2a**. Chunk 1's deliberately deferred items land in named
-sub-chunks below. The 1a-1h sub-chunk notes are kept below for reference.
+so Chunk 2 is unblocked. **Chunk 2 is split into 2a-2h at chunk 1's granularity**: it is a full
+feature milestone spanning eight layers — store, IMAP read fetch, MIME parse, sanitize/render, JWZ
+threading, REST handlers, frontend swap, state seeder — each with its own TDD loop and its own
+definition-of-done layers, and the dependency chain is strictly sequential. **2a is done; start at
+2b.** Chunk 1's deliberately deferred items land in named sub-chunks below. The 1a-1h sub-chunk
+notes are kept below for reference.
 
 ### Chunk 2 sub-chunks
 
 | Sub | Scope | Exit test |
 |---|---|---|
-| **2a** | Mirror schema migration (`threads`, `attachments`, `accounts.icon`/`photo_blob`; `disabled_at` already present) + store query layer: content key, paged inbox (per-account and combined), message/thread lookup, unread + needs counts | Integration on temp SQLite; append-only migration test |
+| **2a** — DONE | Mirror schema migration (`threads`, `attachments`, `accounts.icon`/`photo_blob`, indexed `seen`) + store query layer: content key, account/folder/message upsert+get, paged inbox (per-account and combined), unread + needs counts | Integration on temp SQLite; append-only + v1→v2 upgrade tests |
 | **2b** | `sync/` read fetch: go-imap client connect → `LIST` + role heuristics → envelope/flags → raw body → upsert by `(folder_id, uid)` + content key, newest-first, checkpointed | Through the real `imapclient` against mailworld; resumes cleanly |
 | **2c** | `mime/` parse (enmime): text/html, attachments, inline `cid:`, `Authentication-Results`, snippet, non-fatal errors | Corpus + fuzz |
 | **2d** | `render/` sanitize + sandboxed iframe/CSP: bluemonday, remote-image policy + allow-list, tracking-pixel strip, `cid:` rewrite, plain-text fallback | XSS corpus + fuzz + Playwright network assertions |
@@ -52,6 +51,18 @@ sub-chunks below. The 1a-1h sub-chunk notes are kept below for reference.
 
 Order: 2a → 2b → 2c, then 2d and 2e (threading depends only on parse, not on render), then
 2f → 2g → 2h (2h needs 2a-2e to produce the same visible mailbox as `full`). 2d may overlap 2e.
+
+**2a — mirror schema + store query layer (Go): DONE (2026-10-02, commits `42f86f3`..`229fefa`).**
+`store/` migration 2 adds `threads`, `attachments`, `needs_me`, `accounts.icon`/`photo_blob` and
+the denormalised `seen` column (indexed so unread counts never scan flags JSON). The query layer
+gains `ContentKey` (stable across moves/UID changes), account/folder/message upsert+get with a
+`store.ErrNotFound`, and the paged combined/per-account `ListInbox` with whole-view unread + needs
+counts and keyset cursors. Timestamps are fixed-width so stored text sorts chronologically. Tests
+are integration on a temp SQLite; `make check` is green. Deferred within 2a (with reasons):
+thread *queries* — the table exists but nothing populates it until 2e; the inbox `ORDER BY` still
+uses a temp b-tree (SQLite picks the `(folder_id, uid)` autoindex) — a benchmark item for 2f, with
+an EXPLAIN-QUERY-PLAN guard in the meantime; no `reply_to`/`delivered_to`/`auth_results` columns
+or state-side queries yet (2c/2g).
 
 Two seams are fixed up front so the chunks stay independently committable:
 
@@ -271,7 +282,7 @@ chain; 3/4/5 can be reordered or narrowed, but send (5) is deliberately last.
 |---|---|---|---|
 | **0** | Contract + Go skeleton | `STANDARDS.md` 4/6, `ARCHITECTURE.md` 2/3 | **done** (2026-10-02, commits `aa0e438`..`68e5fce`) |
 | **1** | Harness = `mailworld` + `ivy-dev` + `make dev` + day-one E2E + CI | `DEV.md`, `STANDARDS.md` 3, `TESTING.md` 1/2/8, `CI.md`, `PERFORMANCE.md` 1 | **done** (2026-10-02; open items listed above) |
-| **2** | Milestone 1: Read (real mirror behind the screens) | `PLAN.md` 5, `ARCHITECTURE.md` 3/5, `TESTING.md` 3 | **next** (split into 2a-2h, start at 2a) |
+| **2** | Milestone 1: Read (real mirror behind the screens) | `PLAN.md` 5, `ARCHITECTURE.md` 3/5, `TESTING.md` 3 | **in progress** (2a done; 2b next) |
 | **3** | Milestone 2: Sync (backfill, QRESYNC/IDLE, outbox, tags, attachments, search, backup, update) | `ARCHITECTURE.md` 4/9, `TESTING.md` 2/6 | not started |
 | **4** | Milestone 3: Triage (Jev, the gate + ledger, cascade, newsletters, receipts, vision, ask, stats) | `JEV.md`, `ARCHITECTURE.md` 6/7, `TESTING.md` 4 | not started |
 | **5** | Milestone 4: Send (compose, identities, undo send, drafts, SMTP + APPEND to Sent) | `PLAN.md` 5, `ARCHITECTURE.md` 5 | not started |
