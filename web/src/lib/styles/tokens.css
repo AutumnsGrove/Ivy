@@ -19,6 +19,11 @@
 	--fs-ui-lg: 14.5px;
 	--fs-input: 15px;
 	--fs-lead: 16px;
+	--fs-h2: 20px;
+	--fs-title-sm: 18px;
+	--fs-display: 34px;
+	--fs-display-sm: 24px;
+	--fs-brand: 48px;
 	--fs-top: 22px;
 	--fs-title: 26px;
 	--fs-title-lg: 30px;
@@ -152,6 +157,9 @@
 	--firefly: #f7dc92;
 	--firefly-glow: rgba(247, 220, 146, 0.6);
 	--firefly-wash: rgba(247, 220, 146, 0.1);
+	--moon: #efe9d2;
+	--moon-glow: #e9f3dc;
+	--shoot: #fbf4da;
 	--shadow-fab: 0 8px 24px rgba(0, 0, 0, 0.3);
 	--sky-top: #070d13;
 	--sky-mid: #0a1613;
@@ -214,6 +222,9 @@
 	--firefly: #c98a12;
 	--firefly-glow: rgba(201, 138, 18, 0.35);
 	--firefly-wash: rgba(201, 138, 18, 0.08);
+	--moon: #f2c14e;
+	--moon-glow: #f2c14e;
+	--shoot: #c98a12;
 	--shadow-fab: 0 8px 24px rgba(61, 41, 20, 0.2);
 	--sky-top: #faf8ee;
 	--sky-mid: #eef3e2;

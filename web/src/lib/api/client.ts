@@ -16,14 +16,8 @@ import type {
 } from '../types';
 import * as mock from './mock';
 
-/** Forces a designed failure or edge state; absent in real use. */
-export type Scenario =
-	| 'empty'
-	| 'fetch-error'
-	| 'limit'
-	| 'provider-down'
-	| 'offline'
-	| 'sync-error';
+import type { Scenario } from './scenario';
+export type { Scenario };
 type Opts = { scenario?: Scenario | null };
 
 /** Errors carry the stable code the UI maps to its own copy (STANDARDS.md section 6). */
@@ -67,7 +61,11 @@ export const api = {
 		const summary = mock.inbox.find((m) => m.id === id);
 		if (!summary) throw new ApiError('not_found', 'No such message');
 		if (o.scenario === 'fetch-error') throw new ApiError('fetch_failed', "This message didn't load");
-		return tick({ ...summary, ...mock.messageBody(id) });
+		const body = mock.messageBody(id);
+		if (o.scenario === 'attachment-error') {
+			body.attachments = body.attachments.map((a) => (a.id === 'f2' ? { ...a, failed: true } : a));
+		}
+		return tick({ ...summary, ...body });
 	},
 
 	/** The header alone, for the screen that shows a failed body under a real subject line. */

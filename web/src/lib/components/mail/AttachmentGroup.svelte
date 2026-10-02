@@ -14,6 +14,10 @@
 	const files = $derived(attachments.filter((a) => a.kind === 'file' || a.failed));
 	const shownImages = $derived(wide ? images : images.slice(0, 2));
 	const hidden = $derived(wide ? 0 : images.length - shownImages.length);
+	// Wide layouts put healthy files inline beside the thumbnails; anything that failed always gets the
+	// full row below, because that row is where "Couldn't load" and Retry live.
+	const inlineFiles = $derived(wide ? files.filter((a) => !a.failed) : []);
+	const listFiles = $derived(wide ? files.filter((a) => a.failed) : files);
 </script>
 
 {#if attachments.length}
@@ -26,19 +30,17 @@
 					</li>
 				{/each}
 				{#if hidden > 0}<li class="more">+{hidden} more</li>{/if}
-				{#if wide}
-					{#each files as a (a.id)}
-						<li class="file inline">
-							<span class="ficon"><FileText /></span>
-							<span class="meta"><span>{a.name}</span><span class="size">{a.size}</span></span>
-						</li>
-					{/each}
-				{/if}
+				{#each inlineFiles as a (a.id)}
+					<li class="file inline">
+						<span class="ficon"><FileText /></span>
+						<span class="meta"><span>{a.name}</span><span class="size">{a.size}</span></span>
+					</li>
+				{/each}
 			</ul>
 		{/if}
-		{#if !wide}
+		{#if listFiles.length}
 			<ul class="files">
-				{#each files as a (a.id)}
+				{#each listFiles as a (a.id)}
 					<li class="file" class:bad={a.failed}>
 						<span class="ficon">{#if a.failed}<CircleAlert />{:else}<FileText />{/if}</span>
 						<span class="meta">

@@ -17,7 +17,7 @@ export async function guard<T>(call: Promise<T>): Promise<T> {
 	try {
 		return await call;
 	} catch (e) {
-		if (e instanceof ApiError) error(STATUS[e.code], { message: e.message, code: e.code });
+		if (e instanceof ApiError) error(STATUS[e.code], e.message, { code: e.code });
 		throw e;
 	}
 }

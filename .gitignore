@@ -17,3 +17,6 @@ test-results/
 playwright-report/
 coverage/
 .DS_Store
+
+# Screenshots from e2e/screens.spec.ts
+web/shots/

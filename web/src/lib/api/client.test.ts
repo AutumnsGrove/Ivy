@@ -84,3 +84,12 @@ describe('accounts and health', () => {
 		await expect(api.getRule('nope')).rejects.toMatchObject({ code: 'not_found' });
 	});
 });
+
+describe('attachment errors', () => {
+	it('marks one attachment as failed to load while the message itself opens', async () => {
+		const msg = await api.getMessage('m1', { scenario: 'attachment-error' });
+		const failed = msg.attachments.filter((a) => a.failed);
+		expect(failed).toHaveLength(1);
+		expect(msg.paragraphs.length).toBeGreaterThan(0);
+	});
+});
