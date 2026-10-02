@@ -55,7 +55,18 @@ the header check.
 - **A trap in go-imap v2:** `imap.SeqSetNum(1, n)` is the two messages 1 and n, not the range;
   use `SeqSet.AddRange`. Worth a lint note when writing the real client.
 
+- **Send to a routed alias:** a second message, addressed to a routed alias on the operator's
+  domain, was accepted by SMTP; the Sent folder again stayed empty (the no-Sent-copy result held
+  twice). The alias routes to a different user, so arrival is not visible from the dev mailbox;
+  the operator confirms delivery out of band.
+
+## Resend and DMARC: skipped
+
+Not tested here. The operator reports that Grove's Resend mail was exercised recently under the
+domain's `p=reject` policy and delivered fine, so this is accepted on that report and is not
+independently verified by the spike.
+
 ## Not tested
 
-Send-as from a routed alias; whether mail relayed from Resend passes DMARC under `p=reject`;
+Send-as from a routed alias (a message with that alias in `From:`, logged in as the dev user);
 `COMPRESS=DEFLATE` actually working with go-imap; annotation behaviour; the true connection limit.
