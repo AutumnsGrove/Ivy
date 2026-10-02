@@ -67,6 +67,14 @@ allocs → 1.76 MB / 17 allocs and is ~35% faster to create, at ~10% single-stre
 this 8-core laptop (`BenchmarkZstdEncoderAlloc`, `BenchmarkMiddleware`). These are relative
 laptop numbers, not the section 3 budgets; re-check on the potato when it is next available.
 
+**Implemented (2026-10-02, chunk 2d).** `render/` sanitises a parsed body once, during sync, and
+`store.SetMessageBodyHTML` stores the result, so a re-sync cannot lose it and the same sanitised
+HTML is served as-is (small, but it is the cached-rendered-body path the plan asked for). Hostile
+mail costs bounded time: an XSS corpus, a fuzz target with a 2 s bound and a size cap
+(`render.MaxHTMLBytes`) guard it. Laptop benchmark for a ~3 KB HTML body: about 0.23 ms and 140 KB
+allocation per body on an M2 (`BenchmarkBody`); a per-message cost, not a per-request one, and the
+potato number is a later measurement.
+
 ## 2. Frontend load budgets (asserted in CI, after compression)
 
 Initial starting numbers, to tighten once there is something to measure:

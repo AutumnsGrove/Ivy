@@ -5,9 +5,12 @@ It **is tracked in git** so every step is recoverable. **Update this file and co
 stage at the end of every sub-chunk (not just every chunk)** so the next session can pick up cleanly
 after a context clear.
 
-Last updated: 2026-10-02, after the audit of chunks 1-2c was merged to `main` (PR #3,
-`papercuts.md`) on top of Chunk 2 sub-chunk 2c (the `mime/` parser and its wiring into `sync/`).
-Chunk 1 (1a-1h) and 2a-2c are done; 2d is next. The audit's ground rules are below.
+Last updated: 2026-10-02, after Chunk 2 sub-chunk 2d (the `render/` sanitizer, its wiring into
+`sync/`, the sandboxed body frame, the optional `html` contract field and the API CSP). Chunk 1
+(1a-1h) and 2a-2d are done, except one item: the cross-browser remote-content Playwright
+assertion, which needs the body-document endpoint (2f) because Chromium ignores a `<meta>` CSP
+inside a `srcdoc` frame (finding recorded under "Now"). 2e is next. The audit's ground rules are
+below.
 
 ## How to run a chunk (read this first)
 
@@ -56,7 +59,8 @@ enforced by tests and CI, not just stated here.
   `config.Account.TrustedAuthservIDs` into `sync.Account` (nothing consumes the key today).
 - **Config and scenario YAML are strict** (unknown keys fail). Keep new keys in the structs.
 - **API responses carry** `Cache-Control: no-store`, and every response `nosniff`,
-  `Referrer-Policy: no-referrer` and `X-Frame-Options: SAMEORIGIN`. 2d adds the CSP.
+  `Referrer-Policy: no-referrer` and `X-Frame-Options: SAMEORIGIN`. 2d added a deny-all CSP to API
+  replies; the reader body document's own policy (`render.ContentSecurityPolicy`) lands with 2f.
 - **Failure paths are first-class** (`STANDARDS.md` 4a, with a limits table). Anything sized by the
   sender is bounded and streamed through disk. Sync tiers a message by size: up to 2 MiB in
   `raw_blob`, up to 64 MiB streamed to `spool/<folder>/<uid>.eml` (`raw_path`), above that not
@@ -74,14 +78,14 @@ enforced by tests and CI, not just stated here.
   N8 (identical `Message-ID`s share a content key and its tags/verdict; needs a threat-model line).
   N4/N5 are resolved (laptop numbers in `PERFORMANCE.md`; re-measure on the potato when available).
 
-## ▶ Now: Chunk 2 (Milestone 1: Read) — 2a-2c done, start 2d
+## ▶ Now: Chunk 2 (Milestone 1: Read) — 2a-2d done, start 2e
 
 Chunk 1's sub-chunks (1a-1h) are **complete** and the day-one smoke slice is the gate that passed,
 so Chunk 2 is unblocked. **Chunk 2 is split into 2a-2h at chunk 1's granularity**: it is a full
 feature milestone spanning eight layers — store, IMAP read fetch, MIME parse, sanitize/render, JWZ
 threading, REST handlers, frontend swap, state seeder — each with its own TDD loop and its own
-definition-of-done layers, and the dependency chain is strictly sequential. **2a-2c are done;
-start at 2d.** Chunk 1's deliberately deferred items land in named sub-chunks below. The 1a-1h sub-chunk
+definition-of-done layers, and the dependency chain is strictly sequential. **2a-2d are done;
+start at 2e.** Chunk 1's deliberately deferred items land in named sub-chunks below. The 1a-1h sub-chunk
 notes are kept below for reference.
 
 ### Chunk 2 sub-chunks
@@ -91,7 +95,7 @@ notes are kept below for reference.
 | **2a** — DONE | Mirror schema migration (`threads`, `attachments`, `accounts.icon`/`photo_blob`, indexed `seen`) + store query layer: content key, account/folder/message upsert+get, paged inbox (per-account and combined), unread + needs counts | Integration on temp SQLite; append-only + v1→v2 upgrade tests |
 | **2b** — DONE | `sync/` read fetch: go-imap client connect → `LIST` + role heuristics → envelope/flags → raw body → upsert by `(folder_id, uid)` + content key, newest-first, checkpointed | Through the real `imapclient` against mailworld; resumes cleanly |
 | **2c** — DONE | `mime/` parse (enmime): text/html, attachments, inline `cid:`, `Authentication-Results`, snippet, non-fatal errors; wired into `sync/` + store columns | Corpus + fuzz |
-| **2d** | `render/` sanitize + sandboxed iframe/CSP: bluemonday, remote-image policy + allow-list, tracking-pixel strip, `cid:` rewrite, plain-text fallback | XSS corpus + fuzz + Playwright network assertions |
+| **2d** — DONE (one item to 2f) | `render/` sanitize + sandboxed iframe/CSP: bluemonday, remote-image policy + allow-list, tracking-pixel strip, `cid:` rewrite, plain-text fallback | XSS corpus + fuzz done; the cross-browser remote-content Playwright assertion needs the body-document endpoint (2f) |
 | **2e** | `thread/` JWZ threading + store `thread_id`, normalized-subject fallback | Invariant/property tests + fixtures |
 | **2f** | Gateway read handlers on the real store: `/accounts`, `/inbox`, `/messages/{id}`, `/messages/{id}/summary`, `/mirror/health` | `httptest` against the generated contract |
 | **2g** | Frontend swap for the reader (real `client.ts` bodies) + settings skeleton + stats-panel skeleton + account customization (rename, icon, photo); E2E both viewports, visual baselines, axe; non-reader routes stay mocked | Playwright phone + desktop |
@@ -145,6 +149,28 @@ repeat run skips a message entirely, so a flag changed by another client is pick
 3's `CHANGEDSINCE` pass, not here; no `References` (ENVELOPE does not carry it; 2c parses it from
 the raw body), no `body_status`, no at-rest compression of `raw_blob`, no IDLE/QRESYNC/write path.
 
+**2d — `render/` sanitize + sandboxed body frame (Go + web): DONE, one item to 2f (2026-10-02,
+commits `6f29d15`..`6111a5f`).** `render/` wraps bluemonday with a strict element/attribute/style
+allow-list: no script, style, frame, form, object or media elements; no relative or `cid:`-only URL
+schemes leak through; links gain `rel="noopener noreferrer"`. A second token pass rewrites `cid:`
+parts to `/api/v1/messages/<id>/inline/<cid>`, enforces the remote-image policy (blocked by default,
+allow-listable per sender; tracking pixels stripped even when allowed) and keeps the output
+idempotent. A plain-text fallback comes from the message's own text or is derived from the safe
+HTML; bodies over `MaxHTMLBytes` fall back to text with a visible reason. Tests: an XSS corpus, an
+idempotence property, a 2 s-bounded fuzz target (30 s clean) and hot-path benchmarks. `sync/`
+sanitises each parsed HTML body and writes it through `store.SetMessageBodyHTML` (never
+`UpsertMessage`), so a re-sync cannot lose it. The web reader frames `MailMessage.html` in a
+sandboxed iframe and falls back to `paragraphs`; the API adds an optional `html` field and a
+deny-all CSP.
+
+**2d finding, deferred to 2f:** a `<meta>` Content-Security-Policy inside a `srcdoc` iframe is
+enforced by WebKit but **ignored by Chromium**, and WebKit does not report `srcdoc` subresource
+requests to Playwright, so a meaningful cross-browser network assertion needs the body served as
+its own same-origin document with the policy as a response header. That document endpoint belongs
+with the 2f read handlers; until then the server-side removal of remote content (Go tests) is the
+enforcement and the frame CSP is defence in depth. The SPA's own CSP additionally needs SvelteKit
+build-time script hashes and is folded into 2g.
+
 Two seams are fixed up front so the chunks stay independently committable:
 
 - **Sync seam.** 2b is a deliberately small one-shot read fetch behind a `sync/` package boundary:
@@ -164,7 +190,8 @@ contract addition.
 
 The three deferred chunk-1 items that land here, by design: `fast` mode + the `state.db` seeder
 (2h), the named-state Playwright + visual baselines + `@axe-core/playwright` pass (2g/2h), and the
-compressed-rendered-body cache (2d).
+compressed-rendered-body cache (done in 2d: `render/` stores the sanitised HTML once via
+`store.SetMessageBodyHTML`, and the same HTML is served as-is).
 
 ### Chunk 1 sub-chunk notes (done, kept for reference)
 
@@ -317,7 +344,8 @@ Chunk 1 (a-1h) is done, but these were deliberately left for later. Each names w
   version waits until there is more than one migration; `sqlc` waits for real queries (chunk 2/3).
 
 **Doc folds and probes still open** (see the "Still-open prerequisites" note under "Where we
-stand"): QRESYNC sync, outbox APPEND-to-Sent, iframe sandbox + CSP and PDF extraction tiers are not
+stand"): QRESYNC sync, outbox APPEND-to-Sent, the body-document CSP (2f; the render/iframe fold is
+in `ARCHITECTURE.md` 5) and PDF extraction tiers are not
 folded; Jev real-mail accuracy (needs a labelled corpus), send-as scope, DMARC and the iPhone/HEIC
 checks remain unprobed.
 
@@ -331,7 +359,7 @@ the local Go toolchain off 1.26.1, which `govulncheck` flags.
   seam is `web/src/lib/api/client.ts` over `web/src/lib/api/mock.ts`; `web/src/lib/types.ts` now
   re-exports the OpenAPI-generated schema (only `Settings` is hand-written). Mutating actions still
   only toast.
-- **Backend: Chunk 0 done; Chunk 1 (a-1h) done; Chunk 2 (2a-2c) in progress.** Root Go module
+- **Backend: Chunk 0 done; Chunk 1 (a-1h) done; Chunk 2 (2a-2d) in progress.** Root Go module
   `github.com/AutumnsGrove/Ivy`;
   `store/` (two DBs, pragmas, positional migrations), `config/`, `gateway/` (`/api/v1/version`,
   `/api/v1/health`), `cmd/` + `main.go` (`ivy run|init|doctor`), `api/openapi.yaml` with Go + TS
@@ -348,15 +376,23 @@ the local Go toolchain off 1.26.1, which `govulncheck` flags.
   day-one gate. Chunk 2 started: `store/` has the read-path schema and query layer (2a) and `sync/`
   has the one-shot IMAP read fetch that upserts by `(folder, uid)` + content key, newest first and
   resumable (2b), and `mime/` parses the raw bodies into text, snippet, attachments, threading
-  headers and auth results, which `sync/` now stores (2c). Still no `Dockerfile` and no
+  headers and auth results, which `sync/` now stores (2c), and `render/` sanitises each HTML body into
+  `body_html_sanitized` (2d). Still no `Dockerfile` and no
   image-publish workflow (chunk 1/3).
 - **Spikes: all run**; findings in `docs/spikes/`. Gates that matter to chunk 1: `mailworld` must
   implement CONDSTORE/QRESYNC (S2, because Purelymail offers them per S1); Purelymail SMTP does not
   file a Sent copy (Ivy must APPEND); custom keywords persist; SMTP `SIZE` ~48.8 MiB.
 - **Still-open prerequisites**: `api/openapi.yaml` is now written for the read surface; the doc
-  folds for QRESYNC sync, outbox APPEND-to-Sent, iframe sandbox + CSP (chunk 2d), and PDF extraction tiers are
+  folds for QRESYNC sync, outbox APPEND-to-Sent, the body-document CSP (2f) and PDF extraction tiers are
   not done; Jev real-mail accuracy is deferred until a labelled corpus; send-as scope, DMARC and the
   iPhone/HEIC checks remain unprobed. (Consolidated with the rest under **Open items** above.)
+
+**2d deferred item:** the reader's cross-browser remote-content Playwright assertion waits for the
+body-document endpoint (2f), which must serve the sanitised HTML with
+`render.ContentSecurityPolicy` as a response header. Chromium ignores a `<meta>` CSP in `srcdoc`;
+WebKit enforces it but hides `srcdoc` subresource requests from Playwright. The reader's frame
+(`web/src/lib/components/mail/MessageBody.svelte`) is already in place and the server-side removal
+is tested in Go.
 
 ## The chunk plan
 
@@ -368,7 +404,7 @@ chain; 3/4/5 can be reordered or narrowed, but send (5) is deliberately last.
 |---|---|---|---|
 | **0** | Contract + Go skeleton | `STANDARDS.md` 4/6, `ARCHITECTURE.md` 2/3 | **done** (2026-10-02, commits `aa0e438`..`68e5fce`) |
 | **1** | Harness = `mailworld` + `ivy-dev` + `make dev` + day-one E2E + CI | `DEV.md`, `STANDARDS.md` 3, `TESTING.md` 1/2/8, `CI.md`, `PERFORMANCE.md` 1 | **done** (2026-10-02; open items listed above) |
-| **2** | Milestone 1: Read (real mirror behind the screens) | `PLAN.md` 5, `ARCHITECTURE.md` 3/5, `TESTING.md` 3 | **in progress** (2a-2c done; 2d next) |
+| **2** | Milestone 1: Read (real mirror behind the screens) | `PLAN.md` 5, `ARCHITECTURE.md` 3/5, `TESTING.md` 3 | **in progress** (2a-2d done; 2e next) |
 | **3** | Milestone 2: Sync (backfill, QRESYNC/IDLE, outbox, tags, attachments, search, backup, update) | `ARCHITECTURE.md` 4/9, `TESTING.md` 2/6 | not started |
 | **4** | Milestone 3: Triage (Jev, the gate + ledger, cascade, newsletters, receipts, vision, ask, stats) | `JEV.md`, `ARCHITECTURE.md` 6/7, `TESTING.md` 4 | not started |
 | **5** | Milestone 4: Send (compose, identities, undo send, drafts, SMTP + APPEND to Sent) | `PLAN.md` 5, `ARCHITECTURE.md` 5 | not started |
@@ -489,3 +525,6 @@ size checks against the provider.
   must stay a direct devDependency or Kit's copy is shadowed. sonner needs specificity tricks.
 - Process slips from round 28: `sed` was used on a few files against the Edit/Write rule (results
   checked); work went on main per the operator's instruction.
+- Process slip in 2d: a one-line import add and one probe edit used `sed`/`python3` before the
+  Edit/Write rule was honoured (results checked and formatted with gofumpt); the Edit/Write tools
+  were used for everything after.
