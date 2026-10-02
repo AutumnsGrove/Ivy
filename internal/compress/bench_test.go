@@ -3,9 +3,12 @@ package compress
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 // listPage builds a realistic inbox page: the shape of JSON the API will send,
@@ -120,4 +123,37 @@ func BenchmarkMiddleware(b *testing.B) {
 			benchMiddleware(b, tc.enc)
 		})
 	}
+}
+
+// BenchmarkZstdEncoderAlloc sizes one pooled encoder, which is the memory N5 is
+// about: the library allocates one window buffer per concurrency level (the
+// default is GOMAXPROCS) and keeps them for the life of the encoder.
+func BenchmarkZstdEncoderAlloc(b *testing.B) {
+	newEncoder := func(concurrency int) func() {
+		opts := []zstd.EOption{zstd.WithEncoderLevel(zstd.SpeedDefault)}
+		if concurrency > 0 {
+			opts = append(opts, zstd.WithEncoderConcurrency(concurrency))
+		}
+		return func() {
+			zw, err := zstd.NewWriter(io.Discard, opts...)
+			if err != nil {
+				b.Fatal(err)
+			}
+			zw.Close()
+		}
+	}
+	b.Run("default-concurrency", func(b *testing.B) {
+		create := newEncoder(0)
+		b.ReportAllocs()
+		for range b.N {
+			create()
+		}
+	})
+	b.Run("concurrency-1", func(b *testing.B) {
+		create := newEncoder(1)
+		b.ReportAllocs()
+		for range b.N {
+			create()
+		}
+	})
 }

@@ -291,7 +291,14 @@ var (
 		return brotli.NewWriterLevel(io.Discard, brotliLevel)
 	}}
 	zstdPool = sync.Pool{New: func() any {
-		zw, err := zstd.NewWriter(io.Discard, zstd.WithEncoderLevel(zstd.SpeedDefault))
+		// One encoder thread per pooled encoder, not the library default of
+		// GOMAXPROCS: each concurrency level allocates its own window buffers, and
+		// the potato has four slow cores and little RAM (N5). A response is one
+		// stream at a time, so the parallel path buys nothing here.
+		zw, err := zstd.NewWriter(io.Discard,
+			zstd.WithEncoderLevel(zstd.SpeedDefault),
+			zstd.WithEncoderConcurrency(1),
+		)
 		if err != nil {
 			panic(err)
 		}

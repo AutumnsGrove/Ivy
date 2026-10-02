@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"testing/fstest"
 
@@ -33,7 +34,7 @@ func testFS(t *testing.T) fstest.MapFS {
 	return m
 }
 
-func mustEncode(t *testing.T, suffix string, data []byte) []byte {
+func mustEncode(t testing.TB, suffix string, data []byte) []byte {
 	t.Helper()
 	for _, v := range variants {
 		if v.suffix == suffix {
@@ -168,6 +169,28 @@ func TestFileServerCacheHeaders(t *testing.T) {
 	FileServer(fsys).ServeHTTP(rec, req)
 	if code := rec.Result().StatusCode; code != http.StatusNotModified {
 		t.Errorf("conditional request status = %d, want 304", code)
+	}
+}
+
+// TestFileServerServesRanges proves the server hands ServeContent a seekable
+// body: N4 serves the embedded file directly instead of copying it, and a range
+// client (video, resumable download) must still work.
+func TestFileServerServesRanges(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/"+immutablePath, nil)
+	req.Header["Accept-Encoding"] = nil
+	req.Header.Set("Range", "bytes=0-9")
+	rec := httptest.NewRecorder()
+	FileServer(testFS(t)).ServeHTTP(rec, req)
+	resp := rec.Result()
+	if resp.StatusCode != http.StatusPartialContent {
+		t.Fatalf("status = %d, want 206", resp.StatusCode)
+	}
+	if got, want := resp.Header.Get("Content-Range"), "bytes 0-9/"+strconv.Itoa(len(bigJS)); got != want {
+		t.Errorf("Content-Range = %q, want %q", got, want)
+	}
+	if body, _ := io.ReadAll(resp.Body); !bytes.Equal(body, bigJS[:10]) {
+		t.Errorf("range body = %q, want the first 10 bytes", body)
 	}
 }
 
