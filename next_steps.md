@@ -26,6 +26,35 @@ Last updated: 2026-10-02, after Chunk 2 sub-chunk 2c (the `mime/` parser and its
    "Now" section with exactly where the next session resumes, fold any new decisions into the docs,
    and commit `next_steps.md` with the work.
 
+## Rules introduced by the 2026-10-02 audit (read before writing Go)
+
+An independent audit of the commits through 2c (`papercuts.md` has every finding, its test and its
+fix; the method is `.claude/skills/review-deepseek/SKILL.md`) changed some ground rules. They are
+enforced by tests and CI, not just stated here.
+
+- **SQLite is single-writer.** `store.DBs.Mirror` and `.State` are `*store.DB{Read, Write}`. Reads
+  use `.Read` (a `query_only` pool). **All writes use `.Write`**, one connection that begins
+  transactions `IMMEDIATE`, so writers queue in Go and never see `SQLITE_BUSY`. Never keep a
+  `Rows` open on `.Write`. `store.Open(ctx, dir)` takes a context.
+- **Linters are the documented set** (`.golangci.yml`: standard + errorlint, gosec, bodyclose,
+  noctx, contextcheck, exhaustive, revive) and the tree is at zero. Use `*Context` DB/HTTP/exec
+  calls. A `//nolint` needs a reason on the same line. Test files are excluded from gosec, noctx
+  and bodyclose only.
+- **`make test` runs `-race` with `CGO_ENABLED=1`** (the race runtime is C; Go refuses `-race`
+  under `CGO_ENABLED=0`). Builds stay `CGO_ENABLED=0`.
+- **Parsing hostile input is bounded.** `mime.Parse` caps multipart nesting at
+  `MaxMultipartDepth` (enmime is exponential on unterminated nests); `FuzzParse` fails any input
+  over 2 s. A new parser needs the same time-bound fuzz assertion.
+- **Secure by default.** `sync.Account.Insecure` (plaintext) must be set explicitly; the zero
+  value is implicit TLS. `Fetch` honours its context by closing the connection when it ends.
+- **Config and scenario YAML are strict** (unknown keys fail). Keep new keys in the structs.
+- **API responses carry** `Cache-Control: no-store`, and every response `nosniff`,
+  `Referrer-Policy: no-referrer` and `X-Frame-Options: SAMEORIGIN`. 2d adds the CSP.
+- **Open items that need a decision** are `N`-numbered in `papercuts.md`: N9 (trusting
+  `Authentication-Results` needs an `authserv-id` allowlist), N7 (`UpsertMessage` overwrites
+  `thread_id` and the sanitised HTML on conflict, so 2d/2e need targeted updates), N11 (no
+  per-message size cap in the fetch), N4/N5 (measure on the potato).
+
 ## ▶ Now: Chunk 2 (Milestone 1: Read) — 2a-2c done, start 2d
 
 Chunk 1's sub-chunks (1a-1h) are **complete** and the day-one smoke slice is the gate that passed,

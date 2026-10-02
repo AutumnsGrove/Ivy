@@ -292,3 +292,10 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   nesting bug (#30) went unseen. It now fails any input that takes over 2 s and is seeded with
   unterminated nests at and just past `MaxMultipartDepth`. After the guard, 60 s (about 600k
   runs) and a 75 s run at a 250 ms threshold found nothing else slow.
+- **N11 (open, design, memory)** · `f7eb3f5` · `sync/sync.go` · `fetchBatch` asks for
+  `RFC822Size` and `BODY.PEEK[]` in one FETCH and `Collect()`s each message whole, so there is no
+  per-message size cap: a 100 MB mail is downloaded, held in memory (raw plus decoded
+  attachments) and stored in `raw_blob`, on a board with ~800 MB free. STANDARDS.md says no
+  unbounded reads. Recommendation: fetch envelope and size first, then the body only when
+  `size <= cap` (say 50 MiB, a setting); above it store the headers with a `body_status` of
+  `too_large` and show the "open in webmail" state. Needs a decision on the cap and the UI copy.
