@@ -299,3 +299,15 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   unbounded reads. Recommendation: fetch envelope and size first, then the body only when
   `size <= cap` (say 50 MiB, a setting); above it store the headers with a `body_status` of
   `too_large` and show the "open in webmail" state. Needs a decision on the cap and the UI copy.
+
+## Dependencies and toolchain
+
+- **#36** · baseline · `go.mod` · **risk (supply chain)** · `go 1.26.1` let any build use a
+  toolchain with known standard-library CVEs. `govulncheck` (a CI gate) reported 16 affected
+  vulnerabilities on 1.26.1, 12 on 1.26.2 and 8 on 1.26.3 (net/http, crypto/tls, crypto/x509,
+  mime, net/textproto, encoding/asn1), none in Ivy's own code or third-party modules; on 1.26.6 it
+  reports none. CI's `check-latest` already hides this, but a local build, the future container
+  image or a contributor would not. The `go` directive now says `1.26.6`, so the toolchain is
+  fetched at or above the patched version everywhere. `golangci-lint` v2.12.1, vet, staticcheck,
+  the race suite and `make drift` were re-run on it. **Operator note:** this will need a bump
+  every time `govulncheck` reports a newer stdlib fix; consider a scheduled job that opens that PR.
