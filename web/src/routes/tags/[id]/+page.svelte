@@ -7,7 +7,7 @@
 	import TagChip from '#lib/components/ui/TagChip.svelte';
 	import TagColorPicker from '#lib/components/ui/TagColorPicker.svelte';
 	import TopBar from '#lib/components/ui/TopBar.svelte';
-	import { toasts } from '#lib/toast.svelte.js';
+	import { toasts } from '#lib/toast.js';
 	import type { TagColor } from '#lib/types.js';
 
 	let { data } = $props();

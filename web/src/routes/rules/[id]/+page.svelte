@@ -11,7 +11,7 @@
 	import ListRow from '#lib/components/ui/ListRow.svelte';
 	import Toggle from '#lib/components/ui/Toggle.svelte';
 	import TopBar from '#lib/components/ui/TopBar.svelte';
-	import { toasts } from '#lib/toast.svelte.js';
+	import { toasts } from '#lib/toast.js';
 
 	let { data } = $props();
 	let reading = $state(false);

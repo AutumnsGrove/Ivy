@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { toast } from './helpers';
 
 test.describe('search', () => {
 	test('finds mail, highlights the words, and offers Ask Ivy for the same query', async ({ page }) => {
@@ -63,7 +64,7 @@ test.describe('compose', () => {
 		await expect(sheet).toContainText('safe in Drafts');
 		await sheet.getByRole('button', { name: /Remove blog-export.zip and send/ }).click();
 		await expect(page).toHaveURL(/\/$/);
-		await expect(page.getByRole('status').filter({ hasText: 'Sending to' })).toBeVisible();
+		await expect(toast(page, 'Sending to')).toBeVisible();
 	});
 
 	test('sending offers undo', async ({ page }) => {
@@ -80,7 +81,7 @@ test.describe('tags', () => {
 		await expect(sheet.getByRole('button', { name: 'Create tag' })).toBeDisabled();
 		await sheet.getByLabel('Name').fill('ideas');
 		await sheet.getByRole('button', { name: 'Create tag' }).click();
-		await expect(page.getByRole('status').filter({ hasText: 'created' })).toBeVisible();
+		await expect(toast(page, 'created')).toBeVisible();
 	});
 });
 

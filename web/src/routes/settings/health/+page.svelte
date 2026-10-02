@@ -6,7 +6,7 @@
 	import Glass from '#lib/components/ui/Glass.svelte';
 	import ProgressBar from '#lib/components/ui/ProgressBar.svelte';
 	import TopBar from '#lib/components/ui/TopBar.svelte';
-	import { toasts } from '#lib/toast.svelte.js';
+	import { toasts } from '#lib/toast.js';
 
 	let { data } = $props();
 	const tone = (s: string) => (s === 'ok' ? 'ok' : s === 'syncing' ? 'busy' : 'warn');

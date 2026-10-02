@@ -4,7 +4,7 @@
 	import Group from '#lib/components/ui/Group.svelte';
 	import ListRow from '#lib/components/ui/ListRow.svelte';
 	import TopBar from '#lib/components/ui/TopBar.svelte';
-	import { toasts } from '#lib/toast.svelte.js';
+	import { toasts } from '#lib/toast.js';
 
 	// A working index of every designed screen and state: the quickest way to review the whole app.
 	const screens: Record<string, [string, string][]> = {

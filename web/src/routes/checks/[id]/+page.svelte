@@ -11,7 +11,7 @@
 	import GroupLabel from '#lib/components/ui/GroupLabel.svelte';
 	import Segmented from '#lib/components/ui/Segmented.svelte';
 	import TopBar from '#lib/components/ui/TopBar.svelte';
-	import { toasts } from '#lib/toast.svelte.js';
+	import { toasts } from '#lib/toast.js';
 
 	let { data } = $props();
 	const c = $derived(data.check);

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { TagColor } from '#lib/types.js';
-	import { toasts } from '#lib/toast.svelte.js';
+	import { toasts } from '#lib/toast.js';
 	import Button from '../ui/Button.svelte';
 	import Field from '../ui/Field.svelte';
 	import Glass from '../ui/Glass.svelte';

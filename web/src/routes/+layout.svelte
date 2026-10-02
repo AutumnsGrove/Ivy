@@ -6,7 +6,7 @@
 	import DesktopShell from '#lib/components/shell/DesktopShell.svelte';
 	import PhoneShell from '#lib/components/shell/PhoneShell.svelte';
 	import Scene from '#lib/components/ui/Scene.svelte';
-	import ToastHost from '#lib/components/ui/ToastHost.svelte';
+	import Toaster from '#lib/components/ui/Toaster.svelte';
 	import { prefs } from '#lib/prefs.svelte.js';
 	import { viewport } from '#lib/viewport.svelte.js';
 
@@ -29,4 +29,4 @@
 {:else}
 	<PhoneShell current={page.url.pathname}>{@render children()}</PhoneShell>
 {/if}
-<ToastHost />
+<Toaster />

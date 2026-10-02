@@ -9,7 +9,7 @@
 	import Glass from '#lib/components/ui/Glass.svelte';
 	import IconButton from '#lib/components/ui/IconButton.svelte';
 	import TopBar from '#lib/components/ui/TopBar.svelte';
-	import { toasts } from '#lib/toast.svelte.js';
+	import { toasts } from '#lib/toast.js';
 
 	let { data } = $props();
 

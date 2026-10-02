@@ -10,7 +10,7 @@
 	import Toggle from '#lib/components/ui/Toggle.svelte';
 	import TopBar from '#lib/components/ui/TopBar.svelte';
 	import { prefs, type Accent } from '#lib/prefs.svelte.js';
-	import { toasts } from '#lib/toast.svelte.js';
+	import { toasts } from '#lib/toast.js';
 
 	let { data } = $props();
 	let smart = $state<Record<string, boolean>>({});

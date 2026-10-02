@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { toast } from './helpers';
 
 test.describe('inbox', () => {
 	test('lists mail with the needs-you summary', async ({ page }) => {
@@ -45,8 +46,7 @@ test.describe('reading a message', () => {
 	test('archiving gives feedback with an undo', async ({ page }) => {
 		await page.goto('/m/m1');
 		await page.getByRole('button', { name: 'Archive' }).click();
-		const toast = page.getByRole('status').filter({ hasText: 'Archived' });
-		await expect(toast.getByRole('button', { name: 'Undo' })).toBeVisible();
+		await expect(toast(page, 'Archived').getByRole('button', { name: 'Undo' })).toBeVisible();
 	});
 
 	test("keeps the header and says so when the body can't load", async ({ page }) => {

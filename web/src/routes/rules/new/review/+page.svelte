@@ -7,7 +7,7 @@
 	import Glass from '#lib/components/ui/Glass.svelte';
 	import GroupLabel from '#lib/components/ui/GroupLabel.svelte';
 	import TopBar from '#lib/components/ui/TopBar.svelte';
-	import { toasts } from '#lib/toast.svelte.js';
+	import { toasts } from '#lib/toast.js';
 
 	const rule = {
 		when: 'mail is from',

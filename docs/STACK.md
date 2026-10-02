@@ -70,6 +70,7 @@ compiled output plus fonts and icons, about 100 KB gzip for every route together
 | `@sveltejs/kit` 3, `svelte` 5, `vite` 8, `@sveltejs/adapter-static` | The framework and static output embedded by the Go binary |
 | `@lucide/svelte` | Icons, imported per icon through `src/lib/icons.ts` (the old `lucide-svelte` is deprecated) |
 | `@fontsource-variable/lexend`, `@fontsource-variable/newsreader` | Self-hosted fonts, bundled and hashed by Vite (no third-party font requests) |
+| `svelte-sonner` 1.x | Toasts (MIT, Svelte 5 only; `svelte-french-toast` is stuck on Svelte 3/4). Wrapped by `src/lib/toast.ts` so call sites never import it, and styled from our tokens in `Toaster.svelte` |
 | `cookie` | Kit's own runtime dependency; declared directly so the built server chunk resolves the right copy under pnpm's strict layout |
 | `vitest`, `jsdom`, `@testing-library/svelte`, `@testing-library/jest-dom` | Unit and component tests |
 | `@playwright/test` | E2E on WebKit (iPhone) and Chromium (desktop) |
