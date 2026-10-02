@@ -1,8 +1,9 @@
 # Spikes (before Milestone 0)
 
 Status: DRAFT (2026-10-01), ordering settled in round 23: **spikes run first, before any build
-implementation.** A spike answers one question with evidence, in throwaway code on a `spike/<name>`
-branch (never merged), and ends in a written finding in `docs/spikes/<name>.md` (what was tried,
+implementation.** A spike answers one question with evidence, in throwaway code under
+`spikes/<name>/` (its own Go module, committed to main per the operator's instruction for this
+phase, never imported by real code), and ends in a written finding in `docs/spikes/<name>.md` (what was tried,
 what happened, numbers, decision, what to change in the docs). Planning docs are updated from
 findings before Milestone 0 starts. Spike code is not TDD; the real implementation is redone
 test-first afterward.
@@ -14,7 +15,7 @@ S5. Spend cap for S4: a few cents (`JEV.md` section 5).
 | # | Question | Method | Pass looks like | Changes if it fails |
 |---|---|---|---|---|
 | S1 | What does Purelymail really do? | Live checks as `dev@`: CAPABILITY, `PERMANENTFLAGS`, ANNOTATION/keywords for tags, does SMTP file a copy in Sent or must we APPEND, send-as from routed aliases, max message size (SMTP `SIZE`), connection limits for N accounts, `COMPRESS=DEFLATE`, auth headers/DMARC on a Grove (Resend) mail | Each fact recorded with the command that proved it | Tag storage, write path, send path, connection budget |
-| S2 | Can go-imap v2 (beta) and its `imapmemserver` carry our sync and tests? | Small client: SELECT with CONDSTORE/QRESYNC, IDLE, MOVE, UID EXPUNGE against `imapmemserver`; list what the memory server lacks | QRESYNC/CONDSTORE/MOVE/IDLE work, or a bounded list of what `mailworld` must add | Fork/extend the memory server, or write our own fake |
+| S2 (done, `docs/spikes/s2-imapmem.md`) | Can go-imap v2 (beta) and its `imapmemserver` carry our sync and tests? | Small client: SELECT with CONDSTORE/QRESYNC, IDLE, MOVE, UID EXPUNGE against `imapmemserver`; list what the memory server lacks | QRESYNC/CONDSTORE/MOVE/IDLE work, or a bounded list of what `mailworld` must add | Fork/extend the memory server, or write our own fake |
 | S3 | Does the pure-Go stack build and run on the potato? | Go toolchain on the potato; build `modernc.org/sqlite` + FTS5 hello world; time and peak RAM of `go build` with other services running | Build fits in RAM (or a documented swap/cross-build path), FTS5 present | `ivy update` strategy (build on potato vs ship binaries) |
 | S4 | Is Jev usable for Ivy's questions? | `JEV.md` section 5 spike on a small labeled sample; also the `noul`/`score` shapes, per-email cost, injection behaviour | Accuracy and cost within `JEV.md` targets | Question catalog, cascade design, fallback model |
 | S5 | How does Safari behave? | On the real iPhone/iPad: `Accept-Encoding` sent (is zstd there?), sandboxed iframe + CSP rendering, file picker output (HEIC or JPEG), plain HTTP vs `tailscale serve` HTTPS on the tailnet | Facts recorded per device/iOS version | Compression order, HEIC handling, transport default |
