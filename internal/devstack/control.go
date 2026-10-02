@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -198,7 +199,7 @@ func (s *ControlServer) dispatch(req ControlRequest) ControlResponse {
 	case "flag":
 		flags := make([]imap.Flag, len(req.Flags))
 		for i, f := range req.Flags {
-			flags[i] = imap.Flag(f)
+			flags[i] = imapFlag(f)
 		}
 		if err := acc().Flag(req.Mailbox, req.UID, flags...); err != nil {
 			return ControlResponse{Error: err.Error()}
@@ -230,6 +231,25 @@ func (s *ControlServer) dispatch(req ControlRequest) ControlResponse {
 		return ControlResponse{}
 	default:
 		return ControlResponse{Error: fmt.Sprintf("unknown op %q", req.Op)}
+	}
+}
+
+// imapFlag accepts a friendly name from the CLI ("seen") as well as the wire
+// form ("\\Seen"), so a human does not have to quote a backslash.
+func imapFlag(name string) imap.Flag {
+	switch strings.ToLower(name) {
+	case "seen":
+		return imap.FlagSeen
+	case "flagged":
+		return imap.FlagFlagged
+	case "answered":
+		return imap.FlagAnswered
+	case "draft":
+		return imap.FlagDraft
+	case "deleted":
+		return imap.FlagDeleted
+	default:
+		return imap.Flag(name)
 	}
 }
 

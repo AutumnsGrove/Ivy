@@ -2,7 +2,15 @@
 GO        ?= go
 GENERATED := api/api.gen.go web/src/lib/api/schema.d.ts
 
-.PHONY: check generate drift fmt vet lint test web-check
+.PHONY: check generate drift fmt vet lint test web-check dev dev-fake
+
+# Local dev stack: mailworld + Ivy + Vite against seeded, offline-safe data.
+dev:
+	$(GO) run ./cmd/ivy-dev up
+
+# Same but with the deterministic fake LLM (no network, used by tests/CI).
+dev-fake:
+	$(GO) run ./cmd/ivy-dev up --llm fake
 
 # Fast pre-commit set (PERFORMANCE.md 3b).
 check: drift fmt vet lint test web-check

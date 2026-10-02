@@ -97,7 +97,7 @@ func TestOptionsValidate(t *testing.T) {
 		{"unknown profile", func(o *devstack.Options) { o.Profile = "huge" }},
 		{"unknown mode", func(o *devstack.Options) { o.Mode = "turbo" }},
 		{"unknown llm", func(o *devstack.Options) { o.LLM = "cloud" }},
-		{"no accounts", func(o *devstack.Options) { o.Accounts = 0 }},
+		{"negative accounts", func(o *devstack.Options) { o.Accounts = -1 }},
 		{"bad listen", func(o *devstack.Options) { o.Listen = "nope" }},
 		{"bad root", func(o *devstack.Options) { o.Root = "" }},
 	}

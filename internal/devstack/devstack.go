@@ -52,15 +52,16 @@ type Options struct {
 	Listen   string
 }
 
-// DefaultOptions is the everyday `make dev` shape: the demo profile, three
-// accounts, real OpenRouter behind a low dev cap.
+// DefaultOptions is the everyday `make dev` shape: the demo profile (three
+// accounts), real OpenRouter behind a low dev cap. Accounts 0 means "every
+// account the profile seeds", so `--profile minimal` needs no extra flag.
 func DefaultOptions() Options {
 	return Options{
 		Profile:  "demo",
 		Seed:     1,
 		Mode:     ModeFull,
 		LLM:      LLMLive,
-		Accounts: 3,
+		Accounts: 0,
 		LLMCap:   1,
 	}
 }
@@ -79,8 +80,8 @@ func (o Options) Validate() error {
 	if o.LLM != LLMLive && o.LLM != LLMFake {
 		return fmt.Errorf("devstack: unknown llm %q", o.LLM)
 	}
-	if o.Accounts < 1 {
-		return fmt.Errorf("devstack: accounts must be positive, got %d", o.Accounts)
+	if o.Accounts < 0 {
+		return fmt.Errorf("devstack: accounts must not be negative, got %d", o.Accounts)
 	}
 	if o.Pair && o.Accounts < 2 {
 		return errors.New("devstack: --pair needs at least two accounts")
@@ -175,13 +176,16 @@ func ReadEnv(path string, allowed ...string) (map[string]string, error) {
 	return out, nil
 }
 
-// AccountsFrom applies --accounts/--pair to the seeded accounts. Pair is a
-// preset for the first two, so the two-account sending test always uses a and
-// b rather than an arbitrary slice.
+// AccountsFrom applies --accounts/--pair to the seeded accounts. Zero means
+// every account the profile seeds; pair is a preset for the first two, so the
+// two-account sending test always uses a and b rather than an arbitrary slice.
 func AccountsFrom(accounts []mailworld.SeedAccount, opts Options) ([]mailworld.SeedAccount, error) {
 	n := opts.Accounts
 	if opts.Pair {
 		n = 2
+	}
+	if n == 0 {
+		n = len(accounts)
 	}
 	if n > len(accounts) {
 		return nil, fmt.Errorf("devstack: profile %q seeds %d accounts, %d requested",
