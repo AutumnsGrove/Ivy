@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -338,6 +339,99 @@ func TestFetchCopiesShareContentKey(t *testing.T) {
 	key2 := mustMessage(t, dbs, archive.ID, uidArchive).ContentKey
 	if key1 != key2 {
 		t.Errorf("copy content keys differ: %s vs %s", key1, key2)
+	}
+}
+
+// TestFetchParsesRawBodies proves the read path fills the derived fields from
+// the raw message (attachments, threading headers, auth results, snippet), not
+// just the envelope.
+func TestFetchParsesRawBodies(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+	seedAccountRow(t, dbs, store.Account{ID: "acct-1", Address: "me@grove.test"})
+
+	t1 := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	raw := mailworld.Msg().
+		From("Alice <alice@example.com>").
+		To("me@grove.test").
+		Subject("Parsed").
+		Date(t1).
+		MessageID("<parsed-1@grove.test>").
+		Text("plain body here").
+		HTML("<p>html body</p>").
+		Header("References", "<root@grove.test> <parent@grove.test>").
+		Header("In-Reply-To", "<parent@grove.test>").
+		Header("Reply-To", "Visitor <visitor@example.com>").
+		Header("Delivered-To", "me@grove.test").
+		Header("Authentication-Results", "mx.example.net; spf=pass; dkim=pass; dmarc=pass").
+		Attach("notes.txt", "text/plain", []byte("attached")).
+		Inline("chart.png", "image/png", []byte("pngdata")).
+		Build()
+	uid := acc.Deliver("INBOX", raw)
+
+	if _, err := ivysync.NewFetcher(dbs).Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret")); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	inbox := mustFolder(t, dbs, "acct-1", "INBOX")
+	m := mustMessage(t, dbs, inbox.ID, uid)
+
+	if !strings.Contains(m.BodyText, "plain body here") {
+		t.Errorf("BodyText = %q, want the plain part", m.BodyText)
+	}
+	if m.Snippet != "plain body here" {
+		t.Errorf("Snippet = %q, want the plain preview", m.Snippet)
+	}
+	if !m.HasAttachments {
+		t.Error("HasAttachments = false, want true")
+	}
+	if m.BodyHTML != "" {
+		t.Errorf("BodyHTML = %q, want empty until render/ sanitises (2d)", m.BodyHTML)
+	}
+	if m.References != "<root@grove.test> <parent@grove.test>" {
+		t.Errorf("References = %q, want both ids", m.References)
+	}
+	if m.InReplyTo != "<parent@grove.test>" {
+		t.Errorf("InReplyTo = %q, want the raw header", m.InReplyTo)
+	}
+	if len(m.ReplyTo) != 1 || m.ReplyTo[0].Name != "Visitor" || m.ReplyTo[0].Address != "visitor@example.com" {
+		t.Errorf("ReplyTo = %+v, want Visitor <visitor@example.com>", m.ReplyTo)
+	}
+	if len(m.DeliveredTo) != 1 || m.DeliveredTo[0].Address != "me@grove.test" {
+		t.Errorf("DeliveredTo = %+v, want me@grove.test", m.DeliveredTo)
+	}
+	if m.AuthResults.SPF != "pass" || m.AuthResults.DKIM != "pass" || m.AuthResults.DMARC != "pass" {
+		t.Errorf("AuthResults = %+v, want all pass", m.AuthResults)
+	}
+	if len(m.ParseErrors) != 0 {
+		t.Errorf("ParseErrors = %v, want none", m.ParseErrors)
+	}
+}
+
+// TestFetchRecordsNonFatalParseErrors keeps a message with a broken part in the
+// mirror and records why, instead of dropping it or failing the whole fetch.
+func TestFetchRecordsNonFatalParseErrors(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+	seedAccountRow(t, dbs, store.Account{ID: "acct-1", Address: "me@grove.test"})
+
+	raw := []byte("From: broken@example.com\r\nSubject: Broken\r\nMessage-ID: <broken-1@grove.test>\r\n" +
+		"MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"MISSING\"\r\n\r\n" +
+		"--MISSING\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nunterminated part")
+	uid := acc.Deliver("INBOX", raw)
+
+	if _, err := ivysync.NewFetcher(dbs).Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret")); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	inbox := mustFolder(t, dbs, "acct-1", "INBOX")
+	m := mustMessage(t, dbs, inbox.ID, uid)
+	if len(m.ParseErrors) == 0 {
+		t.Error("ParseErrors is empty, want the missing-boundary error recorded")
 	}
 }
 

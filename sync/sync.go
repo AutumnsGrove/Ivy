@@ -23,6 +23,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
 
+	mailmime "github.com/AutumnsGrove/Ivy/mime"
 	"github.com/AutumnsGrove/Ivy/store"
 )
 
@@ -254,9 +255,10 @@ func (f *Fetcher) fetchBatch(ctx context.Context, c *imapclient.Client, acct Acc
 	return stored, nil
 }
 
-// messageFrom projects one FETCH response into a mirror row. Parsing the raw
-// body (attachments, sanitized HTML, snippet) is chunk 2c's job; here the raw
-// bytes are stored so everything derived can be rebuilt from them.
+// messageFrom projects one FETCH response into a mirror row. The envelope
+// supplies the cheap header fields; the raw body is decoded here so the mirror
+// holds the text, snippet, threading headers and auth signal. Sanitising the
+// HTML is render/'s job (chunk 2d), so body_html is left for it.
 func messageFrom(acct Account, folderID string, buf *imapclient.FetchMessageBuffer, section *imap.FetchItemBodySection) store.Message {
 	raw := buf.FindBodySection(section)
 	uid := uint32(buf.UID)
@@ -287,7 +289,32 @@ func messageFrom(acct Account, folderID string, buf *imapclient.FetchMessageBuff
 		m.Date = buf.InternalDate
 	}
 	m.ContentKey = store.ContentKey(messageID, headerBlock(raw))
+
+	parsed := mailmime.Parse(raw)
+	m.BodyText = parsed.Text
+	m.Snippet = parsed.Snippet
+	m.HasAttachments = len(parsed.Attachments) > 0
+	m.References = strings.Join(parsed.References, " ")
+	if len(parsed.InReplyTo) > 0 {
+		// Prefer the raw header; ENVELOPE is the fallback when it is absent.
+		m.InReplyTo = strings.Join(parsed.InReplyTo, " ")
+	}
+	m.ReplyTo = parsedAddresses(parsed.ReplyTo)
+	m.DeliveredTo = parsedAddresses(parsed.DeliveredTo)
+	m.AuthResults = store.AuthResults{
+		SPF: parsed.Auth.SPF, DKIM: parsed.Auth.DKIM, DMARC: parsed.Auth.DMARC, Raw: parsed.Auth.Raw,
+	}
+	m.ParseErrors = parsed.Errors
 	return m
+}
+
+// parsedAddresses converts the parser's own address type to the mirror's.
+func parsedAddresses(in []mailmime.Address) []store.Address {
+	out := make([]store.Address, 0, len(in))
+	for _, a := range in {
+		out = append(out, store.Address{Name: a.Name, Address: a.Address})
+	}
+	return out
 }
 
 // selectable reports whether a LIST entry is a real mailbox we can SELECT.
