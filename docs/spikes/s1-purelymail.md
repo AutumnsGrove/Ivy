@@ -38,9 +38,24 @@ the header check.
 - **Roles from `LIST` attributes**, with a name-based fallback; `mailworld` should emit the same
   attributes and the `.` delimiter.
 
-## Not tested (needs an outbound send or more probing)
+## Send and download (S1b, `spikes/s1-purelymail/send/`)
 
-Whether SMTP submission files a copy in Sent or Ivy must `APPEND` one; send-as from a routed
-alias; whether mail relayed from Resend passes DMARC under `p=reject`; `COMPRESS=DEFLATE` actually
-working with go-imap; annotation behaviour; the true connection limit. The first two decide the
-send path and are worth one real send between two owned addresses when sending is built.
+- One real message, authorised by the operator, was submitted over SMTP (465, `AUTH PLAIN`,
+  envelope sender equal to the mailbox) to an address on another domain. SMTP accepted it and the
+  operator confirmed it arrived.
+- **SMTP submission does not file a copy in Sent.** The Sent folder (found by its `\Sent`
+  attribute) stayed at 0 messages for 10 s after the send. **Ivy must `APPEND` its own copy to
+  Sent after a successful submission** (and flag it `\Seen`), which fits the outbox model in
+  `ARCHITECTURE.md`: submit, then APPEND, and treat a failed APPEND as retryable without resending.
+- **Download works for the full range of sizes seen:** five messages (3.5 KB and 1.7 KB text,
+  a 132 KB photo, a 19.8 MB attachment) fetched whole over one connection with byte counts
+  matching the server's `RFC822.SIZE`. The 19.8 MB message was fetched into memory by the spike;
+  the real sync must stream large bodies to disk, per the bounded-data rule.
+- Every message arrived flagged `\Recent` only (unseen), as expected for a fresh mailbox.
+- **A trap in go-imap v2:** `imap.SeqSetNum(1, n)` is the two messages 1 and n, not the range;
+  use `SeqSet.AddRange`. Worth a lint note when writing the real client.
+
+## Not tested
+
+Send-as from a routed alias; whether mail relayed from Resend passes DMARC under `p=reject`;
+`COMPRESS=DEFLATE` actually working with go-imap; annotation behaviour; the true connection limit.
