@@ -66,7 +66,23 @@ Not tested here. The operator reports that Grove's Resend mail was exercised rec
 domain's `p=reject` policy and delivered fine, so this is accepted on that report and is not
 independently verified by the spike.
 
+## Send-as (S1c)
+
+Logged in as the dev user, a message with a routed alias as both the envelope sender and the
+`From:` header was **accepted by SMTP, delivered, and displayed as from the alias** (operator
+confirmed). No credentials for the alias were needed: SMTP does not tie `From:` to the login, so
+the provider's policy decides, and Purelymail allowed it.
+
+- **Why it was allowed is not established.** It may be because the alias routes to a user in the
+  account, or because any user may send as any address on the domain. Telling these apart needs a
+  send from an address with no routing rule (not done).
+- **Implications:** Ivy identities are plain `From:` values, with `From` chosen from a stored list
+  of known identities and never accepted free-form from the client. A mailbox password can
+  therefore send as other addresses on the domain, so credentials for any mailbox on that domain,
+  including the dev one, are as sensitive as production credentials (never in CI secrets, logs or
+  committed files).
+
 ## Not tested
 
-Send-as from a routed alias (a message with that alias in `From:`, logged in as the dev user);
+Whether send-as is limited to routed aliases or open to any address on the domain;
 `COMPRESS=DEFLATE` actually working with go-imap; annotation behaviour; the true connection limit.

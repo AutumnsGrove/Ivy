@@ -36,11 +36,17 @@ func loadEnv(path string) map[string]string {
 }
 
 func main() {
-	if len(os.Args) != 2 {
-		log.Fatal("usage: send <recipient>")
+	if len(os.Args) < 2 || len(os.Args) > 3 {
+		log.Fatal("usage: send <recipient> [from-alias]")
 	}
 	to := os.Args[1]
 	env := loadEnv("../../../.env")
+	// With a from-alias the envelope sender and From header both use it (send-as); the login
+	// stays the dev mailbox.
+	from := env["MAIL_USER"]
+	if len(os.Args) == 3 {
+		from = os.Args[2]
+	}
 
 	c, err := imapclient.DialTLS(net.JoinHostPort(env["IMAP_HOST"], env["IMAP_PORT"]), nil)
 	if err != nil {
@@ -79,7 +85,7 @@ func main() {
 
 	id := fmt.Sprintf("<ivy-spike-%d@example.com>", time.Now().UnixNano())
 	msg := strings.Join([]string{
-		"From: " + env["MAIL_USER"],
+		"From: " + from,
 		"To: " + to,
 		"Subject: Ivy spike S1 test send",
 		"Date: " + time.Now().Format(time.RFC1123Z),
@@ -102,7 +108,7 @@ func main() {
 	if err := sc.Auth(smtp.PlainAuth("", env["MAIL_USER"], env["MAIL_PASSWORD"], env["SMTP_HOST"])); err != nil {
 		log.Fatal("smtp auth failed")
 	}
-	if err := sc.Mail(env["MAIL_USER"]); err != nil {
+	if err := sc.Mail(from); err != nil {
 		log.Fatal("MAIL FROM rejected: ", err)
 	}
 	if err := sc.Rcpt(to); err != nil {

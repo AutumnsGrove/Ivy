@@ -216,7 +216,7 @@ E2E on both viewports + a live check on the dev mailbox/potato).
 | Risk / spike | Milestone | Notes |
 |---|---|---|
 | `ANNOTATION` or custom keywords as a server-side home for tags; check `PERMANENTFLAGS` | 2 | CAPABILITY already read live; ANNOTATION advertised |
-| ~~Does Purelymail file a copy in Sent, or must Ivy `APPEND`?~~ Answered by S1: it does not, Ivy `APPEND`s. Send-as from routed addresses still open | 4 (spike early in 2) | Docs say send-as works; verify live |
+| ~~Does Purelymail file a copy in Sent, or must Ivy `APPEND`?~~ Answered by S1: it does not, Ivy `APPEND`s. Send-as from a routed alias works (S1c); its exact scope is unprobed | 4 (spike early in 2) | Docs say send-as works; verify live |
 | Purelymail connection limits for N accounts (IDLE + work connections) | 2 | Budget RAM/connections on the potato |
 | Pure-Go SQLite compile time/RAM on the potato; FTS5 availability | 1 | Build while serving is the squeeze; cache warm |
 | Embedding scan cost and memory at 50k-100k messages | 2 | Batch streaming, int8 fallback, measure |
