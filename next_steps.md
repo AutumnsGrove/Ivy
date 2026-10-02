@@ -5,8 +5,8 @@ It **is tracked in git** so every step is recoverable. **Update this file and co
 stage at the end of every sub-chunk (not just every chunk)** so the next session can pick up cleanly
 after a context clear.
 
-Last updated: 2026-10-02, after Chunk 2 sub-chunk 2a (mirror schema + store query layer) is
-complete. Chunk 1 (1a-1h) and 2a are done; 2b is next.
+Last updated: 2026-10-02, after Chunk 2 sub-chunk 2b (the `sync/` one-shot read fetch) is
+complete. Chunk 1 (1a-1h), 2a and 2b are done; 2c is next.
 
 ## How to run a chunk (read this first)
 
@@ -26,14 +26,14 @@ complete. Chunk 1 (1a-1h) and 2a are done; 2b is next.
    "Now" section with exactly where the next session resumes, fold any new decisions into the docs,
    and commit `next_steps.md` with the work.
 
-## ▶ Now: Chunk 2 (Milestone 1: Read) — 2a done, start 2b
+## ▶ Now: Chunk 2 (Milestone 1: Read) — 2a-2b done, start 2c
 
 Chunk 1's sub-chunks (1a-1h) are **complete** and the day-one smoke slice is the gate that passed,
 so Chunk 2 is unblocked. **Chunk 2 is split into 2a-2h at chunk 1's granularity**: it is a full
 feature milestone spanning eight layers — store, IMAP read fetch, MIME parse, sanitize/render, JWZ
 threading, REST handlers, frontend swap, state seeder — each with its own TDD loop and its own
-definition-of-done layers, and the dependency chain is strictly sequential. **2a is done; start at
-2b.** Chunk 1's deliberately deferred items land in named sub-chunks below. The 1a-1h sub-chunk
+definition-of-done layers, and the dependency chain is strictly sequential. **2a and 2b are done;
+start at 2c.** Chunk 1's deliberately deferred items land in named sub-chunks below. The 1a-1h sub-chunk
 notes are kept below for reference.
 
 ### Chunk 2 sub-chunks
@@ -41,7 +41,7 @@ notes are kept below for reference.
 | Sub | Scope | Exit test |
 |---|---|---|
 | **2a** — DONE | Mirror schema migration (`threads`, `attachments`, `accounts.icon`/`photo_blob`, indexed `seen`) + store query layer: content key, account/folder/message upsert+get, paged inbox (per-account and combined), unread + needs counts | Integration on temp SQLite; append-only + v1→v2 upgrade tests |
-| **2b** | `sync/` read fetch: go-imap client connect → `LIST` + role heuristics → envelope/flags → raw body → upsert by `(folder_id, uid)` + content key, newest-first, checkpointed | Through the real `imapclient` against mailworld; resumes cleanly |
+| **2b** — DONE | `sync/` read fetch: go-imap client connect → `LIST` + role heuristics → envelope/flags → raw body → upsert by `(folder_id, uid)` + content key, newest-first, checkpointed | Through the real `imapclient` against mailworld; resumes cleanly |
 | **2c** | `mime/` parse (enmime): text/html, attachments, inline `cid:`, `Authentication-Results`, snippet, non-fatal errors | Corpus + fuzz |
 | **2d** | `render/` sanitize + sandboxed iframe/CSP: bluemonday, remote-image policy + allow-list, tracking-pixel strip, `cid:` rewrite, plain-text fallback | XSS corpus + fuzz + Playwright network assertions |
 | **2e** | `thread/` JWZ threading + store `thread_id`, normalized-subject fallback | Invariant/property tests + fixtures |
@@ -63,6 +63,26 @@ thread *queries* — the table exists but nothing populates it until 2e; the inb
 uses a temp b-tree (SQLite picks the `(folder_id, uid)` autoindex) — a benchmark item for 2f, with
 an EXPLAIN-QUERY-PLAN guard in the meantime; no `reply_to`/`delivered_to`/`auth_results` columns
 or state-side queries yet (2c/2g).
+
+**2b — `sync/` one-shot read fetch (Go): DONE (2026-10-02, commits `ed1c9e6`..`f7eb3f5`).**
+`sync/` logs in with a real `imapclient`, `LIST`s every mailbox, classifies them with role
+heuristics (SPECIAL-USE attribute when present, otherwise a name map in a few languages; the last
+path segment is matched), `SELECT`s each, and fetches envelope, flags, internal date, size and the
+raw body in bounded UID batches, newest first. Messages upsert by `(folder_id, uid)` with the
+content key from the `Message-ID` (header-block fallback when absent); a missing mirror account row
+is created, an existing one is never clobbered. The store is the checkpoint: a run reads the
+folder's live UIDs and fetches only the rest, so a dropped connection resumes with no duplicates
+and no gaps (tested with a fault-injected mid-session drop at batch size 1). The `folders`
+`highestmodseq` is now `uint64` because sync writes the real value. Added `store.MessageUIDs` and
+`store.GetMessageByUID`. `make check` is green.
+
+Deferred within 2b (with reasons): UIDVALIDITY change still re-reads the folder but leaves the old
+validity's rows in place — chunk 3 owns the disable-and-rebuild sweep; a message expunged on the
+server stays mirrored (disabled-not-deleted is chunk 3); the checkpoint is a full `SELECT uid`
+index read per folder rather than a persisted low-UID watermark (a chunk-3/2f optimisation); a
+repeat run skips a message entirely, so a flag changed by another client is picked up by chunk
+3's `CHANGEDSINCE` pass, not here; no `References` (ENVELOPE does not carry it; 2c parses it from
+the raw body), no `body_status`, no at-rest compression of `raw_blob`, no IDLE/QRESYNC/write path.
 
 Two seams are fixed up front so the chunks stay independently committable:
 
@@ -250,7 +270,8 @@ the local Go toolchain off 1.26.1, which `govulncheck` flags.
   seam is `web/src/lib/api/client.ts` over `web/src/lib/api/mock.ts`; `web/src/lib/types.ts` now
   re-exports the OpenAPI-generated schema (only `Settings` is hand-written). Mutating actions still
   only toast.
-- **Backend: Chunk 0 done; Chunk 1 (a-1h) done.** Root Go module `github.com/AutumnsGrove/Ivy`;
+- **Backend: Chunk 0 done; Chunk 1 (a-1h) done; Chunk 2 (2a-2b) in progress.** Root Go module
+  `github.com/AutumnsGrove/Ivy`;
   `store/` (two DBs, pragmas, positional migrations), `config/`, `gateway/` (`/api/v1/version`,
   `/api/v1/health`), `cmd/` + `main.go` (`ivy run|init|doctor`), `api/openapi.yaml` with Go + TS
   codegen committed and a `make drift` check, and a root `Makefile`. `internal/mailworld` has the
@@ -263,7 +284,9 @@ the local Go toolchain off 1.26.1, which `govulncheck` flags.
   API responses, `internal/asset` serves the precompressed embedded frontend, and `make web-assets`
   builds and precompresses it. CI is live: `.github/workflows/ci.yml` (`go`, `nocgo`, `drift`, `web`,
   `e2e`, `smoke`, `guard`, `deps`, `codeql`) plus `docs.yml`, with the real-binary smoke as the
-  day-one gate. Still no `Dockerfile` and no image-publish workflow (chunk 1/3).
+  day-one gate. Chunk 2 started: `store/` has the read-path schema and query layer (2a) and `sync/`
+  has the one-shot IMAP read fetch that upserts by `(folder, uid)` + content key, newest first and
+  resumable (2b). Still no `Dockerfile` and no image-publish workflow (chunk 1/3).
 - **Spikes: all run**; findings in `docs/spikes/`. Gates that matter to chunk 1: `mailworld` must
   implement CONDSTORE/QRESYNC (S2, because Purelymail offers them per S1); Purelymail SMTP does not
   file a Sent copy (Ivy must APPEND); custom keywords persist; SMTP `SIZE` ~48.8 MiB.
@@ -282,7 +305,7 @@ chain; 3/4/5 can be reordered or narrowed, but send (5) is deliberately last.
 |---|---|---|---|
 | **0** | Contract + Go skeleton | `STANDARDS.md` 4/6, `ARCHITECTURE.md` 2/3 | **done** (2026-10-02, commits `aa0e438`..`68e5fce`) |
 | **1** | Harness = `mailworld` + `ivy-dev` + `make dev` + day-one E2E + CI | `DEV.md`, `STANDARDS.md` 3, `TESTING.md` 1/2/8, `CI.md`, `PERFORMANCE.md` 1 | **done** (2026-10-02; open items listed above) |
-| **2** | Milestone 1: Read (real mirror behind the screens) | `PLAN.md` 5, `ARCHITECTURE.md` 3/5, `TESTING.md` 3 | **in progress** (2a done; 2b next) |
+| **2** | Milestone 1: Read (real mirror behind the screens) | `PLAN.md` 5, `ARCHITECTURE.md` 3/5, `TESTING.md` 3 | **in progress** (2a, 2b done; 2c next) |
 | **3** | Milestone 2: Sync (backfill, QRESYNC/IDLE, outbox, tags, attachments, search, backup, update) | `ARCHITECTURE.md` 4/9, `TESTING.md` 2/6 | not started |
 | **4** | Milestone 3: Triage (Jev, the gate + ledger, cascade, newsletters, receipts, vision, ask, stats) | `JEV.md`, `ARCHITECTURE.md` 6/7, `TESTING.md` 4 | not started |
 | **5** | Milestone 4: Send (compose, identities, undo send, drafts, SMTP + APPEND to Sent) | `PLAN.md` 5, `ARCHITECTURE.md` 5 | not started |
