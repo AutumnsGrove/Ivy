@@ -114,6 +114,47 @@ func (d *DBs) GetMessage(ctx context.Context, id string) (Message, error) {
 	return m, nil
 }
 
+// GetMessageByUID returns one visible message by its folder's unique key, the
+// identity sync upserts on (ARCHITECTURE.md 3). Disabled messages are hidden.
+func (d *DBs) GetMessageByUID(ctx context.Context, folderID string, uid uint32) (Message, error) {
+	row := d.Mirror.QueryRowContext(ctx,
+		messageSelect+` WHERE folder_id = ? AND uid = ? AND disabled_at IS NULL`, folderID, uid)
+	m, err := scanMessage(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Message{}, ErrNotFound
+	}
+	if err != nil {
+		return Message{}, fmt.Errorf("get message %s/%d: %w", folderID, uid, err)
+	}
+	return m, nil
+}
+
+// MessageUIDs returns the UIDs already mirrored in a folder, so a resumed
+// fetch skips bodies it already holds instead of re-downloading them. Disabled
+// rows are excluded: if the server has the message again, a fresh fetch must
+// upsert it and clear the disabled state.
+func (d *DBs) MessageUIDs(ctx context.Context, folderID string) ([]uint32, error) {
+	rows, err := d.Mirror.QueryContext(ctx,
+		`SELECT uid FROM messages WHERE folder_id = ? AND disabled_at IS NULL`, folderID)
+	if err != nil {
+		return nil, fmt.Errorf("message uids for %s: %w", folderID, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var uids []uint32
+	for rows.Next() {
+		var uid int64
+		if err := rows.Scan(&uid); err != nil {
+			return nil, fmt.Errorf("message uids for %s: %w", folderID, err)
+		}
+		uids = append(uids, uint32(uid))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("message uids for %s: %w", folderID, err)
+	}
+	return uids, nil
+}
+
 // messageSelect coalesces nullable columns so scanning never needs sql.Null*.
 const messageSelect = `
 	SELECT id, account_id, folder_id, uid, content_key,

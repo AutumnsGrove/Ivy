@@ -28,7 +28,7 @@ type Folder struct {
 	Name          string
 	Role          string
 	UIDValidity   uint32
-	HighestModSeq uint32
+	HighestModSeq uint64
 	LastSyncAt    time.Time
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 )
@@ -126,6 +127,65 @@ func TestGetMessageMissing(t *testing.T) {
 	t.Parallel()
 	if _, err := openTemp(t).GetMessage(context.Background(), "nope"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestMessageUIDsReturnsOnlyEnabledRowsInFolder(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct-1")
+	seedFolder(t, dbs, "acct-1", "folder-1")
+	seedFolder(t, dbs, "acct-1", "folder-2")
+
+	for _, uid := range []uint32{10, 20, 30} {
+		m := Message{ID: "m" + string(rune('a'+uid/10)), AccountID: "acct-1", FolderID: "folder-1", UID: uid, ContentKey: "ck"}
+		if uid == 20 {
+			m.DisabledAt = time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
+		}
+		if err := dbs.UpsertMessage(ctx, m); err != nil {
+			t.Fatalf("upsert %d: %v", uid, err)
+		}
+	}
+	// A message in another folder must not leak into this folder's set.
+	if err := dbs.UpsertMessage(ctx, Message{ID: "other", AccountID: "acct-1", FolderID: "folder-2", UID: 10, ContentKey: "ck"}); err != nil {
+		t.Fatalf("upsert other: %v", err)
+	}
+
+	uids, err := dbs.MessageUIDs(ctx, "folder-1")
+	if err != nil {
+		t.Fatalf("MessageUIDs: %v", err)
+	}
+	slices.Sort(uids)
+	if !slices.Equal(uids, []uint32{10, 30}) {
+		t.Errorf("uids = %v, want [10 30] (disabled and other-folder rows excluded)", uids)
+	}
+}
+
+func TestGetMessageByUID(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct-1")
+	seedFolder(t, dbs, "acct-1", "folder-1")
+	seedFolder(t, dbs, "acct-1", "folder-2")
+
+	if err := dbs.UpsertMessage(ctx, Message{ID: "m1", AccountID: "acct-1", FolderID: "folder-1", UID: 10, ContentKey: "ck", Subject: "Hi"}); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	got, err := dbs.GetMessageByUID(ctx, "folder-1", 10)
+	if err != nil {
+		t.Fatalf("GetMessageByUID: %v", err)
+	}
+	if got.Subject != "Hi" {
+		t.Errorf("Subject = %q, want Hi", got.Subject)
+	}
+	if _, err := dbs.GetMessageByUID(ctx, "folder-2", 10); !errors.Is(err, ErrNotFound) {
+		t.Errorf("other folder err = %v, want ErrNotFound", err)
+	}
+	if _, err := dbs.GetMessageByUID(ctx, "folder-1", 99); !errors.Is(err, ErrNotFound) {
+		t.Errorf("missing uid err = %v, want ErrNotFound", err)
 	}
 }
 
