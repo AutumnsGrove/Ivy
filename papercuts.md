@@ -284,3 +284,11 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   Chromium with a desktop viewport and an iPhone 14 viewport emulated on Chromium. **Not**
   verified: WebKit (not installed in this container), so the real phone project, and the mocked
   `e2e` suite and visual baselines.
+
+## `12b1017` mime tests
+
+- **#35** · `12b1017` · `mime/mime_test.go` · **nit (test gap)** · `FuzzParse` asserted only the
+  snippet length, so it could never have found a slow input, which is how the exponential
+  nesting bug (#30) went unseen. It now fails any input that takes over 2 s and is seeded with
+  unterminated nests at and just past `MaxMultipartDepth`. After the guard, 60 s (about 600k
+  runs) and a 75 s run at a 250 ms threshold found nothing else slow.

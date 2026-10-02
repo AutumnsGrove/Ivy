@@ -428,8 +428,17 @@ func FuzzParse(f *testing.F) {
 	for _, s := range seeds {
 		f.Add([]byte(s))
 	}
+	// Unterminated nesting at and past the limit: the shape that once ran for minutes.
+	f.Add(nestedMultipart(ivymime.MaxMultipartDepth, false))
+	f.Add(nestedMultipart(ivymime.MaxMultipartDepth+4, false))
 	f.Fuzz(func(t *testing.T, data []byte) {
+		start := time.Now()
 		p := ivymime.Parse(data)
+		// Parse runs on the sync path for every message, so a slow input is a
+		// denial of service even when it returns the right answer.
+		if elapsed := time.Since(start); elapsed > 2*time.Second {
+			t.Errorf("Parse took %v on a %d-byte input", elapsed, len(data))
+		}
 		if n := len([]rune(p.Snippet)); n > 200 {
 			t.Errorf("Snippet is %d runes, want at most 200", n)
 		}
