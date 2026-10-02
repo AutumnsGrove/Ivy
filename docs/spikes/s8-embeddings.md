@@ -98,12 +98,12 @@ million tokens, `baai/bge-m3` $0.01, `voyageai/voyage-4-lite` $0.02). Only repo 
 - Caveats: one run each from the laptop, not the board; no quality comparison against `nomic`
   (different models, different spaces); provider data-retention terms were not reviewed.
 
-**Recommendation (not yet a decision):** put embeddings behind a provider interface with two
-implementations, a local Ollama endpoint (any host, configurable) and OpenRouter, chosen per
-account. Default to hosted for accounts that already opted in to smart features, because the
-potato cannot embed queries or backfill cheaply, and keep local as the private option. This
-overturns "embeddings always local", so it waits for the operator's confirmation before the
-settled-decisions text is changed.
+**Decision (operator, round 30):** embeddings sit behind a provider interface with two
+implementations, OpenRouter (the default) and a local Ollama endpoint (any host, configurable,
+the private option), chosen per account. This replaces "embeddings always local" in the settled
+decisions. Two rules came with it: **each message is embedded once** (keyed by content, so moves,
+archive and trash never re-embed), and **every embedding is tracked per occurrence** in the cost
+ledger like every other remote API call. Details are in `ARCHITECTURE.md` sections 3 and 6.
 
 ## Not tested
 

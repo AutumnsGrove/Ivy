@@ -83,8 +83,8 @@ provider's filter**. Jev's only spam job is **Junk rescue** ("this looks real", 
 one-tap Not junk). Jev does not screen the Inbox for spam (an `is_spam` check stays an idea, not
 planned). Never auto-delete or auto-move; a wrong guess must cost nothing. See `JEV.md` section 3B and `ARCHITECTURE.md` section 4.
 
-**Search and ask.** One search box: hybrid keyword (FTS5) + meaning (Ollama `nomic-embed-text`,
-optional remote provider), merged into one ranked list, with quick filters (from, account, has
+**Search and ask.** One search box: hybrid keyword (FTS5) + meaning (embeddings from OpenRouter by
+default, local Ollama optional, each message embedded once), merged into one ranked list, with quick filters (from, account, has
 attachment, date, tag). **Talk to Ivy** lives at the top of the Search page (a Search / Ask Ivy
 switch): an **agent loop with three read-only tools, `search_mail`, `read_mail` and `think`**,
 that writes a plain answer whose claims cite emails it actually read; an account-picker (tap the
@@ -135,15 +135,17 @@ PDFs and Office files in pure Go). A **vision model** reads images on opted-in a
 automatically only for mail Jev flags, plus an on-demand "read this image" action, with spend
 caps and dedupe. OCR (Tesseract) is far-out, only if the operator finds it useful.
 
-**LLM privacy and safety (settled).** Per-account opt-in, off by default; embeddings always local.
+**LLM privacy and safety (settled).** Per-account opt-in, off by default. Embeddings are hosted
+(OpenRouter) by default and therefore sit behind the same opt-in gate (changed in round 30, which
+replaced "embeddings always local"); a local Ollama endpoint is the private option per account.
 The model may write local tags automatically; sending, deleting, moving, forwarding and
 unsubscribing always need a click. Model output is plain text; citations are DB-verified message
 ids; automated calls see one account; ask mixes only operator-selected accounts.
 
 **Settings and config.** Lots of behavior is configurable (an explicit operator wish): behavior in
-an in-app settings panel with per-account overrides; secrets in `ivy.yaml`/`.env`. Backup: **rolling,
-twice a day, 30 days kept (about 60), older pruned**, of locally owned state plus any
-server-deleted ("disabled") messages, to a folder or S3-compatible target (ideally one off the
+an in-app settings panel with per-account overrides; secrets in `ivy.yaml`/`.env`. Backup: **once a
+day, 15 days kept, older pruned**, of the local `state.db` (the mirror is a separate, never backed
+up file) plus any server-deleted ("disabled") messages, to a folder or S3-compatible target (ideally one off the
 potato), one-line restore. **Server-deleted mail is disabled, not erased:** hidden everywhere like a
 deletion, never purged automatically, restorable (`ARCHITECTURE.md` section 4).
 
@@ -173,7 +175,7 @@ it public is the operator's call. License **AGPL-3.0**.
 
 Go backend; **pure-Go SQLite** (WAL, FTS5; D1-friendly SQL); SvelteKit (`adapter-static`, Svelte 5,
 pnpm) with **pure CSS, no Tailwind** and vendored Grove design tokens; enmime for MIME; go-imap v2
-for IMAP (verify the v2 API); bluemonday for sanitizing; Ollama for embeddings; OpenRouter for Jev
+for IMAP (verify the v2 API); bluemonday for sanitizing; embeddings via OpenRouter (Ollama optional); OpenRouter for Jev
 (`/systemone`), chat and vision. Deployment: GitHub Actions builds a multi-arch container image
 (frontend and Go binary) on merge to main and publishes it to GHCR; the potato only pulls it, via a
 host-side update watcher (`ivy update`, also an in-app button). Access control (passkeys / Face ID, password fallback) is later; Tailscale-only for now.
@@ -227,7 +229,7 @@ E2E on both viewports + a live check on the dev mailbox/potato).
 | Update flow: digest resolve, CI race, health check, rollback | 2 | `ivy update` tests with a fake registry and watcher |
 | Committed frontend build output bloats git history | all | Accepted; CI builds it on merge to main, PRs never touch it (round 24). No compiled Go binary is ever committed or released (round 25) |
 | go-imap v2 API vs the v1 snippet seen in the original thread | 1 | Verify before pinning |
-| Locally owned state (and disabled mail) lost if the potato's storage dies | 2 | Rolling backups, 2/day for 30 days, off-device target recommended (settled) |
+| Locally owned state (and disabled mail) lost if the potato's storage dies | 2 | Daily backups of `state.db`, 15 days, off-device target recommended (settled; mirror rebuilt from IMAP) |
 
 ## 6b. Decisions from round 23
 
@@ -241,7 +243,8 @@ E2E on both viewports + a live check on the dev mailbox/potato).
 
 - **Disabled, not deleted:** server-deleted messages get a `disabled` flag and are hidden as if
   deleted; never purged automatically; restorable; included in backups.
-- **Rolling backups:** twice a day, keep 30 days (about 60), prune older; floor of 10 newest.
+- **Rolling backups:** (round 30 changed this to once a day, keep 15 days, of `state.db` only;
+  floor of 10 newest, prune only after a verified new backup).
 - **Disk is not a concern** (256 GB): no storage budget or eviction.
 - **Everything is compiled in GitHub Actions** and shipped as a container image (round 29); the
   potato builds nothing (a cold Go build there exhausts swap, spike S3). Nothing compiled is

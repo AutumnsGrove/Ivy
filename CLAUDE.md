@@ -52,11 +52,14 @@ mailbox. Real credentials live only in a git-ignored `.env` and are used only by
    negotiated per `Accept-Encoding`; compressed dynamic responses; paged lists and threads; no
    unbounded reads. Performance budgets are tests (`docs/PERFORMANCE.md`).
 5. **Writes go to IMAP first**, never DB-only. The DB follows the server, but nothing is ever
-   erased: server-deleted mail is flagged disabled and hidden. Tags, rules and snoozes
-   are the only locally owned state and are backed up.
+   erased: server-deleted mail is flagged disabled and hidden. Locally owned state (tags and their
+   membership, rules, snoozes, settings, the API cost ledger, the outbox) lives in its own
+   `state.db` and is the only thing backed up; the mirror is a separate `mirror.db`, rebuilt from
+   IMAP. Both refer to mail by a stable content key, so moves never re-derive anything.
 6. **Email is hostile input.** Sanitize server-side, sandbox in the browser, block remote content,
-   guard server-side fetches (SSRF), and keep every LLM call behind the single gate (per-account
-   opt-in, caps, ledger). LLM output on the reading surface is plain text and never labelled as AI.
+   guard server-side fetches (SSRF), and keep every remote API call (LLM, embeddings, anything
+   that costs money) behind the single gate (per-account opt-in, caps, a ledger row per call with
+   its exact cost). LLM output on the reading surface is plain text and never labelled as AI.
    Nothing sends, deletes or moves without an explicit confirmation.
 7. **Measure, don't guess.** Hot paths get benchmarks (`benchstat`); real numbers come from the
    potato, not mocks.
@@ -66,16 +69,17 @@ mailbox. Real credentials live only in a git-ignored `.env` and are used only by
 Name Ivy, standalone repo, AGPL-3.0 · Go + pure-Go SQLite (`modernc.org/sqlite`; D1-friendly SQL,
 Postgres rejected) · SvelteKit (`adapter-static`, Svelte 5), pure CSS custom properties (no
 Tailwind), pnpm, one typed API client module · JSON REST + SSE · mirror model with IMAP-first
-writes and an outbox · enmime, go-imap v2, bluemonday · embeddings via Ollama `nomic-embed-text`
-behind an interface · LLM layer `decide()` (Jev via OpenRouter `/systemone`, model `jev-latest`),
+writes and an outbox · enmime, go-imap v2, bluemonday · embeddings behind an `Embedder`
+interface: OpenRouter by default (`baai/bge-m3`), local Ollama optional, each message embedded
+once · tags kept both locally and as IMAP keywords · LLM layer `decide()` (Jev via OpenRouter `/systemone`, model `jev-latest`),
 `complete()`, `see()`, all through one gate (`docs/JEV.md`) · container deploy: GitHub Actions
 builds a multi-arch image (frontend and pure-Go binary) on merge to main and publishes it to GHCR,
 the target only pulls it via a host-side update watcher, `ivy update` (nothing compiles on the
 target; nothing compiled is committed) · server-deleted mail is disabled (hidden),
-never erased · rolling backups twice a day for 30 days · design: night
+never erased · daily backups of `state.db`, 15 days kept (the mirror is not backed up) · design: night
 botanical garden, Grove vine tile, moonlight-lilac accent, Lexend + Newsreader, Lucide, bottom tab
 bar on phone (mockups in `docs/design/canvas/`) · undo-send delay is a setting · a Polaris-style
-stats panel of all LLM spend.
+stats panel of all remote API spend.
 
 ## Code conventions (summary of `docs/STANDARDS.md`)
 

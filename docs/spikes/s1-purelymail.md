@@ -29,10 +29,10 @@ the header check.
   `imapmemserver` fake lacks them (`s2-imapmem.md`).
 - **Tags can be stored as IMAP keywords** (proved: three custom keywords persisted across
   re-SELECT), with no ANNOTATION dependency. That would make tags server-owned and portable to
-  other clients, but the settled design keeps tags as **locally owned, backed-up state**
-  (`CLAUDE.md`); choosing keywords instead is an operator decision, not made here. If adopted,
-  names should use a documented prefix (the probe used `$ivy-` and `ivytag-`; both worked) and
-  `mailworld` should honour `PERMANENTFLAGS \*`.
+  other clients. **Decision (operator, round 30): do both.** Tags stay locally owned and backed
+  up, and are also written as IMAP keywords (`$ivy-<slug>`, both prefixes worked in the probe);
+  the sync design is in `ARCHITECTURE.md` section 3. `mailworld` should honour
+  `PERMANENTFLAGS \*`.
 - **No `LIST-STATUS`:** per-folder counts need a separate `STATUS` per mailbox.
 - **No provider-side authentication verdicts.** Showing "failed DMARC" style badges would mean
   verifying DKIM and SPF ourselves; plan for none initially and treat it as a later feature.

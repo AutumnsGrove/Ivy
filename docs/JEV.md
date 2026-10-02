@@ -69,8 +69,10 @@ These come from live calls Polaris already made, so they outrank anything read f
 9. **Never act on a probability.** Probabilities are hints. Actions beyond local tags always need a
    click (the settled safety line). Jev's typed output removes the text-exfiltration channel, but
    hostile text can still skew the numbers.
-10. **Ledger every call** in `jev_usage` (message, account, feature, question set, latency, cost,
-    outcome) so the stats panel shows exactly what Jev cost and did. Monthly caps apply.
+10. **Ledger every call** in the shared `api_calls` ledger in `state.db` (message content key,
+    account, feature, question set, latency, exact cost, outcome; the same table that records
+    embeddings and every other remote call, `ARCHITECTURE.md` section 3) so the stats panel shows
+    exactly what Jev cost and did. Monthly caps apply.
 11. **Per-account opt-in gate** in one chokepoint; LLM-off accounts make zero outbound calls (tested).
 
 ## 3. Question catalog
@@ -203,7 +205,8 @@ accounts. Nothing here ever deletes.
 
 **Status (2026-10-02):** run on a synthetic corpus, results in `docs/spikes/s4-jev.md`. Items 1, 2,
 4, 5 and 6 are answered (item 6 only up to 18 questions); item 3 (accuracy) was done on
-synthetic mail only and still needs the operator-labelled real sample. Key finding: instruction
+synthetic mail only; **real-mail accuracy is deferred** until the operator has a corpus of real
+mail to label (none exists yet, so this is a long way off). Key finding: instruction
 wording moves `needs_me` precision a lot (0.73 to the 0.9s at a 0.75 threshold), so write each
 instruction as what does not count, then the exceptions.
 

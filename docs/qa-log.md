@@ -607,3 +607,25 @@ section 9, `CI.md`, `PLAN.md`, `STACK.md`, `TESTING.md`, `SPIKES.md`, `CLAUDE.md
 Also: spike code now lives under `spikes/<name>/` on main (its own Go module), not on `spike/*`
 branches. `.env` (git-ignored) holds the dev mailbox, board alias and OpenRouter key for spikes and
 `live` tests.
+
+## Round 30 — spikes S1 to S10 done; embeddings, tags, backups and the cost ledger (2026-10-02)
+
+All the spikes that need no other input have run (`docs/spikes/`). The operator's decisions on
+what they showed:
+
+| Topic | Decision |
+|---|---|
+| S5 | Accepted as done. It ran on an iPad over HTTPS only; the iPhone, plain HTTP and the `image/heic` upload box were not run. |
+| Real-mail accuracy for Jev (S4) | Deferred. There is no real mail corpus yet, so this waits until the operator has one to label. |
+| Embeddings | **OpenRouter by default** (it is much faster than the potato: about 21 chunks/s against 0.06). Local Ollama stays as an optional provider. **Replaces "embeddings always local".** Default model proposed as `baai/bge-m3` (1024 dimensions, 8k context; a 512-token model fails whole batches). |
+| Embed once | A message is embedded once, keyed by a stable content key (SHA-256 of the lower-cased `Message-ID`, or of the header block when absent), so moving to a folder, archive, trash, flag changes and UIDVALIDITY resets never re-embed. Re-embedding only on changed content or a chosen model change, with a cost estimate. |
+| Cost tracking | **Every remote API call is tracked per occurrence**: one ledger row per call, and per message for batched calls such as embeddings, with the exact cost from the response. All remote calls go through the one gate; nothing paid is reachable otherwise. |
+| Tags | **Both**: locally owned and backed up, and also written as IMAP keywords `$ivy-<slug>`, synced both ways. |
+| Backups | **Once a day, 15 days kept** (was twice a day for 30 days), of **`state.db` only**. |
+| Databases | **Two files**: `state.db` (local state, backed up) and `mirror.db` (a full mirror, never backed up, rebuilt from IMAP). Asked whether that is feasible: yes (mirror 1.2 to 5.6 GiB at 100k messages; state about 27 MiB at 100k). |
+
+Consequence worth remembering: local state and derived data must refer to mail by the content
+key, never by mirror row ids, or a mirror rebuild would orphan them. Docs updated:
+`ARCHITECTURE.md` sections 3, 6 and 9, `PLAN.md`, `STACK.md`, `TESTING.md`, `JEV.md`, `SPIKES.md`,
+`CLAUDE.md`. Also: the operator asked that the board carry no test artifacts; an audit after the
+spikes found none (only the pre-existing `nomic-embed-text` model and unrelated services).

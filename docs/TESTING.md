@@ -133,12 +133,22 @@ actually sent:
   search, rule, digest and Ask Ivy tool excludes them, they re-enable with tags intact when the
   message reappears, nothing purges without the explicit action, and a mass disable raises the
   alert. A property test asserts "no sync sequence ever deletes a message row".
-- **Rolling backups:** a fake clock drives 2 backups per day for 45 days: exactly the last 30 days
+- **Rolling backups:** a fake clock drives 1 backup per day for 30 days: exactly the last 15 days
   remain, pruning happens only after a verified new backup, the floor of 10 holds when the clock
   jumps or backups fail, a corrupt snapshot is detected, disabled blobs de-duplicate and are never
   pruned by age, and restore from any kept snapshot round-trips.
-- **Backup/restore:** snapshot of locally owned state, restore into a fresh instance, mirror
-  rebuilds from IMAP, round-trip equality of tags/rules/settings/snooze.
+- **Backup/restore:** snapshot of `state.db`, restore into a fresh instance, mirror rebuilds from
+  IMAP and re-links to the restored state by content key, round-trip equality of
+  tags/rules/settings/snooze/ledger.
+- **Embed once and cost tracking:** with the fake OpenRouter, a message moved between folders,
+  archived, trashed, flagged or re-synced after a UIDVALIDITY reset is never embedded again (the
+  fake counts calls); a model change or changed content is. Every embedded message and every other
+  remote call (including failed and gate-blocked ones) leaves exactly one ledger row, the batch's
+  cost is split across its messages and sums to the call's `usage.cost`, and an architecture test
+  proves no paid endpoint is reachable except through the gate.
+- **Tags both ways:** adding a tag stores the IMAP keyword first and then the local row; a keyword
+  added or removed by another client updates local membership; a restored mailbox re-applies the
+  keywords from local state; an account that refuses arbitrary keywords stays local-only.
 - **`ivy update`:** a fake registry and watcher simulate: new digest (pulls and swaps); same digest
   (no-op); CI build still in progress (waits); failed pull (old container keeps running); failed
   health check (rolls back to the previous digest); in-app button path.

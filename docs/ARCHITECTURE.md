@@ -12,11 +12,12 @@ the testing strategy in `TESTING.md`.
         v
  +--------------------------- ivy (single Go binary, systemd) ---------------------------+
  |  api  |  sync (one worker per account)  |  triage  |  search  |  compose/outbox  |  llm |
- |                          store (pure-Go SQLite, WAL, FTS5)                              |
+ |              store (pure-Go SQLite, WAL, FTS5): mirror.db + state.db                    |
  +------+-----------------------+-----------------------------+---------------------+------+
-        | IMAP/SMTP (TLS)       | Ollama (localhost)          | OpenRouter (HTTPS)  | backup target
+        | IMAP/SMTP (TLS)       | OpenRouter (HTTPS)          | Ollama (optional)   | backup target
         v                       v                             v                     v
-   Purelymail (per-user)   nomic-embed-text            Jev / chat / vision      folder or S3/R2
+   Purelymail (per-user)   Jev / chat / vision /         local embeddings       folder or S3/R2
+                           embeddings (default)          (any host)
 ```
 
 - **Go backend, SQLite, SvelteKit frontend (settled).** Single operator, one container on the potato.
@@ -36,7 +37,7 @@ ivy/
   mime/              enmime glue: parse, build, cid map, thread keys, Authentication-Results
   render/            sanitizer (bluemonday), tracker stripping, safe HTML/CSP, plain-text fallback
   thread/            JWZ threading
-  search/            FTS5 queries, chunking, embedding client (Ollama/remote), hybrid ranking
+  search/            FTS5 queries, chunking, embedding client (OpenRouter default, Ollama optional), hybrid ranking
   extract/           Extractor interface: bodies/.ics, PDF text layer, OOXML; vision hook
   jev/               Jev client (/systemone), question registry, thresholds, cache
   llm/               chat/vision client + THE gate (opt-in, isolation, caps, ledger)
@@ -44,7 +45,7 @@ ivy/
   compose/           MIME build (enmime builder), identities, signatures, undo-send queue
   gateway/           HTTP handlers, SSE hub, stats, settings, update endpoints
   update/            ivy update: resolve GHCR digest, signal the host watcher, health check, rollback
-  backup/            rolling snapshots (2/day, 30 days) of locally owned state + disabled blobs, restore
+  backup/            daily snapshots (15 days) of state.db + disabled blobs, restore
   web/               SvelteKit app; web/build is produced inside the Docker build and embedded
                      (go:embed); never committed (a tracked placeholder keeps go build working)
   dev/               fake IMAP/OpenRouter helpers, seed tool, stack launcher
@@ -58,41 +59,81 @@ Pragmas: WAL, `synchronous=NORMAL`, `foreign_keys=ON`; sync writes are batched i
 limit flash wear on the potato's SD/eMMC. **Pure-Go driver (settled):** `modernc.org/sqlite` (verify
 FTS5 is available, confirmed by spike S3; it is cross-compiled in CI, never on the potato).
 
-Mirror tables (rebuildable from IMAP):
+**Two SQLite files (settled, round 30).** `mirror.db` is a full mirror of the mailboxes plus
+everything derived from them; it is rebuildable from IMAP, so it is **never backed up**. `state.db`
+holds the small locally owned state; it is the **only database that is backed up** (spike S10:
+about 27 MiB at 100k messages, a snapshot takes about 0.1 s on a laptop). Rows in `state.db`, and
+derived rows in `mirror.db`, refer to mail by a stable **content key**, never by a mirror row id,
+so a mirror rebuild or a move between folders breaks nothing. **Content key:** SHA-256 of the
+lower-cased `Message-ID` header (of the raw header block when that header is missing). It is the
+same in every folder and across UID changes; copies sharing a Message-ID within an account are one
+message as far as derived data goes. Spike S10 sizes the mirror at about 12 KiB per message plus
+about 0.4 MiB per message with an attachment (1.2 to 5.6 GiB at 100k messages), comfortable on the
+potato's disk.
+
+Mirror tables (`mirror.db`, rebuildable from IMAP):
 - `accounts` (id, address, imap/smtp host+port, username, display_name, icon, photo_blob,
   llm_enabled, vision_enabled, color, sort_order, created_at). Password/app-password lives in env/file, never here.
 - `folders` (id, account_id, name, role[inbox|sent|drafts|trash|archive|junk|other], uidvalidity,
   highestmodseq, last_sync_at)
-- `messages` (id, account_id, folder_id, uid, message_id_hdr, in_reply_to, references, subject,
+- `messages` (id, account_id, folder_id, uid, content_key, message_id_hdr, in_reply_to, references, subject,
   from/to/cc/reply_to/delivered_to JSON, date, size, flags JSON, internaldate, auth_results JSON,
   has_attachments, raw_blob (zstd/gzip, nullable until fetched), body_text, body_html_sanitized,
   thread_id, snippet). Unique (folder_id, uid).
 - `threads` (id, account_id, root_message_id, subject_norm, last_date, message_count)
 - `attachments` (id, message_id, filename, mime, size, content_hash, cid, storage_path)
 - `extracted_text` (attachment_id | message_id, tier, text, status)
-- `chunks` / `embeddings` (message_id or attachment_id, chunk_ix, model, dims, vector BLOB), plus an
-  FTS5 virtual table over subject/body/attachment text.
+- `chunks` / `embeddings` (account_id, content_key (or attachment content hash), chunk_ix, model,
+  dims, vector BLOB; keyed by content, never by folder or UID), plus an FTS5 virtual table over
+  subject/body/attachment text.
 
-Locally owned state (NOT on the server, so backed up, section 9):
-- `tags`, `message_tags` (source: user | rule | model), `rules` (conditions JSON incl. fuzzy Jev
-  questions, actions JSON, account scope, enabled), `snoozes` (message_id, until), `image_allow`
-  (sender/domain), `settings` (key/value + per-account overrides), `jev_questions` (user-defined
-  and overrides), account display fields above.
+Locally owned state (`state.db`, not on the server and not rebuildable, so backed up, section 9):
+- `tags` (id, slug, name, color), `message_tags` (account, content_key, tag_id, source: user | rule
+  | model | server), `rules` (conditions JSON incl. fuzzy Jev questions, actions JSON, account
+  scope, enabled), `snoozes` (account, content_key, until), `image_allow` (sender/domain),
+  `settings` (key/value + per-account overrides), `jev_questions` (user-defined and overrides),
+  account display fields above.
+- **Tags live in both places (settled, round 30).** The definition (name, color) and the durable
+  membership are local, in `state.db`. Membership is also written to the server as an IMAP
+  keyword `$ivy-<slug>` (the slug is ASCII, because a keyword is an IMAP atom and tag names are
+  not), IMAP first as for every write. Sync reads keyword changes made by other clients back into
+  `message_tags` (source `server`); a keyword that disappears removes the membership. If a
+  mailbox is lost or restored, local membership re-applies the keywords. Spike S1 showed Purelymail
+  persists custom keywords (`PERMANENTFLAGS \*`); an account whose server does not allow arbitrary
+  keywords keeps its tags local-only.
+- `outbox` (queued IMAP actions with retry state), `send_queue` (composed message, undo deadline):
+  unsent work cannot be rebuilt from IMAP, so it lives here.
+- `api_calls`, the **cost ledger (settled, round 30)**: one row per remote API call and, for
+  batched calls such as embeddings, **one row per message in the batch** with the call's exact cost
+  allocated by token share. Columns: time, provider, endpoint (systemone, chat, vision, embeddings),
+  model, feature, account, content key, input and output tokens, exact cost from the response
+  (`cost_estimated` is set when a provider reports none), latency, outcome, call id. Gate-blocked
+  and failed calls are recorded at zero cost, and local calls (Ollama) at zero cost so volume is
+  visible. `api_caps` monthly counters. Only the gate writes it, and nothing that costs money is
+  reachable except through the gate. Spike S10: 150,000 rows (every embedded message plus a Jev
+  call for half of them) is about 27 MiB.
 
-Derived/ledgers:
-- `decisions` (message_id, question_id, instruction_hash, model, probabilities JSON, choice,
-  confidence, cost, created_at), `needs_me` (message_id, verdict, reason, stage2_model, state)
+Derived (`mirror.db`; regenerable, but regenerating costs money, so rows are keyed by content key
+and a move, archive, trash or flag change never recomputes them):
+- `decisions` (account_id, content_key, question_id, instruction_hash, model, probabilities JSON,
+  choice, confidence, cost, created_at), `needs_me` (account_id, content_key, verdict, reason,
+  stage2_model, state)
 - `people` (derived view/table from addresses seen), `receipts` (extracted fields, renewal dates)
-- `outbox` (queued IMAP actions with retry state), `send_queue` (composed message, undo deadline)
-- `usage` ledger: `jev_usage`, `llm_usage` (chat/vision/embeddings), each per call: account,
-  feature, model, tokens, exact cost, latency, outcome; `api_caps` monthly counters.
-- `schema_migrations` positional `user_version` (never reorder or edit existing entries).
+- `schema_migrations` positional `user_version` in each file (never reorder or edit existing entries).
 
-Vectors: 768-dim float32 is 3 KB per vector (about 150 MB per 50k messages). Plan: brute-force
-cosine in Go, streamed from SQLite in batches (never loaded whole), with int8 quantization as the
-escape hatch (about 4x smaller); benchmark on the potato; embed subject + first N characters per
-message and per attachment chunk, not whole threads. Each vector records its model so a model
-change re-embeds in the background.
+Vectors (spikes S8 and S10): **embed once.** A message is embedded when it first arrives and is
+eligible (the account has smart features on), keyed by (account, content key, chunk, model, dims);
+moves, archive, trash, flag and tag changes never embed again, and neither does a UIDVALIDITY
+reset, because the key is the message and not its place. Re-embedding happens only when the
+content or the chosen model changes, started by the operator with a cost estimate and the monthly
+cap applied. The default provider is OpenRouter (`baai/bge-m3`, 1024 dimensions, 8k context), with
+local Ollama optional per account (section 6). Storage is **int8**, one scale for the whole set:
+S8 measured 98.7% top-10 recall against exact float32 at 768 dimensions; at 1024 dimensions the
+vectors are about 98 MiB per 100k messages (the scan time is extrapolated, about 450 ms on the
+potato, not measured). Brute-force cosine in Go, streamed from SQLite in batches (never loaded
+whole); embed subject plus the first part of the body per message and per attachment chunk, chunked
+by token count with margin, not by characters. Each vector records its model, so a model change is
+detected rather than silently mixed.
 
 ## 4. Sync engine
 
@@ -172,9 +213,17 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 ## 6. Search and ask
 
 - **Hybrid (settled):** FTS5 (BM25) + embedding similarity merged with reciprocal rank fusion into
-  one list from one search box; embeddings from Ollama `nomic-embed-text` on localhost, remote
-  OpenAI-compatible embeddings as an optional provider; embedding is a low-priority background
-  queue (one job at a time, shared with other CPU-heavy work).
+  one list from one search box. **Embeddings come from OpenRouter by default (settled, round 30;
+  `baai/bge-m3`)**, chosen per account, with a local Ollama endpoint (any host, `nomic-embed-text`)
+  as the private option behind the same `Embedder` interface. Why hosted first: spike S8 measured
+  the potato at 17 s per email-sized chunk and a 36 s cold model load holding about 407 MiB, while
+  OpenRouter embedded about 21 chunks per second and answers a query in 0.2 to 0.4 s, for about
+  $0.42 per 100k messages. Hosted embeddings send message text off the device, so they go through
+  the gate (the account must have smart features on, caps apply) and every embedded message is a
+  ledger row; an account with smart features off is searched by FTS5 alone, or by local Ollama if
+  that is configured for it. Embedding is a low-priority background queue (one job at a time),
+  runs once per message (section 3), and at query time embeds only the query. If the provider is
+  unreachable, search falls back to FTS5 and says so quietly.
 - **Talk to Ivy (settled, round 18):** reached from the Search page (a Search / Ask Ivy switch at
   the top). It is an **agent loop with three tools**, all read-only and all executed locally:
   `search_mail(query, filters, limit)` (the hybrid search above, restricted to the selected
@@ -196,9 +245,11 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 - **Interfaces:** `decide(state, questions) -> answers` (Jev; fallback: chat model + JSON schema),
   `complete(prompt) -> text` (configurable OpenAI-compatible chat model via OpenRouter),
   `see(images, prompt) -> text` (vision-capable model, per-account opt-in).
-- **The gate (single chokepoint):** every outbound model call goes through one function that
-  enforces: account `llm_enabled`/`vision_enabled`, ask-selection rules, withheld-message rules
-  (tripwire/sensitive), monthly caps, per-call ledger row with exact cost, and timeouts. An
+- **The gate (single chokepoint):** every outbound remote API call (Jev, chat, vision and
+  embeddings, and anything else that costs money) goes through one function that enforces: account
+  `llm_enabled`/`vision_enabled`, ask-selection rules, withheld-message rules
+  (tripwire/sensitive), monthly caps, a ledger row per call (per embedded message for batches)
+  with the exact cost from the response (section 3), and timeouts. An
   architecture test ensures nothing else can reach the provider (TESTING.md section 4).
 - **Cascade (settled):** Jev `needs_me` first pass (high recall) -> only flagged mail goes to the
   chat model for the verdict + a short plain-text reason (no tools, structured output).
@@ -251,14 +302,20 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   file), which pulls the image, recreates the container, health-checks it, and rolls back to the
   previous digest on failure. The data directory is a bind-mounted volume, so the SQLite file and
   backups survive image swaps. Progress reaches the UI over SSE.
-- **Backup (settled, rolling policy round 24):** **twice a day (every 12 h), keep 30 days, about 60
-  backups; prune anything older than 30 days.** Each run takes a consistent online snapshot
-  (SQLite `VACUUM INTO`/backup API) of the **locally owned state** (tags, rules, snoozes, settings,
-  allow-lists, check definitions, accounts without secrets), zstd-compressed, verified
-  (`integrity_check` + open test) before it counts. Disabled messages' raw blobs (the only copy of
-  server-deleted mail) are stored alongside as **content-addressed, de-duplicated, append-only
-  files**, so 60 backups don't mean 60 copies, and these are not pruned by the 30-day rule. The
-  rebuildable mirror itself is not backed up. Safety rules for pruning: only after a new backup
+- **Backup (settled, rolling policy changed in round 30):** **once a day, keep 15 days, about 15
+  backups; prune anything older than 15 days.** (It was twice a day for 30 days; spike S10 showed
+  that copying the mirror is far too heavy, so the policy only has to protect the small state
+  file.) Each run takes a consistent online snapshot (SQLite `VACUUM INTO`/backup API) of
+  **`state.db` only**: tags and their membership, rules, snoozes, settings, allow-lists, check
+  definitions, the outbox and send queue, the API cost ledger, accounts without secrets,
+  zstd-compressed, verified (`integrity_check` + open test) before it counts. At 100k messages
+  that file is about 27 MiB and 15 snapshots about 390 MiB uncompressed. **`mirror.db` is a full
+  mirror in its own file and is never backed up**; it is rebuilt from IMAP (about 27 minutes of
+  database work per 100k messages on the potato plus the transfer, and re-embedding costs about
+  $0.42 per 100k via the default provider). Disabled messages' raw blobs (the only copy of
+  server-deleted mail) are written to a **content-addressed, de-duplicated, append-only file
+  store** outside both databases at the moment a message becomes disabled, are included in every
+  backup, and are not pruned by the 15-day rule. Safety rules for pruning: only after a new backup
   has succeeded and verified, and never below a floor of the 10 newest backups (a broken clock or
   failing backups must not prune everything). Targets: a folder or S3-compatible bucket; **at least
   one target should be off the potato** (a backup on the same card/disk as the DB does not survive
@@ -274,7 +331,8 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 - **Disk (settled, round 24): not a constraint.** The potato has 256 GB, so there is no storage
   budget and no raw-blob eviction (disabled messages are kept forever). Still: zstd at rest for
   speed and fewer flash writes, and `ivy doctor` warns on low free space (for example under 10%).
-  Spike S10 shrinks to projecting database growth and backup sizes.
+  Spike S10 measured it: about 12 KiB per message plus about 0.4 MiB per message with an
+  attachment, so 1.2 to 5.6 GiB for 100k messages (attachments are about 85% of it).
 - **SQLite on flash:** power loss and card corruption are real. `PRAGMA integrity_check` in
   `ivy doctor` and at startup after an unclean exit, periodic WAL checkpoints, backups of locally
   owned state verified by a restore test, and a kill -9 / power-loss test of the outbox and sync

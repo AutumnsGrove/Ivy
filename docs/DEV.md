@@ -82,7 +82,9 @@ leaks nothing real, and the UI is judged against real Jev/chat/vision output.
   Its answers are fixtures, not a judgment of accuracy.
 - **Tests and CI always pass `--llm fake`** (Playwright, benchmarks); live is for the human dev
   loop and the on-demand evals. A test asserts that no test path can reach the live provider.
-- Embeddings: real local Ollama if it answers on localhost, otherwise the deterministic fake.
+- Embeddings follow the same switch: `--llm fake` uses the deterministic fake embedder (also
+  counting calls, so the embed-once tests can assert on it); `live` uses OpenRouter, capped and
+  ledgered like every other remote call; a local Ollama is used only if configured for the account.
 
 ## 5b. Two-account pair (test sending between accounts)
 

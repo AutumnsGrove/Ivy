@@ -62,6 +62,23 @@ These numbers make that **a hard requirement**:
   Separately, disabled messages' raw blobs are the only copy of server-deleted mail and need
   their own append-only store, as already planned.
 
+## Decision and the follow-up measurement (operator, round 30)
+
+The operator chose: **one backup a day, kept 15 days, of a separate local-state file**, with the
+mirror in its own file as a full mirror that is never backed up. That is feasible:
+- **Mirror file:** about 12 KiB per message plus about 0.4 MiB per attachment-bearing message,
+  so 1.2 to 5.6 GiB at 100k messages on a 189 GB disk. It is rebuilt from IMAP if lost (about 27
+  minutes of database work per 100k messages here, plus the transfer).
+- **State file, measured afterwards** (60 tags, tag membership for 30% of messages, 150 rules,
+  3,000 snoozes, 800 allow-list rows, and a cost-ledger row per embedded message plus a Jev call
+  for half the messages): **3.0 MiB at 10k messages and 26.7 MiB at 100k** (150,000 ledger rows
+  dominate). `VACUUM INTO` takes 12 ms and 103 ms on the laptop respectively (expect a few seconds
+  on the potato), and 15 daily snapshots total about 44 MiB and 389 MiB uncompressed.
+- Local state must refer to mail by a stable content key and not by mirror row ids, or a mirror
+  rebuild would orphan tags, snoozes and the ledger (`ARCHITECTURE.md` section 3).
+- Caveat: the keys in this model are random 32-byte hashes (as real content keys would be), so
+  they do not compress; the ledger rows are an assumption about call volume.
+
 ## Other notes
 
 - The FTS table here is **contentless** (`content=''`), which keeps the index small (4% of the
