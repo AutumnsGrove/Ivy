@@ -63,6 +63,48 @@ query vectors (each query's own vector excluded). The pure-Go scan is single-thr
    100 to 150 tokens (about 3 to 4 times faster, quality untested), or a smaller embedding model
    (untested). Neither was run.
 
+## Hosted alternative: OpenRouter embeddings (operator suggestion, tested the same day)
+
+The operator pointed out that embeddings need not be local. OpenRouter's `/embeddings` endpoint
+lists 33 embedding models (prices per token; for scale `baai/bge-base-en-v1.5` is $0.005 per
+million tokens, `baai/bge-m3` $0.01, `voyageai/voyage-4-lite` $0.02). Only repo prose was sent
+(no mail), from the dev laptop over the internet, one run each:
+
+| | `bge-base-en-v1.5` | **`bge-m3`** | `voyage-4-lite` |
+|---|---|---|---|
+| Dimensions | 768 | 1024 | 1024 |
+| Context | **512 tokens** | 8,194 | 32,000 |
+| One short query | 0.30 s | 0.38 s | 0.23 s |
+| 32 short chunks in one call | 0.80 s | 0.81 s | 0.71 s |
+| 128 email-sized chunks (about 420 tokens each) | **invalid**, see below | **6.1 s => 20.9 chunks/s**, $0.000539 | not run |
+| Cost per 100k such chunks | | **about $0.42** | |
+
+- **A 512-token model fails the whole batch if any one chunk exceeds the limit.** One 1,500-character
+  chunk came to 513 tokens and the API rejected all 32 chunks in its batch (3 of 4 batches failed),
+  so that run's throughput is discarded. Chunk by token count with margin, never by characters,
+  or choose a long-context model.
+- **Against the board:** `bge-m3` embedded email-sized chunks about 360 times faster than the
+  board (20.9/s vs 0.06/s): 1,000 messages in about 48 s instead of 4.8 hours, about $0.004.
+  A search-time query embeds in 0.2 to 0.4 s, with no 407 MiB model and no 36 s cold start on
+  the board, which is the other thing the local route costs.
+- **Size effect:** 1024 dimensions at int8 is 98 MiB per 100k messages, and the scan scales to
+  about 450 ms on the board (340 ms at 768), still inside the 800 ms hybrid-search budget.
+- **Cost is not the issue;** privacy is. This sends message text to a third party, which is a
+  different line from the settled "embeddings always local" (`PLAN.md`). It would sit behind the
+  existing gate (per-account opt-in, caps, ledger) like the other hosted calls, but a mailbox
+  backfill sends far more old mail than triage of new mail does.
+- Also: vectors are tied to the model, so store the model id with each vector; a switch means
+  re-embedding, which at these prices is cents, so lock-in is cheap.
+- Caveats: one run each from the laptop, not the board; no quality comparison against `nomic`
+  (different models, different spaces); provider data-retention terms were not reviewed.
+
+**Recommendation (not yet a decision):** put embeddings behind a provider interface with two
+implementations, a local Ollama endpoint (any host, configurable) and OpenRouter, chosen per
+account. Default to hosted for accounts that already opted in to smart features, because the
+potato cannot embed queries or backfill cheaply, and keep local as the private option. This
+overturns "embeddings always local", so it waits for the operator's confirmation before the
+settled-decisions text is changed.
+
 ## Not tested
 
 Batch sizes 8 and 32 on the board, throughput under concurrent load, recall on varied real mail,
