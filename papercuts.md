@@ -381,3 +381,15 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   non-spool files; removes the orphan and the stale temp), `TestSweepSpoolWithNoSpoolIsFine`,
   `TestFetchSweepsOrphansFirst`, `TestSpooledPathsIncludesDisabledMessages`. The sweep's
   stub-then-implement red step was observed; `SpooledPaths` and its test were written together.
+
+## Spike code removed
+
+- **#41** · `aa0e438`..`a049bfb` · `spikes/` · **standards / CI cost** · nine finished spikes were
+  committed to `main` as nine separate Go modules (264 KB), against STANDARDS.md section 1 (spikes
+  live on a `spike/` branch and are never merged) and by a phase-specific exception. They were
+  invisible to the main build, vet, linters and tests, but CodeQL's Go autobuild walks every
+  `go.mod`, and the PDF and image libraries only they used showed up in the dependency graph and
+  Dependabot once the repo went public. Removed at the operator's direction; their findings stay
+  in `docs/spikes/` and the code is recoverable from history (`git show a049bfb:spikes/<name>/`,
+  the last commit that has it). Each finding doc and `docs/SPIKES.md` now say so, and
+  `docs/qa-log.md` records the decision.

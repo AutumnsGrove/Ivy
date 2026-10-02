@@ -1,6 +1,7 @@
 # S7: what does compression cost on the board?
 
-Run 2026-10-02. Code: `spikes/s7-compress/` (throwaway), cross-compiled for linux/arm64 and run on
+Run 2026-10-02. Code: `spikes/s7-compress/` (throwaway; removed from the tree, recover it with
+`git show a049bfb:spikes/s7-compress/`), cross-compiled for linux/arm64 and run on
 the board and on a dev laptop (Apple silicon, 8 cores) for comparison. Every codec ran
 single-threaded. The board was near idle (load 0.2, about 930 MiB available); under real load
 these numbers get worse.

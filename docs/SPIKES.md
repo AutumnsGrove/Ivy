@@ -1,9 +1,11 @@
 # Spikes (before Milestone 0)
 
 Status: DRAFT (2026-10-01), ordering settled in round 23: **spikes run first, before any build
-implementation.** A spike answers one question with evidence, in throwaway code under
-`spikes/<name>/` (its own Go module, committed to main per the operator's instruction for this
-phase, never imported by real code), and ends in a written finding in `docs/spikes/<name>.md` (what was tried,
+implementation.** A spike answers one question with evidence, in throwaway code (for the
+first nine, under `spikes/<name>/`, each its own Go module committed to main for this phase and
+never imported by real code; **that code was removed from the tree on 2026-10-02 and lives in
+history: `git show a049bfb:spikes/<name>/`**; any new spike goes on a `spike/` branch, per
+`STANDARDS.md` section 1), and ends in a written finding in `docs/spikes/<name>.md` (what was tried,
 what happened, numbers, decision, what to change in the docs). Planning docs are updated from
 findings before Milestone 0 starts. Spike code is not TDD; the real implementation is redone
 test-first afterward.

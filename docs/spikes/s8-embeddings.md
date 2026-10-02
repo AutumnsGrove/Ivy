@@ -1,6 +1,7 @@
 # S8: embedding throughput and memory on the board
 
-Run 2026-10-02. Code: `spikes/s8-embed/` (throwaway). Model: Ollama `nomic-embed-text`
+Run 2026-10-02. Code: `spikes/s8-embed/` (throwaway; removed from the tree, recover it with
+`git show a049bfb:spikes/s8-embed/`). Model: Ollama `nomic-embed-text`
 (768 dimensions), the same digest (`0a109f422b47`) on the board and on the dev laptop. The board
 was running its normal services. Text: chunks of the repo's own docs (prose, not mail), about 350
 tokens (1,500 characters) for throughput and about 120 tokens (500 characters) for the recall test.

@@ -1,6 +1,7 @@
 # S3: pure-Go build on the target board
 
-Run 2026-10-02. Code: `spikes/s3-potato-build/` (throwaway). Board: aarch64, 4 cores, 1.9 GB RAM,
+Run 2026-10-02. Code: `spikes/s3-potato-build/` (throwaway; removed from the tree, recover it with
+`git show a049bfb:spikes/s3-potato-build/`). Board: aarch64, 4 cores, 1.9 GB RAM,
 ~1 GB swap, Go 1.26.5, running other services (about 900 MiB used at idle, swap partly in use).
 Program: `modernc.org/sqlite v1.60.1` with an FTS5 table, `CGO_ENABLED=0`, fresh Go caches.
 Peak RAM is the summed RSS of the build's process group, sampled every 50 ms.

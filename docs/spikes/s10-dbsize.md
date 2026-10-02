@@ -1,6 +1,7 @@
 # S10: how big will the database and its backups get?
 
-Run 2026-10-02. Code: `spikes/s10-dbsize/` (throwaway), run on a dev laptop and on the board
+Run 2026-10-02. Code: `spikes/s10-dbsize/` (throwaway; removed from the tree, recover it with
+`git show a049bfb:spikes/s10-dbsize/`), run on a dev laptop and on the board
 (on its eMMC, not `/tmp`, which is RAM-backed there). It builds a **synthetic** mailbox of 10,000
 messages in a real SQLite file with the planned shape: mirror rows and indexes, the raw RFC 822
 message zstd-compressed, body text, an FTS5 index, one int8 768-dimension embedding per message,

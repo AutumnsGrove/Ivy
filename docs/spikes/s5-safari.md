@@ -1,6 +1,7 @@
 # S5: how does Safari behave?
 
-Run 2026-10-02 with `spikes/s5-safari/` (a throwaway test page and server, reached over Tailscale,
+Run 2026-10-02 with `spikes/s5-safari/` (removed from the tree; recover it with
+`git show a049bfb:spikes/s5-safari/`; a throwaway test page and server, reached over Tailscale,
 storing metadata only). **Tested so far: one iPad, Safari 26.5, over HTTPS (`tailscale serve`).**
 Not yet tested: an iPhone, plain HTTP over the tailnet IP, and the `image/heic` upload box. Treat
 everything below as iPad-only until the iPhone runs.

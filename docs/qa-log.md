@@ -661,3 +661,14 @@ Ivy with a `replace` in `go.mod`. The fork is beta.8 + a cherry-pick of #756 + a
 `imapmemserver` (mailworld's `Account.Deliver` mutates the memory store directly, so the backend is
 where modseq must live). Retire the fork when #756 lands upstream. Nothing is vendored into this
 repo. Recorded in `docs/STACK.md`, `next_steps.md`.
+
+## Spike code removed from the tree (2026-10-02, operator)
+
+All nine spikes had run and their findings are written up in `docs/spikes/`. The spike code (nine
+separate Go modules under `spikes/`, 264 KB) is **removed from `main`**; git history is the archive
+(`git show a049bfb:spikes/<name>/`, the last commit that has it). Reasons: CodeQL's Go autobuild
+walks every `go.mod` and compiled all of them; their PDF and image libraries (used nowhere else)
+showed up in the dependency graph and Dependabot alerts once the repo became public; and
+`STANDARDS.md` section 1 already says spikes do not live on `main`. Follow-ups that still want the
+code (S4 on a real corpus, S10 on a real mailbox, S5 on an iPhone) restore it from that commit or
+start a fresh `spike/` branch.

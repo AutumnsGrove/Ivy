@@ -1,6 +1,7 @@
 # S2: go-imap v2 and `imapmemserver`
 
-Run 2026-10-02 with `go-imap/v2 v2.0.0-beta.8`, Go 1.26.1. Code: `spikes/s2-imapmem/` (throwaway).
+Run 2026-10-02 with `go-imap/v2 v2.0.0-beta.8`, Go 1.26.1. Code: `spikes/s2-imapmem/` (throwaway; removed from the tree, recover it with
+`git show a049bfb:spikes/s2-imapmem/`).
 The probe starts `imapmemserver` in-process, connects with `imapclient` and tries each command Ivy's
 sync needs, recording the server's answer.
 

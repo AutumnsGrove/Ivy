@@ -2,7 +2,8 @@
 
 Run 2026-10-02 through OpenRouter's `/systemone` with `jev-latest` (resolved to
 `typesafe/jev-1.13-20260917`). Code and a 40-email hand-labelled synthetic corpus:
-`spikes/s4-jev/`. Total spend about $0.007 against a hard cap of $0.05 (cost read from
+`spikes/s4-jev/` (removed from the tree; recover it, with the labelled corpus, using
+`git show a049bfb:spikes/s4-jev/`). Total spend about $0.007 against a hard cap of $0.05 (cost read from
 `usage.cost`). Raw results were written to the git-ignored `.dev/`.
 
 **Honest limits of this evidence:** the corpus is synthetic, short (about 100 tokens per email) and

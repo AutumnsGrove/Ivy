@@ -1,7 +1,8 @@
 # S1: what Purelymail really does
 
 Run 2026-10-02 against a dedicated dev mailbox on `imap.purelymail.com:993` and
-`smtp.purelymail.com:465` (implicit TLS). Code: `spikes/s1-purelymail/` (throwaway; reads
+`smtp.purelymail.com:465` (implicit TLS). Code: `spikes/s1-purelymail/` (removed from the tree; recover it with
+`git show a049bfb:spikes/s1-purelymail/`; throwaway; reads
 credentials from the git-ignored `.env`, prints none, sends no mail, and removes its one scratch
 folder afterwards). One real message from another provider had been delivered to the INBOX for
 the header check.

@@ -1,6 +1,7 @@
 # S6: is pure-Go PDF text extraction good enough?
 
-Run 2026-10-02. Code: `spikes/s6-pdf/` (throwaway). Candidates, all cgo-free: `ledongthuc/pdf`,
+Run 2026-10-02. Code: `spikes/s6-pdf/` (throwaway; removed from the tree, recover it with
+`git show a049bfb:spikes/s6-pdf/`). Candidates, all cgo-free: `ledongthuc/pdf`,
 `dslipak/pdf` (a fork) and `go-pdfium` in WebAssembly mode (PDFium compiled to wasm and run by the
 pure-Go `wazero`). Reference: `pdftotext` (poppler), used only as an oracle. Fixtures: a generated
 receipt, a generated invoice with a table and right-aligned totals, an image-only "scan" with no
