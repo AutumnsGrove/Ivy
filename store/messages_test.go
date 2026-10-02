@@ -224,3 +224,57 @@ func TestCorruptUIDIsAnErrorNotAWrap(t *testing.T) {
 		t.Errorf("MessageUIDs returned %v for a corrupt row", uids)
 	}
 }
+
+// Sync upserts a message it knows nothing derived about: no thread (2e) and no
+// sanitised HTML (2d). Running it again over a message those layers already
+// processed must leave their output alone.
+func TestUpsertKeepsDerivedColumns(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct-1")
+	seedFolder(t, dbs, "acct-1", "folder-1")
+
+	m := Message{ID: "msg-1", AccountID: "acct-1", FolderID: "folder-1", UID: 10, ContentKey: "ck", Subject: "First"}
+	if err := dbs.UpsertMessage(ctx, m); err != nil {
+		t.Fatalf("first upsert: %v", err)
+	}
+	if err := dbs.SetMessageThread(ctx, "msg-1", "thread-9"); err != nil {
+		t.Fatalf("SetMessageThread: %v", err)
+	}
+	if err := dbs.SetMessageBodyHTML(ctx, "msg-1", "<p>clean</p>"); err != nil {
+		t.Fatalf("SetMessageBodyHTML: %v", err)
+	}
+
+	m.Subject = "Second"
+	m.Flags = []string{`\Seen`}
+	if err := dbs.UpsertMessage(ctx, m); err != nil { // thread and html are empty here
+		t.Fatalf("re-sync upsert: %v", err)
+	}
+
+	got, err := dbs.GetMessage(ctx, "msg-1")
+	if err != nil {
+		t.Fatalf("GetMessage: %v", err)
+	}
+	if got.Subject != "Second" || !got.Seen {
+		t.Errorf("sync-owned fields were not updated: %+v", got)
+	}
+	if got.ThreadID != "thread-9" {
+		t.Errorf("ThreadID = %q after a re-sync, want thread-9", got.ThreadID)
+	}
+	if got.BodyHTML != "<p>clean</p>" {
+		t.Errorf("BodyHTML = %q after a re-sync, want the sanitised html", got.BodyHTML)
+	}
+}
+
+func TestSetDerivedColumnsOnMissingMessage(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	if err := dbs.SetMessageThread(ctx, "nope", "t"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("SetMessageThread on a missing id = %v, want ErrNotFound", err)
+	}
+	if err := dbs.SetMessageBodyHTML(ctx, "nope", "<p>"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("SetMessageBodyHTML on a missing id = %v, want ErrNotFound", err)
+	}
+}

@@ -66,6 +66,10 @@ type Message struct {
 // updates rows in place rather than duplicating them. A reappearing message
 // has its disabled fields cleared, re-enabling it with its derived data intact
 // (ARCHITECTURE.md 4).
+//
+// thread_id and body_html_sanitized are written on the first insert only. Later
+// layers own them (SetMessageThread, SetMessageBodyHTML), and sync, which knows
+// neither, must not blank them when it sees the message again.
 func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 	from, err := marshalAddress(m.From)
 	if err != nil {
@@ -117,7 +121,6 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 			date=excluded.date, size=excluded.size, flags_json=excluded.flags_json,
 			internaldate=excluded.internaldate, has_attachments=excluded.has_attachments,
 			raw_blob=excluded.raw_blob, body_text=excluded.body_text,
-			body_html_sanitized=excluded.body_html_sanitized, thread_id=excluded.thread_id,
 			snippet=excluded.snippet, auth_results=excluded.auth_results,
 			parse_errors=excluded.parse_errors, disabled_at=excluded.disabled_at,
 			disabled_reason=excluded.disabled_reason, seen=excluded.seen`,
@@ -130,6 +133,36 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 	)
 	if err != nil {
 		return fmt.Errorf("upsert message %s: %w", m.ID, err)
+	}
+	return nil
+}
+
+// SetMessageThread records the conversation a message belongs to (chunk 2e).
+// It is its own statement, not part of UpsertMessage, so a later sync of the
+// same message cannot blank it.
+func (d *DBs) SetMessageThread(ctx context.Context, id, threadID string) error {
+	return d.setMessageColumn(ctx, id, "thread_id", threadID)
+}
+
+// SetMessageBodyHTML stores the server-sanitised HTML for a message (chunk 2d),
+// for the same reason as SetMessageThread.
+func (d *DBs) SetMessageBodyHTML(ctx context.Context, id, html string) error {
+	return d.setMessageColumn(ctx, id, "body_html_sanitized", html)
+}
+
+// setMessageColumn updates one derived column. column is a literal from this
+// file, never input, so building the statement from it is safe.
+func (d *DBs) setMessageColumn(ctx context.Context, id, column, value string) error {
+	res, err := d.Mirror.Write.ExecContext(ctx, `UPDATE messages SET `+column+` = ? WHERE id = ?`, value, id)
+	if err != nil {
+		return fmt.Errorf("set %s on message %s: %w", column, id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("set %s on message %s: %w", column, id, err)
+	}
+	if n == 0 {
+		return ErrNotFound
 	}
 	return nil
 }

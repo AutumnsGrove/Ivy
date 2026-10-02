@@ -324,3 +324,13 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   blocking without a deadline and silent failure, requires sender-sized data to stream through disk,
   and lists the boundary tests every change owes. The limits table is the source of truth for the
   caps implemented in N11 and N7's follow-up commits.
+
+## N7 resolved
+
+- **#38 (resolves N7)** · `42f86f3` · `store/messages.go` · **risk** · `UpsertMessage`'s conflict
+  clause overwrote `thread_id` and `body_html_sanitized` with the caller's values. Sync, which
+  knows neither, would blank the threads 2e and the sanitised HTML 2d write whenever it sees a
+  known message again (chunk 3's flag and move updates, or any re-sync). Both columns are now
+  written on the first insert only, and owned by `SetMessageThread` and `SetMessageBodyHTML`
+  (each `ErrNotFound` on a missing id). Tests `TestUpsertKeepsDerivedColumns` (failed with both
+  fields empty before the fix) and `TestSetDerivedColumnsOnMissingMessage`.
