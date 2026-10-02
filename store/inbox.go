@@ -68,7 +68,7 @@ func (d *DBs) ListInbox(ctx context.Context, q InboxQuery) (InboxPage, error) {
 	if err != nil {
 		return InboxPage{}, fmt.Errorf("list inbox: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		summary, err := scanInboxSummary(rows)

@@ -42,7 +42,7 @@ func explain(t *testing.T, db *sql.DB, query string, args ...any) string {
 	if err != nil {
 		t.Fatalf("explain: %v", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var lines []string
 	for rows.Next() {

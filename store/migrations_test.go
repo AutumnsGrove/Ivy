@@ -103,7 +103,7 @@ func columnExists(t *testing.T, db *sql.DB, table, column string) bool {
 	if err != nil {
 		t.Fatalf("pragma_table_info(%s): %v", table, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {

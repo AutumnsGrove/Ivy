@@ -73,7 +73,7 @@ func (d *DBs) ListAccounts(ctx context.Context) ([]Account, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list accounts: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []Account
 	for rows.Next() {

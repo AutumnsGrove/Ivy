@@ -68,7 +68,7 @@ func (d *DBs) ListFolders(ctx context.Context, accountID string) ([]Folder, erro
 	if err != nil {
 		return nil, fmt.Errorf("list folders for %s: %w", accountID, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var out []Folder
 	for rows.Next() {
