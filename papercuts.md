@@ -195,3 +195,26 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   folders `Entwürfe`, `Envoyés`, `Courrier indésirable` and `Archivés` all resolved to `other`
   (no Drafts/Sent/Junk role for a German or French account). Lookup now folds common Latin
   diacritics with a small replacer (no new dependency). Test `TestRoleForFoldsDiacritics`.
+
+## `12b1017`..`0a7dc96` mime (2c) — review paused here
+
+- **N9 (open, security, needs a decision)** · `12b1017` · `mime/authresults.go` · **risk** ·
+  `ParseAuthResults` trusts "the first header that carries a method", on the theory that the
+  receiving server's header is on top. If the receiver adds none (local delivery, an unchecked
+  relay), a sender-supplied `Authentication-Results: x; spf=pass; dkim=pass; dmarc=pass` becomes
+  the only and therefore trusted header, and the spoofed-sender discount (qa-log round on LLM
+  safety) would be switched off by the attacker. RFC 8601 section 5 says to trust a header only
+  when its `authserv-id` is the receiving server's. Recommendation: record the `authserv-id`
+  with each verdict and accept only ids matching a per-account allowlist (default: the IMAP
+  host's registrable domain). Blocked on the Purelymail header capture the qa-log lists as "not
+  yet confirmed", so it was not implemented.
+- **N10 (open, unverified)** · `12b1017` · `mime/mime.go` · whether a deeply nested multipart
+  message can exhaust the stack or CPU. `recover()` does not catch Go's fatal stack-overflow error.
+  A first experiment (50 to 20000 nested levels) did not finish within 40 s even at the smaller
+  depths, which was not diagnosed (the harness may have been at fault). Re-run with `-timeout` at
+  depths 1, 3, 6, 10, 14 to find the growth curve; if it is super-linear in depth, bound nesting
+  depth and part count before `Parse` hands the message to enmime.
+- Not yet reviewed: `92ef9fe` (store parsed header fields), `0a7dc96` (body parse in the fetch),
+  `fd7f73c`/`48be660`/`a049bfb` (next_steps.md), the remaining `mime` tests and fuzzers, the
+  `store` tests and query-plan guard, the golangci-lint wider-set switch (N2), and the
+  `web/` changes in `68e5fce`.
