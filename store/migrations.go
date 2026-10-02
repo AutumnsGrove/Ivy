@@ -162,6 +162,17 @@ var mirrorMigrations = []migration{
 			`CREATE INDEX idx_folders_role ON folders(role)`,
 		},
 	},
+	{
+		version: 3,
+		statements: []string{
+			// Fields parsed from the raw header block (2c) so reply handling and
+			// the auth trust signal never need to re-parse the raw message.
+			`ALTER TABLE messages ADD COLUMN reply_to_json TEXT`,
+			`ALTER TABLE messages ADD COLUMN delivered_to_json TEXT`,
+			`ALTER TABLE messages ADD COLUMN auth_results TEXT`,
+			`ALTER TABLE messages ADD COLUMN parse_errors TEXT`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.

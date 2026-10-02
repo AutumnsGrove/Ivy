@@ -17,6 +17,15 @@ type Address struct {
 	Address string `json:"address"`
 }
 
+// AuthResults is the SPF/DKIM/DMARC trust signal parsed from a message's
+// Authentication-Results headers (ARCHITECTURE.md 5).
+type AuthResults struct {
+	SPF   string   `json:"spf,omitempty"`
+	DKIM  string   `json:"dkim,omitempty"`
+	DMARC string   `json:"dmarc,omitempty"`
+	Raw   []string `json:"raw,omitempty"`
+}
+
 // Message is one mirrored message row. BodyHTML is the server-sanitized HTML;
 // RawBlob is the original RFC 822 bytes, stored so everything derived can be
 // rebuilt.
@@ -33,6 +42,8 @@ type Message struct {
 	From           Address
 	To             []Address
 	CC             []Address
+	ReplyTo        []Address
+	DeliveredTo    []Address
 	Date           time.Time
 	Size           int64
 	Flags          []string
@@ -43,6 +54,8 @@ type Message struct {
 	BodyHTML       string
 	ThreadID       string
 	Snippet        string
+	AuthResults    AuthResults
+	ParseErrors    []string
 	DisabledAt     time.Time
 	DisabledReason string
 	Seen           bool
@@ -65,7 +78,23 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 	if err != nil {
 		return err
 	}
+	replyTo, err := marshalAddresses(m.ReplyTo)
+	if err != nil {
+		return err
+	}
+	deliveredTo, err := marshalAddresses(m.DeliveredTo)
+	if err != nil {
+		return err
+	}
 	flags, err := marshalFlags(m.Flags)
+	if err != nil {
+		return err
+	}
+	authResults, err := marshalAuthResults(m.AuthResults)
+	if err != nil {
+		return err
+	}
+	parseErrors, err := marshalStrings(m.ParseErrors)
 	if err != nil {
 		return err
 	}
@@ -73,25 +102,29 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 	_, err = d.Mirror.ExecContext(ctx, `
 		INSERT INTO messages (
 			id, account_id, folder_id, uid, content_key, message_id_hdr, in_reply_to,
-			refs, subject, from_json, to_json, cc_json, date, size, flags_json,
-			internaldate, has_attachments, raw_blob, body_text, body_html_sanitized,
-			thread_id, snippet, disabled_at, disabled_reason, seen)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			refs, subject, from_json, to_json, cc_json, reply_to_json, delivered_to_json,
+			date, size, flags_json, internaldate, has_attachments, raw_blob, body_text,
+			body_html_sanitized, thread_id, snippet, auth_results, parse_errors,
+			disabled_at, disabled_reason, seen)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(folder_id, uid) DO UPDATE SET
 			account_id=excluded.account_id, content_key=excluded.content_key,
 			message_id_hdr=excluded.message_id_hdr, in_reply_to=excluded.in_reply_to,
 			refs=excluded.refs, subject=excluded.subject, from_json=excluded.from_json,
-			to_json=excluded.to_json, cc_json=excluded.cc_json, date=excluded.date,
-			size=excluded.size, flags_json=excluded.flags_json,
+			to_json=excluded.to_json, cc_json=excluded.cc_json,
+			reply_to_json=excluded.reply_to_json, delivered_to_json=excluded.delivered_to_json,
+			date=excluded.date, size=excluded.size, flags_json=excluded.flags_json,
 			internaldate=excluded.internaldate, has_attachments=excluded.has_attachments,
 			raw_blob=excluded.raw_blob, body_text=excluded.body_text,
 			body_html_sanitized=excluded.body_html_sanitized, thread_id=excluded.thread_id,
-			snippet=excluded.snippet, disabled_at=excluded.disabled_at,
+			snippet=excluded.snippet, auth_results=excluded.auth_results,
+			parse_errors=excluded.parse_errors, disabled_at=excluded.disabled_at,
 			disabled_reason=excluded.disabled_reason, seen=excluded.seen`,
 		m.ID, m.AccountID, m.FolderID, m.UID, m.ContentKey, m.MessageID, m.InReplyTo,
-		m.References, m.Subject, from, to, cc, nullableTime(m.Date), m.Size, flags,
-		nullableTime(m.InternalDate), m.HasAttachments, m.RawBlob, m.BodyText,
-		m.BodyHTML, m.ThreadID, m.Snippet, nullableTime(m.DisabledAt), m.DisabledReason,
+		m.References, m.Subject, from, to, cc, replyTo, deliveredTo,
+		nullableTime(m.Date), m.Size, flags, nullableTime(m.InternalDate),
+		m.HasAttachments, m.RawBlob, m.BodyText, m.BodyHTML, m.ThreadID, m.Snippet,
+		authResults, parseErrors, nullableTime(m.DisabledAt), m.DisabledReason,
 		slices.Contains(m.Flags, `\Seen`),
 	)
 	if err != nil {
@@ -160,28 +193,34 @@ const messageSelect = `
 	SELECT id, account_id, folder_id, uid, content_key,
 	       COALESCE(message_id_hdr, ''), COALESCE(in_reply_to, ''), COALESCE(refs, ''),
 	       COALESCE(subject, ''), COALESCE(from_json, ''), COALESCE(to_json, ''),
-	       COALESCE(cc_json, ''), COALESCE(date, ''), size, COALESCE(flags_json, ''),
+	       COALESCE(cc_json, ''), COALESCE(reply_to_json, ''), COALESCE(delivered_to_json, ''),
+	       COALESCE(date, ''), size, COALESCE(flags_json, ''),
 	       COALESCE(internaldate, ''), has_attachments, raw_blob,
 	       COALESCE(body_text, ''), COALESCE(body_html_sanitized, ''),
 	       COALESCE(thread_id, ''), COALESCE(snippet, ''),
+	       COALESCE(auth_results, ''), COALESCE(parse_errors, ''),
 	       COALESCE(disabled_at, ''), COALESCE(disabled_reason, ''), seen
 	FROM messages`
 
 func scanMessage(s scanner) (Message, error) {
 	var (
-		m                        Message
-		uid, size                int64
-		fromJSON, toJSON, ccJSON string
-		flagsJSON, date          string
-		internalDate             string
-		disabledAt               string
+		m                                Message
+		uid, size                        int64
+		fromJSON, toJSON, ccJSON         string
+		replyToJSON, deliveredToJSON     string
+		flagsJSON, date                  string
+		internalDate                     string
+		authResultsJSON, parseErrorsJSON string
+		disabledAt                       string
 	)
 	err := s.Scan(
 		&m.ID, &m.AccountID, &m.FolderID, &uid, &m.ContentKey, &m.MessageID,
 		&m.InReplyTo, &m.References, &m.Subject, &fromJSON, &toJSON, &ccJSON,
+		&replyToJSON, &deliveredToJSON,
 		&date, &size, &flagsJSON, &internalDate, &m.HasAttachments, &m.RawBlob,
-		&m.BodyText, &m.BodyHTML, &m.ThreadID, &m.Snippet, &disabledAt,
-		&m.DisabledReason, &m.Seen,
+		&m.BodyText, &m.BodyHTML, &m.ThreadID, &m.Snippet,
+		&authResultsJSON, &parseErrorsJSON,
+		&disabledAt, &m.DisabledReason, &m.Seen,
 	)
 	if err != nil {
 		return Message{}, err
@@ -198,8 +237,20 @@ func scanMessage(s scanner) (Message, error) {
 	if err := decodeJSON(ccJSON, &m.CC); err != nil {
 		return Message{}, fmt.Errorf("cc: %w", err)
 	}
+	if err := decodeJSON(replyToJSON, &m.ReplyTo); err != nil {
+		return Message{}, fmt.Errorf("reply-to: %w", err)
+	}
+	if err := decodeJSON(deliveredToJSON, &m.DeliveredTo); err != nil {
+		return Message{}, fmt.Errorf("delivered-to: %w", err)
+	}
 	if err := decodeJSON(flagsJSON, &m.Flags); err != nil {
 		return Message{}, fmt.Errorf("flags: %w", err)
+	}
+	if err := decodeJSON(authResultsJSON, &m.AuthResults); err != nil {
+		return Message{}, fmt.Errorf("auth results: %w", err)
+	}
+	if err := decodeJSON(parseErrorsJSON, &m.ParseErrors); err != nil {
+		return Message{}, fmt.Errorf("parse errors: %w", err)
 	}
 	for _, tc := range []struct {
 		raw  string
@@ -247,6 +298,32 @@ func marshalFlags(flags []string) (any, error) {
 	b, err := json.Marshal(flags)
 	if err != nil {
 		return nil, fmt.Errorf("marshal flags: %w", err)
+	}
+	return string(b), nil
+}
+
+// marshalAuthResults stores NULL for a message with no verdicts, so a scan
+// leaves the zero value rather than decoding an empty object.
+func marshalAuthResults(a AuthResults) (any, error) {
+	if a.SPF == "" && a.DKIM == "" && a.DMARC == "" && len(a.Raw) == 0 {
+		return nil, nil
+	}
+	b, err := json.Marshal(a)
+	if err != nil {
+		return nil, fmt.Errorf("marshal auth results: %w", err)
+	}
+	return string(b), nil
+}
+
+// marshalStrings stores NULL for an empty list, keeping the scanned zero value
+// nil instead of an empty slice.
+func marshalStrings(list []string) (any, error) {
+	if len(list) == 0 {
+		return nil, nil
+	}
+	b, err := json.Marshal(list)
+	if err != nil {
+		return nil, fmt.Errorf("marshal strings: %w", err)
 	}
 	return string(b), nil
 }

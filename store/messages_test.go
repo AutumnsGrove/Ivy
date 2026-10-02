@@ -30,6 +30,8 @@ func TestMessageRoundTrip(t *testing.T) {
 		From:           Address{Name: "Alice", Address: "alice@example.test"},
 		To:             []Address{{Name: "Me", Address: "me@example.test"}},
 		CC:             []Address{},
+		ReplyTo:        []Address{{Name: "Visitor", Address: "visitor@example.test"}},
+		DeliveredTo:    []Address{},
 		Date:           date,
 		Size:           1234,
 		Flags:          []string{`\Seen`, `\Flagged`},
@@ -40,6 +42,8 @@ func TestMessageRoundTrip(t *testing.T) {
 		BodyHTML:       "<p>hi</p>",
 		ThreadID:       "thread-1",
 		Snippet:        "hi",
+		AuthResults:    AuthResults{SPF: "pass", DKIM: "pass", DMARC: "pass", Raw: []string{"mx; spf=pass"}},
+		ParseErrors:    []string{"[W] Malformed Header: x"},
 	}
 	if err := dbs.UpsertMessage(ctx, in); err != nil {
 		t.Fatalf("UpsertMessage: %v", err)

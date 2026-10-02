@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"testing"
 )
@@ -70,6 +71,59 @@ func TestMirrorUpgradeFromV1PreservesData(t *testing.T) {
 	}
 }
 
+// TestMirrorUpgradeFromEveryPriorVersion applies each historical schema, seeds
+// a message, then opens normally and checks the upgrade reached current and the
+// row survived. This is the "upgrade from every prior version" rule in
+// TESTING.md section 6.
+func TestMirrorUpgradeFromEveryPriorVersion(t *testing.T) {
+	t.Parallel()
+	for version := 1; version < len(mirrorMigrations); version++ {
+		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			db, err := openDB(filepath.Join(dir, "mirror.db"))
+			if err != nil {
+				t.Fatalf("open mirror: %v", err)
+			}
+			if err := migrate(db, mirrorMigrations[:version]); err != nil {
+				t.Fatalf("apply v%d: %v", version, err)
+			}
+			seedSQL := []string{
+				`INSERT INTO accounts (id, address, imap_host, imap_port, smtp_host, smtp_port, username, created_at)
+				 VALUES ('acct-1', 'me@example.test', 'imap.test', 993, 'smtp.test', 465, 'me', '2026-10-02T00:00:00Z')`,
+				`INSERT INTO folders (id, account_id, name, role) VALUES ('folder-1', 'acct-1', 'INBOX', 'inbox')`,
+				`INSERT INTO messages (id, account_id, folder_id, uid, content_key, subject)
+				 VALUES ('msg-1', 'acct-1', 'folder-1', 1, 'ck', 'survives')`,
+			}
+			for _, stmt := range seedSQL {
+				if _, err := db.Exec(stmt); err != nil {
+					t.Fatalf("seed v%d: %v", version, err)
+				}
+			}
+			if err := db.Close(); err != nil {
+				t.Fatalf("close v%d: %v", version, err)
+			}
+
+			dbs, err := Open(dir)
+			if err != nil {
+				t.Fatalf("Open upgrade from v%d: %v", version, err)
+			}
+			defer dbs.Close()
+
+			if got := userVersion(t, dbs.Mirror); got != len(mirrorMigrations) {
+				t.Errorf("user_version = %d, want %d", got, len(mirrorMigrations))
+			}
+			var subject string
+			if err := dbs.Mirror.QueryRow(`SELECT subject FROM messages WHERE id='msg-1'`).Scan(&subject); err != nil {
+				t.Fatalf("read message after v%d upgrade: %v", version, err)
+			}
+			if subject != "survives" {
+				t.Errorf("subject = %q, want survives", subject)
+			}
+		})
+	}
+}
+
 // TestMirrorReadSchema covers the tables and columns the read path queries.
 func TestMirrorReadSchema(t *testing.T) {
 	t.Parallel()
@@ -86,7 +140,7 @@ func TestMirrorReadSchema(t *testing.T) {
 	}
 	wantColumns := map[string][]string{
 		"accounts": {"icon", "photo_blob"},
-		"messages": {"seen"},
+		"messages": {"seen", "reply_to_json", "delivered_to_json", "auth_results", "parse_errors"},
 	}
 	for table, columns := range wantColumns {
 		for _, column := range columns {
