@@ -177,7 +177,10 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 |---|---|---|
 | Message fetched into memory (`InlineMessageBytes`) | 2 MiB | streamed to a spool file on disk, parsed as a skeleton (below) |
 | Message downloaded at all (`MaxMessageBytes`) | 64 MiB | not downloaded; headers kept, `body_status = too_large`, UI offers "open in webmail" |
-| Body part kept in memory while parsing a spooled message (`MaxBodyPartBytes`) | 256 KiB | the part is recorded (name, type, size) and left on disk |
+| Inline text body kept in memory while parsing a spooled message (`mime.MaxTextPartBytes`) | 2 MiB | the part is recorded (name, type, size) and left on disk |
+| Attachment or other part kept in memory (`mime.MaxLeafBytes`) | 64 KiB | recorded and left on disk; served by streaming from the file (`mime.CopyPart`) |
+| Everything kept across all parts of one message (`mime.MaxSkeletonBytes`) | 8 MiB | the remaining parts are recorded and left on disk |
+| Header block (`mime.MaxHeaderBytes`) | 1 MiB | body not parsed, error recorded |
 | Multipart nesting (`mime.MaxMultipartDepth`) | 16 | body not parsed, headers kept, error recorded |
 | Parts per message (`mime.MaxParts`) | 1000 | body not parsed, headers kept, error recorded |
 | Non-fatal parse errors kept per message | 20 | dropped after the 20th |

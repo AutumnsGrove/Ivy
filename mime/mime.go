@@ -59,6 +59,12 @@ type Parsed struct {
 	DeliveredTo []Address
 	Attachments []Part
 	Inlines     []Part
+	// Large lists the parts ParseStream left on disk (their bodies are not in
+	// Attachments or Inlines). Empty for Parse, which keeps everything.
+	Large []PartInfo
+	// BodySkipped is true when the body could not be read at all (too deep, too
+	// many parts, an unreadable header) and only the headers were parsed.
+	BodySkipped bool
 	Auth        AuthResults
 	Errors      []string
 }
