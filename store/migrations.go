@@ -112,6 +112,56 @@ var mirrorMigrations = []migration{
 			`CREATE INDEX idx_messages_thread ON messages(thread_id)`,
 		},
 	},
+	{
+		version: 2,
+		statements: []string{
+			// Account customization (PLAN.md 3): display name, icon and optional photo.
+			`ALTER TABLE accounts ADD COLUMN icon TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE accounts ADD COLUMN photo_blob BLOB`,
+
+			// Conversations are keyed by the content key of their root message so a
+			// move or UID change never re-derives them (ARCHITECTURE.md 3).
+			`CREATE TABLE threads (
+				id              TEXT PRIMARY KEY,
+				account_id      TEXT NOT NULL REFERENCES accounts(id),
+				root_message_id TEXT,
+				subject_norm    TEXT,
+				last_date       TEXT,
+				message_count   INTEGER NOT NULL DEFAULT 0
+			)`,
+			`CREATE INDEX idx_threads_account_last ON threads(account_id, last_date DESC)`,
+
+			`CREATE TABLE attachments (
+				id           TEXT PRIMARY KEY,
+				message_id   TEXT NOT NULL REFERENCES messages(id),
+				filename     TEXT,
+				mime         TEXT,
+				size         INTEGER NOT NULL DEFAULT 0,
+				content_hash TEXT,
+				cid          TEXT,
+				storage_path TEXT
+			)`,
+			`CREATE INDEX idx_attachments_message ON attachments(message_id)`,
+
+			// Derived, regenerable triage verdicts (ARCHITECTURE.md 3). Nothing
+			// writes this until the triage milestone; the read query left-joins it.
+			`CREATE TABLE needs_me (
+				account_id   TEXT NOT NULL,
+				content_key  TEXT NOT NULL,
+				verdict      TEXT,
+				reason       TEXT,
+				stage2_model TEXT,
+				state        TEXT NOT NULL DEFAULT '',
+				PRIMARY KEY (account_id, content_key)
+			)`,
+
+			// Denormalised from flags_json so the unread count is an indexed query
+			// instead of a JSON scan over every message.
+			`ALTER TABLE messages ADD COLUMN seen INTEGER NOT NULL DEFAULT 0`,
+			`CREATE INDEX idx_messages_inbox ON messages(folder_id, date DESC, id DESC)`,
+			`CREATE INDEX idx_folders_role ON folders(role)`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.
