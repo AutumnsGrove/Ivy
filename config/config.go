@@ -83,7 +83,7 @@ func applyEnv(cfg *Config) {
 		cfg.DataDir = v
 	}
 	for i := range cfg.Accounts {
-		if v := os.Getenv(passwordEnv(cfg.Accounts[i].ID)); v != "" {
+		if v := os.Getenv(PasswordEnv(cfg.Accounts[i].ID)); v != "" {
 			cfg.Accounts[i].Password = v
 		}
 	}
@@ -91,9 +91,10 @@ func applyEnv(cfg *Config) {
 
 var envSanitize = regexp.MustCompile(`[^A-Z0-9]+`)
 
-// passwordEnv maps an account id to its environment variable, e.g. account
-// "my-account" -> IVY_MY_ACCOUNT_PASSWORD.
-func passwordEnv(id string) string {
+// PasswordEnv maps an account id to its environment variable, e.g. account
+// "my-account" -> IVY_MY_ACCOUNT_PASSWORD. It is exported so the dev stack can
+// set the same variable it expects config.Load to read.
+func PasswordEnv(id string) string {
 	slug := envSanitize.ReplaceAllString(strings.ToUpper(id), "_")
 	return "IVY_" + slug + "_PASSWORD"
 }
