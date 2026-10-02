@@ -94,3 +94,9 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   models only choice-style `criteria` (a map); the real API's `score` questions send a list
   (see `spikes/s4-jev`), which the fake silently answers with an empty answer. Add score support
   when the real Jev client lands in chunk 4.
+- **#15** · `53bac38` · `internal/devstack/supervisor.go` · **bug** · the restart-on-change
+  supervisor scanned its "last known" file stamps after the build finished, so a Go file saved
+  while the compiler was running was absorbed into the baseline and the stale binary kept running
+  until the next edit (the existing test even slept to dodge this). The baseline is now taken
+  before the build and also handed to `awaitChange` after a failed build or start. Test
+  `TestSupervisorRebuildsAfterEditDuringBuild` timed out before the fix.

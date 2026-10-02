@@ -151,3 +151,50 @@ func waitFor(t *testing.T, what string, ok func() bool) {
 	}
 	t.Fatalf("timed out waiting for %s", what)
 }
+
+// A file saved while the compiler runs is newer than the binary being built, so
+// it must trigger another rebuild rather than be absorbed into the baseline.
+func TestSupervisorRebuildsAfterEditDuringBuild(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	file := filepath.Join(root, "main.go")
+	if err := os.WriteFile(file, []byte("package main\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var mu sync.Mutex
+	builds, starts := 0, 0
+	sup := &devstack.Supervisor{
+		Root: root,
+		Build: func(context.Context) error {
+			mu.Lock()
+			builds++
+			first := builds == 1
+			mu.Unlock()
+			if first {
+				return os.WriteFile(file, []byte("package main\n// edited mid-build\n"), 0o600)
+			}
+			return nil
+		},
+		Command: func() *exec.Cmd {
+			mu.Lock()
+			starts++
+			mu.Unlock()
+			return exec.Command("sleep", "60")
+		},
+		PollInterval: 20 * time.Millisecond,
+		Log:          io.Discard,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- sup.Run(ctx) }()
+
+	waitFor(t, "a second build for the mid-build edit", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return builds >= 2
+	})
+	cancel()
+	<-done
+}

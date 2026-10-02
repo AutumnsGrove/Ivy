@@ -113,12 +113,15 @@ func (s *Supervisor) Run(ctx context.Context) error {
 	}
 
 	for {
+		// Scanned before the build, not after: a file saved while the compiler
+		// runs is newer than the binary it produces and must trigger a rebuild.
+		baseline, _ := ScanGo(s.Root)
 		if err := s.Build(ctx); err != nil {
 			if ctx.Err() != nil {
 				return nil
 			}
 			fmt.Fprintf(logw, "build failed: %v\n", err)
-			if !s.awaitChange(ctx, interval) {
+			if !s.awaitChange(ctx, interval, baseline) {
 				return nil
 			}
 			continue
@@ -128,12 +131,11 @@ func (s *Supervisor) Run(ctx context.Context) error {
 		cmd.Stderr = logw
 		if err := cmd.Start(); err != nil {
 			fmt.Fprintf(logw, "start failed: %v\n", err)
-			if !s.awaitChange(ctx, interval) {
+			if !s.awaitChange(ctx, interval, baseline) {
 				return nil
 			}
 			continue
 		}
-		baseline, _ := ScanGo(s.Root)
 		childDone := make(chan error, 1)
 		go func() { childDone <- cmd.Wait() }()
 		ticker := time.NewTicker(interval)
@@ -149,7 +151,7 @@ func (s *Supervisor) Run(ctx context.Context) error {
 			case <-childDone:
 				fmt.Fprintln(logw, "child exited, waiting for a Go change")
 				ticker.Stop()
-				if !s.awaitChange(ctx, interval) {
+				if !s.awaitChange(ctx, interval, baseline) {
 					return nil
 				}
 				restart = true
@@ -167,10 +169,9 @@ func (s *Supervisor) Run(ctx context.Context) error {
 	}
 }
 
-// awaitChange blocks until a Go file changes or ctx ends, reporting false when
-// ctx ended so Run can return.
-func (s *Supervisor) awaitChange(ctx context.Context, interval time.Duration) bool {
-	baseline, _ := ScanGo(s.Root)
+// awaitChange blocks until a Go file differs from baseline or ctx ends,
+// reporting false when ctx ended so Run can return.
+func (s *Supervisor) awaitChange(ctx context.Context, interval time.Duration, baseline map[string]fileStamp) bool {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
