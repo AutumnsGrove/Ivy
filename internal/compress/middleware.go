@@ -171,6 +171,10 @@ func (w *responseWriter) Flush() {
 		w.WriteHeader(http.StatusOK)
 	}
 	w.decide()
+	// The header must be sent before the encoder touches the underlying writer,
+	// which would otherwise flush it implicitly and trigger a second
+	// WriteHeader when the handler returns.
+	w.writeHeader()
 	if _, err := w.drain(); err != nil {
 		return
 	}

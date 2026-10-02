@@ -6,9 +6,11 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,6 +26,35 @@ func newServer(t *testing.T, h http.Handler) *httptest.Server {
 	srv := httptest.NewServer(Middleware(h))
 	t.Cleanup(srv.Close)
 	return srv
+}
+
+// syncBuffer collects the server's error log so a test can assert that the
+// net/http plumbing was happy (no superfluous WriteHeader).
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
+func newLoggedServer(t *testing.T, h http.Handler) (*httptest.Server, *syncBuffer) {
+	t.Helper()
+	logs := &syncBuffer{}
+	srv := httptest.NewUnstartedServer(Middleware(h))
+	srv.Config.ErrorLog = log.New(logs, "", 0)
+	srv.Start()
+	t.Cleanup(srv.Close)
+	return srv, logs
 }
 
 // get performs a request with an explicit Accept-Encoding. Setting it (even to
@@ -284,6 +315,46 @@ func TestMiddlewareFlushesStreams(t *testing.T) {
 
 // TestMiddlewareCompressesEveryTextShape covers the content types the API and
 // the rendered mail surface actually produce.
+// TestMiddlewareStreamsAfterHeaderFlush covers the common SSE shape: headers
+// are flushed before the first event to open the stream.
+func TestMiddlewareStreamsAfterHeaderFlush(t *testing.T) {
+	t.Parallel()
+	srv, logs := newLoggedServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		rc := http.NewResponseController(w)
+		if err := rc.Flush(); err != nil {
+			t.Errorf("header flush: %v", err)
+		}
+		_, _ = io.WriteString(w, "data: hello\n\n")
+		_, _ = io.WriteString(w, "data: world\n\n")
+	}))
+	resp := get(t, srv, "zstd")
+	if got := resp.Header.Get("Content-Encoding"); got != "zstd" {
+		t.Fatalf("Content-Encoding = %q, want zstd", got)
+	}
+	body := readAll(t, resp)
+	if !strings.Contains(string(body), "data: hello") || !strings.Contains(string(body), "data: world") {
+		t.Errorf("body = %q, want both events", body)
+	}
+	if logs.String() != "" {
+		t.Errorf("server logged a problem: %s", logs.String())
+	}
+}
+
+func TestMiddlewareNoContentHasNoEncoding(t *testing.T) {
+	t.Parallel()
+	srv := newServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	resp := get(t, srv, "zstd")
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Content-Encoding"); got != "" {
+		t.Errorf("Content-Encoding = %q, want none on a bodyless status", got)
+	}
+}
+
 func TestMiddlewareCompressesEveryTextShape(t *testing.T) {
 	t.Parallel()
 	for _, ct := range []string{
