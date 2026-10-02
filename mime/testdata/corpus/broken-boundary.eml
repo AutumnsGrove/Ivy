@@ -1,0 +1,13 @@
+From: broken@example.com
+To: me@grove.test
+Subject: A part with no closing boundary
+Date: Wed, 05 Nov 2025 10:00:00 +0000
+Message-ID: <broken-boundary-1@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="MISSING"
+
+--MISSING
+Content-Type: text/plain; charset=utf-8
+
+This part is unterminated and must still parse.
+

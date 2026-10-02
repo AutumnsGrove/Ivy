@@ -1,0 +1,27 @@
+From: forwarder@example.com
+To: me@grove.test
+Subject: Fwd: the original
+Date: Tue, 04 Nov 2025 09:00:00 +0000
+Message-ID: <fwd-nested-1@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="OUT"
+
+--OUT
+Content-Type: text/plain; charset=utf-8
+
+Forwarding the original message below.
+
+--OUT
+Content-Type: message/rfc822
+
+From: original@example.com
+To: me@grove.test
+Subject: The original
+Date: Mon, 03 Nov 2025 08:00:00 +0000
+Message-ID: <orig-nested-1@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+The nested original body.
+
+--OUT--
