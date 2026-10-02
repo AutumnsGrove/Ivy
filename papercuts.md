@@ -393,3 +393,21 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   in `docs/spikes/` and the code is recoverable from history (`git show a049bfb:spikes/<name>/`,
   the last commit that has it). Each finding doc and `docs/SPIKES.md` now say so, and
   `docs/qa-log.md` records the decision.
+
+## N9 resolved
+
+- **#42 (resolves N9)** · `12b1017` · `mime/authresults.go`, `sync/sync.go`, `config/config.go`,
+  `store/messages.go` · **risk (security)** · `ParseAuthResults` believed the first header that
+  carried each method. Purelymail adds **no** SPF/DKIM/DMARC verdicts (spike S1), so a
+  sender-supplied header was the only one, and a forged `spf=pass; dkim=pass; dmarc=pass` switched
+  off the spoofed-sender discount. Fixed per RFC 8601 sections 2.5/4.1: believe only the **topmost**
+  header whose `authserv-id` is in the account's new `trusted_authserv_ids`, and **only that one
+  header** (a later header cannot add a method the trusted one omitted, which is the same forgery
+  by another route). The trusted id is recorded with the verdicts, the raw headers are kept for
+  debugging, and the default is an empty list, so nothing is trusted — the audit's suggested
+  registrable-domain default was rejected because a forged header could spell the provider's domain.
+  Tests: `TestParseAuthResultsTrustsOnlyConfiguredAuthservID` (the forged cases failed with the
+  verdicts accepted before the fix), `TestFetchIgnoresForgedAuthResults` (end to end through
+  mailworld), and the updated `TestParseAuthResults`/`TestParseAuthResultsHeader`.
+  On Purelymail the signal is now honestly empty and the discount stays off; verifying DKIM
+  ourselves is the later feature (`ARCHITECTURE.md` section 5, `next_steps.md`).

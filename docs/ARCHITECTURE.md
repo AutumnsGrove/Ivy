@@ -228,7 +228,14 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   attachments, and the copy in Sent keeps them. Reply/forward re-attach the original's attachments
   only when asked.
 - **Auth results:** parse `Authentication-Results` (SPF/DKIM/DMARC) into a trust signal used by
-  the phishing question and the spoofed-sender discount.
+  the phishing question and the spoofed-sender discount. Only the **topmost** header whose
+  `authserv-id` is in the account's `trusted_authserv_ids` is believed, and **only that one
+  header**: a later header cannot add a method it omitted. The trusted id is stored beside the
+  verdicts (N9, `papercuts.md`). RFC 8601 does not let a consumer interpret the header until the
+  operator configures the ids, so an empty list means no verdict, never a forged one. **Purelymail
+  adds no SPF/DKIM/DMARC verdicts** (spike S1: its header is only `mail.purelymail.com; auth=pass`),
+  so on Purelymail the signal is empty and the spoofed-sender discount stays off; verifying DKIM
+  ourselves is the later feature that would change that.
 
 ## 6. Search and ask
 

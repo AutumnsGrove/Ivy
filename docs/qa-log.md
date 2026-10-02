@@ -701,3 +701,28 @@ input and silent failures were not - became a rule.
 These were folded into `CLAUDE.md`, `docs/STANDARDS.md` (4a), `docs/ARCHITECTURE.md` (section 3),
 `docs/CI.md`, `docs/TESTING.md`, `docs/PERFORMANCE.md` (section 1), `docs/STACK.md` and
 `next_steps.md`. The spike code was removed in the same pass (entry above).
+
+## N9 resolved: trusting Authentication-Results (2026-10-02)
+
+Spike S1 showed Purelymail adds **no** SPF/DKIM/DMARC verdicts (its inbound header is only
+`mail.purelymail.com; auth=pass`), so the parser's "first header carrying each method" rule had no
+real header to prefer: a sender could add
+`Authentication-Results: bad.example; spf=pass; dkim=pass; dmarc=pass` and switch off the
+spoofed-sender discount. RFC 8601 sections 2.5 and 4.1 are explicit that a consumer must not
+interpret this header until the operator configures which `authserv-id` is trustworthy.
+
+**Settled (operator):**
+
+- `mime.Parse`/`ParseStream` believe only the **topmost** header whose `authserv-id` is in the
+  account's `trusted_authserv_ids`; every other header is ignored, and a later header cannot fill a
+  method the trusted one omitted (that would be the same forgery by another route). The trusted id
+  is stored with the verdicts; the raw headers are kept for debugging.
+- The default is an **empty list, so nothing is trusted**. This is stricter than the audit's first
+  suggestion (default to the IMAP host's registrable domain), which would have trusted a forged
+  header spelling `purelymail.com`.
+- Because Purelymail adds no verdicts, the auth signal on Purelymail is now honestly empty and the
+  spoofed-sender discount does not fire. Verifying DKIM (and, from `Received`, DMARC alignment)
+  ourselves is the later feature that would make it usable; it is recorded as such in
+  `docs/ARCHITECTURE.md` section 5 and `next_steps.md`.
+
+Recorded in `docs/ARCHITECTURE.md` section 5, `papercuts.md` (N9 resolved) and `next_steps.md`.

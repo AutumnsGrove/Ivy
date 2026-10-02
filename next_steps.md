@@ -48,6 +48,12 @@ enforced by tests and CI, not just stated here.
   over 2 s. A new parser needs the same time-bound fuzz assertion.
 - **Secure by default.** `sync.Account.Insecure` (plaintext) must be set explicitly; the zero
   value is implicit TLS. `Fetch` honours its context by closing the connection when it ends.
+- **Authentication-Results is trusted only by `authserv-id`.** `mime.Parse`/`ParseStream` (and so
+  `sync`) believe only the topmost header whose id is in the account's `trusted_authserv_ids`
+  (config), and only that header; the default is empty, so nothing is trusted (N9, resolved).
+  Purelymail adds no SPF/DKIM/DMARC verdicts (spike S1), so its signal is empty; verifying DKIM
+  ourselves is the later feature. `sync/` is not wired to config yet, so chunk 3's runner must copy
+  `config.Account.TrustedAuthservIDs` into `sync.Account` (nothing consumes the key today).
 - **Config and scenario YAML are strict** (unknown keys fail). Keep new keys in the structs.
 - **API responses carry** `Cache-Control: no-store`, and every response `nosniff`,
   `Referrer-Policy: no-referrer` and `X-Frame-Options: SAMEORIGIN`. 2d adds the CSP.
@@ -63,9 +69,7 @@ enforced by tests and CI, not just stated here.
   are over an hour old: crash-leftover `.spool-*` temp files and downloads whose row never landed.
 - **Derived columns have their own setters.** 2d writes `store.SetMessageBodyHTML`, 2e writes
   `store.SetMessageThread`; `UpsertMessage` never overwrites them after the first insert.
-- **Open items that need a decision** are `N`-numbered in `papercuts.md`: N9 (trusting
-  `Authentication-Results` needs an `authserv-id` allowlist) and N4/N5 (measure on the potato,
-  held for now).
+- **Open items** are `N`-numbered in `papercuts.md`: N4/N5 (measure on the potato, held for now).
 
 ## ▶ Now: Chunk 2 (Milestone 1: Read) — 2a-2c done, start 2d
 
