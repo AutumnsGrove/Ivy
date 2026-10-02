@@ -1,0 +1,60 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"strings"
+	"testing"
+)
+
+// TestReadQueriesUseIndexes guards the large-table rule in STANDARDS.md
+// section 4: every query that can run on a large table must use an index
+// rather than scanning the messages table.
+func TestReadQueriesUseIndexes(t *testing.T) {
+	t.Parallel()
+	dbs := openTemp(t)
+
+	cases := []struct {
+		name  string
+		query string
+		args  []any
+	}{
+		{"inbox", inboxSelect, []any{"", "", "", "", "", 50}},
+		{"inbox counts", inboxCountsSelect, []any{"", ""}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			plan := explain(t, dbs.Mirror, tc.query, tc.args...)
+			if strings.Contains(plan, "SCAN m ") || strings.Contains(plan, "SCAN messages") {
+				t.Errorf("full table scan of messages:\n%s", plan)
+			}
+			if !strings.Contains(plan, "SEARCH") {
+				t.Errorf("no index search in plan:\n%s", plan)
+			}
+		})
+	}
+}
+
+func explain(t *testing.T, db *sql.DB, query string, args ...any) string {
+	t.Helper()
+	rows, err := db.QueryContext(context.Background(), "EXPLAIN QUERY PLAN "+query, args...)
+	if err != nil {
+		t.Fatalf("explain: %v", err)
+	}
+	defer rows.Close()
+
+	var lines []string
+	for rows.Next() {
+		var id, parent, notused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &notused, &detail); err != nil {
+			t.Fatalf("scan plan: %v", err)
+		}
+		lines = append(lines, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate plan: %v", err)
+	}
+	return strings.Join(lines, "\n")
+}

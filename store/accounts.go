@@ -119,10 +119,17 @@ func scanAccount(s scanner) (Account, error) {
 	return a, nil
 }
 
+// timeLayout is fixed-width so stored timestamps sort lexicographically in the
+// same order as chronologically; the mirror orders inbox pages on this column.
+const timeLayout = "2006-01-02T15:04:05.000000000Z"
+
 func formatTime(t time.Time) string {
-	return t.UTC().Format(time.RFC3339Nano)
+	return t.UTC().Format(timeLayout)
 }
 
 func parseTime(s string) (time.Time, error) {
+	if t, err := time.Parse(timeLayout, s); err == nil {
+		return t, nil
+	}
 	return time.Parse(time.RFC3339Nano, s)
 }
