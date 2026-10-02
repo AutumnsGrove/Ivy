@@ -13,8 +13,10 @@ import (
 type SentCopy int
 
 const (
-	SentCopyClient SentCopy = iota // the client must APPEND its own copy
-	SentCopyAuto                   // the server files the copy
+	// SentCopyClient means the client must APPEND its own copy.
+	SentCopyClient SentCopy = iota
+	// SentCopyAuto means the server files the copy.
+	SentCopyAuto
 )
 
 // SentMessage is one message the fake SMTP server accepted, for tests and the

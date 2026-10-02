@@ -13,16 +13,16 @@ import (
 	"time"
 )
 
-// fileStamp is enough to notice an edit even when mtime resolution hides it.
-type fileStamp struct {
+// FileStamp is enough to notice an edit even when mtime resolution hides it.
+type FileStamp struct {
 	Mod  time.Time
 	Size int64
 }
 
 // ScanGo records every Go source and module file under root, skipping trees
 // that never hold Ivy source (the dev dir, web, spikes, generated output).
-func ScanGo(root string) (map[string]fileStamp, error) {
-	out := make(map[string]fileStamp)
+func ScanGo(root string) (map[string]FileStamp, error) {
+	out := make(map[string]FileStamp)
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -43,7 +43,7 @@ func ScanGo(root string) (map[string]fileStamp, error) {
 			if err != nil {
 				return err
 			}
-			out[path] = fileStamp{Mod: info.ModTime(), Size: info.Size()}
+			out[path] = FileStamp{Mod: info.ModTime(), Size: info.Size()}
 		}
 		return nil
 	})
@@ -54,7 +54,7 @@ func ScanGo(root string) (map[string]fileStamp, error) {
 }
 
 // Changed lists paths that were added, removed or edited between two scans.
-func Changed(prev, next map[string]fileStamp) []string {
+func Changed(prev, next map[string]FileStamp) []string {
 	var changed []string
 	for path, stamp := range next {
 		if before, ok := prev[path]; !ok || before != stamp {
@@ -171,7 +171,7 @@ func (s *Supervisor) Run(ctx context.Context) error {
 
 // awaitChange blocks until a Go file differs from baseline or ctx ends,
 // reporting false when ctx ended so Run can return.
-func (s *Supervisor) awaitChange(ctx context.Context, interval time.Duration, baseline map[string]fileStamp) bool {
+func (s *Supervisor) awaitChange(ctx context.Context, interval time.Duration, baseline map[string]FileStamp) bool {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {

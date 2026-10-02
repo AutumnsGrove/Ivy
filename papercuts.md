@@ -243,3 +243,30 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   health check pings the read side only, since a long batch holds the writer. `Open` and
   `migrate` now take a context (STANDARDS: context first on I/O), so no store call lacks one. The
   one rule for callers: never keep a `Rows` open on `Write`.
+
+## Linter set (resolves N2)
+
+- **#32** · `e7c955b` · `store/messages.go` · **risk** · `uint32(uid)` on an `int64` read from the
+  database wrapped silently: a corrupt row with `uid = -5` came back as UID 4294967291, which would
+  make sync skip or refetch the wrong message. A checked `uidFromDB` returns an error for
+  anything outside 0..2^32-1. Test `TestCorruptUIDIsAnErrorNotAWrap` (returned the wrapped UID
+  before the fix).
+- **#33 (resolves N2)** · `eb5288b` · `.golangci.yml` and the tree · **standards** · STANDARDS.md
+  promised errorlint, gosec, bodyclose, noctx, contextcheck, exhaustive and revive, but the config
+  enabled only the `standard` set, so CI was green over 120 findings. The config now enables the
+  documented set and the tree reports **0 issues** under the CI-pinned `golangci-lint` v2.12.1.
+  Findings were fixed at the source:
+  - noctx: `store.Open`/`migrate` take a context; the control-socket dial uses a `net.Dialer` with
+    a timeout, and each call now has a 30 s deadline (a stack that accepts but never answers can
+    no longer hang the CLI); mailworld listens through `net.ListenConfig`; the dev supervisor's
+    child uses `CommandContext`.
+  - exhaustive/revive: `FileStamp` exported (an exported func returned an unexported type); a
+    `max` constant shadowing the builtin renamed; doc comments on exported constants; a package
+    comment on `compress`; unused `cmd` parameters renamed; `++`/`--`; a missing `Identity` case.
+  - gosec: kept only where the code is deliberate, each with a stated reason on the line:
+    operator-chosen paths (`--config`, `--file`, scenario files), the harness running its own
+    toolchain and build output, a build-time tool over its own output (public `0644` assets),
+    and the seeded math/rand that makes a profile byte-reproducible.
+  - Test files are excluded from `gosec`, `noctx` and `bodyclose` only (loopback `httptest`
+    servers, background contexts and `t.Cleanup`-closed bodies the analyzers cannot follow);
+    `revive`, `exhaustive` and the standard set still apply to tests.

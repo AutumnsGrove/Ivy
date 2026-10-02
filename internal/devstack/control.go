@@ -1,6 +1,7 @@
 package devstack
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -68,9 +69,19 @@ func (s FaultSpec) fault() (mailworld.Fault, error) {
 // a dead connection never poisons the next command.
 type Client struct{ path string }
 
+const (
+	controlDialTimeout = 5 * time.Second
+	controlCallTimeout = 30 * time.Second
+)
+
+func dialControl(path string) (net.Conn, error) {
+	d := net.Dialer{Timeout: controlDialTimeout}
+	return d.DialContext(context.Background(), "unix", path)
+}
+
 // Dial prepares a client for the control socket at path.
 func Dial(path string) (*Client, error) {
-	conn, err := net.Dial("unix", path)
+	conn, err := dialControl(path)
 	if err != nil {
 		return nil, fmt.Errorf("devstack: dial control %s: %w", path, err)
 	}
@@ -83,11 +94,13 @@ func (c *Client) Close() error { return nil }
 
 // Do sends one request and returns the response.
 func (c *Client) Do(req ControlRequest) (ControlResponse, error) {
-	conn, err := net.Dial("unix", c.path)
+	conn, err := dialControl(c.path)
 	if err != nil {
 		return ControlResponse{}, fmt.Errorf("devstack: dial control: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
+	// A stack that accepts but never answers must not hang the CLI or a test.
+	_ = conn.SetDeadline(time.Now().Add(controlCallTimeout))
 	if err := json.NewEncoder(conn).Encode(req); err != nil {
 		return ControlResponse{}, fmt.Errorf("devstack: send %s: %w", req.Op, err)
 	}

@@ -26,7 +26,9 @@ const DevDirName = ".dev"
 type Mode string
 
 const (
+	// ModeFull builds the dev stack by running the real sync against mailworld.
 	ModeFull Mode = "full"
+	// ModeFast seeds the databases directly, skipping the sync (chunk 2h).
 	ModeFast Mode = "fast"
 )
 
@@ -34,7 +36,9 @@ const (
 type LLM string
 
 const (
+	// LLMLive uses real OpenRouter behind the spend cap.
 	LLMLive LLM = "live"
+	// LLMFake uses the deterministic fake provider from mailworld.
 	LLMFake LLM = "fake"
 )
 

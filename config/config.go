@@ -52,7 +52,7 @@ func Load(path string) (*Config, error) {
 	cfg := &Config{Listen: DefaultListen, DataDir: DefaultDataDir}
 
 	if path != "" {
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) //nolint:gosec // G304: the operator chose this config path with --config
 		switch {
 		case err == nil:
 			// Strict so a typo'd key fails loudly instead of silently keeping a default.

@@ -64,7 +64,7 @@ func writeRecipe(path string, r Recipe) error {
 }
 
 func readRecipe(path string) (Recipe, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G304: built from the dev root and a validated snapshot name
 	if err != nil {
 		return Recipe{}, err
 	}

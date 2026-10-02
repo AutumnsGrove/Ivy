@@ -7,6 +7,7 @@
 package mailworld
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log"
@@ -76,7 +77,8 @@ func New(opts ...Option) (*World, error) {
 		Logger:       log.New(io.Discard, "", 0),
 	})
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +90,7 @@ func New(opts ...Option) (*World, error) {
 	w.smtpSrv.Domain = "mailworld"
 	w.smtpSrv.AllowInsecureAuth = true
 	w.smtpSrv.ErrorLog = log.New(io.Discard, "", 0)
-	smtpLn, err := net.Listen("tcp", "127.0.0.1:0")
+	smtpLn, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		_ = w.srv.Close()
 		return nil, err

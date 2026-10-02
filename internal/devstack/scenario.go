@@ -65,7 +65,7 @@ type ExpungeStep struct {
 
 // ParseScenario reads a YAML scenario from path.
 func ParseScenario(path string) (Scenario, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G304: the operator names the scenario file
 	if err != nil {
 		return Scenario{}, fmt.Errorf("devstack: read scenario %s: %w", path, err)
 	}
@@ -123,7 +123,7 @@ func scenarioMessage(d *DeliverStep, baseDir string) ([]byte, error) {
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(baseDir, path)
 		}
-		raw, err := os.ReadFile(path)
+		raw, err := os.ReadFile(path) //nolint:gosec // G304: a scenario file names its own fixtures
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", path, err)
 		}

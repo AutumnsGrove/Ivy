@@ -167,6 +167,8 @@ func TestSeedDemoIsBelievable(t *testing.T) {
 				seen++
 			case imap.FlagFlagged:
 				flagged++
+			default:
+				// Other flags are not part of this check.
 			}
 		}
 	}

@@ -137,14 +137,16 @@ func runWatched(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
 	sup := &devstack.Supervisor{
 		Root: moduleRoot,
 		Build: func(buildCtx context.Context) error {
-			build := exec.CommandContext(buildCtx, "go", "build", "-o", bin, ".")
+			// ivy-dev is the operator's own dev harness: it runs the Go toolchain and the
+			// binary it just built from paths it derived itself.
+			build := exec.CommandContext(buildCtx, "go", "build", "-o", bin, ".") //nolint:gosec // G204: fixed toolchain command, harness-derived paths
 			build.Dir = moduleRoot
 			build.Stdout = out
 			build.Stderr = cmd.ErrOrStderr()
 			return build.Run()
 		},
 		Command: func() *exec.Cmd {
-			child := exec.Command(bin, "run", "--config", devstack.ConfigPath(opts.Root))
+			child := exec.CommandContext(ctx, bin, "run", "--config", devstack.ConfigPath(opts.Root)) //nolint:gosec // G204: the binary this harness just built
 			child.Env = env
 			return child
 		},
@@ -222,7 +224,7 @@ func startWeb(ctx context.Context, cmd *cobra.Command, opts devstack.Options, no
 	}
 	// --strictPort: without it Vite silently moves to 5174 when 5173 is taken,
 	// and the URL printed below (and the QR code) would be wrong.
-	web := exec.CommandContext(ctx, pnpm, "dev", "--host", "127.0.0.1", "--port", "5173", "--strictPort")
+	web := exec.CommandContext(ctx, pnpm, "dev", "--host", "127.0.0.1", "--port", "5173", "--strictPort") //nolint:gosec // G204: pnpm resolved by LookPath, fixed arguments
 	web.Dir = filepath.Join(opts.Root, "web")
 	// pnpm runs Vite as a child, and CommandContext alone kills only pnpm. Own
 	// process group, signalled as a whole, so no Vite is left holding the port.
@@ -414,7 +416,7 @@ func deliverCmd(root *string) *cobra.Command {
 
 func deliverRaw(account, file, from, subject, text string) ([]byte, error) {
 	if file != "" {
-		raw, err := os.ReadFile(file)
+		raw, err := os.ReadFile(file) //nolint:gosec // G304: the operator names the .eml to deliver
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", file, err)
 		}
@@ -430,7 +432,7 @@ func flagCmd(root *string) *cobra.Command {
 		Use:   "flag [flag...]",
 		Short: "Add flags to a message",
 		Args:  cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			c, err := control(*root)
 			if err != nil {
 				return err
@@ -455,7 +457,7 @@ func moveCmd(root *string) *cobra.Command {
 		Use:   "move",
 		Short: "Move a message to another mailbox",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			c, err := control(*root)
 			if err != nil {
 				return err
@@ -482,7 +484,7 @@ func expungeCmd(root *string) *cobra.Command {
 		Use:   "expunge",
 		Short: "Remove a message",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			c, err := control(*root)
 			if err != nil {
 				return err
@@ -506,7 +508,7 @@ func faultCmd(root *string) *cobra.Command {
 		Use:   "fault",
 		Short: "Arm a mailworld fault: drop|unreachable|auth-fail|smtp-reject|smtp-auth-fail",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			c, err := control(*root)
 			if err != nil {
 				return err
@@ -586,7 +588,7 @@ func advanceClockCmd(root *string) *cobra.Command {
 		Use:   "advance-clock <duration>",
 		Short: "Move the fake clock forward, e.g. 2h or 30m",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			d, err := time.ParseDuration(args[0])
 			if err != nil {
 				return err

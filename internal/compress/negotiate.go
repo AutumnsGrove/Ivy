@@ -1,3 +1,6 @@
+// Package compress picks a content coding from Accept-Encoding and compresses
+// dynamic HTTP responses per request with zstd, brotli or gzip, using the
+// levels spike S7 measured for the board (PERFORMANCE.md section 3).
 package compress
 
 import (

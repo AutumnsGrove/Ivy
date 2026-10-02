@@ -242,9 +242,9 @@ func mustNotTransform(status int, h http.Header) bool {
 }
 
 func sample(b []byte) []byte {
-	const max = 512
-	if len(b) > max {
-		return b[:max]
+	const sniffLen = 512 // what http.DetectContentType reads
+	if len(b) > sniffLen {
+		return b[:sniffLen]
 	}
 	return b
 }
@@ -326,5 +326,7 @@ func release(enc Encoding, w io.WriteCloser) {
 		brotliPool.Put(w)
 	case Zstd:
 		zstdPool.Put(w)
+	case Identity:
+		// Nothing was acquired for an uncompressed response.
 	}
 }

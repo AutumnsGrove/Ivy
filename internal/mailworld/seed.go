@@ -77,7 +77,7 @@ func Seed(w *World, p Profile, opts ...SeedOption) (SeedResult, error) {
 	}
 	s := &seeder{
 		w:    w,
-		rnd:  rand.New(rand.NewSource(cfg.seed)),
+		rnd:  rand.New(rand.NewSource(cfg.seed)), //nolint:gosec // G404: seeded on purpose so a profile is byte-reproducible
 		hash: sha256.New(),
 	}
 	if err := p.generate(s); err != nil {
@@ -517,7 +517,7 @@ func (s *seeder) hugeBody(acc *Account, i int, at time.Time) {
 func deterministicBytes(n, seed int) []byte {
 	out := make([]byte, n)
 	for i := range out {
-		out[i] = byte((i*31 + seed*7) % 251)
+		out[i] = byte((i*31 + seed*7) % 251) //nolint:gosec // G115: reduced mod 251, always fits a byte
 	}
 	return out
 }

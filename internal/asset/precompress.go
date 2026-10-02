@@ -54,7 +54,10 @@ func Precompress(dir string) (Stats, error) {
 		if info.Size() > maxAssetSize {
 			return fmt.Errorf("precompress %s: %d bytes exceeds the %d byte limit", path, info.Size(), maxAssetSize)
 		}
-		data, err := os.ReadFile(path)
+		// This is a build-time tool over a directory the build just produced, so
+		// the paths are ours (not attacker-influenced) and symlinks are skipped
+		// above by the IsRegular check.
+		data, err := os.ReadFile(path) //nolint:gosec // G304,G122: our own build output
 		if err != nil {
 			return err
 		}
@@ -67,12 +70,13 @@ func Precompress(dir string) (Stats, error) {
 			if len(encoded) >= len(data) {
 				// Drop a sibling an earlier run left, or it would be served for
 				// content it no longer matches.
-				if err := os.Remove(path + variant.suffix); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				if err := os.Remove(path + variant.suffix); err != nil && !errors.Is(err, fs.ErrNotExist) { //nolint:gosec // G122: our own build output
 					return err
 				}
 				continue
 			}
-			if err := os.WriteFile(path+variant.suffix, encoded, 0o644); err != nil {
+			// 0644: these are public static assets served to every visitor.
+			if err := os.WriteFile(path+variant.suffix, encoded, 0o644); err != nil { //nolint:gosec // G306,G122: public assets, our own build output
 				return err
 			}
 			wrote = true

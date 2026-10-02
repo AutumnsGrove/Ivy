@@ -374,11 +374,11 @@ func (w *World) embed(text string) []float32 {
 	v := make([]float32, dims)
 	for _, tok := range tokenize(text) {
 		h := hash64(tok)
-		idx := int(h % uint64(dims))
+		idx := h % uint64(dims) // any integer type may index a slice
 		if h&(1<<63) != 0 {
-			v[idx] -= 1
+			v[idx]--
 		} else {
-			v[idx] += 1
+			v[idx]++
 		}
 	}
 	var norm float64

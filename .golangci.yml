@@ -1,16 +1,24 @@
 # golangci-lint aggregate config (CI.md section 2). `make lint` keeps staticcheck
 # as the fast local loop; CI runs this wider set through the pinned action.
 #
-# Two deliberate relaxations: errcheck does not police `fmt.Fprint*` to a CLI
-# writer (cobra reports the error), and does not police anything in tests, where
-# a failed cleanup is not a result. Everything else must be clean.
+# The set is the one STANDARDS.md section 1 documents: the standard linters plus
+# errorlint, gosec, bodyclose, noctx, contextcheck, exhaustive and revive.
 version: "2"
 
 linters:
   default: standard
+  enable:
+    - bodyclose
+    - contextcheck
+    - errorlint
+    - exhaustive
+    - gosec
+    - noctx
+    - revive
   settings:
     errcheck:
       exclude-functions:
+        # Reporting a failed write to a CLI writer is cobra's job.
         - fmt.Fprintf
         - fmt.Fprintln
         - fmt.Fprint
@@ -18,11 +26,43 @@ linters:
         # work's error; callers that must care check it explicitly.
         - (io.Closer).Close
         - (*github.com/AutumnsGrove/Ivy/store.DBs).Close
+        - (*github.com/AutumnsGrove/Ivy/store.DB).Close
         - (*github.com/AutumnsGrove/Ivy/internal/devstack.Stack).Close
         - (*github.com/AutumnsGrove/Ivy/internal/devstack.Client).Close
         - (*github.com/emersion/go-imap/v2/imapclient.Client).Close
+    exhaustive:
+      # A switch with a default is a deliberate "everything else".
+      default-signifies-exhaustive: true
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: increment-decrement
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: time-naming
+        - name: unexported-return
+        - name: unused-parameter
+        - name: var-declaration
+        - name: var-naming
   exclusions:
     rules:
+      # Tests drive httptest servers and temp dirs on loopback with background
+      # contexts, close bodies through t.Cleanup helpers the analyzers cannot
+      # follow, and write fixtures with ordinary modes. These four rules guard
+      # production behaviour (cancellation, leaks, file modes, SSRF) that a test
+      # helper does not have. Everything else, revive and exhaustive included,
+      # still applies to tests.
       - path: _test\.go
         linters:
+          - bodyclose
           - errcheck
+          - gosec
+          - noctx
