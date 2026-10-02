@@ -26,6 +26,7 @@ type ControlRequest struct {
 	Raw     []byte    `json:"raw,omitempty"`
 	Fault   FaultSpec `json:"fault,omitempty"`
 	Advance string    `json:"advance,omitempty"`
+	State   string    `json:"state,omitempty"`
 }
 
 // ControlResponse is the result of a command; Error is non-empty on failure.
@@ -125,6 +126,12 @@ func (c *Client) Expunge(account, mailbox string, uid uint32) error {
 // Fault arms a fault for future connections.
 func (c *Client) Fault(spec FaultSpec) error {
 	_, err := c.Do(ControlRequest{Op: "fault", Fault: spec})
+	return err
+}
+
+// State applies a named dev condition (DEV.md section 4).
+func (c *Client) State(name string) error {
+	_, err := c.Do(ControlRequest{Op: "state", State: name})
 	return err
 }
 
@@ -229,6 +236,11 @@ func (s *ControlServer) dispatch(req ControlRequest) ControlResponse {
 		}
 		s.world.Fault(f)
 		return ControlResponse{}
+	case "state":
+		if err := ApplyState(s.world, req.State); err != nil {
+			return ControlResponse{Error: err.Error()}
+		}
+		return ControlResponse{Info: "state " + req.State}
 	default:
 		return ControlResponse{Error: fmt.Sprintf("unknown op %q", req.Op)}
 	}

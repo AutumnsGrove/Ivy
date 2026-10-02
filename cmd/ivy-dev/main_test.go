@@ -152,6 +152,35 @@ func TestFaultCommandArmsSMTPReject(t *testing.T) {
 	}
 }
 
+func TestStateCommandListsAndApplies(t *testing.T) {
+	stack, root := prepared(t)
+	addr := stack.Seed.Accounts[0].Address
+
+	out, err := runCLI(t, root, "state", "--list")
+	if err != nil {
+		t.Fatalf("state --list: %v", err)
+	}
+	if !strings.Contains(out, "sync-auth-failed") || !strings.Contains(out, "mirror-healthy") {
+		t.Fatalf("state list = %q", out)
+	}
+
+	if _, err := runCLI(t, root, "state", "sync-auth-failed"); err != nil {
+		t.Fatalf("state apply: %v", err)
+	}
+	c, err := imapclient.DialInsecure(stack.World.IMAPAddr(), nil)
+	if err != nil {
+		t.Fatalf("dial imap: %v", err)
+	}
+	defer c.Close()
+	if err := c.Login(addr, mailworld.SeedPassword).Wait(); err == nil {
+		t.Fatal("login succeeded under sync-auth-failed")
+	}
+
+	if _, err := runCLI(t, root, "state", "mirror-healthy"); err != nil {
+		t.Fatalf("state healthy: %v", err)
+	}
+}
+
 func TestAdvanceClockCommand(t *testing.T) {
 	stack, root := prepared(t)
 	before := stack.World.Clock().Now()

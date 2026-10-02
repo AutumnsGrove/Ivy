@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 // faultListener wraps the IMAP listener so an armed DropConnection fault can
@@ -22,7 +23,22 @@ func (l *faultListener) Accept() (net.Conn, error) {
 	if drop, ok := l.w.takeDropFault(); ok {
 		return &dropConn{Conn: c, after: drop.After}, nil
 	}
+	if delay, ok := l.w.latency(); ok {
+		return &slowConn{Conn: c, delay: delay}, nil
+	}
 	return c, nil
+}
+
+// slowConn delays every read, modelling a server that is still backfilling so
+// the UI's in-progress state lasts long enough to look at (DEV.md section 4).
+type slowConn struct {
+	net.Conn
+	delay time.Duration
+}
+
+func (c *slowConn) Read(p []byte) (int, error) {
+	time.Sleep(c.delay)
+	return c.Conn.Read(p)
 }
 
 // dropConn closes the connection once the client has sent After IMAP commands.

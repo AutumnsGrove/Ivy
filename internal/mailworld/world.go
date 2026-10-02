@@ -7,12 +7,14 @@
 package mailworld
 
 import (
+	"errors"
 	"io"
 	"log"
 	"net"
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapserver"
@@ -60,8 +62,12 @@ func New(opts ...Option) (*World, error) {
 	w.srv = imapserver.New(&imapserver.Options{
 		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
 			sess := w.mem.NewSession()
-			if w.hasFault(AuthFail{}) {
-				sess = authFailSession{Session: sess}
+			if w.hasFault(AuthFail{}) || w.hasFault(FailFetch{}) {
+				sess = faultSession{
+					Session:   sess,
+					authFail:  w.hasFault(AuthFail{}),
+					fetchFail: w.hasFault(FailFetch{}),
+				}
 			}
 			return sess, nil, nil
 		},
@@ -209,13 +215,70 @@ type DropConnection struct{ After int }
 // AuthFail makes every login fail.
 type AuthFail struct{}
 
+// FailFetch makes every IMAP FETCH fail, for DEV.md's fetch-failed state.
+type FailFetch struct{}
+
+// Latency delays every IMAP response, so a sync-in-progress screen has time to
+// show progress (DEV.md section 4's backfilling).
+type Latency struct{ Delay time.Duration }
+
+// LLMDown makes the fake LLM providers return 503.
+type LLMDown struct{}
+
+// LLMCapReached makes the fake providers return 429, the answer a real
+// provider gives when an account's spend cap is hit.
+type LLMCapReached struct{}
+
 func (DropConnection) isFault() {}
 func (AuthFail) isFault()       {}
+func (FailFetch) isFault()      {}
+func (Latency) isFault()        {}
+func (LLMDown) isFault()        {}
+func (LLMCapReached) isFault()  {}
 
-// authFailSession forces Login to fail while leaving the memory session intact.
-type authFailSession struct{ imapserver.Session }
+// faultSession injects per-connection faults while preserving the optional
+// interfaces the server requires for the capabilities we advertise (it panics
+// if NAMESPACE or MOVE is advertised but absent).
+type faultSession struct {
+	imapserver.Session
+	authFail  bool
+	fetchFail bool
+}
 
-func (authFailSession) Login(string, string) error { return imapserver.ErrAuthFailed }
+func (s faultSession) Login(username, password string) error {
+	if s.authFail {
+		return imapserver.ErrAuthFailed
+	}
+	return s.Session.Login(username, password)
+}
+
+func (s faultSession) Fetch(w *imapserver.FetchWriter, set imap.NumSet, options *imap.FetchOptions) error {
+	if s.fetchFail {
+		return errors.New("mailworld: FETCH failed (fault)")
+	}
+	return s.Session.Fetch(w, set, options)
+}
+
+func (s faultSession) Namespace() (*imap.NamespaceData, error) {
+	return s.Session.(imapserver.SessionNamespace).Namespace()
+}
+
+func (s faultSession) Move(w *imapserver.MoveWriter, set imap.NumSet, dest string) error {
+	return s.Session.(imapserver.SessionMove).Move(w, set, dest)
+}
+
+// latency returns the delay an armed Latency fault asks for, if any. Unlike
+// DropConnection it is not consumed: it lasts until the faults are cleared.
+func (w *World) latency() (time.Duration, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, f := range w.faults {
+		if lat, ok := f.(Latency); ok {
+			return lat.Delay, true
+		}
+	}
+	return 0, false
+}
 
 func imapCapabilities(condStore bool) imap.CapSet {
 	caps := imap.CapSet{

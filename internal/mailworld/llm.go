@@ -111,6 +111,22 @@ func (w *World) takeJev() (map[string]JevAnswer, bool) {
 	return answers, true
 }
 
+// failLLM answers an armed provider fault and reports whether it did. DEV.md
+// section 4's llm-cap-reached and llm-provider-down map to the two statuses a
+// real provider returns for those conditions.
+func (w *World) failLLM(rw http.ResponseWriter) bool {
+	switch {
+	case w.hasFault(LLMDown{}):
+		http.Error(rw, "provider unavailable", http.StatusServiceUnavailable)
+		return true
+	case w.hasFault(LLMCapReached{}):
+		http.Error(rw, "spend cap reached", http.StatusTooManyRequests)
+		return true
+	default:
+		return false
+	}
+}
+
 func (w *World) openRouterMux() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/systemone", w.handleSystemone)
@@ -148,6 +164,9 @@ type jevUsage struct {
 }
 
 func (w *World) handleSystemone(rw http.ResponseWriter, r *http.Request) {
+	if w.failLLM(rw) {
+		return
+	}
 	body, _ := io.ReadAll(r.Body)
 	var req struct {
 		Model     string                 `json:"model"`
@@ -186,6 +205,9 @@ func (w *World) handleChat(rw http.ResponseWriter, r *http.Request)   { w.serveC
 func (w *World) handleVision(rw http.ResponseWriter, r *http.Request) { w.serveChat(rw, r, true) }
 
 func (w *World) serveChat(rw http.ResponseWriter, r *http.Request, forceVision bool) {
+	if w.failLLM(rw) {
+		return
+	}
 	body, _ := io.ReadAll(r.Body)
 	var req struct {
 		Model    string `json:"model"`
@@ -264,6 +286,9 @@ func newChatResponse(model, reply string, promptTokens int, rate float64) chatCo
 }
 
 func (w *World) handleOpenRouterEmbeddings(rw http.ResponseWriter, r *http.Request) {
+	if w.failLLM(rw) {
+		return
+	}
 	body, _ := io.ReadAll(r.Body)
 	var req struct {
 		Model string          `json:"model"`
@@ -297,6 +322,9 @@ type embeddingsResponse struct {
 }
 
 func (w *World) handleOllamaEmbeddings(rw http.ResponseWriter, r *http.Request) {
+	if w.failLLM(rw) {
+		return
+	}
 	body, _ := io.ReadAll(r.Body)
 	var req struct {
 		Model  string `json:"model"`
@@ -311,6 +339,9 @@ func (w *World) handleOllamaEmbeddings(rw http.ResponseWriter, r *http.Request) 
 }
 
 func (w *World) handleOllamaEmbed(rw http.ResponseWriter, r *http.Request) {
+	if w.failLLM(rw) {
+		return
+	}
 	body, _ := io.ReadAll(r.Body)
 	var req struct {
 		Model string          `json:"model"`

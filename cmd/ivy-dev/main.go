@@ -50,6 +50,7 @@ func newRootCommand() *cobra.Command {
 		moveCmd(&root),
 		expungeCmd(&root),
 		faultCmd(&root),
+		stateCmd(&root),
 		advanceClockCmd(&root),
 	)
 	return cmd
@@ -358,6 +359,34 @@ func faultCmd(root *string) *cobra.Command {
 	f.IntVar(&spec.Code, "code", 0, "SMTP reject code")
 	f.StringVar(&spec.Message, "message", "", "SMTP reject message")
 	_ = cmd.MarkFlagRequired("kind")
+	return cmd
+}
+
+func stateCmd(root *string) *cobra.Command {
+	var list bool
+	cmd := &cobra.Command{
+		Use:   "state [name]",
+		Short: "Apply a named dev condition (DEV.md section 4)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if list {
+				for _, s := range devstack.States() {
+					fmt.Fprintf(cmd.OutOrStdout(), "%-20s %s\n", s.Name, s.Description)
+				}
+				return nil
+			}
+			if len(args) != 1 {
+				return errors.New("state needs a name, or --list")
+			}
+			c, err := control(*root)
+			if err != nil {
+				return err
+			}
+			defer c.Close()
+			return c.State(args[0])
+		},
+	}
+	cmd.Flags().BoolVar(&list, "list", false, "list the available states")
 	return cmd
 }
 
