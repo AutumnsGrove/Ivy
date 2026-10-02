@@ -16,6 +16,7 @@ import (
 
 	"github.com/AutumnsGrove/Ivy/config"
 	"github.com/AutumnsGrove/Ivy/gateway"
+	"github.com/AutumnsGrove/Ivy/internal/webui"
 	"github.com/AutumnsGrove/Ivy/store"
 )
 
@@ -75,7 +76,7 @@ func runCmd(configPath *string, version string) *cobra.Command {
 
 			srv := &http.Server{
 				Addr:    cfg.Listen,
-				Handler: gateway.New(dbs, version).Handler(),
+				Handler: gateway.New(dbs, version, webui.FS).Handler(),
 			}
 
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)

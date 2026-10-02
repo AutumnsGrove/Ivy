@@ -2,12 +2,21 @@ package gateway
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/AutumnsGrove/Ivy/store"
 )
+
+func testStaticFS() fstest.MapFS {
+	return fstest.MapFS{
+		"index.html": &fstest.MapFile{Data: []byte("<!doctype html><title>Ivy</title>")},
+	}
+}
 
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -16,7 +25,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { dbs.Close() })
-	srv := httptest.NewServer(New(dbs, "test-version").Handler())
+	srv := httptest.NewServer(New(dbs, "test-version", testStaticFS()).Handler())
 	t.Cleanup(srv.Close)
 	return srv
 }
@@ -71,7 +80,7 @@ func TestHealthUnavailableWhenDatabaseClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}
-	srv := httptest.NewServer(New(dbs, "test-version").Handler())
+	srv := httptest.NewServer(New(dbs, "test-version", nil).Handler())
 	defer srv.Close()
 	dbs.Close()
 
@@ -89,6 +98,41 @@ func TestUnknownPathIs404(t *testing.T) {
 	srv := newTestServer(t)
 	if code := getJSON(t, srv.URL+"/api/v1/nope", nil); code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", code)
+	}
+}
+
+func TestStaticIndexIsServed(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t)
+	resp, err := http.Get(srv.URL + "/")
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "Ivy") {
+		t.Errorf("body = %q, want the index placeholder", body)
+	}
+}
+
+func TestAPIResponsesVaryOnEncoding(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/version", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Accept-Encoding", "zstd")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	defer resp.Body.Close()
+	if !strings.Contains(resp.Header.Get("Vary"), "Accept-Encoding") {
+		t.Errorf("Vary = %q, want Accept-Encoding", resp.Header.Get("Vary"))
 	}
 }
 

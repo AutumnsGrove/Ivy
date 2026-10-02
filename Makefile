@@ -2,7 +2,7 @@
 GO        ?= go
 GENERATED := api/api.gen.go web/src/lib/api/schema.d.ts
 
-.PHONY: check generate drift fmt vet lint test web-check dev dev-fake
+.PHONY: check generate drift fmt vet lint test web-check dev dev-fake web-assets
 
 # Local dev stack: mailworld + Ivy + Vite against seeded, offline-safe data.
 dev:
@@ -41,3 +41,13 @@ test:
 
 web-check:
 	cd web && pnpm check && pnpm test
+
+# Build the frontend into the embed directory and precompress it (brotli 11,
+# zstd, gzip 9). The generated files are git-ignored; only the placeholder is
+# committed. The image build performs the same steps.
+web-assets:
+	cd web && pnpm build
+	@mkdir -p internal/webui/build
+	find internal/webui/build -mindepth 1 ! -name .gitkeep -delete
+	cp -R web/build/. internal/webui/build/
+	$(GO) run ./cmd/ivy-assets -dir internal/webui/build

@@ -18,5 +18,9 @@ playwright-report/
 coverage/
 .DS_Store
 
+# Built frontend embedded by the Go binary: only the placeholder is committed
+/internal/webui/build/*
+!/internal/webui/build/.gitkeep
+
 # Screenshots from e2e/screens.spec.ts
 web/shots/

@@ -4,8 +4,11 @@ package gateway
 import (
 	"database/sql"
 	"encoding/json"
+	"io/fs"
 	"net/http"
 
+	"github.com/AutumnsGrove/Ivy/internal/asset"
+	"github.com/AutumnsGrove/Ivy/internal/compress"
 	"github.com/AutumnsGrove/Ivy/store"
 )
 
@@ -14,12 +17,14 @@ import (
 type Server struct {
 	dbs     *store.DBs
 	version string
+	static  fs.FS
 }
 
 // New builds a Server. version is the human build identifier reported by the
-// version endpoint.
-func New(dbs *store.DBs, version string) *Server {
-	return &Server{dbs: dbs, version: version}
+// version endpoint. static is the built frontend; it may be nil before the
+// assets exist.
+func New(dbs *store.DBs, version string, static fs.FS) *Server {
+	return &Server{dbs: dbs, version: version, static: static}
 }
 
 type versionResponse struct {
@@ -32,12 +37,21 @@ type healthResponse struct {
 	Databases map[string]string `json:"databases"`
 }
 
-// Handler returns the API mux.
+// Handler returns the full HTTP surface: the API (compressed per request) and
+// the embedded frontend.
 func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/version", s.handleVersion)
-	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
-	return mux
+	api := http.NewServeMux()
+	api.HandleFunc("GET /api/v1/version", s.handleVersion)
+	api.HandleFunc("GET /api/v1/health", s.handleHealth)
+
+	root := http.NewServeMux()
+	root.Handle("/api/", compress.Middleware(api))
+	if s.static != nil {
+		root.Handle("/", asset.FileServer(s.static))
+	} else {
+		root.Handle("/", http.NotFoundHandler())
+	}
+	return root
 }
 
 func (s *Server) handleVersion(w http.ResponseWriter, _ *http.Request) {

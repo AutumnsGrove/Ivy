@@ -22,6 +22,7 @@ import (
 	"github.com/AutumnsGrove/Ivy/gateway"
 	"github.com/AutumnsGrove/Ivy/internal/devstack"
 	"github.com/AutumnsGrove/Ivy/internal/mailworld"
+	"github.com/AutumnsGrove/Ivy/internal/webui"
 	"github.com/AutumnsGrove/Ivy/store"
 )
 
@@ -176,7 +177,7 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	srv := &http.Server{Addr: stack.Config.Listen, Handler: gateway.New(dbs, version).Handler()}
+	srv := &http.Server{Addr: stack.Config.Listen, Handler: gateway.New(dbs, version, webui.FS).Handler()}
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 
