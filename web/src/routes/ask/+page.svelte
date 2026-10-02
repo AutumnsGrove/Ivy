@@ -106,6 +106,7 @@
 		<p class="hint">Ask in your own words. Ivy reads your mail and shows where each answer came from.</p>
 	{/if}
 
+	<div class="clear" aria-hidden="true"></div>
 	<div class="dock">
 		<div class="sugg">
 			{#each suggestions as s}
@@ -278,6 +279,10 @@
 		text-align: center;
 		font: italic 400 var(--fs-title-sm) / 1.5 var(--font-read);
 		color: var(--muted);
+	}
+	/* the fixed input dock must never cover the last answer card when scrolled to the end */
+	.clear {
+		height: var(--sp-110);
 	}
 	.dock {
 		position: fixed;

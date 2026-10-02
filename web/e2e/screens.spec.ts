@@ -5,7 +5,12 @@ for (const [name, path] of Object.entries(ROUTES)) {
 	test(`${name} renders cleanly`, async ({ page }, info) => {
 		const problems: string[] = [];
 		page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
-		page.on('console', (m) => m.type() === 'error' && problems.push(`console: ${m.text()}`));
+		page.on('console', (m) => {
+			if (m.type() !== 'error') return;
+			// The not-found screen is reached through a real 404, which the browser always logs.
+			if (name === 'not-found' && /status of 404/.test(m.text())) return;
+			problems.push(`console: ${m.text()}`);
+		});
 
 		await page.goto(path);
 		await page.waitForLoadState('networkidle');

@@ -7,7 +7,8 @@ export const SCENARIOS = [
 	'limit',
 	'provider-down',
 	'offline',
-	'sync-error'
+	'sync-error',
+	'send-failed'
 ] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];

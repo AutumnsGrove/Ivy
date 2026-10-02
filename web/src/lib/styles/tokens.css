@@ -181,6 +181,10 @@
 	--warn-soft: rgba(245, 196, 90, 0.14);
 	--warn-line: rgba(245, 196, 90, 0.4);
 
+	--accent-lilac: #c4b5fd;
+	--accent-green: #4ade80;
+	--accent-amber: #f5c45a;
+
 	--acct-1: #7cc4ff;
 	--acct-2: #f0a6ca;
 	--acct-3: #5ad1c8;
@@ -245,6 +249,10 @@
 	--warn: #b45309;
 	--warn-soft: rgba(180, 83, 9, 0.1);
 	--warn-line: rgba(180, 83, 9, 0.35);
+
+	--accent-lilac: #6d28d9;
+	--accent-green: #15803d;
+	--accent-amber: #b45309;
 
 	--acct-1: #1d6fb8;
 	--acct-2: #a8326f;

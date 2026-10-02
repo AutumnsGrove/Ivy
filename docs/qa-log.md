@@ -554,3 +554,29 @@ migration notes. `LICENSE` is the standard AGPL-3.0 text (SPDX copy; gnu.org was
 the sandbox). `SECURITY.md` points to GitHub private vulnerability reporting, which must be switched
 on in the repo settings before going public. `dev@` (the throwaway test user) and the
 `potato-remote` alias are still mentioned and were left as is.
+
+## Round 28 — plan approved, frontend first (2026-10-02)
+
+Operator: "it's time, let's get to building", with the full mockup set as the guide.
+Answers to the kickoff questions:
+- **Plan approved; start with the frontend.** SvelteKit shell, tokens and a reusable component
+  library against mock data; backend and spikes follow. (This reorders the old "spikes first"
+  sequencing for the frontend only; the Go backend is still gated by S1-S3.)
+- **API style approved:** JSON REST + SSE with one typed client module. Until `api/openapi.yaml`
+  exists, `web/src/lib/api/client.ts` is that module, backed by mock data, and `types.ts` stands in
+  for the generated types.
+- **First slice:** the whole shell with every screen stubbed (all 32 screens and states from
+  `design/canvas/`), then wired up.
+- **Workflow:** all tooling allowed; **everything goes directly on main** (overrides the "work on a
+  branch" rule in `CLAUDE.md` for this phase), committed in stages.
+
+Built (all tests-first where behaviour exists): token file with night/day themes, accents and a
+`data-force` scope for side-by-side previews; ~40 components; phone shell (tab bar, drawer, FAB) and
+desktop shell (rail + three panes) sharing the same list and reader components; mock API with
+`?scenario=` edge states; Vitest (token guard, stores, citations, components) and Playwright
+(WebKit iPhone + Chromium desktop) suites. E2E caught one real bug (failed attachments invisible in
+the wide reader). SvelteKit 3 differences recorded in `CLAUDE.md`.
+
+Findings to remember: a stray `/Users/autumn/node_modules` shadows Kit's `cookie@2` at build time
+unless `cookie` is a direct devDependency (fixed); `error()` now takes `(status, message, props)`;
+`goto` options `keepFocus`/`noScroll` became `reset: false`.

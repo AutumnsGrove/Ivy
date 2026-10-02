@@ -13,12 +13,18 @@ Sibling of Polaris in philosophy, fully independent code. No auth for now; it mu
 
 ## Phase
 
-**Planning, then spikes, then Milestone 0.** No application code, Go module or frontend scaffold
-until the operator approves `docs/PLAN.md`. The next phase is the spikes in `docs/SPIKES.md`
-(throwaway code on `spike/*` branches, findings in `docs/spikes/`), which run before any build
-implementation. Record every Q&A answer in `docs/qa-log.md` and fold settled decisions into the
-docs. Milestone 0 is the test harness, dev stack and day-one E2E slice, not features. Work happens
-on a branch (never directly on main) so it can go up as a PR.
+**Frontend first (operator decision, 2026-10-02, qa-log round 28).** The plan is approved and the
+SvelteKit app in `web/` is being built against mock data behind `web/src/lib/api/client.ts`. The Go
+module, mailworld and the spikes in `docs/SPIKES.md` come next; nothing in the Go backend starts
+before the spikes that gate it (S1-S3). Record every Q&A answer in `docs/qa-log.md` and fold settled
+decisions into the docs. **Work goes directly on main** (operator's explicit instruction for this
+phase, overriding the old "never on main" rule), committed in small stages.
+
+Frontend facts worth knowing: SvelteKit **3** (config lives in `vite.config.ts`; aliases are the
+`#lib/...` imports map, not `$lib`); `pnpm test` (Vitest, includes a token guard that fails on raw
+px/colour literals outside `tokens.css`), `pnpm check`, `pnpm exec playwright test` (WebKit phone +
+Chromium desktop; `e2e/screens.spec.ts` visits every route in `e2e/routes.ts`). `?scenario=` forces
+designed edge states while the backend is mocked; `/gallery` links every screen.
 
 ## Doc map
 

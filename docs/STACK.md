@@ -62,6 +62,18 @@ rule from `PLAN.md` section 6: verify before pinning). The constraint: **pure Go
 | Build | Vite (via SvelteKit); a post-build step precompresses assets (brotli/zstd/gzip) |
 | Sanitised mail view | Sandboxed iframe fed by server-sanitised HTML (no client sanitiser library) |
 
+Pinned in `web/package.json` (2026-10-02, all dev dependencies; the shipped bundle is Svelte's
+compiled output plus fonts and icons, about 100 KB gzip for every route together):
+
+| Package | Why |
+|---|---|
+| `@sveltejs/kit` 3, `svelte` 5, `vite` 8, `@sveltejs/adapter-static` | The framework and static output embedded by the Go binary |
+| `@lucide/svelte` | Icons, imported per icon through `src/lib/icons.ts` (the old `lucide-svelte` is deprecated) |
+| `@fontsource-variable/lexend`, `@fontsource-variable/newsreader` | Self-hosted fonts, bundled and hashed by Vite (no third-party font requests) |
+| `cookie` | Kit's own runtime dependency; declared directly so the built server chunk resolves the right copy under pnpm's strict layout |
+| `vitest`, `jsdom`, `@testing-library/svelte`, `@testing-library/jest-dom` | Unit and component tests |
+| `@playwright/test` | E2E on WebKit (iPhone) and Chromium (desktop) |
+
 Frontend dependency policy: the runtime dependency list should stay near-empty (Svelte plus icons).
 Anything else is justified here with its compressed size.
 
