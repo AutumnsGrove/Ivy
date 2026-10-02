@@ -281,3 +281,28 @@ func TestMiddlewareFlushesStreams(t *testing.T) {
 		t.Errorf("second event missing from %q", rest)
 	}
 }
+
+// TestMiddlewareCompressesEveryTextShape covers the content types the API and
+// the rendered mail surface actually produce.
+func TestMiddlewareCompressesEveryTextShape(t *testing.T) {
+	t.Parallel()
+	for _, ct := range []string{
+		"text/html; charset=utf-8",
+		"text/plain",
+		"application/javascript",
+		"image/svg+xml",
+		"application/ld+json",
+	} {
+		t.Run(ct, func(t *testing.T) {
+			t.Parallel()
+			srv := newServer(t, largeHandler(ct))
+			resp := get(t, srv, "zstd")
+			if got := resp.Header.Get("Content-Encoding"); got != "zstd" {
+				t.Fatalf("%s: Content-Encoding = %q, want zstd", ct, got)
+			}
+			if body := readAll(t, resp); !bytes.Equal(body, bigBody) {
+				t.Errorf("%s: decoded body differs", ct)
+			}
+		})
+	}
+}
