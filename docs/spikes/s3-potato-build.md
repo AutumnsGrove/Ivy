@@ -18,12 +18,11 @@ Peak RAM is the summed RSS of the build's process group, sampled every 50 ms.
 - Building on the board is workable only when the build cache is warm, or with a memory limit and
   a 4-minute cold build. Either way it competes with the live services.
 
-## Decision (recommended, pending operator confirmation)
+## Decision (confirmed by the operator, round 29)
 
 Do not compile on the board. Build in CI and ship a container image (the Polaris model:
 multi-arch image to GHCR on every push to main, host-side update watcher pulls it). The pure-Go,
 `CGO_ENABLED=0` rule stays: it is what makes the cross-build from the CI runner trivial, with no
 QEMU for the Go and frontend stages. This supersedes the "target builds the binary" and
 "bot-committed frontend build output" decisions, and makes S9 moot. The docs that describe those
-(`ARCHITECTURE.md` section 9, `CI.md`, `PLAN.md`, `qa-log.md`, `CLAUDE.md`) need updating once
-confirmed.
+(`ARCHITECTURE.md` section 9, `CI.md`, `PLAN.md`, `qa-log.md`, `CLAUDE.md`) are updated.
