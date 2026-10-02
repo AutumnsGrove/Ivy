@@ -50,6 +50,23 @@ flip the classification answers: two injected emails stayed `needs_me=none` (0.7
 scored `likely` at 0.83 under the same wording, so that error is the wording's, not the
 injection's. Six injected samples is a small corpus; hostile text can still skew numbers.
 
+## `score` versus `choice` (operator asked; same 40 emails, same wording)
+
+`needs_me` and phishing were also asked as an ordered `score` scale (three levels, two questions
+per call, about 490 input tokens, $0.0008 for the 40). Flagging when `score >= t`:
+
+| | `choice` (flag when option is not none and p >= t) | `score` (flag when score >= t) |
+|---|---|---|
+| `needs_me` | p>=0.75: precision 1.00, recall 1.00 | t=1.0: 0.89 / 1.00; t=1.75: 1.00 / 0.82 |
+| phishing | p>=0.95: 1 false positive, 3/3 caught | best: 3 false positives, 3/3 caught |
+
+On this corpus `choice` gated better: its per-option probability lets a threshold say "this option,
+and sure". `score` collapses the three levels into one number, so a 50/50 split between `maybe` and
+`likely` (1.5) looks the same as a confident middle. Its strength is the one continuous number,
+which suits **ordering** (the needs-attention sort, urgency) and a visible bar in the odds sheet.
+Caveat: the shared wording was tuned on `choice`, so this slightly favours `choice`.
+**Use `choice` to gate actions and `score` to rank**; neither was validated on real mail.
+
 ## Cost, latency, scale
 
 - **Cost per email, 9 questions:** average 1,164 input tokens and $0.000049 on this short corpus
@@ -67,9 +84,9 @@ injection's. Six injected samples is a small corpus; hostile text can still skew
 
 ## Decisions
 
-1. **Use `choice` for the Tier A catalog** (validated here); consider `noul` for binary questions
-   (`has_deadline`, `asks_question`, `is_automated`) and `score` for ordered scales (`urgency`)
-   once their calibration is checked on real mail. Until then `JEV.md`'s "yes/no as a choice"
+1. **Use `choice` for the Tier A catalog and anything that gates an action** (validated here);
+   use `score` for ordering (urgency, the needs-attention sort); consider `noul` for plain binary
+   questions (`has_deadline`, `asks_question`) once calibration is checked on real mail. Until then `JEV.md`'s "yes/no as a choice"
    fallback stands.
 2. **Ship the sharper `needs_me` wording** as the starting instruction, with threshold 0.75, and
    write every question's instructions as "what does not count, then the exceptions".

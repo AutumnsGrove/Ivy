@@ -180,6 +180,7 @@ func main() {
 	run("scoretest", scoretest)
 	run("accuracy", accuracy)
 	run("needsme2", needsme2)
+	run("scorecmp", scorecmp)
 	run("scale", scale)
 	run("burst", burst)
 }
@@ -340,6 +341,120 @@ func accuracy() {
 	needsMeThresholds(rs, "needs_me")
 	phishThresholds(rs)
 	injectionEffect(rs)
+}
+
+const needsMeV2 = "Would a busy person need to personally read this and respond or act? Bulk mail, newsletters, promotions, receipts, automated alerts, codes and routine notifications do not, unless they report a problem that needs action such as a failed payment or failed build, or a legal deadline."
+
+// scorecmp asks the same needs_me and phishing questions as an ordered `score` scale, to compare
+// against `choice` on the same emails and wording. score is the expected level index (0 to 2).
+func scorecmp() {
+	qs := map[string]any{
+		"needs_me": map[string]any{"type": "score", "instructions": needsMeV2,
+			"criteria": []string{"bulk or automated mail, or a message that needs no response or action", "possibly worth a look, but unclear whether a response or action is needed", "a person is waiting for a reply or action, or a problem or deadline needs the recipient"}},
+		"phishing": map[string]any{"type": "score", "instructions": "Does this email look like phishing or a scam?",
+			"criteria": []string{"no sign of phishing", "some signs of phishing", "clearly a phishing or scam attempt"}},
+	}
+	type row struct {
+		e      email
+		need   float64
+		phish  float64
+		conf   float64
+		failed bool
+	}
+	rows := make([]row, len(corpus))
+	sem := make(chan struct{}, 4)
+	var wg sync.WaitGroup
+	var cost float64
+	var inTok int
+	var cmu sync.Mutex
+	for i, e := range corpus {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			_, raw, status, _, _ := call(stateOf(e), qs)
+			var r struct {
+				Answers map[string]struct {
+					Score      float64 `json:"score"`
+					Confidence float64 `json:"confidence"`
+				} `json:"answers"`
+				Usage struct {
+					In   int     `json:"input_tokens"`
+					Cost float64 `json:"cost"`
+				} `json:"usage"`
+			}
+			if status != 200 || json.Unmarshal([]byte(raw), &r) != nil {
+				rows[i] = row{e: e, failed: true}
+				return
+			}
+			cmu.Lock()
+			cost += r.Usage.Cost
+			inTok += r.Usage.In
+			cmu.Unlock()
+			rows[i] = row{e: e, need: r.Answers["needs_me"].Score, phish: r.Answers["phishing"].Score, conf: r.Answers["needs_me"].Confidence}
+		}()
+	}
+	wg.Wait()
+	idx := map[string]float64{"none": 0, "maybe": 1, "likely": 2}
+	var absErr float64
+	n := 0
+	for _, r := range rows {
+		if !r.failed {
+			absErr += abs(r.need - idx[r.e.Need])
+			n++
+		}
+	}
+	fmt.Printf("score scale, 2 questions/call: avg input tokens %.0f, total $%.6f, mean |score - label index| = %.3f over %d emails\n", float64(inTok)/float64(n), cost, absErr/float64(n), n)
+	fmt.Println("needs_me as score: flag when score >= t, vs labelled maybe/likely:")
+	for _, t := range []float64{0.5, 0.75, 1.0, 1.25, 1.5, 1.75} {
+		var tp, fp, fn int
+		var fps []string
+		for _, r := range rows {
+			if r.failed {
+				continue
+			}
+			flagged, want := r.need >= t, r.e.Need != "none"
+			switch {
+			case flagged && want:
+				tp++
+			case flagged && !want:
+				fp++
+				fps = append(fps, r.e.ID)
+			case !flagged && want:
+				fn++
+			}
+		}
+		fmt.Printf("  t=%.2f tp=%2d fp=%d fn=%d precision=%.2f recall=%.2f fps=%v\n", t, tp, fp, fn, ratio(tp, tp+fp), ratio(tp, tp+fn), fps)
+	}
+	fmt.Println("phishing as score: flag when score >= t, vs labelled phishing:")
+	for _, t := range []float64{0.5, 1.0, 1.5, 1.75} {
+		var tp, fp, fn int
+		var fps []string
+		for _, r := range rows {
+			if r.failed {
+				continue
+			}
+			flagged := r.phish >= t
+			switch {
+			case flagged && r.e.Phish:
+				tp++
+			case flagged && !r.e.Phish:
+				fp++
+				fps = append(fps, r.e.ID)
+			case !flagged && r.e.Phish:
+				fn++
+			}
+		}
+		fmt.Printf("  t=%.2f tp=%d fp=%d fn=%d fps=%v\n", t, tp, fp, fn, fps)
+	}
+}
+
+func abs(f float64) float64 {
+	if f < 0 {
+		return -f
+	}
+	return f
 }
 
 // phishThresholds: phishing is flagged when the chosen option is not none and p >= t.
