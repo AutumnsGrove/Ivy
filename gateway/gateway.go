@@ -45,13 +45,37 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/health", s.handleHealth)
 
 	root := http.NewServeMux()
-	root.Handle("/api/", compress.Middleware(api))
+	root.Handle("/api/", noStore(compress.Middleware(api)))
 	if s.static != nil {
 		root.Handle("/", asset.FileServer(s.static))
 	} else {
 		root.Handle("/", http.NotFoundHandler())
 	}
-	return root
+	return hardened(root)
+}
+
+// hardened sets the response headers every page and API reply needs. The full
+// Content-Security-Policy arrives with the sandboxed reader (render/), because
+// SvelteKit's inline bootstrap needs hashes chosen alongside it.
+func hardened(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		// A link clicked in a mail must not tell the sender's site which Ivy
+		// URL (and so which message) it came from.
+		h.Set("Referrer-Policy", "no-referrer")
+		// SAMEORIGIN, not DENY: the reader frames its own sanitised bodies.
+		h.Set("X-Frame-Options", "SAMEORIGIN")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// noStore is the API default; a handler that sets its own Cache-Control wins.
+func noStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) handleVersion(w http.ResponseWriter, _ *http.Request) {
