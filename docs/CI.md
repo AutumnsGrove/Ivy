@@ -45,7 +45,7 @@ module cache, pnpm store and Playwright browsers.
 
 | Job | What it runs |
 |---|---|
-| `go` | `CGO_ENABLED=0 go build ./...`, `gofumpt -l` (must be empty), `go vet`, `staticcheck`, `golangci-lint`, `go test -race ./...` (integration tests against `internal/mailworld`, fuzz seed corpora included), `govulncheck`, plus a `GOOS=linux GOARCH=arm64` compile check (the target architecture; nothing is published) |
+| `go` | `CGO_ENABLED=0 go build ./...`, `gofumpt -l` (must be empty), `go vet`, `staticcheck`, `golangci-lint`, `CGO_ENABLED=1 go test -race ./...` (cgo only for the race runtime; integration tests against `internal/mailworld`, fuzz seed corpora included), `govulncheck`, plus a `GOOS=linux GOARCH=arm64` compile check (the target architecture; nothing is published) |
 | `nocgo` | Fails if any package or dependency has cgo files (`go list -deps -f '{{.CgoFiles}}'`) |
 | `drift` | Regenerates OpenAPI (Go and TS types) and `sqlc` output, fails on any diff |
 | `web` | `pnpm install --frozen-lockfile`, `svelte-check`, ESLint, Prettier, Vitest, build in a scratch dir, compressed-size budgets (`PERFORMANCE.md` 2) |

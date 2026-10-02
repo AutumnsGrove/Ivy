@@ -91,8 +91,10 @@ parallel one.
 - **Formatting and lint (CI-enforced, zero warnings):** `gofumpt`, `go vet`, `staticcheck`,
   `golangci-lint` (errcheck, errorlint, gosec, bodyclose, noctx, contextcheck, exhaustive,
   revive on exported names), `govulncheck`. Linters are run locally before every commit.
-- **Pure Go only.** `CGO_ENABLED=0` in every build and test job; a CI step fails if cgo sneaks in or
-  a dependency needs a C toolchain. A dependency that requires cgo is rejected, not special-cased.
+- **Pure Go only.** `CGO_ENABLED=0` in every build job; a CI step fails if cgo sneaks in or
+  a dependency needs a C toolchain. The one exception is `go test -race`, which Go refuses to run
+  without cgo (the race runtime is C): tests run with `CGO_ENABLED=1` and still prove nothing of ours
+  needs cgo, because the `CGO_ENABLED=0` build and `nocgo` jobs gate it. A dependency that requires cgo is rejected, not special-cased.
 - **Standard library first.** `net/http` with Go's pattern mux, `log/slog`, `database/sql`,
   `encoding/json`, `embed`, `context`, `errors`, `slices`/`maps`, `testing`. A dependency must earn
   its place with a sentence in `STACK.md`.
@@ -217,7 +219,7 @@ Details and budgets live in `PERFORMANCE.md`. The standards:
 The per-layer checklist in `TESTING.md` section 9 applies to every change, plus:
 
 - [ ] Test was written first and seen failing (noted in the commit).
-- [ ] Linters, `-race` tests, frontend checks all pass locally with `CGO_ENABLED=0`.
+- [ ] Linters, `-race` tests, frontend checks all pass locally (`CGO_ENABLED=0` for builds; `make test` sets cgo on for `-race` only).
 - [ ] No new dependency without a `STACK.md` entry.
 - [ ] Hot-path changes carry a benchmark before/after.
 - [ ] No secrets, mail content or personal data in logs, fixtures or commits.

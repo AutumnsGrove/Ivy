@@ -41,8 +41,10 @@ lint:
 golangci:
 	golangci-lint run ./...
 
+# The race detector is a C runtime, so it is the one step that needs cgo; our own code and
+# every dependency stay pure Go (the nocgo job and the CGO_ENABLED=0 builds prove it).
 test:
-	CGO_ENABLED=0 $(GO) test -race ./...
+	CGO_ENABLED=1 $(GO) test -race ./...
 
 web-check:
 	cd web && pnpm check && pnpm test
