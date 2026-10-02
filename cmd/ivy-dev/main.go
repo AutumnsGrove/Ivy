@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -61,6 +62,7 @@ func upCmd(root *string) *cobra.Command {
 	opts := devstack.DefaultOptions()
 	opts.Listen = "127.0.0.1:8787"
 	var noWeb bool
+	var watch bool
 	cmd := &cobra.Command{
 		Use:   "up",
 		Short: "Start mailworld, Ivy and the web dev server",
@@ -68,6 +70,9 @@ func upCmd(root *string) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts.Root = *root
 			applyRecipe(cmd, &opts)
+			if watch {
+				return runWatched(cmd, opts, noWeb)
+			}
 			return runUp(cmd, opts, noWeb)
 		},
 	}
@@ -82,12 +87,72 @@ func upCmd(root *string) *cobra.Command {
 	f.Float64Var(&opts.LLMCap, "llm-cap", opts.LLMCap, "monthly dev LLM spend cap in dollars")
 	f.StringVar(&opts.Listen, "listen", opts.Listen, "Ivy listen address")
 	f.BoolVar(&noWeb, "no-web", false, "do not start the Vite dev server")
+	f.BoolVar(&watch, "watch", true, "rebuild and restart Ivy on Go changes")
 	return cmd
 }
 
+// printStack reports what up started; both the watch and no-watch paths use it.
+func printStack(out io.Writer, opts devstack.Options, stack *devstack.Stack) {
+	fmt.Fprintf(out, "mailworld  imap %s  smtp %s\n", stack.World.IMAPAddr(), stack.World.SMTPAddr())
+	fmt.Fprintf(out, "ivy %s  http://%s\n", version, stack.Config.Listen)
+	fmt.Fprintf(out, "profile %s  seed %d  delivered %d  hash %s\n",
+		opts.Profile, opts.Seed, stack.Seed.Delivered, shortHash(stack.Seed.Hash))
+	for _, a := range stack.Config.Accounts {
+		fmt.Fprintf(out, "  account %s (id %s)\n", a.Address, a.ID)
+	}
+}
+
+// runWatched starts a prepared stack and supervises the real Ivy binary,
+// rebuilding and restarting it on Go file changes (DEV.md section 1).
+func runWatched(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
+	moduleRoot, err := devstack.ModuleRoot(".")
+	if err != nil {
+		return err
+	}
+	stack, err := devstack.Prepare(opts)
+	if err != nil {
+		return err
+	}
+	defer stack.Close()
+
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	out := cmd.OutOrStdout()
+	printStack(out, opts, stack)
+
+	bin := filepath.Join(devstack.DevDir(opts.Root), "ivy")
+	env := append(os.Environ(), stack.PasswordEnv()...)
+	web := startWeb(ctx, cmd, opts, noWeb)
+	fmt.Fprintln(out, "press Ctrl-C to stop")
+
+	sup := &devstack.Supervisor{
+		Root: moduleRoot,
+		Build: func(buildCtx context.Context) error {
+			build := exec.CommandContext(buildCtx, "go", "build", "-o", bin, ".")
+			build.Dir = moduleRoot
+			build.Stdout = out
+			build.Stderr = cmd.ErrOrStderr()
+			return build.Run()
+		},
+		Command: func() *exec.Cmd {
+			child := exec.Command(bin, "run", "--config", devstack.ConfigPath(opts.Root))
+			child.Env = env
+			return child
+		},
+		Log: out,
+	}
+	if err := sup.Run(ctx); err != nil {
+		return err
+	}
+	if web != nil {
+		_ = web.Wait()
+	}
+	return nil
+}
+
 // runUp starts a prepared stack and the real Ivy gateway in-process, then
-// blocks until Ctrl-C. The real binary is exercised separately by the E2E
-// smoke; keeping it in-process here means one command, no build step.
+// blocks until Ctrl-C. The --watch=false path, used by fast tests.
 func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
 	stack, err := devstack.Prepare(opts)
 	if err != nil {
@@ -109,13 +174,7 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
 	go func() { errCh <- srv.ListenAndServe() }()
 
 	out := cmd.OutOrStdout()
-	fmt.Fprintf(out, "mailworld  imap %s  smtp %s\n", stack.World.IMAPAddr(), stack.World.SMTPAddr())
-	fmt.Fprintf(out, "ivy %s  http://%s\n", version, stack.Config.Listen)
-	fmt.Fprintf(out, "profile %s  seed %d  delivered %d  hash %s\n",
-		opts.Profile, opts.Seed, stack.Seed.Delivered, shortHash(stack.Seed.Hash))
-	for _, a := range stack.Config.Accounts {
-		fmt.Fprintf(out, "  account %s (id %s)\n", a.Address, a.ID)
-	}
+	printStack(out, opts, stack)
 
 	web := startWeb(ctx, cmd, opts, noWeb)
 	fmt.Fprintln(out, "press Ctrl-C to stop")
@@ -150,6 +209,7 @@ func startWeb(ctx context.Context, cmd *cobra.Command, opts devstack.Options, no
 	}
 	web := exec.CommandContext(ctx, pnpm, "dev", "--host", "127.0.0.1", "--port", "5173")
 	web.Dir = filepath.Join(opts.Root, "web")
+	web.Env = append(os.Environ(), "IVY_API_TARGET=http://"+opts.Listen)
 	web.Stdout = cmd.OutOrStdout()
 	web.Stderr = cmd.ErrOrStderr()
 	if err := web.Start(); err != nil {

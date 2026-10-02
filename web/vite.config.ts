@@ -14,6 +14,15 @@ export default defineConfig({
 			adapter: adapter({ fallback: 'index.html', precompress: false, strict: false })
 		})
 	],
+	// ivy-dev sets IVY_API_TARGET so the dev server proxies the API and SSE to
+	// the real binary; without it (vitest) no proxy is configured.
+	server: process.env.IVY_API_TARGET
+		? {
+				proxy: {
+					'/api': { target: process.env.IVY_API_TARGET, changeOrigin: false }
+				}
+			}
+		: undefined,
 	resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,
 	test: {
 		environment: 'jsdom',

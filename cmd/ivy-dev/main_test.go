@@ -238,7 +238,7 @@ func TestUpNoWebServesHealthAndShutsDown(t *testing.T) {
 	defer cancel()
 
 	cmd := newRootCommand()
-	cmd.SetArgs([]string{"--root", root, "up", "--no-web", "--profile", "minimal", "--listen", addr})
+	cmd.SetArgs([]string{"--root", root, "up", "--no-web", "--watch=false", "--profile", "minimal", "--listen", addr})
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
 
