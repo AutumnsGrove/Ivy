@@ -19,10 +19,12 @@ even though WireGuard encrypts the link):**
   plus an `ETag`.
 - **Dynamic responses (API JSON, SSE, sanitised HTML):** compressed per request via
   `klauspost/compress/gzhttp` (gzip/zstd) and `andybalholm/brotli`, using a **low-effort level**
-  (the potato has four slow cores) and a minimum size threshold. Preference order: brotli
-  (guaranteed Safari support), then zstd where the client advertises it, then gzip. **Safari's
-  zstd support must be verified on the operator's devices before relying on it**, so negotiation is
-  driven strictly by `Accept-Encoding`, never by user-agent sniffing.
+  (the potato has four slow cores) and a minimum size threshold. Preference order (S5 and S7,
+  `docs/spikes/`): **zstd** where the client advertises it (the cheapest per byte: about 1.6 ms for
+  a typical page on the potato; Safari 26.5 on iPad advertises and decodes it), then brotli at
+  level 4 to 5, then gzip at 6. Never above brotli 6 on the hot path (brotli 11 took 133 ms for a
+  typical page and over a second for a large one). Negotiation is driven strictly by
+  `Accept-Encoding`, never by user-agent sniffing.
 - **Cache the compressed form** of expensive-to-build, rarely-changing responses (a rendered message
   body's sanitised HTML is stored once and served as-is).
 - **SSE:** compressed streams must flush per event; tested so heartbeats still arrive promptly.
