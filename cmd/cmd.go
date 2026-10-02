@@ -74,9 +74,13 @@ func runCmd(configPath *string, version string) *cobra.Command {
 			}
 			defer dbs.Close()
 
+			// No Read/WriteTimeout: SSE streams and large bodies are long-lived. The
+			// header and idle timeouts still shed slow-loris connections.
 			srv := &http.Server{
-				Addr:    cfg.Listen,
-				Handler: gateway.New(dbs, version, webui.FS).Handler(),
+				Addr:              cfg.Listen,
+				Handler:           gateway.New(dbs, version, webui.FS).Handler(),
+				ReadHeaderTimeout: 10 * time.Second,
+				IdleTimeout:       2 * time.Minute,
 			}
 
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)

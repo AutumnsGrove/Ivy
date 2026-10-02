@@ -55,12 +55,17 @@ func Load(path string) (*Config, error) {
 		data, err := os.ReadFile(path)
 		switch {
 		case err == nil:
-			if err := yaml.Unmarshal(data, cfg); err != nil {
+			// Strict so a typo'd key fails loudly instead of silently keeping a default.
+			if err := yaml.UnmarshalWithOptions(data, cfg, yaml.Strict()); err != nil {
 				return nil, fmt.Errorf("parse %s: %w", path, err)
 			}
 			// godotenv.Load does not override variables already in the
-			// environment, so real env wins over the file.
-			_ = godotenv.Load(filepath.Join(filepath.Dir(path), ".env"))
+			// environment, so real env wins over the file. A missing .env is
+			// normal; an unreadable or malformed one would silently drop secrets.
+			envPath := filepath.Join(filepath.Dir(path), ".env")
+			if err := godotenv.Load(envPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return nil, fmt.Errorf("load %s: %w", envPath, err)
+			}
 		case errors.Is(err, os.ErrNotExist):
 			// defaults stand
 		default:
@@ -104,14 +109,15 @@ func (c *Config) validate() error {
 	if err != nil || host == "" || port == "" {
 		return fmt.Errorf("listen %q is not host:port", c.Listen)
 	}
-	if _, err := strconv.Atoi(port); err != nil {
-		return fmt.Errorf("listen %q has a non-numeric port", c.Listen)
+	if n, err := strconv.Atoi(port); err != nil || n < 0 || n > 65535 {
+		return fmt.Errorf("listen %q has an invalid port", c.Listen)
 	}
 	if c.DataDir == "" {
 		return errors.New("data_dir is empty")
 	}
 
 	seen := make(map[string]bool)
+	seenEnv := make(map[string]string)
 	for i, a := range c.Accounts {
 		where := fmt.Sprintf("account %d", i)
 		if a.ID == "" {
@@ -121,6 +127,13 @@ func (c *Config) validate() error {
 			return fmt.Errorf("%s: duplicate id %q", where, a.ID)
 		}
 		seen[a.ID] = true
+		// "my-mail" and "my_mail" both map to IVY_MY_MAIL_PASSWORD; sharing one
+		// credential between two mailboxes is never what the operator meant.
+		if other, ok := seenEnv[PasswordEnv(a.ID)]; ok {
+			return fmt.Errorf("%s: id %q and %q share the password variable %s",
+				where, a.ID, other, PasswordEnv(a.ID))
+		}
+		seenEnv[PasswordEnv(a.ID)] = a.ID
 		if a.Address == "" {
 			return fmt.Errorf("%s: address is empty", where)
 		}
