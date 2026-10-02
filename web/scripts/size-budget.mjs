@@ -22,12 +22,21 @@ function brotli(bytes) {
 const html = readFileSync(join(BUILD, 'index.html'), 'utf8');
 const seen = new Set();
 const assets = [];
-const ref = /["'](\/_app\/immutable\/[^"']+\.(?:js|css))["']/g;
+// SvelteKit emits "/_app/..." or, with relative paths, "./_app/..."; accept both
+// and normalise, so a config change cannot make the scan match nothing.
+const ref = /["'](?:\.\/|\/)(_app\/immutable\/[^"']+\.(?:js|css))["']/g;
 for (let m = ref.exec(html); m; m = ref.exec(html)) {
 	if (!seen.has(m[1])) {
 		seen.add(m[1]);
-		assets.push(m[1]);
+		assets.push(`/${m[1]}`);
 	}
+}
+
+// An empty scan would report 0 KiB and pass every budget; that is a broken
+// check, not a fast page.
+if (!assets.some((a) => a.endsWith('.js'))) {
+	console.error('size-budget: found no critical-path JS in index.html; the scan is broken');
+	process.exit(1);
 }
 
 const totals = { js: 0, css: 0 };

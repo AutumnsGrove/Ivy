@@ -147,3 +147,13 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
 - **N6 (open)** · `gateway/gateway.go` · unknown `/api/...` paths and wrong methods answer with
   the mux's plain-text 404/405, but the contract promises a JSON `Error` body. Lands with the
   2f handlers.
+
+## CI pipeline and load budgets (`1d2ebbb`..`9e3f6d3`)
+
+- **#23** · `9e3f6d3` · `web/scripts/size-budget.mjs` · **bug** · the budget scan matched only
+  `"/_app/immutable/..."` literals in `index.html`. Switching SvelteKit to relative paths
+  (`"./_app/..."`) made it match nothing, report `0.0 KiB`, and pass every budget (reproduced by
+  rewriting the built `index.html`). The regex now accepts both forms, and the script fails
+  outright when it finds no critical-path JS, so an empty scan can no longer look like a fast page.
+- Reviewed with no change needed: `ci.yml` (read-only token, SHA-pinned actions, no secrets, fork
+  PRs safe), `docs.yml`, `guard.sh`, the smoke spec and its config, `web-assets` in the Makefile.
