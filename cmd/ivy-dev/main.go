@@ -113,7 +113,7 @@ func printStack(out io.Writer, opts devstack.Options, stack *devstack.Stack) {
 // runWatched starts a prepared stack and supervises the real Ivy binary,
 // rebuilding and restarting it on Go file changes (DEV.md section 1).
 func runWatched(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
-	moduleRoot, err := devstack.ModuleRoot(".")
+	moduleRoot, err := devstack.ModuleRoot(opts.Root)
 	if err != nil {
 		return err
 	}
@@ -177,7 +177,12 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	srv := &http.Server{Addr: stack.Config.Listen, Handler: gateway.New(dbs, version, webui.FS).Handler()}
+	srv := &http.Server{
+		Addr:              stack.Config.Listen,
+		Handler:           gateway.New(dbs, version, webui.FS).Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+	}
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 
@@ -215,8 +220,15 @@ func startWeb(ctx context.Context, cmd *cobra.Command, opts devstack.Options, no
 		fmt.Fprintln(cmd.OutOrStdout(), "web: pnpm not found, skipping the Vite dev server")
 		return nil
 	}
-	web := exec.CommandContext(ctx, pnpm, "dev", "--host", "127.0.0.1", "--port", "5173")
+	// --strictPort: without it Vite silently moves to 5174 when 5173 is taken,
+	// and the URL printed below (and the QR code) would be wrong.
+	web := exec.CommandContext(ctx, pnpm, "dev", "--host", "127.0.0.1", "--port", "5173", "--strictPort")
 	web.Dir = filepath.Join(opts.Root, "web")
+	// pnpm runs Vite as a child, and CommandContext alone kills only pnpm. Own
+	// process group, signalled as a whole, so no Vite is left holding the port.
+	web.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	web.Cancel = func() error { return syscall.Kill(-web.Process.Pid, syscall.SIGTERM) }
+	web.WaitDelay = 3 * time.Second
 	web.Env = append(os.Environ(), "IVY_API_TARGET=http://"+opts.Listen)
 	web.Stdout = cmd.OutOrStdout()
 	web.Stderr = cmd.ErrOrStderr()
@@ -492,7 +504,7 @@ func faultCmd(root *string) *cobra.Command {
 	var spec devstack.FaultSpec
 	cmd := &cobra.Command{
 		Use:   "fault",
-		Short: "Arm a mailworld fault: drop|auth-fail|smtp-reject|smtp-auth-fail",
+		Short: "Arm a mailworld fault: drop|unreachable|auth-fail|smtp-reject|smtp-auth-fail",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			c, err := control(*root)
@@ -504,7 +516,7 @@ func faultCmd(root *string) *cobra.Command {
 		},
 	}
 	f := cmd.Flags()
-	f.StringVar(&spec.Kind, "kind", "", "drop|auth-fail|smtp-reject|smtp-auth-fail")
+	f.StringVar(&spec.Kind, "kind", "", "drop|unreachable|auth-fail|smtp-reject|smtp-auth-fail")
 	f.IntVar(&spec.After, "after", 0, "drop after N commands")
 	f.IntVar(&spec.Code, "code", 0, "SMTP reject code")
 	f.StringVar(&spec.Message, "message", "", "SMTP reject message")

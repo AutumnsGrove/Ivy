@@ -100,3 +100,18 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   until the next edit (the existing test even slept to dodge this). The baseline is now taken
   before the build and also handed to `awaitChange` after a failed build or start. Test
   `TestSupervisorRebuildsAfterEditDuringBuild` timed out before the fix.
+- **#16** · `bce5b0d` · `cmd/ivy-dev/main.go` · **bug** · `startWeb` used plain
+  `exec.CommandContext` for `pnpm dev`, which on cancel kills only `pnpm`; Vite, its child, kept
+  running and kept port 5173. Vite without `--strictPort` then silently moves to 5174 on the next
+  `make dev`, so the printed URL and the `--expose` QR code pointed at the stale server (and
+  `Wait()` could block on the orphan's pipe). Vite now runs in its own process group that is
+  signalled as a whole on cancel, with `WaitDelay`, and `--strictPort` makes a port clash loud.
+  Test `TestStartWebStopsTheWholeProcessTree` (a fake `pnpm` that spawns a grandchild) hung and
+  then failed before the fix.
+- **#17** · `53bac38` · `cmd/ivy-dev/main.go` · **bug** · `runWatched` located the Go module with
+  `ModuleRoot(".")` instead of `--root`, so `ivy-dev --root /repo up` run from elsewhere built and
+  watched the wrong tree. Uses `opts.Root` now.
+- **#18** · `bce5b0d` · `cmd/ivy-dev/main.go` · **risk** · the in-process server in `runUp` had
+  no `ReadHeaderTimeout` (gosec G112); added header and idle timeouts like `ivy run`.
+- **#19** · `a2e4e07` · `cmd/ivy-dev/main.go` · **nit** · the `fault` command's help text did not
+  list the new `unreachable` kind.

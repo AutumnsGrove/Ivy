@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -318,4 +319,67 @@ func slicesContains(flags []imap.Flag, want imap.Flag) bool {
 		}
 	}
 	return false
+}
+
+// pnpm spawns Vite as a child. Cancelling must take the whole process group,
+// or an orphaned Vite keeps port 5173 and the next run's printed URL (and QR
+// code) points at a stale server while Vite quietly moves to another port.
+func TestStartWebStopsTheWholeProcessTree(t *testing.T) {
+	root := shortRoot(t)
+	if err := os.MkdirAll(filepath.Join(root, "web"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	pidFile := filepath.Join(bin, "child.pid")
+	script := "#!/bin/sh\nsleep 300 &\necho $! > " + pidFile + "\nwait\n"
+	if err := os.WriteFile(filepath.Join(bin, "pnpm"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cmd := newRootCommand()
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	opts := devstack.DefaultOptions()
+	opts.Root = root
+	opts.Listen = "127.0.0.1:0"
+
+	web := startWeb(ctx, cmd, opts, false)
+	if web == nil {
+		t.Fatal("startWeb did not start the fake pnpm")
+	}
+	var pid int
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) && pid == 0 {
+		if b, err := os.ReadFile(pidFile); err == nil {
+			_, _ = fmt.Sscanf(strings.TrimSpace(string(b)), "%d", &pid)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if pid == 0 {
+		t.Fatal("fake pnpm never started its child")
+	}
+
+	cancel()
+	waited := make(chan struct{})
+	go func() { _ = web.Wait(); close(waited) }()
+	select {
+	case <-waited:
+	case <-time.After(5 * time.Second):
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+		<-waited
+		t.Fatalf("pnpm's child %d held the process open after cancellation", pid)
+	}
+
+	gone := time.Now().Add(5 * time.Second)
+	for time.Now().Before(gone) {
+		if err := syscall.Kill(pid, 0); err != nil {
+			return // the child is gone
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	_ = syscall.Kill(pid, syscall.SIGKILL)
+	t.Fatalf("pnpm's child %d survived cancellation", pid)
 }
