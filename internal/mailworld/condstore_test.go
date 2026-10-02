@@ -228,6 +228,34 @@ func TestWithoutCondStoreFallback(t *testing.T) {
 	}
 }
 
+// The scenario bot can read a mailbox's current mod-sequence the way sync
+// captures a floor before it starts watching for changes.
+func TestAccountHighestModSeq(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	uid := acc.Deliver("INBOX", mailworld.Msg().From("a@example.com").Subject("x").Build())
+
+	before, err := acc.HighestModSeq("INBOX")
+	if err != nil {
+		t.Fatalf("highest modseq: %v", err)
+	}
+	if before == 0 {
+		t.Fatalf("HighestModSeq = 0, want non-zero")
+	}
+
+	if err := acc.Flag("INBOX", uid, imap.FlagSeen); err != nil {
+		t.Fatalf("flag: %v", err)
+	}
+	after, err := acc.HighestModSeq("INBOX")
+	if err != nil {
+		t.Fatalf("highest modseq: %v", err)
+	}
+	if after <= before {
+		t.Errorf("HighestModSeq after change = %d, want > %d", after, before)
+	}
+}
+
 func uidsOf(msgs []*imapclient.FetchMessageBuffer) []imap.UID {
 	uids := make([]imap.UID, 0, len(msgs))
 	for _, m := range msgs {

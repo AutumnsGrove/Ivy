@@ -84,6 +84,21 @@ func (a *Account) BumpUIDValidity(mailbox string) error {
 	return a.user.Create(mailbox, nil)
 }
 
+// HighestModSeq returns a mailbox's current HIGHESTMODSEQ, read the way the
+// sync code captures a floor before watching for changes.
+func (a *Account) HighestModSeq(mailbox string) (uint64, error) {
+	var modSeq uint64
+	err := a.withClient(func(c *imapclient.Client) error {
+		data, err := c.Select(mailbox, &imap.SelectOptions{CondStore: true}).Wait()
+		if err != nil {
+			return err
+		}
+		modSeq = data.HighestModSeq
+		return nil
+	})
+	return modSeq, err
+}
+
 // Status returns the message and unseen counts for a mailbox.
 func (a *Account) Status(mailbox string) (num, unseen uint32, err error) {
 	err = a.withClient(func(c *imapclient.Client) error {
