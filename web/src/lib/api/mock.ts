@@ -34,8 +34,8 @@ export const accounts: Account[] = [
 		slot: 2,
 		unread: 5,
 		smart: true,
-		sync: 'auth-failed',
-		syncNote: "Can't sign in · last synced 14 min ago"
+		sync: 'ok',
+		syncNote: 'Up to date · synced just now'
 	},
 	{
 		id: 'a3',
@@ -45,9 +45,8 @@ export const accounts: Account[] = [
 		slot: 3,
 		unread: 1,
 		smart: false,
-		sync: 'syncing',
-		syncNote: 'Reading your mailbox, newest first',
-		progress: 0.62
+		sync: 'ok',
+		syncNote: 'Up to date · synced 4 min ago'
 	},
 	{
 		id: 'a4',
@@ -61,6 +60,24 @@ export const accounts: Account[] = [
 		syncNote: 'Up to date · synced 2 min ago'
 	}
 ];
+
+/** hello@ can't sign in; used by the sync-error scenario and the mirror health screen. */
+export const failingHello = (a: Account): Account =>
+	a.id === 'a2'
+		? { ...a, sync: 'auth-failed', syncNote: "Can't sign in · last synced 14 min ago" }
+		: a;
+
+/** Mirror health shows the whole spread: healthy, failing, and still backfilling. */
+export const healthAccounts: Account[] = accounts.map((a) =>
+	a.id === 'a3'
+		? {
+				...a,
+				sync: 'syncing' as const,
+				syncNote: 'Reading your mailbox, newest first',
+				progress: 0.62
+			}
+		: failingHello(a)
+);
 
 const mara = {
 	from: 'Mara Linden',

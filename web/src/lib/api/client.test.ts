@@ -59,3 +59,28 @@ describe('api (mock backed)', () => {
 		});
 	});
 });
+
+describe('accounts and health', () => {
+	it('reports every account healthy by default', async () => {
+		const accounts = await api.listAccounts();
+		expect(accounts.every((a) => a.sync === 'ok')).toBe(true);
+	});
+
+	it('fails one account sign-in in the sync-error scenario', async () => {
+		const accounts = await api.listAccounts({ scenario: 'sync-error' });
+		expect(accounts.filter((a) => a.sync === 'auth-failed')).toHaveLength(1);
+	});
+
+	it('shows the full spread of states on the mirror health screen', async () => {
+		const { accounts } = await api.getHealth();
+		const states = new Set(accounts.map((a) => a.sync));
+		expect(states).toEqual(new Set(['ok', 'auth-failed', 'syncing']));
+		expect(accounts.find((a) => a.sync === 'syncing')?.progress).toBeGreaterThan(0);
+	});
+
+	it('finds a rule by id for the editor', async () => {
+		const [first] = await api.listRules();
+		expect((await api.getRule(first.id)).id).toBe(first.id);
+		await expect(api.getRule('nope')).rejects.toMatchObject({ code: 'not_found' });
+	});
+});

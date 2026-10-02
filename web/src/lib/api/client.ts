@@ -17,7 +17,13 @@ import type {
 import * as mock from './mock';
 
 /** Forces a designed failure or edge state; absent in real use. */
-export type Scenario = 'empty' | 'fetch-error' | 'limit' | 'provider-down' | 'offline';
+export type Scenario =
+	| 'empty'
+	| 'fetch-error'
+	| 'limit'
+	| 'provider-down'
+	| 'offline'
+	| 'sync-error';
 type Opts = { scenario?: Scenario | null };
 
 /** Errors carry the stable code the UI maps to its own copy (STANDARDS.md section 6). */
@@ -37,7 +43,10 @@ function offlineGuard(o?: Opts) {
 }
 
 export const api = {
-	listAccounts: (): Promise<Account[]> => tick(mock.accounts),
+	async listAccounts(o: Opts = {}): Promise<Account[]> {
+		offlineGuard(o);
+		return tick(o.scenario === 'sync-error' ? mock.accounts.map(mock.failingHello) : mock.accounts);
+	},
 
 	async listInbox(o: Opts & { accountId?: string } = {}): Promise<Inbox> {
 		offlineGuard(o);
@@ -101,12 +110,18 @@ export const api = {
 	},
 
 	listRules: (): Promise<Rule[]> => tick(mock.rules),
+
+	async getRule(id: string): Promise<Rule> {
+		const r = mock.rules.find((x) => x.id === id);
+		if (!r) throw new ApiError('not_found', 'No such rule');
+		return tick(r);
+	},
 	listChecks: (): Promise<Check[]> => tick(mock.checks),
 	getCheck: (_id: string): Promise<CheckDetail> => tick(mock.checkDetail),
 
 	getHealth: (): Promise<HealthOverview> =>
 		tick({
-			accounts: mock.accounts,
+			accounts: mock.healthAccounts,
 			searchIndex: 'Up to date',
 			meaningSearch: 'Catching up',
 			storage: '1.8 GB'
