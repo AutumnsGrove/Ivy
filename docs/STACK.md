@@ -36,6 +36,7 @@ rule from `PLAN.md` section 6: verify before pinning). The constraint: **pure Go
 | Attachment text | `golang.org/x/net/html`, `archive/zip` + `encoding/xml` (OOXML), a pure-Go PDF text-layer library (spike, quality uncertain) | PDF library choice is a Milestone 2 spike. |
 | Images | stdlib `image/*`, `golang.org/x/image` | Downscale and EXIF strip in pure Go. **HEIC is the open C-free question:** iOS Safari normally hands back JPEG for `accept="image/*"`; verify on the real phone before adding any decoder (a WASM-based one via `wazero` is the pure-Go fallback). |
 | Process mgmt | `golang.org/x/sync/errgroup` | Goroutine ownership and shutdown. |
+| Dev QR | `rsc.io/qr` | `ivy-dev up --expose` prints a scannable terminal QR of the tailnet URL; pure Go, no transitive deps, dev-only. |
 | Frontend embedding | `go:embed` of `web/build` with precompressed variants | Built inside the CI Docker build, never committed (**settled**, round 29). |
 
 ## Go testing and quality tools

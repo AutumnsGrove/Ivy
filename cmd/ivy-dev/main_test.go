@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -200,6 +201,29 @@ func TestSeedCommandPrintsResult(t *testing.T) {
 	}
 	if !strings.Contains(out, "delivered") || !strings.Contains(out, "ivy@grove.test") {
 		t.Fatalf("seed output = %q", out)
+	}
+}
+
+func TestScenarioCommandRunsAFile(t *testing.T) {
+	stack, root := prepared(t)
+	addr := stack.Seed.Accounts[0].Address
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "scenario.yaml")
+	body := "steps:\n" +
+		"  - deliver:\n" +
+		"      account: " + addr + "\n" +
+		"      mailbox: Archive\n" +
+		"      subject: scripted\n" +
+		"  - advance_clock: 30m\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runCLI(t, root, "scenario", "run", path); err != nil {
+		t.Fatalf("scenario run: %v", err)
+	}
+	if n, _, _ := stack.World.Account(addr, mailworld.SeedPassword).Status("Archive"); n != 1 {
+		t.Fatalf("Archive has %d messages, want 1", n)
 	}
 }
 

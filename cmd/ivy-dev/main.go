@@ -53,6 +53,7 @@ func newRootCommand() *cobra.Command {
 		expungeCmd(&root),
 		faultCmd(&root),
 		stateCmd(&root),
+		scenarioCmd(&root),
 		advanceClockCmd(&root),
 	)
 	return cmd
@@ -99,6 +100,12 @@ func printStack(out io.Writer, opts devstack.Options, stack *devstack.Stack) {
 		opts.Profile, opts.Seed, stack.Seed.Delivered, shortHash(stack.Seed.Hash))
 	for _, a := range stack.Config.Accounts {
 		fmt.Fprintf(out, "  account %s (id %s)\n", a.Address, a.ID)
+	}
+	if opts.Expose {
+		fmt.Fprintln(out, "exposed on the tailnet: fake data, no auth; never the public internet")
+		if err := devstack.WriteQR(out, "http://"+stack.Config.Listen); err != nil {
+			fmt.Fprintf(out, "qr: %v\n", err)
+		}
 	}
 }
 
@@ -529,6 +536,35 @@ func stateCmd(root *string) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&list, "list", false, "list the available states")
+	return cmd
+}
+
+func scenarioCmd(root *string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "scenario",
+		Short: "Run scripted dev scenarios",
+	}
+	cmd.AddCommand(&cobra.Command{
+		Use:   "run <file.yaml>",
+		Short: "Replay a scenario against the running stack",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, err := devstack.ParseScenario(args[0])
+			if err != nil {
+				return err
+			}
+			c, err := control(*root)
+			if err != nil {
+				return err
+			}
+			defer c.Close()
+			if err := devstack.RunScenario(c, s, filepath.Dir(args[0])); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "ran %d steps\n", len(s.Steps))
+			return nil
+		},
+	})
 	return cmd
 }
 

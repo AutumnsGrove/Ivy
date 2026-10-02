@@ -38,10 +38,10 @@ type ControlResponse struct {
 
 // FaultSpec names a mailworld fault for the "fault" op.
 type FaultSpec struct {
-	Kind    string `json:"kind"`
-	After   int    `json:"after,omitempty"`
-	Code    int    `json:"code,omitempty"`
-	Message string `json:"message,omitempty"`
+	Kind    string `json:"kind" yaml:"kind"`
+	After   int    `json:"after,omitempty" yaml:"after,omitempty"`
+	Code    int    `json:"code,omitempty" yaml:"code,omitempty"`
+	Message string `json:"message,omitempty" yaml:"message,omitempty"`
 }
 
 // fault maps a spec to the mailworld fault it names. Unknown kinds fail rather
