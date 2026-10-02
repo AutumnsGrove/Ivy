@@ -141,3 +141,22 @@ func tableExists(t *testing.T, db *sql.DB, name string) bool {
 	}
 	return n == 1
 }
+
+// A data dir is an operator-chosen path, so URI metacharacters in it must not
+// redirect SQLite to a different file.
+func TestOpenHandlesURIMetacharactersInPath(t *testing.T) {
+	t.Parallel()
+	dir := filepath.Join(t.TempDir(), "mail?x=1#frag%41 dir")
+
+	dbs, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer dbs.Close()
+
+	for _, name := range []string{"mirror.db", "state.db"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Errorf("%s not created inside the requested dir: %v", name, err)
+		}
+	}
+}

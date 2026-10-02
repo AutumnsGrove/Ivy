@@ -8,6 +8,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -61,7 +62,9 @@ func (d *DBs) Close() error {
 func openDB(path string) (*sql.DB, error) {
 	// Pragmas are set per connection through the DSN so that every pooled
 	// connection gets them, not just the one that ran a PRAGMA statement.
-	dsn := "file:" + path +
+	// The path is escaped because SQLite parses the DSN as a URI: a '?', '#' or '%'
+	// in the operator's data dir would otherwise truncate or rewrite it.
+	dsn := "file:" + (&url.URL{Path: path}).EscapedPath() +
 		"?_pragma=busy_timeout(5000)" +
 		"&_pragma=journal_mode(WAL)" +
 		"&_pragma=synchronous(NORMAL)" +
