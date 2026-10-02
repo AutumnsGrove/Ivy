@@ -14,7 +14,6 @@ export { default as PenLine } from '@lucide/svelte/icons/pen-line';
 export { default as Reply } from '@lucide/svelte/icons/reply';
 export { default as FileText } from '@lucide/svelte/icons/file-text';
 export { default as Download } from '@lucide/svelte/icons/download';
-export { default as Sprout } from '@lucide/svelte/icons/sprout';
 export { default as Check } from '@lucide/svelte/icons/check';
 export { default as X } from '@lucide/svelte/icons/x';
 export { default as Plus } from '@lucide/svelte/icons/plus';

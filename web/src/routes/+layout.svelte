@@ -2,7 +2,6 @@
 	import '#lib/styles/base.css';
 	import { onDestroy } from 'svelte';
 	import { page } from '$app/state';
-	import favicon from '#lib/assets/favicon.svg';
 	import DesktopShell from '#lib/components/shell/DesktopShell.svelte';
 	import PhoneShell from '#lib/components/shell/PhoneShell.svelte';
 	import Scene from '#lib/components/ui/Scene.svelte';
@@ -20,7 +19,6 @@
 
 <svelte:head>
 	<title>Ivy</title>
-	<link rel="icon" href={favicon} />
 </svelte:head>
 
 <Scene />

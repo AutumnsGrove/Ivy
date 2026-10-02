@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { BookOpen, Inbox, Search, SlidersHorizontal, Sprout, Tag } from '#lib/icons.js';
+	import { BookOpen, Inbox, Search, SlidersHorizontal, Tag } from '#lib/icons.js';
 
 	let { current }: { current: string } = $props();
 
@@ -16,7 +16,7 @@
 </script>
 
 <nav class="rail" aria-label="Main">
-	<span class="logo" aria-hidden="true"><Sprout /></span>
+	<img class="logo" src="/icon-256.png" alt="Ivy" />
 	{#each main as { href, label, icon: Icon } (href)}
 		<a {href} class="item" class:on={active(href)} aria-label={label} aria-current={active(href) ? 'page' : undefined}>
 			<Icon />
@@ -44,13 +44,9 @@
 		padding: var(--sp-14) 0;
 	}
 	.logo {
-		display: flex;
+		width: var(--sp-40);
+		height: var(--sp-40);
 		margin-bottom: var(--sp-10);
-		color: var(--accent);
-	}
-	.logo :global(svg) {
-		width: var(--sp-26);
-		height: var(--sp-26);
 	}
 	.item {
 		display: flex;

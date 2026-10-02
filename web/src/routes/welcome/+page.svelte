@@ -1,10 +1,9 @@
 <script lang="ts">
-	import { Sprout } from '#lib/icons.js';
 	import Button from '#lib/components/ui/Button.svelte';
 </script>
 
 <div class="welcome">
-	<div class="halo"><span class="logo"><Sprout /></span></div>
+	<div class="halo"><img class="logo" src="/icon-256.png" alt="Ivy" /></div>
 	<h1>Ivy</h1>
 	<p class="tag">A quiet place for your mail.</p>
 	<div class="cta">
@@ -33,13 +32,9 @@
 		animation: breathe 6s ease-in-out infinite;
 	}
 	.logo {
-		display: flex;
-		color: var(--accent);
-	}
-	.logo :global(svg) {
-		width: var(--sp-84);
-		height: var(--sp-84);
-		stroke-width: 1;
+		width: var(--sp-132);
+		height: var(--sp-132);
+		filter: drop-shadow(var(--shadow-fab));
 	}
 	h1 {
 		margin-top: var(--sp-16);
