@@ -52,6 +52,25 @@ var nameRoles = map[string]string{
 	"courrier indesirable": store.RoleJunk,
 }
 
+// diacritics folds the accented Latin letters real folder names use to the
+// ASCII keys in nameRoles ("Entwürfe", "Envoyés"). A small replacer rather than
+// golang.org/x/text/unicode/norm keeps the dependency list unchanged.
+var diacritics = strings.NewReplacer(
+	"à", "a", "á", "a", "â", "a", "ä", "a", "ã", "a", "å", "a",
+	"ç", "c",
+	"è", "e", "é", "e", "ê", "e", "ë", "e",
+	"ì", "i", "í", "i", "î", "i", "ï", "i",
+	"ñ", "n",
+	"ò", "o", "ó", "o", "ô", "o", "ö", "o", "õ", "o",
+	"ù", "u", "ú", "u", "û", "u", "ü", "u",
+	"ß", "ss",
+)
+
+// foldName lower-cases a mailbox name and strips those diacritics.
+func foldName(name string) string {
+	return diacritics.Replace(strings.ToLower(strings.TrimSpace(name)))
+}
+
 // RoleFor resolves a mailbox's role from its LIST attributes and name. An
 // announced SPECIAL-USE attribute wins; otherwise the last path segment is
 // matched against the name heuristics; INBOX is recognised case-insensitively.
@@ -61,7 +80,7 @@ func RoleFor(name string, attrs []imap.MailboxAttr) string {
 			return role
 		}
 	}
-	lower := strings.ToLower(strings.TrimSpace(name))
+	lower := foldName(name)
 	if lower == "inbox" {
 		return store.RoleInbox
 	}

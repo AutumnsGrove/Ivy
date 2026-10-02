@@ -190,3 +190,8 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   (`needs_me`, tags) keys on `(account_id, content_key)`, so a hostile sender who copies a victim
   message's `Message-ID` inherits its verdict and tags. Fine for a single operator today; worth a
   line in the threat model before tags and triage write anything.
+- **#29** · `4eefb89` · `sync/roles.go` · **bug** · the name table keys are ASCII-folded
+  (`entwurfe`, `envoyes`, `courrier indesirable`) but the lookup only lower-cased, so the real
+  folders `Entwürfe`, `Envoyés`, `Courrier indésirable` and `Archivés` all resolved to `other`
+  (no Drafts/Sent/Junk role for a German or French account). Lookup now folds common Latin
+  diacritics with a small replacer (no new dependency). Test `TestRoleForFoldsDiacritics`.

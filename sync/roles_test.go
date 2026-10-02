@@ -55,3 +55,22 @@ func TestRoleFor(t *testing.T) {
 		}
 	}
 }
+
+// Real German, French and Spanish accounts name their folders with accents.
+func TestRoleForFoldsDiacritics(t *testing.T) {
+	t.Parallel()
+	cases := map[string]string{
+		"Entwürfe":             store.RoleDrafts,
+		"ENTWÜRFE":             store.RoleDrafts,
+		"Envoyés":              store.RoleSent,
+		"Courrier indésirable": store.RoleJunk,
+		"Corbeille":            store.RoleTrash,
+		"Archivés":             store.RoleArchive,
+		"INBOX.Entwürfe":       store.RoleDrafts,
+	}
+	for name, want := range cases {
+		if got := ivysync.RoleFor(name, nil); got != want {
+			t.Errorf("RoleFor(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
