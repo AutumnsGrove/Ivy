@@ -107,7 +107,7 @@ func (w *responseWriter) decide() {
 		return
 	}
 	h := w.inner.Header()
-	if h.Get("Content-Encoding") != "" {
+	if h.Get("Content-Encoding") != "" || mustNotTransform(w.status, h) {
 		return
 	}
 	if h.Get("Content-Type") == "" && len(w.buf) > 0 {
@@ -222,6 +222,23 @@ var _ interface {
 
 func bodyAllowed(status int) bool {
 	return status >= 200 && status != http.StatusNoContent && status != http.StatusNotModified
+}
+
+// mustNotTransform reports responses whose bytes must reach the client as the
+// handler wrote them: a byte range (Content-Range offsets refer to the
+// identity representation) and anything marked Cache-Control: no-transform.
+func mustNotTransform(status int, h http.Header) bool {
+	if status == http.StatusPartialContent || h.Get("Content-Range") != "" {
+		return true
+	}
+	for _, value := range h.Values("Cache-Control") {
+		for directive := range strings.SplitSeq(value, ",") {
+			if strings.EqualFold(strings.TrimSpace(directive), "no-transform") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func sample(b []byte) []byte {

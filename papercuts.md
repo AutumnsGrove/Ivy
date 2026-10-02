@@ -115,3 +115,35 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   no `ReadHeaderTimeout` (gosec G112); added header and idle timeouts like `ivy run`.
 - **#19** · `a2e4e07` · `cmd/ivy-dev/main.go` · **nit** · the `fault` command's help text did not
   list the new `unreachable` kind.
+
+## `9c1e7c9`..`38be26b` compression, `5e46a02` embedded frontend
+
+- **#20** · `be808b3` · `internal/compress/middleware.go` · **bug** · the compressor encoded any
+  2xx body of a compressible type, including `206 Partial Content` and responses carrying
+  `Content-Range`, so the range offsets described bytes the client never received and range
+  clients would corrupt their reassembly. It also ignored `Cache-Control: no-transform`. Both now
+  pass through untouched (`mustNotTransform`). Tests `TestMiddlewareLeavesPartialContentAlone`
+  and `TestMiddlewareHonoursNoTransform` failed with `zstd` before the fix.
+- **#21** · `2878911` · `internal/asset/precompress.go` · **risk** · when a variant was not
+  smaller than its source the code skipped it but left any sibling from an earlier run, so a
+  stale `.br`/`.zst`/`.gz` would be served for content it no longer matched. It now removes the
+  sibling. (`make web-assets` wipes the directory first, so this only bit direct re-runs of
+  `ivy-assets`.) Test `TestPrecompressRemovesStaleSiblings`.
+- **#22** · `5e46a02` · `gateway/gateway.go` · **risk** · the gateway set no security headers.
+  Added `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` (a link clicked in a
+  mail would otherwise send the Ivy URL, message id included, to the sender's site),
+  `X-Frame-Options: SAMEORIGIN` (not DENY, so 2d's reader can frame its own sanitised bodies),
+  and `Cache-Control: no-store` by default on `/api/` (private, fast-changing mailbox data).
+  The full CSP is left to 2d where its hashes are chosen. Tests
+  `TestEveryResponseCarriesHardeningHeaders` and `TestAPIResponsesAreNotCached`.
+- **N4 (open, perf)** · `d53dc23` · `internal/asset/server.go` · every static request copies the
+  embedded file (`fs.ReadFile`) and SHA-256s it for the ETag. The embedded set is immutable per
+  binary, so both could be computed once per file. Not changed without a number: measure on the
+  potato first (PERFORMANCE.md, "measure, don't guess").
+- **N5 (open, perf)** · `be808b3` · `internal/compress/middleware.go` · the pooled zstd encoder
+  uses the library default concurrency (GOMAXPROCS goroutines and buffers per encoder). For
+  one-response-at-a-time streaming `zstd.WithEncoderConcurrency(1)` is the usual setting and
+  matters on a 4-core, ~800 MB box. Benchmark on the potato before changing.
+- **N6 (open)** · `gateway/gateway.go` · unknown `/api/...` paths and wrong methods answer with
+  the mux's plain-text 404/405, but the contract promises a JSON `Error` body. Lands with the
+  2f handlers.

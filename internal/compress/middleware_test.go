@@ -377,3 +377,37 @@ func TestMiddlewareCompressesEveryTextShape(t *testing.T) {
 		})
 	}
 }
+
+// A 206 body is a byte range of the identity representation; compressing it
+// makes Content-Range describe bytes the client never receives.
+func TestMiddlewareLeavesPartialContentAlone(t *testing.T) {
+	t.Parallel()
+	srv := newServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-%d/100000", len(bigBody)-1))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(bigBody)
+	}))
+	resp := get(t, srv, "gzip, br, zstd")
+	if got := resp.Header.Get("Content-Encoding"); got != "" {
+		t.Fatalf("206 response was compressed with %q", got)
+	}
+	if !bytes.Equal(readAll(t, resp), bigBody) {
+		t.Fatal("206 body was altered")
+	}
+}
+
+// Cache-Control: no-transform forbids intermediaries, which includes us, from
+// changing the representation.
+func TestMiddlewareHonoursNoTransform(t *testing.T) {
+	t.Parallel()
+	srv := newServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, no-transform")
+		_, _ = w.Write(bigBody)
+	}))
+	resp := get(t, srv, "gzip, br, zstd")
+	if got := resp.Header.Get("Content-Encoding"); got != "" {
+		t.Fatalf("no-transform response was compressed with %q", got)
+	}
+}
