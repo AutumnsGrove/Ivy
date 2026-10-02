@@ -36,6 +36,9 @@ accounts:
     smtp_port: 465
     username: me@example.com
     llm_enabled: true
+    trusted_authserv_ids:
+      - mx.example.net
+      - mail.purelymail.com
 `)
 
 	cfg, err := Load(path)
@@ -54,6 +57,9 @@ accounts:
 	a := cfg.Accounts[0]
 	if a.ID != "autumn" || a.Address != "me@example.com" || !a.LLMEnabled {
 		t.Errorf("account = %+v", a)
+	}
+	if len(a.TrustedAuthservIDs) != 2 || a.TrustedAuthservIDs[0] != "mx.example.net" || a.TrustedAuthservIDs[1] != "mail.purelymail.com" {
+		t.Errorf("TrustedAuthservIDs = %v, want the two configured ids", a.TrustedAuthservIDs)
 	}
 }
 

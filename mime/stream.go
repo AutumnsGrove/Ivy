@@ -82,8 +82,8 @@ func BuildSkeleton(r io.Reader) (Skeleton, error) {
 // ParseStream parses a message read from r without holding its large parts. It
 // never fails: a body that cannot be read (too deep, too many parts, a header
 // block over the limit, an I/O error) yields the headers alone with BodySkipped
-// set and the reason in Errors.
-func ParseStream(r io.Reader) (p Parsed) {
+// set and the reason in Errors. trustedAuthservIDs is as in Parse.
+func ParseStream(r io.Reader, trustedAuthservIDs ...string) (p Parsed) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			p.Errors = append(p.Errors, fmt.Sprintf("parser panic: %v", rec))
@@ -92,12 +92,12 @@ func ParseStream(r io.Reader) (p Parsed) {
 	}()
 	sk, err := BuildSkeleton(r)
 	if err != nil {
-		p = Parse(headerOnly(sk.Raw))
+		p = Parse(headerOnly(sk.Raw), trustedAuthservIDs...)
 		p.BodySkipped = true
 		p.Errors = append(p.Errors, "body not parsed: "+err.Error())
 		return p
 	}
-	p = Parse(sk.Raw)
+	p = Parse(sk.Raw, trustedAuthservIDs...)
 	p.Large = sk.Large
 	p.Attachments = withoutEmptied(p.Attachments, sk.Large)
 	p.Inlines = withoutEmptied(p.Inlines, sk.Large)

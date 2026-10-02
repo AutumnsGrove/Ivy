@@ -185,9 +185,12 @@ Message-ID: <auth@example.com>
 MIME-Version: 1.0
 Content-Type: text/plain; charset=utf-8`,
 		"body",
-	))
+	), "example.com")
 	if p.Auth.SPF != "pass" || p.Auth.DKIM != "pass" || p.Auth.DMARC != "pass" {
 		t.Errorf("Auth = %+v, want all pass", p.Auth)
+	}
+	if p.Auth.AuthservID != "example.com" {
+		t.Errorf("Auth.AuthservID = %q, want example.com", p.Auth.AuthservID)
 	}
 	if len(p.Auth.Raw) != 1 {
 		t.Errorf("Auth.Raw = %v, want one raw value", p.Auth.Raw)
@@ -197,9 +200,10 @@ Content-Type: text/plain; charset=utf-8`,
 func TestParseAuthResults(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name   string
-		values []string
-		want   ivymime.AuthResults
+		name    string
+		values  []string
+		trusted []string
+		want    ivymime.AuthResults
 	}{
 		{
 			name:   "no headers",
@@ -207,29 +211,34 @@ func TestParseAuthResults(t *testing.T) {
 			want:   ivymime.AuthResults{},
 		},
 		{
-			name:   "purelymail adds only auth",
-			values: []string{"mail.purelymail.com; auth=pass"},
-			want:   ivymime.AuthResults{Raw: []string{"mail.purelymail.com; auth=pass"}},
+			name:    "purelymail adds only an unknown auth method",
+			values:  []string{"mail.purelymail.com; auth=pass"},
+			trusted: []string{"mail.purelymail.com"},
+			want:    ivymime.AuthResults{AuthservID: "mail.purelymail.com", Raw: []string{"mail.purelymail.com; auth=pass"}},
 		},
 		{
-			name:   "receiver header wins, later fills gaps",
-			values: []string{"mx.example.net; dmarc=fail", "other.example; spf=pass; dkim=fail"},
-			want:   ivymime.AuthResults{SPF: "pass", DKIM: "fail", DMARC: "fail", Raw: []string{"mx.example.net; dmarc=fail", "other.example; spf=pass; dkim=fail"}},
+			name:    "topmost trusted header wins",
+			values:  []string{"mx.example.net; dmarc=fail", "other.example; spf=pass; dkim=fail"},
+			trusted: []string{"mx.example.net", "other.example"},
+			want:    ivymime.AuthResults{AuthservID: "mx.example.net", DMARC: "fail", Raw: []string{"mx.example.net; dmarc=fail", "other.example; spf=pass; dkim=fail"}},
 		},
 		{
-			name:   "any dkim pass wins within a header",
-			values: []string{"mx.example.net; dkim=fail reason=bad; dkim=pass header.d=example.com"},
-			want:   ivymime.AuthResults{DKIM: "pass", Raw: []string{"mx.example.net; dkim=fail reason=bad; dkim=pass header.d=example.com"}},
+			name:    "any dkim pass wins within a header",
+			values:  []string{"mx.example.net; dkim=fail reason=bad; dkim=pass header.d=example.com"},
+			trusted: []string{"mx.example.net"},
+			want:    ivymime.AuthResults{AuthservID: "mx.example.net", DKIM: "pass", Raw: []string{"mx.example.net; dkim=fail reason=bad; dkim=pass header.d=example.com"}},
 		},
 		{
-			name:   "case and spacing are ignored",
-			values: []string{"MX.Example.NET ; SPF=Pass ; DKIM=Pass ; DMARC=FAIL"},
-			want:   ivymime.AuthResults{SPF: "pass", DKIM: "pass", DMARC: "fail", Raw: []string{"MX.Example.NET ; SPF=Pass ; DKIM=Pass ; DMARC=FAIL"}},
+			name:    "case and spacing are ignored",
+			values:  []string{"MX.Example.NET ; SPF=Pass ; DKIM=Pass ; DMARC=FAIL"},
+			trusted: []string{"mx.example.net"},
+			want:    ivymime.AuthResults{AuthservID: "mx.example.net", SPF: "pass", DKIM: "pass", DMARC: "fail", Raw: []string{"MX.Example.NET ; SPF=Pass ; DKIM=Pass ; DMARC=FAIL"}},
 		},
 		{
-			name:   "unknown methods are ignored",
-			values: []string{"mx.example.net; iprev=pass; auth=pass; dmarc=pass"},
-			want:   ivymime.AuthResults{DMARC: "pass", Raw: []string{"mx.example.net; iprev=pass; auth=pass; dmarc=pass"}},
+			name:    "unknown methods are ignored",
+			values:  []string{"mx.example.net; iprev=pass; auth=pass; dmarc=pass"},
+			trusted: []string{"mx.example.net"},
+			want:    ivymime.AuthResults{AuthservID: "mx.example.net", DMARC: "pass", Raw: []string{"mx.example.net; iprev=pass; auth=pass; dmarc=pass"}},
 		},
 		{
 			name:   "malformed input yields no verdicts",
@@ -240,9 +249,9 @@ func TestParseAuthResults(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := ivymime.ParseAuthResults(tc.values)
-			if got.SPF != tc.want.SPF || got.DKIM != tc.want.DKIM || got.DMARC != tc.want.DMARC {
-				t.Errorf("verdicts = {%q %q %q}, want {%q %q %q}", got.SPF, got.DKIM, got.DMARC, tc.want.SPF, tc.want.DKIM, tc.want.DMARC)
+			got := ivymime.ParseAuthResults(tc.values, tc.trusted)
+			if got.SPF != tc.want.SPF || got.DKIM != tc.want.DKIM || got.DMARC != tc.want.DMARC || got.AuthservID != tc.want.AuthservID {
+				t.Errorf("verdicts = %+v, want %+v", got, tc.want)
 			}
 			if strings.Join(got.Raw, "\x00") != strings.Join(tc.want.Raw, "\x00") {
 				t.Errorf("Raw = %q, want %q", got.Raw, tc.want.Raw)
@@ -261,7 +270,7 @@ func TestParseFoldedAuthResults(t *testing.T) {
 MIME-Version: 1.0
 Content-Type: text/plain; charset=utf-8`,
 		"body",
-	))
+	), "mx.example.net")
 	if p.Auth.SPF != "pass" || p.Auth.DKIM != "pass" || p.Auth.DMARC != "pass" {
 		t.Errorf("Auth = %+v, want folded header unfolded and parsed", p.Auth)
 	}
@@ -451,7 +460,7 @@ func FuzzParseAuthResults(f *testing.F) {
 	f.Add(";;; = = =")
 	f.Add("mx; dkim=fail; dkim=pass")
 	f.Fuzz(func(t *testing.T, value string) {
-		got := ivymime.ParseAuthResults([]string{value})
+		got := ivymime.ParseAuthResults([]string{value}, []string{"mx"})
 		// The result token is whatever follows "method=", so the parser's
 		// contract is only that a recorded verdict is a trimmed lowercase token
 		// with no trailing properties (extension verdicts are allowed).

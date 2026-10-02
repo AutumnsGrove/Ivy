@@ -376,7 +376,9 @@ func TestFetchParsesRawBodies(t *testing.T) {
 		Build()
 	uid := acc.Deliver("INBOX", raw)
 
-	if _, err := ivysync.NewFetcher(dbs).Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret")); err != nil {
+	acct := accountFor(t, w, "acct-1", "me@grove.test", "secret")
+	acct.TrustedAuthservIDs = []string{"mx.example.net"}
+	if _, err := ivysync.NewFetcher(dbs).Fetch(ctx, acct); err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
 	inbox := mustFolder(t, dbs, "acct-1", "INBOX")
@@ -409,8 +411,50 @@ func TestFetchParsesRawBodies(t *testing.T) {
 	if m.AuthResults.SPF != "pass" || m.AuthResults.DKIM != "pass" || m.AuthResults.DMARC != "pass" {
 		t.Errorf("AuthResults = %+v, want all pass", m.AuthResults)
 	}
+	if m.AuthResults.AuthservID != "mx.example.net" {
+		t.Errorf("AuthResults.AuthservID = %q, want the trusted server recorded", m.AuthResults.AuthservID)
+	}
 	if len(m.ParseErrors) != 0 {
 		t.Errorf("ParseErrors = %v, want none", m.ParseErrors)
+	}
+}
+
+// TestFetchIgnoresForgedAuthResults is N9 end to end: a sender-supplied
+// Authentication-Results header must not become the trust signal. The account
+// trusts a different server, so the forged verdicts are dropped (Purelymail adds
+// none of its own, so the naive parser would otherwise believe the attacker).
+func TestFetchIgnoresForgedAuthResults(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+	seedAccountRow(t, dbs, store.Account{ID: "acct-1", Address: "me@grove.test"})
+
+	t1 := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	raw := mailworld.Msg().
+		From("Attacker <bad@evil.test>").
+		To("me@grove.test").
+		Subject("Reset your password").
+		Date(t1).
+		MessageID("<forged-1@grove.test>").
+		Header("Authentication-Results", "mx.example.net; spf=pass; dkim=pass; dmarc=pass").
+		Text("spoofed").
+		Build()
+	uid := acc.Deliver("INBOX", raw)
+
+	acct := accountFor(t, w, "acct-1", "me@grove.test", "secret")
+	acct.TrustedAuthservIDs = []string{"mail.purelymail.com"}
+	if _, err := ivysync.NewFetcher(dbs).Fetch(ctx, acct); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	inbox := mustFolder(t, dbs, "acct-1", "INBOX")
+	m := mustMessage(t, dbs, inbox.ID, uid)
+	if m.AuthResults.SPF != "" || m.AuthResults.DKIM != "" || m.AuthResults.DMARC != "" || m.AuthResults.AuthservID != "" {
+		t.Errorf("AuthResults = %+v, want empty: a forged header must not be trusted", m.AuthResults)
+	}
+	if len(m.AuthResults.Raw) != 1 {
+		t.Errorf("AuthResults.Raw = %v, want the raw header kept for debugging", m.AuthResults.Raw)
 	}
 }
 

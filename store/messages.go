@@ -19,12 +19,15 @@ type Address struct {
 }
 
 // AuthResults is the SPF/DKIM/DMARC trust signal parsed from a message's
-// Authentication-Results headers (ARCHITECTURE.md 5).
+// Authentication-Results headers (ARCHITECTURE.md 5). AuthservID names the
+// trusted server that attested the verdicts, so the operator can see where the
+// signal came from (or that a trusted header carried none).
 type AuthResults struct {
-	SPF   string   `json:"spf,omitempty"`
-	DKIM  string   `json:"dkim,omitempty"`
-	DMARC string   `json:"dmarc,omitempty"`
-	Raw   []string `json:"raw,omitempty"`
+	AuthservID string   `json:"authserv_id,omitempty"`
+	SPF        string   `json:"spf,omitempty"`
+	DKIM       string   `json:"dkim,omitempty"`
+	DMARC      string   `json:"dmarc,omitempty"`
+	Raw        []string `json:"raw,omitempty"`
 }
 
 // Message is one mirrored message row. BodyHTML is the server-sanitized HTML;
@@ -388,7 +391,7 @@ func marshalFlags(flags []string) (any, error) {
 // marshalAuthResults stores NULL for a message with no verdicts, so a scan
 // leaves the zero value rather than decoding an empty object.
 func marshalAuthResults(a AuthResults) (any, error) {
-	if a.SPF == "" && a.DKIM == "" && a.DMARC == "" && len(a.Raw) == 0 {
+	if a.AuthservID == "" && a.SPF == "" && a.DKIM == "" && a.DMARC == "" && len(a.Raw) == 0 {
 		return nil, nil
 	}
 	b, err := json.Marshal(a)

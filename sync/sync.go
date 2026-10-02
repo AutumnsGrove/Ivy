@@ -55,6 +55,11 @@ type Account struct {
 	// mail world only; the zero value is implicit TLS so a forgotten field can
 	// never put a real password on the wire unencrypted.
 	Insecure bool
+	// TrustedAuthservIDs lists the Authentication-Results authserv-ids whose
+	// verdicts may be believed (RFC 8601; N9 in papercuts.md). Empty means no
+	// header is trusted, so the message has no auth signal rather than a forged
+	// one. Purelymail adds no SPF/DKIM/DMARC verdicts, so for it this stays empty.
+	TrustedAuthservIDs []string
 }
 
 // Result summarizes one read fetch.
@@ -358,7 +363,7 @@ func (f *Fetcher) fetchInline(ctx context.Context, c *imapclient.Client, acct Ac
 		m := f.baseMessage(acct, folderID, meta)
 		m.RawBlob = raw
 		m.ContentKey = store.ContentKey(m.MessageID, headerBlock(raw))
-		applyParsed(&m, mailmime.Parse(raw))
+		applyParsed(&m, mailmime.Parse(raw, acct.TrustedAuthservIDs...))
 		if err := f.dbs.UpsertMessage(ctx, m); err != nil {
 			_ = cmd.Close()
 			return stored, err
@@ -412,7 +417,7 @@ func (f *Fetcher) fetchSpooled(ctx context.Context, c *imapclient.Client, acct A
 
 	m := f.baseMessage(acct, folderID, meta)
 	m.RawPath = rel
-	parsed, header, err := parseSpooled(filepath.Join(f.dbs.Dir, filepath.FromSlash(rel)))
+	parsed, header, err := parseSpooled(filepath.Join(f.dbs.Dir, filepath.FromSlash(rel)), acct.TrustedAuthservIDs)
 	if err != nil {
 		return false, err
 	}
@@ -427,7 +432,7 @@ func (f *Fetcher) fetchSpooled(ctx context.Context, c *imapclient.Client, acct A
 // parseSpooled reads a spooled message from disk in a single pass, returning the
 // parsed fields and the header block (the content key needs it when a message has
 // no Message-ID).
-func parseSpooled(file string) (mailmime.Parsed, []byte, error) {
+func parseSpooled(file string, trustedAuthservIDs []string) (mailmime.Parsed, []byte, error) {
 	fh, err := os.Open(file) //nolint:gosec // G304: a path this package built from a folder id and a UID
 	if err != nil {
 		return mailmime.Parsed{}, nil, fmt.Errorf("open spooled message: %w", err)
@@ -440,7 +445,7 @@ func parseSpooled(file string) (mailmime.Parsed, []byte, error) {
 	if _, err := fh.Seek(0, io.SeekStart); err != nil {
 		return mailmime.Parsed{}, nil, fmt.Errorf("rewind spooled message: %w", err)
 	}
-	return mailmime.ParseStream(fh), header, nil
+	return mailmime.ParseStream(fh, trustedAuthservIDs...), header, nil
 }
 
 // envelopeOnly builds the row for a message that is not downloaded: the
@@ -501,7 +506,8 @@ func applyParsed(m *store.Message, parsed mailmime.Parsed) {
 	m.ReplyTo = parsedAddresses(parsed.ReplyTo)
 	m.DeliveredTo = parsedAddresses(parsed.DeliveredTo)
 	m.AuthResults = store.AuthResults{
-		SPF: parsed.Auth.SPF, DKIM: parsed.Auth.DKIM, DMARC: parsed.Auth.DMARC, Raw: parsed.Auth.Raw,
+		AuthservID: parsed.Auth.AuthservID,
+		SPF:        parsed.Auth.SPF, DKIM: parsed.Auth.DKIM, DMARC: parsed.Auth.DMARC, Raw: parsed.Auth.Raw,
 	}
 	m.ParseErrors = parsed.Errors
 }

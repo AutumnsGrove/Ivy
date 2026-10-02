@@ -42,10 +42,13 @@ type Part struct {
 // AuthResults is the SPF/DKIM/DMARC verdict set parsed from the
 // Authentication-Results header(s), plus the raw header values.
 type AuthResults struct {
-	SPF   string
-	DKIM  string
-	DMARC string
-	Raw   []string
+	// AuthservID is the trusted authentication service that supplied the
+	// verdicts (RFC 8601), so the operator can see which server attested them.
+	AuthservID string
+	SPF        string
+	DKIM       string
+	DMARC      string
+	Raw        []string
 }
 
 // Parsed is the result of parsing one raw message.
@@ -72,7 +75,10 @@ type Parsed struct {
 // Parse decodes one raw message. It never returns an error: a message that
 // enmime cannot read yields the fields we could recover plus an entry in
 // Parsed.Errors, because a single hostile message must not stop a sync.
-func Parse(raw []byte) (p Parsed) {
+//
+// trustedAuthservIDs are the Authentication-Results authserv-ids whose verdicts
+// may be believed; the empty list trusts none (N9, ParseAuthResults).
+func Parse(raw []byte, trustedAuthservIDs ...string) (p Parsed) {
 	defer func() {
 		// enmime is fuzzed upstream, but a parser panic on hostile mail would
 		// kill a sync worker, so it is caught and recorded like any other error.
@@ -103,7 +109,7 @@ func Parse(raw []byte) (p Parsed) {
 	p.DeliveredTo = addresses(env, "Delivered-To", &p.Errors)
 	p.Attachments = parts(env.Attachments, false)
 	p.Inlines = parts(env.Inlines, true)
-	p.Auth = ParseAuthResults(env.GetHeaderValues("Authentication-Results"))
+	p.Auth = ParseAuthResults(env.GetHeaderValues("Authentication-Results"), trustedAuthservIDs)
 	p.Errors = append(p.Errors, partErrors(env.Errors)...)
 	return p
 }

@@ -41,6 +41,10 @@ type Account struct {
 	SMTPPort   int    `yaml:"smtp_port"`
 	Username   string `yaml:"username"`
 	LLMEnabled bool   `yaml:"llm_enabled"`
+	// TrustedAuthservIDs lists the Authentication-Results authserv-ids whose
+	// verdicts Ivy may believe (RFC 8601; N9 in papercuts.md). Empty is the safe
+	// default: no header is trusted. Only set ids a configured provider adds.
+	TrustedAuthservIDs []string `yaml:"trusted_authserv_ids"`
 
 	Password string `yaml:"-"`
 }
