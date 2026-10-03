@@ -519,3 +519,11 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   Fixed: on a decode error the rest of the part is drained raw (so the skeleton keeps it whole and
   a failure of the stream itself still surfaces), the part is listed with the size that decoded and
   no hash, and the walk continues.
+- **N15 (open, needs a design decision)** · `46be4c0` · `gateway/format.go` · `humanTime` renders
+  "15:04", "Yesterday" and weekday names server-side in `now.Location()`, which is the server's
+  zone, while its comment promises the viewer's. A container on the potato defaults to UTC, so the
+  operator's phone would show inbox times in UTC and the today/yesterday boundary would fall at UTC
+  midnight. The tests pin `testNow` in UTC, so they cannot see it. Recommendation: send the
+  timestamp (RFC 3339) in the API and format it in the browser, which knows the viewer's zone and
+  locale; if the API must keep pre-rendered strings, add a `timezone` setting and load it into the
+  formatter. Not fixed because it changes the `MailSummary`/`MailMessage` contract.
