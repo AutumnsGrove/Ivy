@@ -303,6 +303,18 @@ func TestMirrorHealth(t *testing.T) {
 	}
 }
 
+func TestListInboxBadCursorIsBadRequest(t *testing.T) {
+	t.Parallel()
+	srv, _ := newSeededServer(t)
+	var body api.Error
+	if code := getJSON(t, srv.URL+"/api/v1/inbox?cursor=!!!not-base64!!!", &body); code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", code)
+	}
+	if body.Code != "bad_request" {
+		t.Errorf("code = %q, want bad_request", body.Code)
+	}
+}
+
 func TestUnknownAPIPathsAreJSON(t *testing.T) {
 	t.Parallel()
 	srv, _ := newSeededServer(t)

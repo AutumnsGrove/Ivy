@@ -35,6 +35,10 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 		AccountID: q.Get("account_id"),
 		Cursor:    q.Get("cursor"),
 	})
+	if errors.Is(err, store.ErrBadCursor) {
+		writeError(w, http.StatusBadRequest, "bad_request", "That page link is not valid")
+		return
+	}
 	if err != nil {
 		s.serverError(w, r, err)
 		return

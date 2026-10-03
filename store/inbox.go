@@ -60,7 +60,7 @@ func (d *DBs) ListInbox(ctx context.Context, q InboxQuery) (InboxPage, error) {
 
 	cursorDate, cursorID, err := decodeCursor(q.Cursor)
 	if err != nil {
-		return InboxPage{}, err
+		return InboxPage{}, fmt.Errorf("%w: %w", ErrBadCursor, err)
 	}
 
 	rows, err := d.Mirror.Read.QueryContext(ctx, inboxSelect,

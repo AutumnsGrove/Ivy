@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"hash/crc32"
 	"testing"
 	"time"
@@ -150,6 +151,17 @@ func TestListInboxCountsNeeds(t *testing.T) {
 	}
 	if !page.Items[0].Needs {
 		t.Error("first item Needs = false, want true")
+	}
+}
+
+// A cursor is opaque; a client that invents one gets a defined client error,
+// not a 500 or an empty page that looks like the end of the mailbox.
+func TestListInboxRejectsBadCursor(t *testing.T) {
+	t.Parallel()
+	dbs := openTemp(t)
+	_, err := dbs.ListInbox(context.Background(), InboxQuery{Cursor: "!!!not-base64!!!"})
+	if !errors.Is(err, ErrBadCursor) {
+		t.Fatalf("err = %v, want ErrBadCursor", err)
 	}
 }
 
