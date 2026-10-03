@@ -5,13 +5,12 @@ It **is tracked in git** so every step is recoverable. **Update this file and co
 stage at the end of every sub-chunk (not just every chunk)** so the next session can pick up cleanly
 after a context clear.
 
-Last updated: 2026-10-02, after Chunk 2 sub-chunk 2f (the real gateway read handlers:
-`/accounts`, `/inbox`, `/messages/{id}`, `/messages/{id}/summary`, `/mirror/health`, plus the
-body-document endpoint with `render.ContentSecurityPolicy` as a response header and streaming
-inline/attachment parts, and the `attachments` table populated at sync from the parser's skeleton
-walk, with a content hash per part). Chunk 1 (1a-1h) and 2a-2f are done; the cross-browser
-remote-content Playwright assertion still needs the frontend reader to point at the body-document
-endpoint, so it lands with 2g. 2g is next. The audit's ground rules are below.
+Last updated: 2026-10-03, mid Chunk 2 sub-chunk 2g. Chunk 1 (1a-1h) and 2a-2f are done. 2g has
+started: the reader client fetches the real read API, the body frame points at
+`/api/v1/messages/{id}/body` so the browser enforces the policy as a response header, the mock E2E
+suite now fakes the API at the network boundary, and an `@axe-core/playwright` pass (with the shell
+landmarks it required) is green. Account customization, the settings/stats skeletons and committed
+visual baselines remain in 2g. The audit's ground rules are below.
 
 ## How to run a chunk (read this first)
 
@@ -81,7 +80,7 @@ enforced by tests and CI, not just stated here.
   potato when available) and N6 is resolved by 2f (JSON error envelope for unknown `/api` paths and
   wrong methods).
 
-## ▶ Now: Chunk 2 (Milestone 1: Read) — 2a-2f done, start 2g
+## ▶ Now: Chunk 2 (Milestone 1: Read) — 2a-2f done, 2g in progress
 
 Chunk 1's sub-chunks (1a-1h) are **complete** and the day-one smoke slice is the gate that passed,
 so Chunk 2 is unblocked. **Chunk 2 is split into 2a-2h at chunk 1's granularity**: it is a full
@@ -102,7 +101,7 @@ notes are kept below for reference.
 | **2d** — DONE (browser item to 2g) | `render/` sanitize + sandboxed iframe/CSP: bluemonday, remote-image policy + allow-list, tracking-pixel strip, `cid:` rewrite, plain-text fallback | XSS corpus + fuzz done; 2f adds the body-document endpoint with the policy as a header, so the cross-browser remote-content Playwright assertion now needs only the reader to point at it (2g) |
 | **2e** — DONE | `thread/` JWZ threading + store `thread_id`, normalized-subject fallback | Invariant/property tests + fixtures |
 | **2f** — DONE | Gateway read handlers on the real store: `/accounts`, `/inbox`, `/messages/{id}`, `/messages/{id}/summary`, `/mirror/health`, plus the body-document, inline and attachment endpoints | `httptest` against the generated contract |
-| **2g** | Frontend swap for the reader (real `client.ts` bodies) + settings skeleton + stats-panel skeleton + account customization (rename, icon, photo); E2E both viewports, visual baselines, axe; non-reader routes stay mocked | Playwright phone + desktop |
+| **2g** | Frontend swap for the reader (real `client.ts` bodies) + settings skeleton + stats-panel skeleton + account customization (rename, icon, photo); E2E both viewports, visual baselines, axe; non-reader routes stay mocked — **in progress**: reader swap, body endpoint and axe done; customization, settings/stats skeleton, visual baselines left | Playwright phone + desktop |
 | **2h** | `state.db` fast seeder + `ivy-dev --mode fast` + the `full == fast` agreement test for `demo` + named-state Playwright | `DEV.md` 8; seeder determinism |
 
 Order: 2a → 2b → 2c, then 2d and 2e (threading depends only on parse, not on render), then
@@ -212,14 +211,32 @@ minimal inline stylesheet, and the reader's real theming arrives with 2g; the
 `openapi.yaml`; messages mirrored before the attachment table existed are served through the
 raw-walk fallback until a re-fetch populates their rows.
 
+**2g — frontend reader swap (in progress, 2026-10-03).** `client.ts` now fetches the real read
+gateway for `/accounts`, `/inbox`, `/messages/{id}`, `/messages/{id}/summary` and `/mirror/health`
+through a new `api/http.ts` (the one module that calls `fetch`; `ApiError` moved to `api/errors.ts`
+so the transport and the client share the stable codes). The reader's body frame is its own document
+at `/api/v1/messages/{id}/body` instead of `srcdoc`, so the policy arrives as a response header
+Chromium enforces and the cross-browser remote-content assertion runs on both viewports. The mock
+E2E suite no longer mocks inside the client: a Playwright fixture (`e2e/api.ts`) fakes
+`/api/v1/**` at the network boundary, so every spec (including the designed `?scenario=` states)
+drives the same requests the gateway answers; the smoke slice now boots the real binary and renders
+the real (empty) mirror until sync or the 2h seeder fills it. An `@axe-core/playwright` suite covers
+eleven screens on phone and desktop; the pass added the missing `<main>` landmarks to both shells
+and an h1 to Search and Ask. `@axe-core/playwright` is a new dev dependency (`STACK.md`). Deferred
+within 2g (with reasons): account customization (rename/icon/photo) needs targeted store setters
+(so a re-sync cannot clobber them), a gateway write surface and a screen, and is the next step; the
+settings/stats skeletons have no design yet; committed visual baselines wait until the harness is
+regenerated in CI (macOS and Linux font rendering differ). `+layout.ts` still uses `window.fetch`,
+so SvelteKit logs its `window_fetch_in_load` warning; threading the load-time `fetch` through the
+client is the follow-up.
+
 **2d finding, resolved in 2f, browser assertion to 2g:** a `<meta>` Content-Security-Policy inside a
 `srcdoc` iframe is enforced by WebKit but **ignored by Chromium**, and WebKit does not report
 `srcdoc` subresource requests to Playwright, so a meaningful cross-browser network assertion needs
 the body served as its own same-origin document with the policy as a response header. 2f adds that
 endpoint (`/api/v1/messages/{id}/body`, tested in Go) and the inline endpoint it loads images from.
-The Playwright assertion still cannot run until the reader's frame points at the endpoint instead
-of using `srcdoc` (the frontend swap is 2g); the SPA's own CSP additionally needs SvelteKit
-build-time script hashes and is folded into 2g.
+The reader now frames that endpoint (2g), so the assertion runs on both viewports; the SPA's own
+CSP still needs SvelteKit build-time script hashes and remains open.
 
 Two seams are fixed up front so the chunks stay independently committable:
 
@@ -406,12 +423,15 @@ the local Go toolchain off 1.26.1, which `govulncheck` flags.
 
 ## Where we stand
 
-- **Frontend: done against mocks, green.** SvelteKit 3 app in `web/`, all 32 screens, 123 Vitest
-  tests passing, Playwright specs (WebKit phone + Chromium desktop) over `e2e/routes.ts`. The only
-  seam is `web/src/lib/api/client.ts` over `web/src/lib/api/mock.ts`; `web/src/lib/types.ts` now
-  re-exports the OpenAPI-generated schema (only `Settings` is hand-written). Mutating actions still
-  only toast.
-- **Backend: Chunk 0 done; Chunk 1 (a-1h) done; Chunk 2 (2a-2f) done; 2g next.** Root Go
+- **Frontend: reader real, the rest still mock-backed, green.** SvelteKit 3 app in `web/`, all 32
+  screens, 129 Vitest tests passing, Playwright specs (WebKit phone + Chromium desktop) over
+  `e2e/routes.ts`, plus the axe suite. The reader endpoints (`/accounts`, `/inbox`, `/messages/{id}`,
+  `/messages/{id}/summary`, `/mirror/health`) now fetch the real gateway through
+  `web/src/lib/api/http.ts`; `web/src/lib/api/mock.ts` still backs search/ask/tags/rules/people/
+  checks/reading until chunks 3/4, and the mock E2E suite fakes those real requests with
+  `e2e/api.ts`. `web/src/lib/types.ts` re-exports the OpenAPI-generated schema (only `Settings` is
+  hand-written). Mutating actions still only toast.
+- **Backend: Chunk 0 done; Chunk 1 (a-1h) done; Chunk 2 (2a-2f) done; 2g in progress.** Root Go
   module `github.com/AutumnsGrove/Ivy`;
   `store/` (two DBs, pragmas, positional migrations), `config/`, `gateway/` (`/api/v1/version`,
   `/api/v1/health`), `cmd/` + `main.go` (`ivy run|init|doctor`), `api/openapi.yaml` with Go + TS
@@ -459,7 +479,7 @@ and triage is chunk 5** (send needs no LLM gate); 4 and 5 can still be narrowed.
 |---|---|---|---|
 | **0** | Contract + Go skeleton | `STANDARDS.md` 4/6, `ARCHITECTURE.md` 2/3 | **done** (2026-10-02, commits `aa0e438`..`68e5fce`) |
 | **1** | Harness = `mailworld` + `ivy-dev` + `make dev` + day-one E2E + CI | `DEV.md`, `STANDARDS.md` 3, `TESTING.md` 1/2/8, `CI.md`, `PERFORMANCE.md` 1 | **done** (2026-10-02; open items listed above) |
-| **2** | Milestone 1: Read (real mirror behind the screens) | `PLAN.md` 5, `ARCHITECTURE.md` 3/5, `TESTING.md` 3 | **in progress** (2a-2f done; 2g next) |
+| **2** | Milestone 1: Read (real mirror behind the screens) | `PLAN.md` 5, `ARCHITECTURE.md` 3/5, `TESTING.md` 3 | **in progress** (2a-2f done; 2g: reader swap, body endpoint, axe done) |
 | **3** | Milestone 2: Sync (backfill, QRESYNC/IDLE, outbox, tags, attachments, search, backup, update) | `ARCHITECTURE.md` 4/9, `TESTING.md` 2/6 | not started |
 | **4** | Milestone 3: Send (compose, identities, undo send, drafts, SMTP + APPEND to Sent) | `PLAN.md` 5, `ARCHITECTURE.md` 5 | not started |
 | **5** | Milestone 4: Triage (Jev, the gate + ledger, cascade, newsletters, receipts, vision, ask, stats) | `JEV.md`, `ARCHITECTURE.md` 6/7, `TESTING.md` 4 | not started |
@@ -556,7 +576,8 @@ stats panel. Safety assertions are part of done, not polish.
 
 - Wire the stub actions (archive, delete, tag, save rule, delete tag, Update, "Try on recent mail",
   send) to real API calls with IMAP-first writes and undo — lands with chunks 3/5.
-- Desktop keyboard shortcuts + help overlay; a11y pass with `@axe-core/playwright`; day-theme
+- Desktop keyboard shortcuts + help overlay; a11y pass with `@axe-core/playwright` (2g covers
+  eleven screens; extend to the remaining routes); day-theme
   review; font subsetting/preload and the CDP timing budgets (JS/CSS byte budgets are done, 1h);
   real-iPhone safe areas/`100dvh`; collapse-below-minimum list drag;
   settings gaps (undo-send delay, photo size, remote images, digest time).
@@ -571,7 +592,7 @@ stats panel. Safety assertions are part of done, not polish.
   directive to `go.mod`) before the next security pass.
 - Lore feature names deferred; Purelymail follow-ups (auth headers, Resend DMARC, alias/send-as
   scope, seeding the dev mailbox); Jev labelled corpus for real-mail accuracy.
-- Housekeeping: possible stray Vite dev server on :5173; icon recipe in
+- Housekeeping: the stray Vite dev server on :5173 was killed (2026-10-03); icon recipe in
   `docs/design/brand/README.md`; the stray parent `node_modules` noted in round 28.
 
 ## Historical notes worth keeping (frontend phase)
