@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -411,5 +412,131 @@ func TestBuildRandomGraphs(t *testing.T) {
 		}
 		threads := Build(msgs)
 		assertPartition(t, threads, ids)
+	}
+}
+
+// referencesWithJunk builds <r> <q> <junk...> <p>: the root first, a real but
+// unrelated message in the middle and the real parent last.
+func referencesWithJunk(junk int) string {
+	var b strings.Builder
+	b.WriteString("<r@x> <q@x>")
+	for i := 0; i < junk; i++ {
+		b.WriteString(" <junk" + strconv.Itoa(i) + "@x>")
+	}
+	b.WriteString(" <p@x>")
+	return b.String()
+}
+
+func referenceCapMessages(junk int) []Message {
+	return []Message{
+		msg(0, "r", "<r@x>", "Plan", "", ""),
+		msg(1, "q", "<q@x>", "Something unrelated", "", ""),
+		msg(2, "p", "<p@x>", "Re: Plan", "<r@x>", "<r@x>"),
+		msg(3, "m", "<m@x>", "Re: Plan", referencesWithJunk(junk), "<p@x>"),
+	}
+}
+
+// A References header can be 1 MiB, so one message can name ~250k ids and cost
+// linear time per message on every rethread (N13). Only the first id (the
+// conversation's root) and the last MaxReferences (its nearest ancestors) are
+// honoured, so an id in the middle of a long chain no longer links.
+func TestBuildHonoursOnlyTheFirstAndLastReferences(t *testing.T) {
+	t.Parallel()
+	threads := Build(referenceCapMessages(MaxReferences + 200))
+	assertPartition(t, threads, []string{"r", "q", "p", "m"})
+
+	root, _ := threadOf(threads, "r")
+	for _, id := range []string{"p", "m"} {
+		if got, _ := threadOf(threads, id); got != root {
+			t.Errorf("%s is in thread %q, want the root's %q (the first and the last ids are kept)", id, got, root)
+		}
+	}
+	if got, _ := threadOf(threads, "q"); got == root {
+		t.Error("q, named only in the dropped middle of the header, was still linked into the conversation")
+	}
+}
+
+// Ordinary mail, far below the cap, threads exactly as before.
+func TestBuildKeepsEveryReferenceWithinTheCap(t *testing.T) {
+	t.Parallel()
+	threads := Build(referenceCapMessages(10))
+	assertPartition(t, threads, []string{"r", "q", "p", "m"})
+	root, _ := threadOf(threads, "r")
+	if got, _ := threadOf(threads, "q"); got != root {
+		t.Errorf("q is in thread %q, want the root's %q: every id within the cap is honoured", got, root)
+	}
+}
+
+// The boundary itself: the first id plus exactly MaxReferences more is kept whole.
+func TestBuildKeepsTheCapBoundaryExactly(t *testing.T) {
+	t.Parallel()
+	// <r> <q> <junk x (MaxReferences-2)> <p> is MaxReferences+1 ids: all honoured.
+	threads := Build(referenceCapMessages(MaxReferences - 2))
+	root, _ := threadOf(threads, "r")
+	if got, _ := threadOf(threads, "q"); got != root {
+		t.Errorf("q dropped at %d ids; the first id plus %d more must all be honoured", MaxReferences+1, MaxReferences)
+	}
+	// One more id pushes q (second) out of the last MaxReferences.
+	threads = Build(referenceCapMessages(MaxReferences - 1))
+	root, _ = threadOf(threads, "r")
+	if got, _ := threadOf(threads, "q"); got == root {
+		t.Error("q survived with one id over the cap")
+	}
+}
+
+// scanMessageIDs replaces a regexp scan that cost ~75 ms per 1.4 MB header
+// (N13): it must find exactly the ids the regexp did, on any input.
+func TestScanMessageIDsMatchesTheRegexp(t *testing.T) {
+	t.Parallel()
+	fixed := []string{
+		"", "<a@x>", "<a@x> <b@x>", "<a@x><b@x>", "<>", "<> <a@x>", "<<a@x>", "<a@x>>", "<a <b@x>",
+		"<a@x", "a@x>", "junk <a@x> junk <b@x> junk", "<a@x>\r\n <b@x>", "<><><a@x>", "< >", "<<>>",
+	}
+	for _, s := range fixed {
+		if got, want := scanMessageIDs(s, 1<<30), messageIDRe.FindAllString(s, -1); !slices.Equal(got, want) {
+			t.Errorf("scan(%q) = %q, want %q", s, got, want)
+		}
+	}
+	rng := rand.New(rand.NewSource(13))
+	alphabet := []string{"<", ">", "a", "b@x", " ", "\r\n", "<a@x>", "<"}
+	for i := 0; i < 2000; i++ {
+		var b strings.Builder
+		for n := rng.Intn(30); n > 0; n-- {
+			b.WriteString(alphabet[rng.Intn(len(alphabet))])
+		}
+		s := b.String()
+		if got, want := scanMessageIDs(s, 1<<30), messageIDRe.FindAllString(s, -1); !slices.Equal(got, want) {
+			t.Fatalf("scan(%q) = %q, want %q", s, got, want)
+		}
+	}
+}
+
+// The first id and the last keepLast, in order, whatever the length.
+func TestScanMessageIDsKeepsTheFirstAndTheLast(t *testing.T) {
+	t.Parallel()
+	var b strings.Builder
+	for i := 0; i < 1000; i++ {
+		b.WriteString("<" + strconv.Itoa(i) + "@x> ")
+	}
+	got := scanMessageIDs(b.String(), 3)
+	if want := []string{"<0@x>", "<997@x>", "<998@x>", "<999@x>"}; !slices.Equal(got, want) {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if got := scanMessageIDs("<a@x> <b@x> <c@x>", 3); len(got) != 3 {
+		t.Errorf("a header at the cap lost ids: %q", got)
+	}
+}
+
+// What makes it safe against a 1 MiB header is that the work and the memory do
+// not grow with the number of ids: asserted on allocations, which do not flake
+// the way a timing would.
+func TestScanMessageIDsDoesNotMaterialiseEveryID(t *testing.T) {
+	var b strings.Builder
+	for i := 0; i < 200_000; i++ {
+		b.WriteString("<" + strconv.Itoa(i) + "@x>")
+	}
+	header := b.String()
+	if allocs := testing.AllocsPerRun(3, func() { _ = scanMessageIDs(header, MaxReferences) }); allocs > 5 {
+		t.Errorf("scanning 200k ids made %.0f allocations, want a handful independent of the count", allocs)
 	}
 }

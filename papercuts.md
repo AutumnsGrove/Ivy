@@ -624,3 +624,23 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   "on Jan 2" form, used after 24 hours, takes the date in the server's zone, and the whole note is
   English only. Send `lastSyncAt` as an instant and format the note in the browser when the
   settings and health screens are designed (the health screen already needs a design pass).
+
+## N13 resolved: bounded References
+
+- **#55 (resolves N13)** · `4e103a3` · `thread/thread.go` · **risk (performance)** · `References` was
+  parsed without a cap: a header can be 1 MiB (about 250k ids) and `Build` ran over the whole account
+  after every fetch. N13 measured it as linear in the ids and guessed the graph work was the cost.
+  **That diagnosis was wrong.** A first fix that only capped the parsed ids (first id plus the last
+  128) barely moved the number (51 messages x 200k ids: 4.2 s to 3.8 s), because the time was the
+  regexp scanning the 1.4 MB header, about 75 ms per message, before any cap applied. The real fix
+  is `scanMessageIDs`, one linear pass that keeps the first id and a ring of the last
+  `MaxReferences` (128), so memory does not grow with the header. Same probe afterwards: 148 ms
+  (28x), and 10k ids 193 ms to 7 ms. Tests: `TestScanMessageIDsMatchesTheRegexp` (fixed awkward
+  inputs plus 2000 random ones: it finds exactly the ids the regexp did),
+  `TestScanMessageIDsDoesNotMaterialiseEveryID` (a handful of allocations for 200k ids; asserted on
+  allocations because a timing would flake), and three `Build` tests: an unrelated real message named
+  only in the dropped middle of a long header no longer links into the conversation, ordinary mail
+  below the cap threads as before, and the boundary (first id plus exactly 128 more) is kept whole.
+  The row is in the `STANDARDS.md` 4a limits table. Laptop numbers only; the potato is slower, so
+  the ratio is the claim, not the milliseconds. The choice (first plus last 128) was the recommendation
+  in N13, taken as the default when the work was started.

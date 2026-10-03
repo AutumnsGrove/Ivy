@@ -194,6 +194,7 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Multipart nesting (`mime.MaxMultipartDepth`) | 16 | body not parsed, headers kept, error recorded |
 | Parts per message (`mime.MaxParts`) | 1000 | body not parsed, headers kept, error recorded |
 | Non-fatal parse errors kept per message | 20 | dropped after the 20th |
+| Ids honoured in a `References` header (`thread.MaxReferences`) | first + last 128 | the middle of a longer chain is ignored; scanned in one linear pass without storing it |
 | Inbox page (`maxInboxLimit`) | 200 | clamped |
 | Account display name / icon | 120 / 16 runes | rejected with 400 |
 | Account photo upload (`maxAccountPhotoBytes`) | 5 MiB | rejected with 413; only a sniffed JPEG/PNG/GIF/WebP is kept, SVG is refused |

@@ -27,6 +27,12 @@ var messageIDRe = regexp.MustCompile(`<[^<>]+>`)
 // a different subject, and grouping it here would merge unrelated mail.
 var replyPrefixRe = regexp.MustCompile(`(?i)^[ \t]*re[ \t]*(\[[0-9]+\])?[ \t]*:[ \t]*`)
 
+// MaxReferences is how many of a References header's ids are honoured besides
+// the first: the last MaxReferences, the message's nearest ancestors. Real
+// conversations rarely run past a few dozen; a header can be 1 MiB (about 250k
+// ids), and every rethread pays for each id (N13 in papercuts.md).
+const MaxReferences = 128
+
 // Message is one message offered to the algorithm. ID is opaque and only used
 // to name the message in the output; Key is the stable identity (the content
 // key) that becomes the thread's id. MessageID, References and InReplyTo are the
@@ -176,11 +182,69 @@ func Build(messages []Message) []Thread {
 // Appending only when absent avoids re-parenting a message to an ancestor that
 // a broken sender left in both headers.
 func referenceIDs(m *Message) []string {
-	refs := parseMessageIDs(m.References)
+	refs := scanMessageIDs(m.References, MaxReferences)
 	if in := parseMessageIDs(m.InReplyTo); len(in) > 0 && !slices.Contains(refs, in[0]) {
 		refs = append(refs, in[0])
 	}
 	return refs
+}
+
+// scanMessageIDs returns the angle-bracketed ids of a header, exactly as
+// messageIDRe would find them, but keeping only the first (the conversation's
+// root, which a reply's References always starts with) and the last keepLast
+// (its nearest ancestors, which decide where it hangs). An over-long chain loses
+// its middle.
+//
+// It exists because the regexp scan cost about 75 ms on a 1.4 MB header, paid
+// per message on every rethread, and capping the result afterwards saved
+// nothing: measured, 51 such messages took 3.8 s with the cap and 4.2 s without.
+// This is one linear pass that holds the first id and a ring of the last
+// keepLast, so its memory does not grow with the header.
+func scanMessageIDs(s string, keepLast int) []string {
+	var (
+		first    string
+		haveLast bool
+		ring     = make([]string, 0, min(keepLast, MaxReferences)) // sized by the usual cap, never by the argument
+		next     int // ring slot to overwrite once it is full
+	)
+	for i := 0; i < len(s); {
+		start := strings.IndexByte(s[i:], '<')
+		if start < 0 {
+			break
+		}
+		start += i
+		end := strings.IndexAny(s[start+1:], "<>")
+		if end < 0 {
+			break
+		}
+		end += start + 1
+		switch {
+		case s[end] == '<':
+			i = end // an unclosed '<': the id, if any, starts at the later one
+			continue
+		case end == start+1:
+			i = end + 1 // "<>" is not an id
+			continue
+		}
+		id := s[start : end+1]
+		i = end + 1
+		switch {
+		case !haveLast:
+			first, haveLast = id, true
+		case len(ring) < keepLast:
+			ring = append(ring, id)
+		default:
+			ring[next] = id
+			next = (next + 1) % keepLast
+		}
+	}
+	if !haveLast {
+		return nil
+	}
+	out := make([]string, 0, 1+len(ring))
+	out = append(out, first)
+	out = append(out, ring[next:]...)
+	return append(out, ring[:next]...)
 }
 
 func parseMessageIDs(s string) []string {
