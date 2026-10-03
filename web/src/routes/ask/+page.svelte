@@ -37,6 +37,7 @@
 </script>
 
 <Page>
+	<h1 class="sr-only">Ask Ivy</h1>
 	<div class="top"><SearchSwitch current="ask" /></div>
 
 	<div class="scope">

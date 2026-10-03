@@ -27,6 +27,7 @@
 </script>
 
 <Page>
+	<h1 class="sr-only">Search</h1>
 	<div class="top"><SearchSwitch current="search" /></div>
 
 	<form class="field" onsubmit={submit} role="search">

@@ -77,6 +77,7 @@ compiled output plus fonts and icons, about 100 KB gzip for every route together
 | `cookie` | Kit's own runtime dependency; declared directly so the built server chunk resolves the right copy under pnpm's strict layout |
 | `vitest`, `jsdom`, `@testing-library/svelte`, `@testing-library/jest-dom` | Unit and component tests |
 | `@playwright/test` | E2E on WebKit (iPhone) and Chromium (desktop) |
+| `@axe-core/playwright` | Accessibility assertions in E2E (STANDARDS.md 5); the shell landmarks the pass required were added in 2g |
 
 Frontend dependency policy: the runtime dependency list should stay near-empty (Svelte plus icons).
 Anything else is justified here with its compressed size.

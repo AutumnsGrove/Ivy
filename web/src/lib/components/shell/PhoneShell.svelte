@@ -9,7 +9,7 @@
 </script>
 
 <div class="phone" class:tabs>
-	<div class="screen">{@render children()}</div>
+	<main class="screen">{@render children()}</main>
 	{#if tabs}
 		<div class="dock"><TabBar {current} /></div>
 	{/if}

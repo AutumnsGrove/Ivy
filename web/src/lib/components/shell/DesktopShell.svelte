@@ -9,7 +9,7 @@
 
 <div class="desk">
 	<Glass radius="panel" class="rail-wrap"><Rail {current} /></Glass>
-	<div class="main">{@render children()}</div>
+	<main class="main">{@render children()}</main>
 </div>
 
 <style>
