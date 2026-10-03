@@ -181,7 +181,7 @@ over random reference graphs, a JSON fixture corpus, a 20k-reference hostile cha
 95 ms -> 8 ms) so a long References header stays linear. `make check` is green.
 
 **2f — gateway read handlers on the real store (Go): DONE (2026-10-02, commits
-`fe20330`..`7e7c468`).** The five contract endpoints now answer from the mirror in the generated
+`fe20330`..`56a5aba`).** The five contract endpoints now answer from the mirror in the generated
 `api` types: `/accounts` (with per-account unread and derived sync state), `/inbox` (keyset paging
 and whole-view counts), `/messages/{id}`, `/messages/{id}/summary` and `/mirror/health`. `store`
 gained `AccountStats`, `MessageNeeds` and `MirrorBytes`; `mime` gained `ListParts` (a bounded,
@@ -193,9 +193,16 @@ re-parsed. Inline and attachment parts stream from `raw_blob` or the spool file 
 `mime.CopyPart`, rewind-and-copy, never held in memory. Unknown `/api` paths and wrong methods now
 answer the JSON error envelope (N6 resolved) via a rewriter that touches only the mux's plain-text
 404/405. Tests: `httptest` against seeded real SQLite (both blob and spool part serving, the
-too-large body, the JSON 404/405, the CSP header), formatting unit tables, and a 10k-message inbox
+too-large body, the JSON 404/405, the CSP header, a bad cursor as a 400), formatting unit tables, and a 10k-message inbox
 benchmark. `make check` is green; the inbox list is ~15 ms/op at 10k messages (the whole-view
 counts dominate), a documented follow-up.
+
+Deferred within 2f (with reasons): attachment metadata is listed from the raw message on each read
+(the `attachments` table is still unpopulated) — caching it is a later optimisation; the whole-view
+inbox counts scan the account's inbox on every page (~15 ms/op at 10k) — the same follow-up; the
+body document carries a minimal inline stylesheet, and the reader's real theming arrives with 2g;
+the `body`/`inline`/`attachments` endpoints serve HTML/bytes, so they are intentionally not in
+`openapi.yaml`.
 
 **2d finding, resolved in 2f, browser assertion to 2g:** a `<meta>` Content-Security-Policy inside a
 `srcdoc` iframe is enforced by WebKit but **ignored by Chromium**, and WebKit does not report
