@@ -6,8 +6,8 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 it in the same stage as the work**, so the next session can resume after a context clear.
 
 last updated: 2026-10-03 (round 32, cleanup phase). Chunks 0, 1 and 2a-2f are done; 2g is nearly
-done. Baseline at this date: `make check` green (Go `-race` with cgo, golangci-lint, drift,
-svelte-check, 132 Vitest), Playwright 150 passed / 8 viewport-conditional skips.
+done. Baseline at this date: svelte-check and Vitest (169) green, Playwright 158 passed / 8
+viewport-conditional skips (`make check` not re-run since the Go side was untouched).
 
 ## How to run a chunk
 
@@ -80,7 +80,11 @@ Next up is the remaining 2g work below.
    remote images, digest time, reply-as, strip location, junk rescue and spam score are real
    controls (`Select` is a native `<select>`). The mock lives in the client, not at the network
    boundary, so there is no `e2e/api.ts` fake. The Go side adopts these in chunks 3-5.
-2. Photo downscale in the browser (square, ~512 px JPEG) before upload; pure helper, Vitest first.
+2. ~~Photo downscale~~ **done**: `lib/photo.ts` crops the centre square and resizes to at most 512
+   px in the browser (JPEG for photos, PNG for sources that can carry transparency), with
+   `createImageBitmap` so Safari decodes HEIC and EXIF rotation is applied; an undecodable file
+   says so and uploads nothing. The server's 5 MiB limit and sniff are the backstop. The old 1x1
+   E2E fixture was not a valid PNG (WebKit tolerated it, Chromium did not), so it was replaced.
 3. Stats panel design: a canvas board (summary and call log) shown to the operator first.
 4. Stats panel build: `/settings/spend` and `/settings/spend/calls`, mock-backed, `?scenario=`
    edge states, `e2e/routes.ts`, axe.
@@ -121,9 +125,6 @@ Found by the round 32 audit; each needs a home before its milestone starts.
   renderer already counts `RemoteBlocked`) and a re-render, which ties to `derived_version`.
 - **Disabled-message restore UI and the mass-disable alert** (`ARCHITECTURE.md` 4): backend in
   chunk 3, screens to be designed.
-- **Account photo size and format**: the 5 MiB limit will reject some iPhone photos and HEIC is
-  refused. Decide on client-side downscale to a small square before upload (design call, with the
-  settings work).
 - **Security/abuse and contact-form mail types** (first-class, `PLAN.md` 3): chunk 5.
 
 ### Frontend

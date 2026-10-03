@@ -11,6 +11,7 @@
 	import Group from '#lib/components/ui/Group.svelte';
 	import ListRow from '#lib/components/ui/ListRow.svelte';
 	import TopBar from '#lib/components/ui/TopBar.svelte';
+	import { PhotoError, squarePhoto } from '#lib/photo.js';
 	import { toasts } from '#lib/toast.js';
 
 	let { data } = $props();
@@ -34,7 +35,7 @@
 	);
 
 	const report = (e: unknown, fallback: string) =>
-		toasts.push({ text: e instanceof ApiError ? e.message : fallback, tone: 'danger' });
+		toasts.push({ text: e instanceof ApiError || e instanceof PhotoError ? e.message : fallback, tone: 'danger' });
 
 	async function save() {
 		busy = true;
@@ -56,7 +57,7 @@
 		if (!file) return;
 		busy = true;
 		try {
-			await api.setAccountPhoto(data.account.id, file);
+			await api.setAccountPhoto(data.account.id, await squarePhoto(file));
 			photoNonce++;
 			toasts.push({ text: 'Photo updated', tone: 'ok' });
 			await invalidateAll();
@@ -119,14 +120,14 @@
 		</Glass>
 	</Group>
 
-	<Group label="Photo" note="PNG, JPEG, GIF or WebP, up to 5 MB.">
+	<Group label="Photo" note="Any photo; it is cropped to a square and made small.">
 		<ListRow tall>
 			<span>Photo</span>
 			{#snippet trailing()}
 				<div class="photoacts">
 					<label class="pick">
 						<span class="sr-only">Choose a photo</span>
-						<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange={choosePhoto} />
+						<input type="file" accept="image/*" onchange={choosePhoto} />
 						<span class="pickbtn">Choose</span>
 					</label>
 					{#if data.account.photo}
