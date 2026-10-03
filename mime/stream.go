@@ -44,13 +44,18 @@ var (
 	ErrHeaderTooLarge = errors.New("mime: header block too large")
 )
 
-// PartInfo describes a part whose body was left on disk.
+// PartInfo describes one leaf part of a message: a part left on disk by the
+// skeleton pass, or any part enumerated by ListParts and served by CopyPart.
 type PartInfo struct {
 	Path        string // 1-based position at each level, e.g. "2.1"
 	Filename    string
 	ContentType string
-	Size        int64 // bytes as stored in the message (still transfer-encoded)
-	Attachment  bool  // a file, as opposed to a very large inline text body
+	Size        int64 // decoded bytes for ListParts; stored bytes for a skeleton part
+	Attachment  bool  // a file, as opposed to the message body
+	// CID is the Content-ID without angle brackets; the reader serves it from
+	// the inline endpoint. Inline is a cid: part rather than a file.
+	CID    string
+	Inline bool
 }
 
 // Skeleton is a message with every body that is too big to keep removed, in a
