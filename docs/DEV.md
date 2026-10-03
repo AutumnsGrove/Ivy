@@ -97,9 +97,9 @@ badge), reply as B, and watch the thread join up across accounts.
 - Mailworld models whether the provider files a copy in Sent itself or expects the client to
   APPEND (`SentCopy: auto|client`), so both behaviours are testable once spike S1 settles which one
   Purelymail does.
-- This is also a standing integration/E2E test from Milestone 4: A sends to B, B receives, B
+- This is also a standing integration/E2E test from Milestone 3: A sends to B, B receives, B
   replies, threading, Sent copies, undo-send, Reply-To handling, send-as per address.
-- Compose isn't built until Milestone 4, but the pair and local delivery are part of Milestone 0 so
+- Compose isn't built until Milestone 3, but the pair and local delivery are part of Milestone 0 so
   `ivy-dev deliver`/the fake SMTP can already exercise cross-account mail.
 
 ## 6. Safety rails

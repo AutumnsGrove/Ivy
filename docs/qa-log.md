@@ -726,3 +726,17 @@ interpret this header until the operator configures which `authserv-id` is trust
   `docs/ARCHITECTURE.md` section 5 and `next_steps.md`.
 
 Recorded in `docs/ARCHITECTURE.md` section 5, `papercuts.md` (N9 resolved) and `next_steps.md`.
+
+## Build order changed: send before triage (2026-10-03, operator)
+
+Asked how long until Ivy is usable, the answer was that the sync and send milestones, not triage,
+decide when it can replace Apple Mail. **Settled (operator):** the order is now
+**read -> sync -> send -> triage**. This supersedes the early "Build order" line ("Read -> sync ->
+triage -> send") near the top of this log.
+
+- Send is **Milestone 3 / chunk 4**; triage is **Milestone 4 / chunk 5**. Sync stays Milestone 2 /
+  chunk 3, and send still depends on it (outbox, Sent `APPEND`).
+- Send needs no LLM gate, so nothing in it waits for triage. The gate, the cost ledger and the
+  stats panel move with triage.
+- Renumbered references in `docs/PLAN.md` (milestones and risk table), `docs/JEV.md`,
+  `docs/DEV.md`, `next_steps.md` and `papercuts.md`. No Go or web code names these chunks.
