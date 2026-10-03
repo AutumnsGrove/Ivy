@@ -4,8 +4,10 @@ package gateway
 import (
 	"encoding/json"
 	"io/fs"
+	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/AutumnsGrove/Ivy/internal/asset"
@@ -22,6 +24,18 @@ type Server struct {
 	// now is the clock the read views render times against; injected so a test
 	// can pin "today".
 	now func() time.Time
+	// allowedHosts are the names, besides loopback, the API answers to.
+	allowedHosts map[string]bool
+}
+
+// WithAllowedHosts sets the host names the API answers to besides loopback
+// (config allowed_hosts and the listen host). Without it only loopback works.
+func (s *Server) WithAllowedHosts(hosts []string) *Server {
+	s.allowedHosts = make(map[string]bool, len(hosts))
+	for _, h := range hosts {
+		s.allowedHosts[normalizeHost(h)] = true
+	}
+	return s
 }
 
 // New builds a Server. version is the human build identifier reported by the
@@ -61,7 +75,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/mirror/health", s.handleMirrorHealth)
 
 	root := http.NewServeMux()
-	root.Handle("/api/", noStore(apiCSP(compress.Middleware(originGuard(jsonErrors(api))))))
+	root.Handle("/api/", s.hostGuard(noStore(apiCSP(compress.Middleware(originGuard(jsonErrors(api)))))))
 	if s.static != nil {
 		root.Handle("/", asset.FileServer(s.static))
 	} else {
@@ -103,6 +117,44 @@ func noStore(next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// hostGuard answers only to loopback and the configured host names. The Origin
+// check below compares Origin to Host, and in a DNS-rebinding attack both are
+// the attacker's own name, so a rebound page passes it and could read and write
+// the whole API. Pinning Host to names the operator listed closes that, for
+// reads as well as writes (N11 in papercuts.md). A missing Host never matches.
+func (s *Server) hostGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := hostOnly(r.Host)
+		if host == "" || (!isLoopbackHost(host) && !s.allowedHosts[host]) {
+			writeError(w, http.StatusForbidden, "forbidden", "This address is not allowed to reach Ivy")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// hostOnly lower-cases a Host header and drops its port and any trailing dot.
+func hostOnly(hostport string) string {
+	host := hostport
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		host = h
+	}
+	return normalizeHost(strings.Trim(host, "[]"))
+}
+
+func normalizeHost(h string) string {
+	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(h)), ".")
+}
+
+// isLoopbackHost is exact: "localhost" and loopback IPs, not "x.localhost".
+func isLoopbackHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // originGuard rejects a browser cross-site write. With no auth, a mutating

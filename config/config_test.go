@@ -210,3 +210,45 @@ func TestAccountIDsCollidingOnPasswordEnvRejected(t *testing.T) {
 		t.Fatal("expected error for ids sharing a password variable")
 	}
 }
+
+func TestAllowedHostsLoadedAndListenHostAdded(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "ivy.yaml")
+	write(t, path, "listen: 100.64.0.7:8787\nallowed_hosts:\n  - Ivy.tail1234.ts.net\n  - \"::1\"\n")
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	got := cfg.HostAllowList()
+	want := []string{"ivy.tail1234.ts.net", "::1", "100.64.0.7"}
+	if len(got) != len(want) {
+		t.Fatalf("HostAllowList = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("HostAllowList[%d] = %q, want %q (all: %v)", i, got[i], want[i], got)
+		}
+	}
+}
+
+// A wildcard listen address names no host, so it must not add one: the operator
+// lists the names the phone really uses.
+func TestWildcardListenAddsNoAllowedHost(t *testing.T) {
+	t.Parallel()
+	for _, listen := range []string{"0.0.0.0:8787", "[::]:8787"} {
+		cfg := &Config{Listen: listen, DataDir: "d"}
+		if got := cfg.HostAllowList(); len(got) != 0 {
+			t.Errorf("listen %q: HostAllowList = %v, want none", listen, got)
+		}
+	}
+}
+
+func TestInvalidAllowedHostsRejected(t *testing.T) {
+	t.Parallel()
+	for _, bad := range []string{"http://ivy.ts.net", "ivy.ts.net:8787", "*.ts.net", "a/b", "", "has space"} {
+		cfg := &Config{Listen: DefaultListen, DataDir: "d", AllowedHosts: []string{bad}}
+		if err := cfg.validate(); err == nil {
+			t.Errorf("allowed_hosts entry %q accepted, want an error", bad)
+		}
+	}
+}

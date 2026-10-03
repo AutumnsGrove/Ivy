@@ -6,9 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -53,6 +56,7 @@ func initCmd(configPath *string) *cobra.Command {
 			}
 			defer dbs.Close()
 			fmt.Fprintf(cmd.OutOrStdout(), "initialised %s\n", cfg.DataDir)
+			reportHosts(cmd.OutOrStdout(), cfg)
 			return nil
 		},
 	}
@@ -78,7 +82,7 @@ func runCmd(configPath *string, version string) *cobra.Command {
 			// header and idle timeouts still shed slow-loris connections.
 			srv := &http.Server{
 				Addr:              cfg.Listen,
-				Handler:           gateway.New(dbs, version, webui.FS).Handler(),
+				Handler:           gateway.New(dbs, version, webui.FS).WithAllowedHosts(cfg.HostAllowList()).Handler(),
 				ReadHeaderTimeout: 10 * time.Second,
 				IdleTimeout:       2 * time.Minute,
 			}
@@ -129,7 +133,36 @@ func doctorCmd(configPath *string, version string) *cobra.Command {
 			fmt.Fprintf(out, "data dir: %s\n", cfg.DataDir)
 			fmt.Fprintf(out, "accounts: %d\n", len(cfg.Accounts))
 			fmt.Fprintf(out, "store:    ok\n")
+			reportHosts(out, cfg)
 			return nil
 		},
 	}
+}
+
+// reportHosts says which host names the API answers to (loopback always, then
+// allowed_hosts and the listen host) and, when Ivy listens on a network address
+// but no name is configured, how to let the phone's own name in. `ivy init`
+// writes no config file, so this is guidance rather than a prompt.
+func reportHosts(out io.Writer, cfg *config.Config) {
+	allowed := cfg.HostAllowList()
+	fmt.Fprintf(out, "allowed hosts: loopback%s\n", joinWithComma(allowed))
+	if len(cfg.AllowedHosts) > 0 {
+		return
+	}
+	if host, _, err := net.SplitHostPort(cfg.Listen); err == nil {
+		if ip := net.ParseIP(host); host != "localhost" && (ip == nil || !ip.IsLoopback()) {
+			fmt.Fprintf(out, "note: Ivy listens on %s but allowed_hosts is empty, so a browser using any other\n"+
+				"name (such as your Tailscale name) is refused. set allowed_hosts in ivy.yaml, e.g.\n"+
+				"  allowed_hosts:\n    - ivy.your-tailnet.ts.net\n", cfg.Listen)
+		}
+	}
+}
+
+func joinWithComma(hosts []string) string {
+	var b strings.Builder
+	for _, h := range hosts {
+		b.WriteString(", ")
+		b.WriteString(h)
+	}
+	return b.String()
 }

@@ -273,6 +273,12 @@ Details and budgets live in `PERFORMANCE.md`. The standards:
   `0.0.0.0` unless asked). Frictionless means no login screen, not no safeguards: reject requests whose `Host` is not
   on the allow-list and mutating requests whose `Origin` does not match (blocks DNS rebinding and
   drive-by CSRF from other sites open in the same browser). Both are tested in dev and prod modes.
+  **The Host allow-list is the `allowed_hosts` config key** (bare names or IPs, no port): every API
+  request whose `Host` is not loopback, in `allowed_hosts` or the listen host is answered `403
+  forbidden`, reads included. The Origin check alone is not enough, because in a rebinding attack
+  `Origin` and `Host` are both the attacker's name. `ivy init` and `ivy doctor` print the effective
+  list and say how to add the Tailscale name; the static build is not guarded (it is public and a
+  rebound page's API calls are refused).
 - Auth is a seam, not a rewrite: a single middleware slot where passkeys or a token can be added
   later without touching handlers.
 

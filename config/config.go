@@ -26,9 +26,51 @@ const (
 // Config is the non-secret file configuration. Behavior settings live in the
 // in-app panel and state.db; only bootstrap and secrets live here.
 type Config struct {
-	Listen   string    `yaml:"listen"`
-	DataDir  string    `yaml:"data_dir"`
-	Accounts []Account `yaml:"accounts"`
+	Listen  string `yaml:"listen"`
+	DataDir string `yaml:"data_dir"`
+	// AllowedHosts are the names (no port, no scheme) a browser may use to reach
+	// the API, besides loopback and the listen address. A request whose Host is
+	// not one of them is refused, which closes DNS rebinding (N11 in
+	// papercuts.md): add the Tailscale name the phone uses.
+	AllowedHosts []string  `yaml:"allowed_hosts"`
+	Accounts     []Account `yaml:"accounts"`
+}
+
+// HostAllowList returns the lower-cased names the API answers to besides
+// loopback: the configured allowed_hosts and the host of the listen address.
+// A wildcard listen address names no host, so it adds nothing.
+func (c *Config) HostAllowList() []string {
+	out := make([]string, 0, len(c.AllowedHosts)+1)
+	for _, h := range c.AllowedHosts {
+		out = append(out, normalizeHost(h))
+	}
+	if host, _, err := net.SplitHostPort(c.Listen); err == nil && host != "" {
+		if ip := net.ParseIP(host); ip == nil || !ip.IsUnspecified() {
+			out = append(out, normalizeHost(host))
+		}
+	}
+	return out
+}
+
+func normalizeHost(h string) string {
+	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(h)), ".")
+}
+
+// validAllowedHost accepts a bare host name or IP. A port, a scheme, a path or a
+// wildcard would never match what the check compares, so each is an error that
+// says what to write instead of a silent no-op.
+func validAllowedHost(h string) error {
+	h = strings.TrimSpace(h)
+	switch {
+	case h == "":
+		return errors.New("is empty")
+	case strings.ContainsAny(h, "/* \t"):
+		return errors.New("must be a bare host name or IP (no scheme, path, wildcard or spaces)")
+	}
+	if _, _, err := net.SplitHostPort(h); err == nil {
+		return errors.New("must not include a port")
+	}
+	return nil
 }
 
 // Account is one configured mailbox. Password is never serialised.
@@ -118,6 +160,11 @@ func (c *Config) validate() error {
 	}
 	if c.DataDir == "" {
 		return errors.New("data_dir is empty")
+	}
+	for i, h := range c.AllowedHosts {
+		if err := validAllowedHost(h); err != nil {
+			return fmt.Errorf("allowed_hosts[%d] %q: %w", i, h, err)
+		}
 	}
 
 	seen := make(map[string]bool)

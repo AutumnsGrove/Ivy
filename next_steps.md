@@ -55,8 +55,8 @@ or image-publish workflow yet.
 
 1. ~~Move account name/icon/photo to `state.db`~~ **done**: `account_profiles` (state migration 2),
    a once-only copy from the old mirror columns on `Open`, the mirror columns now unused.
-2. N11: `allowed_hosts` config key checked on every API request (default loopback plus the listen
-   address; `ivy init` prompts for the Tailscale name).
+2. ~~N11: `allowed_hosts`~~ **done** (#49): checked on every API request; loopback plus the listen
+   host are always allowed. `ivy init` writes no config, so it prints guidance instead of prompting.
 3. N10/N14: `derived_version` column set last in the same transaction as the derived data, plus a
    bounded re-derive pass for rows behind the current version.
 4. N12: sticky oldest-wins thread ids in `ReplaceThreads`.

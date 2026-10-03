@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -247,4 +248,59 @@ func TestOriginGuard(t *testing.T) {
 		t.Fatalf("cross-site GET = %d, want 200", resp.StatusCode)
 	}
 	_ = json.NewDecoder(resp.Body).Decode(&accounts)
+}
+
+// A browser sends the Host it was pointed at, so a DNS-rebinding page has an
+// attacker-chosen name there even though it is "same-origin" with the Origin
+// header. Only loopback and the configured names may reach the API.
+func TestAPIRejectsUnknownHosts(t *testing.T) {
+	t.Parallel()
+	dbs, err := store.Open(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = dbs.Close() })
+	handler := New(dbs, "test", testStaticFS()).WithAllowedHosts([]string{"ivy.tail1234.ts.net", "100.64.0.7"}).Handler()
+
+	cases := []struct {
+		host string
+		want int
+	}{
+		{"127.0.0.1:8787", http.StatusOK},
+		{"localhost:8787", http.StatusOK},
+		{"[::1]:8787", http.StatusOK},
+		{"ivy.tail1234.ts.net", http.StatusOK},
+		{"IVY.tail1234.ts.net:8787", http.StatusOK},
+		{"ivy.tail1234.ts.net.:8787", http.StatusOK},
+		{"100.64.0.7:8787", http.StatusOK},
+		{"evil.example", http.StatusForbidden},
+		{"evil.example:8787", http.StatusForbidden},
+		{"127.0.0.1.evil.example", http.StatusForbidden},
+		{"ivy.tail1234.ts.net.evil.example", http.StatusForbidden},
+		{"sub.localhost", http.StatusForbidden},
+		{"100.64.0.8", http.StatusForbidden},
+		{"", http.StatusForbidden},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/version", nil)
+		req.Host = tc.host
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != tc.want {
+			t.Errorf("Host %q: status = %d, want %d", tc.host, rec.Code, tc.want)
+		}
+		if tc.want == http.StatusForbidden && !strings.Contains(rec.Body.String(), `"forbidden"`) {
+			t.Errorf("Host %q: body = %q, want the forbidden envelope", tc.host, rec.Body.String())
+		}
+	}
+
+	// The static build is public and carries nothing of the operator's, and a
+	// rebound page's API calls are refused above, so the shell is not guarded.
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "evil.example"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("static shell with a foreign Host: status = %d, want 200", rec.Code)
+	}
 }

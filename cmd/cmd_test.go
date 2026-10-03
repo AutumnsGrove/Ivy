@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -104,4 +106,90 @@ func waitForHealth(t *testing.T, url string) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("%s never became healthy", url)
+}
+
+// The real server, not just the handler: allowed_hosts must reach the gateway
+// the run command builds, or the rebinding guard is dead code.
+func TestRunRefusesAForeignHostUnlessAllowed(t *testing.T) {
+	t.Parallel()
+	addr := freeAddr(t)
+	dir := t.TempDir()
+	configPath := writeConfig(t, dir,
+		"listen: "+addr+"\ndata_dir: "+dir+"\nallowed_hosts:\n  - ivy.tail1234.ts.net\n")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	root := New("test")
+	root.SetArgs([]string{"--config", configPath, "run"})
+	root.SetOut(os.Stderr)
+	root.SetErr(os.Stderr)
+	done := make(chan error, 1)
+	go func() { done <- root.ExecuteContext(ctx) }()
+	waitForHealth(t, "http://"+addr+"/api/v1/health")
+
+	for host, want := range map[string]int{
+		"evil.example":          http.StatusForbidden,
+		"ivy.tail1234.ts.net":   http.StatusOK,
+		"localhost:12345":       http.StatusOK,
+		"ivy.tail1234.ts.net.x": http.StatusForbidden,
+	} {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+"/api/v1/version", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Host = host
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Errorf("Host %q: status = %d, want %d", host, resp.StatusCode, want)
+		}
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("run did not shut down")
+	}
+}
+
+// The operator needs to see which names the API answers to, and be told what to
+// do when it will be reached over a network name that is not listed.
+func TestInitAndDoctorReportAllowedHosts(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	configPath := writeConfig(t, dir,
+		"listen: 100.64.0.7:8787\ndata_dir: "+dir+"\nallowed_hosts:\n  - ivy.tail1234.ts.net\n")
+	bare := writeConfig(t, t.TempDir(), "listen: 100.64.0.7:8787\ndata_dir: "+dir+"\n")
+
+	for _, name := range []string{"init", "doctor"} {
+		var out bytes.Buffer
+		root := New("test")
+		root.SetArgs([]string{"--config", configPath, name})
+		root.SetOut(&out)
+		if err := root.Execute(); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if !strings.Contains(out.String(), "ivy.tail1234.ts.net") || !strings.Contains(out.String(), "100.64.0.7") {
+			t.Errorf("%s output = %q, want the allowed hosts listed", name, out.String())
+		}
+		if strings.Contains(out.String(), "set allowed_hosts") {
+			t.Errorf("%s output = %q, want no hint when a name is configured", name, out.String())
+		}
+	}
+
+	// A network listen address with no configured name gets the hint.
+	var out bytes.Buffer
+	root := New("test")
+	root.SetArgs([]string{"--config", bare, "init"})
+	root.SetOut(&out)
+	if err := root.Execute(); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if !strings.Contains(out.String(), "set allowed_hosts") {
+		t.Errorf("init output = %q, want a hint to set allowed_hosts", out.String())
+	}
 }

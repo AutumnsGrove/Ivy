@@ -527,3 +527,19 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   timestamp (RFC 3339) in the API and format it in the browser, which knows the viewer's zone and
   locale; if the API must keep pre-rendered strings, add a `timezone` setting and load it into the
   formatter. Not fixed because it changes the `MailSummary`/`MailMessage` contract.
+
+## N11 resolved: the Host allow-list
+
+- **#49 (resolves N11)** · `46be4c0` · `gateway/gateway.go`, `config/config.go`, `cmd/cmd.go` ·
+  **risk (security)** · `STANDARDS.md` section 8 required rejecting requests whose `Host` is not on an
+  allow-list, but nothing enforced it; the Origin guard compares `Origin` to `Host`, and in a
+  DNS-rebinding attack both are the attacker's name, so a rebound page could read and write the
+  whole API. Decided in round 32b. Reproduced by `TestAPIRejectsUnknownHosts` (every foreign Host,
+  including `127.0.0.1.evil.example`, `sub.localhost` and an empty Host, answered 200) and
+  `TestRunRefusesAForeignHostUnlessAllowed` against the real `ivy run`. Fixed: a `hostGuard` on
+  every `/api/` request admits exact loopback names, the config's new `allowed_hosts` (validated as
+  bare names or IPs, so a port or wildcard fails loudly) and the listen host (a wildcard listen adds
+  none); everything else is `403 forbidden`. `ivy init` and `ivy doctor` print the effective list and
+  a hint when a network listen address has no configured name. `ivy init` writes no config file, so
+  the "prompt for the Tailscale name" in the decision became that guidance. The static shell is not
+  guarded by design (tested).

@@ -181,7 +181,7 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
 
 	srv := &http.Server{
 		Addr:              stack.Config.Listen,
-		Handler:           gateway.New(dbs, version, webui.FS).Handler(),
+		Handler:           gateway.New(dbs, version, webui.FS).WithAllowedHosts(stack.Config.HostAllowList()).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}
