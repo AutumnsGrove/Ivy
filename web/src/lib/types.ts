@@ -57,3 +57,48 @@ export type Settings = {
 	junkRescue: boolean;
 	spamScore: boolean;
 };
+
+// --- Spend and calls (the LLM ledger). Hand-written until chunk 5 puts the real ledger in the contract.
+// Costs are integer micro-dollars so a sum is exact; the ledger promises the provider's own figure.
+
+export type SpendPeriod = 'today' | '7d' | '30d' | 'all';
+export type CallFeature = 'embed' | 'needs' | 'vision' | 'categories' | 'digest' | 'ask';
+/** acted: changed something; quiet: ran, nothing to say; held: never sent (a gate stopped it); error: the provider failed. */
+export type CallOutcome = 'acted' | 'quiet' | 'held' | 'error';
+export type HeldReason = 'smart-off' | 'cap' | 'withheld';
+
+export type CallRecord = {
+	id: string;
+	/** RFC 3339 instant. */
+	at: string;
+	feature: CallFeature;
+	accountId: string;
+	model: string;
+	outcome: CallOutcome;
+	/** Set only when outcome is `held`. */
+	reason?: HeldReason;
+	costMicros: number;
+	tokens: number;
+	latencyMs: number;
+	/** The Jev answer, when the call was a Jev question. */
+	probabilities?: { label: string; p: number }[];
+};
+
+export type SpendRow = { key: string; label: string; calls: number; micros: number };
+export type SpendAccountRow = SpendRow & { address: string; smart: boolean };
+
+export type SpendSummary = {
+	period: SpendPeriod;
+	totalMicros: number;
+	/** Calls actually sent; held calls are counted under `held`. */
+	calls: number;
+	/** The current calendar month, whatever the period shown. */
+	monthMicros: number;
+	capMicros: number;
+	byFeature: SpendRow[];
+	byAccount: SpendAccountRow[];
+	byModel: SpendRow[];
+	held: { smartOff: number; capReached: number; withheld: number };
+};
+
+export type CallPage = { items: CallRecord[]; nextCursor: string | null };

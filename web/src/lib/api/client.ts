@@ -6,6 +6,9 @@
 import type {
 	Account,
 	AskAnswer,
+	CallOutcome,
+	CallPage,
+	CallRecord,
 	Check,
 	CheckDetail,
 	HealthOverview,
@@ -17,8 +20,11 @@ import type {
 	Rule,
 	SearchResults,
 	Settings,
+	SpendPeriod,
+	SpendSummary,
 	TagsOverview
 } from '../types';
+import { pageCalls, summarise } from '../spend';
 import { ApiError, type ErrorCode } from './errors';
 import { apiPath, request } from './http';
 import * as mock from './mock';
@@ -30,6 +36,17 @@ export { ApiError, type ErrorCode };
 type Opts = { scenario?: Scenario | null };
 
 const tick = <T>(value: T): Promise<T> => Promise.resolve(structuredClone(value));
+
+// The monthly cap becomes a setting with the gate (chunk 5); until then it is a fixed $5.
+const MOCK_CAP_MICROS = 5_000_000;
+
+// Built once per set of accounts so the log keeps the same rows (and cursors) while the page lives.
+let ledger: { key: string; rows: CallRecord[] } | null = null;
+async function ledgerFor(accounts: Account[]): Promise<CallRecord[]> {
+	const key = accounts.map((a) => `${a.id}:${a.smart}`).join(',');
+	if (ledger?.key !== key) ledger = { key, rows: mock.makeLedger(accounts, new Date()) };
+	return ledger.rows;
+}
 
 export const api = {
 	// --- reader: answered by the real gateway over the JSON contract ---------
@@ -70,6 +87,24 @@ export const api = {
 	// --- still mock-backed until their chunks land ---------------------------
 	getSettings: (): Promise<Settings> => Promise.resolve(readSettings()),
 	updateSettings: async (patch: Partial<Settings>): Promise<Settings> => patchSettings(patch),
+
+	/** Totals for one period over the call ledger, from the one-row-per-call mock until chunk 5. */
+	async getSpend(period: SpendPeriod, o: Opts = {}): Promise<SpendSummary> {
+		const accounts = await api.listAccounts();
+		if (o.scenario === 'no-spend') {
+			return summarise([], period, new Date(), accounts.map((a) => ({ ...a, smart: false })), MOCK_CAP_MICROS);
+		}
+		const s = summarise(await ledgerFor(accounts), period, new Date(), accounts, MOCK_CAP_MICROS);
+		// The designed "cap reached" state: the month is full and the gate has been turning calls away.
+		return o.scenario === 'cap-hit'
+			? { ...s, capMicros: s.monthMicros, held: { ...s.held, capReached: s.held.capReached + 12 } }
+			: s;
+	},
+
+	async listCalls(o: Opts & { outcome?: CallOutcome; cursor?: string; limit?: number } = {}): Promise<CallPage> {
+		if (o.scenario === 'no-spend') return { items: [], nextCursor: null };
+		return pageCalls(await ledgerFor(await api.listAccounts()), o);
+	},
 
 	listReading: (): Promise<ReadingFeed> => tick(mock.reading),
 
