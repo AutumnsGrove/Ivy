@@ -128,6 +128,10 @@ func runWatched(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
 
 	out := cmd.OutOrStdout()
 	printStack(out, opts, stack)
+	// The child Ivy only opens the databases, so they are filled before it starts.
+	if err := populate(ctx, out, stack, opts); err != nil {
+		return err
+	}
 
 	bin := filepath.Join(devstack.DevDir(opts.Root), "ivy")
 	env := append(os.Environ(), stack.PasswordEnv()...)
@@ -170,14 +174,17 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
 	}
 	defer stack.Close()
 
-	dbs, err := store.Open(cmd.Context(), stack.Config.DataDir)
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := populate(ctx, cmd.OutOrStdout(), stack, opts); err != nil {
+		return err
+	}
+	dbs, err := store.Open(ctx, stack.Config.DataDir)
 	if err != nil {
 		return err
 	}
 	defer dbs.Close()
-
-	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	srv := &http.Server{
 		Addr:              stack.Config.Listen,
@@ -209,6 +216,19 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
 		}
 		return err
 	}
+}
+
+// populate fills the dev databases and says how, so a slow or failed first
+// sync is visible instead of looking like a hung start.
+func populate(ctx context.Context, out io.Writer, stack *devstack.Stack, opts devstack.Options) error {
+	start := time.Now()
+	sum, err := devstack.Populate(ctx, stack, opts)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "populated %d messages across %d accounts (%s mode, %s)\n",
+		sum.Messages, sum.Accounts, opts.Mode, time.Since(start).Round(time.Millisecond))
+	return nil
 }
 
 // startWeb runs Vite when pnpm is available. The frontend is still backed by

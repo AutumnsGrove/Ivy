@@ -79,8 +79,16 @@ the ledger mock (`mock.makeLedger`, `lib/spend.ts` `summarise`/`pageCalls`) are 
 the chunk 3-5 Go endpoints; the mock ledger marks half the accounts smart-off, so the call log is
 heavy with "held back" rows (mock realism only).
 
-**3. 2h.** The `state.db` fast seeder, `ivy-dev --mode fast`, the `full == fast` agreement test and
-named-state Playwright (`DEV.md` 4, 8).
+**3. 2h** (in progress; decisions in qa-log round 34). The `state.db` fast seeder, `ivy-dev --mode
+fast`, the `full == fast` agreement test and named-state Playwright (`DEV.md` 4, 8). Stages:
+- ~~`full` runs a one-shot sync at startup~~ **done**: `devstack.Populate` runs `sync.Fetcher` per
+  account before either `up` path serves (the watched child only opens the databases). `--mode fast`
+  is rejected by `Populate` until the next stage.
+- `fast`: a `mailworld.WithObserver` seed option streams each delivery into an exported `sync`
+  store-from-raw entry point (same tiers, same code as the IMAP path), plus the `state.db` seed
+  (tags, message tags, settings, account profiles only).
+- The `full == fast` agreement test for `demo`, then `reset` under 5 s.
+- Named-state Playwright: each `DEV.md` 4 state, run against `ivy-dev up --mode fast`.
 
 **4. Chunk 3**, once the gating spikes (`docs/SPIKES.md`) are confirmed.
 

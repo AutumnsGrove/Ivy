@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -273,6 +274,49 @@ func TestUpNoWebServesHealthAndShutsDown(t *testing.T) {
 	waitForHealth(t, "http://"+addr+"/api/v1/health")
 	if _, err := os.Stat(devstack.ConfigPath(root)); err != nil {
 		t.Fatalf("config missing while up: %v", err)
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("up returned %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("up did not shut down")
+	}
+}
+
+// make dev used to serve empty databases because nothing ran the sync; the
+// inbox must have mail the moment the stack is healthy.
+func TestUpServesTheSeededInbox(t *testing.T) {
+	root := shortRoot(t)
+	addr := freeAddr(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cmd := newRootCommand()
+	cmd.SetArgs([]string{"--root", root, "up", "--no-web", "--watch=false", "--profile", "minimal", "--listen", addr})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	done := make(chan error, 1)
+	go func() { done <- cmd.ExecuteContext(ctx) }()
+
+	waitForHealth(t, "http://"+addr+"/api/v1/health")
+	resp, err := http.Get("http://" + addr + "/api/v1/inbox")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var inbox struct {
+		Items []json.RawMessage `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&inbox); err != nil {
+		t.Fatalf("decode inbox: %v", err)
+	}
+	if len(inbox.Items) == 0 {
+		t.Fatal("the inbox is empty right after up: nothing populated the mirror")
 	}
 
 	cancel()
