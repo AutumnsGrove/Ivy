@@ -355,3 +355,47 @@ func assertNoLiveMarkup(t *testing.T, got, from string) {
 		}
 	}
 }
+
+// A style value that fetches a URL would bypass both the remote-image block and
+// the tracking-pixel strip, so none may survive (list-style and font accept url()).
+func TestStyleValuesNeverFetch(t *testing.T) {
+	t.Parallel()
+	for _, style := range []string{
+		"list-style:url(https://t.example/b.gif)",
+		"list-style: URL( 'https://t.example/b.gif' ) inside",
+		"list-style-type:disc;list-style:url(//t.example/b.gif)",
+		"font:12px url(https://t.example/b.woff)",
+		`list-style:\75rl(https://t.example/b.gif)`,
+		`list-style-type:disc;list-style:u\rl(https://t.example/b.gif)`,
+		"border:1px solid red;color:image-set('https://t.example/b.gif' 1x)",
+	} {
+		got := render.SanitizeHTML(
+			`<ul style="`+style+`"><li>x</li></ul>`,
+			render.Options{MessageID: "m1", AllowRemoteImages: true},
+		)
+		if strings.Contains(got, "t.example") {
+			t.Errorf("style %q kept a fetchable URL:\n%s", style, got)
+		}
+	}
+}
+
+// The renderer's own inline URLs must stay confined to one segment under the
+// message's inline path; a sender-written ../ would otherwise reach any other
+// same-origin URL (the invariant stated in newBasePolicy).
+func TestSenderWrittenInlineURLCannotClimbOut(t *testing.T) {
+	t.Parallel()
+	for _, href := range []string{
+		"/api/v1/messages/m1/inline/../../m2/attachments/0",
+		"/api/v1/messages/m1/inline/%2e%2e/%2e%2e/accounts",
+		"/api/v1/messages/m1/inline/a/b",
+		"/api/v1/messages/m1/inline/..",
+	} {
+		got := render.SanitizeHTML(
+			`<a href="`+href+`">l</a><img src="`+href+`">`,
+			render.Options{MessageID: "m1"},
+		)
+		if strings.Contains(got, "/api/") {
+			t.Errorf("sender URL %q survived:\n%s", href, got)
+		}
+	}
+}

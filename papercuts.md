@@ -434,3 +434,26 @@ laptop (Apple M2, 8 cores) and only the direction is claimed; the potato re-meas
   ~35% faster to create (128 µs → 87 µs). Single-stream throughput cost **12.6 µs → 13.9 µs/op**
   (~10%) on this 8-core laptop; on the potato's four slow cores the parallel path helps less and
   the work is I/O-bound. `BenchmarkZstdEncoderAlloc` records the footprint.
+
+## Review of 6f29d15..HEAD (2d render through account customization)
+
+Second pass over the unreviewed range, security-sensitive slice first (round 32).
+
+- **#45** · `6f29d15` · `render/render.go` · **risk (security)** · `allowSafeStyles` allowed the
+  `list-style` shorthand, which accepts `url()` (it is `list-style-image`), and bluemonday does not
+  judge a declared value. A sender could therefore load a remote image through a style, bypassing the
+  remote-image block when an allow-listed sender turns remote images on and the tracking-pixel strip
+  in every case; the doc comment claimed no fetching property was on the list. Reproduced by
+  `TestStyleValuesNeverFetch` (failed with `list-style: url(https://t.example/b.gif)` kept). Fixed:
+  `list-style` is gone (the `-type`/`-position` longhands stay) and every allowed property now goes
+  through `safeStyleValue`, which refuses `url`, `image`, `expression`, `@`, `<`, `>` and any
+  backslash (CSS escapes can spell `url(` without the text); the escaped forms are in the test.
+- **#46** · `6f29d15` · `render/render.go` · **risk (security)** · `isOurInline` accepted any URL
+  with the message's inline prefix, so sender-written `/api/v1/messages/<id>/inline/../../x` (or its
+  `%2e%2e` form, or extra segments) survived the sanitizer and the browser normalised it to any
+  same-origin URL, contradicting the stated invariant that a sender cannot make the reader fetch an
+  Ivy URL. No state-changing GET exists today, so the reach was reads and navigation, but the first
+  one added would have inherited it. Reproduced by `TestSenderWrittenInlineURLCannotClimbOut` (all
+  four cases survived before the fix). Fixed: after the prefix the remainder must be one segment
+  that is not empty, `.` or `..` once percent-decoded and has no `/` or `\`; the renderer's own
+  `pathEscape` output is unchanged.

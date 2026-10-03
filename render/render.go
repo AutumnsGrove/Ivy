@@ -7,6 +7,7 @@ package render
 import (
 	"errors"
 	"io"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -248,7 +249,17 @@ func hasScheme(raw, scheme string) bool {
 // output can be sanitized again without losing its inline images.
 func isOurInline(raw string, opts Options) bool {
 	p := inlinePrefix(opts)
-	return p != "" && strings.HasPrefix(raw, p)
+	if p == "" || !strings.HasPrefix(raw, p) {
+		return false
+	}
+	// The cid is one escaped segment. Anything else (a slash, or a dot segment
+	// spelled literally or percent-encoded) would let a sender climb out of the
+	// inline path to any other same-origin URL.
+	seg, err := url.PathUnescape(raw[len(p):])
+	if err != nil || strings.ContainsAny(raw[len(p):], `/\`) {
+		return false
+	}
+	return seg != "" && seg != "." && seg != ".." && !strings.Contains(seg, "/")
 }
 
 func inlinePrefix(opts Options) string {
@@ -478,7 +489,23 @@ func allowSafeStyles(p *bluemonday.Policy) {
 		"border-color", "border-style", "border-width", "border-radius",
 		"width", "height", "max-width", "min-width",
 		"display", "float", "clear",
-		"list-style", "list-style-type", "list-style-position",
+		"list-style-type", "list-style-position",
 	}
-	p.AllowStyles(props...).Globally()
+	// list-style is the shorthand for list-style-image, so it is left out; and
+	// because bluemonday does not judge a value, every value is checked here for
+	// anything that can fetch (url(), image-set(), and CSS escapes that spell them).
+	p.AllowStyles(props...).MatchingHandler(safeStyleValue).Globally()
+}
+
+// safeStyleValue rejects a declared value that could make the browser load
+// something. A backslash is refused outright: CSS escapes (\75rl) let a value
+// spell url( without the literal text, and real mail never needs them here.
+func safeStyleValue(v string) bool {
+	low := strings.ToLower(v)
+	for _, bad := range []string{"url", "image", "expression", "\\", "@", "<", ">"} {
+		if strings.Contains(low, bad) {
+			return false
+		}
+	}
+	return true
 }
