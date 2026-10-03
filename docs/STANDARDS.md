@@ -114,12 +114,19 @@ parallel one.
   leak check.
 - **Concurrency:** share by communicating, but a mutex is fine for small state. One SQLite writer
   (a single serialized write connection) and a pool of readers; never hold a transaction across
-  network I/O. Run the whole suite under `-race`.
+  network I/O. Run the whole suite under `-race`. In code: `store.DBs.Mirror` and `.State` are
+  `*store.DB{Read, Write}`; reads use `.Read` (a `query_only` pool), **every write uses `.Write`**
+  (one connection that begins transactions `IMMEDIATE`, so writers queue in Go and never see
+  `SQLITE_BUSY`), and a `Rows` is never left open on `.Write`.
 - **SQL:** parameterised only, never string-built from input. **`sqlc` generates typed Go from plain
   `.sql` files (settled, round 21)**: build-time tool, generated code committed with a CI drift
   check, SQL kept D1-compatible. Migrations are append-only and positional (`user_version`);
   queries live next to their package; every query that can run on a
   large table has an `EXPLAIN QUERY PLAN` test asserting it uses an index.
+  **A derived column has exactly one writer and its own setter** (`SetMessageBodyHTML`,
+  `ReplaceThreads`, `ReplaceMessageAttachments`); `UpsertMessage` never overwrites it after the
+  first insert, so a re-sync cannot lose derived data. Config and scenario YAML are strict (unknown
+  keys fail), so a new key goes in the struct.
 - **Logging:** `slog`, structured, levels used honestly, no secrets, no message bodies or subjects
   at info level (mail is private; the log is a support artifact).
 - **Time and randomness** come from an injected `Clock` / ID source.
@@ -221,7 +228,12 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 - Idempotency keys on mutating requests that can be retried by a phone on a flaky connection
   (send, move, delete); the outbox is the enforcement point.
 - Errors: `{code, message, detail?}` with an HTTP status that matches; the same codes the UI maps
-  to its copy.
+  to its copy. Unknown `/api` paths and wrong methods answer the same JSON envelope.
+- Headers: every API reply carries `Cache-Control: no-store` (a handler that serves a document may
+  override it), and every response `X-Content-Type-Options: nosniff`, `Referrer-Policy:
+  no-referrer` and `X-Frame-Options: SAMEORIGIN`. API replies carry a deny-all CSP; the reader's
+  body document overrides it with `render.ContentSecurityPolicy` as a **response header** (a
+  `<meta>` CSP inside a frame is ignored by Chromium).
 - Every response is compressed (section 7) and carries correct `ETag`/`Cache-Control`; list and
   thread endpoints are shaped so a large thread streams or pages rather than arriving as one blob.
 - SSE has event ids and `Last-Event-ID` resume so a phone waking up catches up cleanly.
