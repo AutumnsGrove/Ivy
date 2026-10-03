@@ -85,7 +85,9 @@ Next up is the remaining 2g work below.
    `createImageBitmap` so Safari decodes HEIC and EXIF rotation is applied; an undecodable file
    says so and uploads nothing. The server's 5 MiB limit and sniff are the backstop. The old 1x1
    E2E fixture was not a valid PNG (WebKit tolerated it, Chromium did not), so it was replaced.
-3. Stats panel design: a canvas board (summary and call log) shown to the operator first.
+3. Stats panel design: **boards drawn, awaiting the operator's review** (`Spend.dc.html` summary,
+   `SpendCalls.dc.html` call log, both under "States" on the canvas). Do not build stage 4 until
+   they are approved or changed.
 4. Stats panel build: `/settings/spend` and `/settings/spend/calls`, mock-backed, `?scenario=`
    edge states, `e2e/routes.ts`, axe.
 5. Fold the round 33 decisions into `PLAN.md`/`ARCHITECTURE.md` and `BUILD-LOG.md`.
@@ -134,7 +136,7 @@ Found by the round 32 audit; each needs a home before its milestone starts.
 - Desktop keyboard shortcuts and a help overlay; extend the axe pass beyond the eleven screens;
   day-theme review; font subsetting and preload (fonts are 303 KiB against the 60 KiB target) and
   the CDP-throttled timing budgets; real-iPhone safe areas and `100dvh`; collapse-below-minimum list
-  drag; settings gaps (undo-send delay, photo size, remote images, digest time).
+  drag.
 - `+layout.ts` uses `window.fetch`, so SvelteKit logs `window_fetch_in_load`; thread the load-time
   `fetch` through the client.
 - The SPA's own CSP needs SvelteKit build-time script hashes (the body document's CSP is done).

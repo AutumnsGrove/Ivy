@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spend and calls, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.row{display:flex;align-items:center}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:0;background:transparent;color:var(--text)}
+.card{border-radius:20px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.seg{display:flex;gap:3px;padding:3px;border:1px solid var(--glass-border);border-radius:22px}
+.seg span{flex:1;text-align:center;height:34px;line-height:34px;border-radius:18px;font-size:13px;color:var(--muted)}
+.seg .on{background:var(--accent-soft);color:var(--text);box-shadow:inset 0 0 0 1px var(--accent-line)}
+.label{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);padding:0 6px}
+.line{display:flex;flex-direction:column;gap:6px}
+.line .top{display:flex;align-items:baseline;font-size:13.5px}
+.line .top b{flex-grow:1;font-weight:400}
+.line .top em{font-style:normal;color:var(--faint);font-size:12px;margin-right:10px}
+.bar{height:5px;border-radius:3px;background:rgba(255,255,255,0.1);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:3px;background:var(--accent)}
+.av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:500 12px 'Lexend',system-ui,sans-serif;flex:none;background:rgba(255,255,255,0.06)}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:1180px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.6);--glass-border:rgba(190,235,208,0.15);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+
+  <div style="position:absolute;left:8px;right:14px;top:14px;display:flex;align-items:center;gap:4px">
+    <button class="iconbtn" aria-label="Back"><svg class="ic" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg></button>
+    <div style="flex-grow:1;font-size:22px;font-weight:300">Spend and calls</div>
+  </div>
+
+  <div style="position:absolute;left:14px;right:14px;top:70px;display:flex;flex-direction:column;gap:14px">
+
+    <div class="seg" role="radiogroup" aria-label="Period"><span>Today</span><span class="on">7 days</span><span>30 days</span><span>All time</span></div>
+
+    <!-- The one number, then the cap it sits under. -->
+    <div class="glass card" style="gap:12px">
+      <div style="font-size:12.5px;color:var(--muted)">Spent in the last 7 days</div>
+      <div style="font-family:'Newsreader',Georgia,serif;font-size:44px;line-height:1;font-weight:500;letter-spacing:-0.01em">$0.84</div>
+      <div class="row" style="font-size:12.5px;color:var(--muted)"><span>1,204 calls</span><span style="flex-grow:1"></span><span>All sent to your chosen provider</span></div>
+      <div class="line" style="margin-top:4px">
+        <div class="top"><b style="color:var(--muted)">This month</b><span>$1.92 of $5.00</span></div>
+        <div class="bar"><i style="width:38%"></i></div>
+      </div>
+    </div>
+
+    <div class="label">By feature</div>
+    <div class="glass card" style="gap:14px">
+      <div class="line"><div class="top"><b>Meaning search</b><em>812 calls</em><span>$0.31</span></div><div class="bar"><i style="width:37%"></i></div></div>
+      <div class="line"><div class="top"><b>Needs-me check</b><em>260 calls</em><span>$0.22</span></div><div class="bar"><i style="width:26%"></i></div></div>
+      <div class="line"><div class="top"><b>Reading images</b><em>41 calls</em><span>$0.19</span></div><div class="bar"><i style="width:23%"></i></div></div>
+      <div class="line"><div class="top"><b>Categories</b><em>60 calls</em><span>$0.07</span></div><div class="bar"><i style="width:8%"></i></div></div>
+      <div class="line"><div class="top"><b>Digest and Ask</b><em>31 calls</em><span>$0.05</span></div><div class="bar"><i style="width:6%"></i></div></div>
+    </div>
+
+    <div class="label">By account</div>
+    <div class="glass card" style="gap:12px">
+      <div class="row" style="gap:12px"><span class="av" style="border:1px solid #7cc4ff;color:#7cc4ff">A</span><div style="flex-grow:1;font-size:14px">me@example.com</div><span style="font-size:13.5px">$0.52</span></div>
+      <div class="row" style="gap:12px"><span class="av" style="border:1px solid #5ad1c8;color:#5ad1c8">D</span><div style="flex-grow:1;font-size:14px">support@example.com</div><span style="font-size:13.5px">$0.32</span></div>
+      <div class="row" style="gap:12px;opacity:.7"><span class="av" style="border:1px solid #f0a6ca;color:#f0a6ca">H</span><div style="flex-grow:1"><div style="font-size:14px">hello@example.com</div><div style="font-size:12px;color:var(--faint);margin-top:2px">Smart features are off. Nothing is sent.</div></div><span style="font-size:13.5px;color:var(--faint)">$0.00</span></div>
+    </div>
+
+    <div class="label">By model</div>
+    <div class="glass card" style="gap:8px">
+      <div class="row" style="font-size:13.5px"><span style="flex-grow:1;color:var(--muted)">jev-latest</span><span>$0.48</span></div>
+      <div class="row" style="font-size:13.5px"><span style="flex-grow:1;color:var(--muted)">pplx-embed-v1-0.6b</span><span>$0.31</span></div>
+      <div class="row" style="font-size:13.5px"><span style="flex-grow:1;color:var(--muted)">Vision model</span><span>$0.05</span></div>
+    </div>
+
+    <div class="label">Held back before anything was sent</div>
+    <div class="glass card" style="gap:8px">
+      <div class="row" style="font-size:13.5px"><span style="flex-grow:1;color:var(--muted)">Smart features off for that account</span><span>24</span></div>
+      <div class="row" style="font-size:13.5px"><span style="flex-grow:1;color:var(--muted)">Monthly cap reached</span><span>0</span></div>
+      <div class="row" style="font-size:13.5px"><span style="flex-grow:1;color:var(--muted)">Mail you asked Ivy to keep private</span><span>7</span></div>
+    </div>
+
+    <div class="glass card" style="padding:0">
+      <div class="row" style="height:52px;padding:0 16px;font-size:14.5px"><span style="flex-grow:1">See every call</span><svg class="ic ic-sm" viewBox="0 0 24 24" style="color:var(--faint)"><path d="m9 18 6-6-6-6"></path></svg></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

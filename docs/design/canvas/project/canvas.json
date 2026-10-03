@@ -37,6 +37,8 @@
     "Toasts.dc.html": { "x": 0, "y": 5784, "w": 390, "h": 844, "title": "States · Toasts" },
     "AskLimit.dc.html": { "x": 470, "y": 5784, "w": 390, "h": 844, "title": "States · Ask Ivy limits" },
     "NoResults.dc.html": { "x": 940, "y": 5784, "w": 390, "h": 844, "title": "States · No results" },
+    "Spend.dc.html": { "x": 1410, "y": 5784, "w": 390, "h": 1180, "title": "States · Spend and calls" },
+    "SpendCalls.dc.html": { "x": 1880, "y": 5784, "w": 390, "h": 844, "title": "States · Every call" },
     "Tokens.dc.html": { "x": 0, "y": 6748, "w": 720, "h": 1100, "title": "Tokens and type" },
     "Desktop.dc.html": { "x": 840, "y": 6748, "w": 1440, "h": 860, "title": "Desktop three-pane" }
   },
@@ -73,6 +75,8 @@
     "Toasts.dc.html",
     "AskLimit.dc.html",
     "NoResults.dc.html",
+    "Spend.dc.html",
+    "SpendCalls.dc.html",
     "Tokens.dc.html",
     "Desktop.dc.html"
   ],

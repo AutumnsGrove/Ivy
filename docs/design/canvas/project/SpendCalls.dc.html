@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Every call, phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&amp;family=Newsreader:ital,wght@0,400;0,500;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.ivy,.ivy *{box-sizing:border-box}
+.scene{position:absolute;left:0;top:0;width:100%;height:100%}
+.glass{background:var(--glass);border:1px solid var(--glass-border);backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-sm{width:15px;height:15px}
+.row{display:flex;align-items:center}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;border:0;background:transparent;color:var(--text)}
+.chips{display:flex;gap:8px;overflow:hidden}
+.chip{height:32px;line-height:30px;padding:0 14px;border-radius:16px;border:1px solid var(--glass-border);font-size:13px;color:var(--muted);white-space:nowrap}
+.chip.on{background:var(--accent-soft);border-color:var(--accent-line);color:var(--text)}
+.call{padding:12px 16px;display:flex;flex-direction:column;gap:6px;border-bottom:1px solid var(--glass-border)}
+.call:last-child{border-bottom:0}
+.call .a{display:flex;align-items:center;gap:8px;font-size:14px}
+.call .a b{flex-grow:1;font-weight:400}
+.call .b{display:flex;gap:10px;font-size:12px;color:var(--faint)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.prob{display:flex;flex-direction:column;gap:5px;margin-top:6px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,0.04)}
+.prob .p{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.prob .p span:first-child{width:92px}
+.prob .p .bar{flex-grow:1}
+.prob .p span:last-child{width:34px;text-align:right}
+.bar{height:5px;border-radius:3px;background:rgba(255,255,255,0.1);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:3px;background:var(--accent)}
+.sbtn{height:34px;padding:0 14px;border-radius:17px;border:1px solid var(--glass-border);background:transparent;color:var(--text);font:500 13px 'Lexend',system-ui,sans-serif}
+</style>
+</helmet>
+
+<div class="ivy" style="position:relative;width:390px;height:844px;overflow:hidden;font-family:'Lexend',system-ui,sans-serif;color:var(--text);--text:#f2eddc;--muted:#b9c6bc;--faint:#8ea296;--glass:rgba(14,30,26,0.6);--glass-border:rgba(190,235,208,0.15);--accent:#c4b5fd;--accent-soft:rgba(196,181,253,0.16);--accent-line:rgba(196,181,253,0.40);--on-accent:#1b1238">
+  <div class="scene" style="background-color:#070d11;background-image:url(assets/vines.svg),url(assets/vines.svg),url(assets/vines.svg),linear-gradient(180deg,#070d13 0%,#0a1613 50%,#0c1f18 100%);background-size:450px 450px,450px 450px,450px 450px,100% 100%;background-repeat:repeat,repeat,repeat,no-repeat"></div>
+
+  <div style="position:absolute;left:8px;right:14px;top:14px;display:flex;align-items:center;gap:4px">
+    <button class="iconbtn" aria-label="Back"><svg class="ic" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg></button>
+    <div style="flex-grow:1;font-size:22px;font-weight:300">Every call</div>
+  </div>
+
+  <div style="position:absolute;left:14px;right:14px;top:70px;display:flex;flex-direction:column;gap:12px">
+    <div class="chips"><span class="chip on">All</span><span class="chip">Acted</span><span class="chip">Quiet</span><span class="chip">Errors</span><span class="chip">Held back</span></div>
+
+    <div class="glass" style="border-radius:20px;overflow:hidden">
+      <div class="call">
+        <div class="a"><i class="dot" style="background:#86efac"></i><b>Needs-me check</b><span>$0.0008</span></div>
+        <div class="b"><span>2:41 pm</span><span>me@example.com</span><span>jev-latest</span><span>1.0k tokens · 0.2 s</span></div>
+        <div class="prob">
+          <div class="p"><span>Needs me</span><div class="bar"><i style="width:91%"></i></div><span>91%</span></div>
+          <div class="p"><span>Receipt</span><div class="bar"><i style="width:6%"></i></div><span>6%</span></div>
+          <div class="p"><span>Newsletter</span><div class="bar"><i style="width:2%"></i></div><span>2%</span></div>
+        </div>
+      </div>
+      <div class="call">
+        <div class="a"><i class="dot" style="background:var(--faint)"></i><b>Meaning search</b><span>$0.0002</span></div>
+        <div class="b"><span>2:38 pm</span><span>me@example.com</span><span>pplx-embed</span><span>0.4k tokens · 0.3 s</span></div>
+      </div>
+      <div class="call">
+        <div class="a"><i class="dot" style="background:#86efac"></i><b>Reading images</b><span>$0.0046</span></div>
+        <div class="b"><span>2:12 pm</span><span>support@example.com</span><span>Vision model</span><span>2.1k tokens · 1.8 s</span></div>
+      </div>
+      <div class="call">
+        <div class="a"><i class="dot" style="background:#f5c45a"></i><b>Categories</b><span>$0.0000</span></div>
+        <div class="b"><span>1:58 pm</span><span>hello@example.com</span><span style="color:#f5c45a">Held back: Smart features off</span></div>
+      </div>
+      <div class="call">
+        <div class="a"><i class="dot" style="background:#f2957f"></i><b>Needs-me check</b><span>$0.0000</span></div>
+        <div class="b"><span>1:31 pm</span><span>me@example.com</span><span style="color:#f2957f">Provider didn't answer · will retry</span></div>
+      </div>
+      <div class="call">
+        <div class="a"><i class="dot" style="background:var(--faint)"></i><b>Meaning search</b><span>$0.0002</span></div>
+        <div class="b"><span>12:47 pm</span><span>me@example.com</span><span>pplx-embed</span><span>0.5k tokens · 0.3 s</span></div>
+      </div>
+    </div>
+
+    <div class="row" style="gap:10px;font-size:12.5px;color:var(--faint);padding:0 4px"><i class="dot" style="background:#86efac"></i>Acted <i class="dot" style="background:var(--faint)"></i>Quiet <i class="dot" style="background:#f5c45a"></i>Held back <i class="dot" style="background:#f2957f"></i>Error</div>
+
+    <div class="row" style="gap:10px"><button class="sbtn" style="flex-grow:1">Show older</button><button class="sbtn">Save as CSV</button></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
