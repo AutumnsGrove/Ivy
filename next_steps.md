@@ -41,8 +41,9 @@ svelte-check, 132 Vitest), Playwright 150 passed / 8 viewport-conditional skips.
 Frontend: SvelteKit 3 app in `web/`, 32 screens. The reader endpoints (`/accounts`, `/inbox`,
 `/messages/{id}`, `/summary`, `/mirror/health`, account profile and photo) are real behind
 `web/src/lib/api/http.ts`; search, ask, tags, rules, people, checks and reading stay mock-backed
-until chunks 3/4, and the mock E2E suite fakes the real requests at the network boundary
-(`e2e/api.ts`). Mutating actions (archive, delete, tag, save rule, send) only toast until 3/5.
+until chunks 3 and 5, and the mock E2E suite fakes the real requests at the network boundary
+(`e2e/api.ts`). Mutating actions (archive, delete, tag, save rule, send) only toast until chunks 3
+and 4.
 
 Backend: `store/` (two DBs), `config/`, `sync/` (one-shot read fetch), `mime/`, `render/`,
 `thread/`, `gateway/` (read API, body/inline/attachment documents, account profile), `internal/*`
@@ -99,7 +100,7 @@ Grouped by where it lands. Each item names its source so it can be found again.
 Found by the round 32 audit; each needs a home before its milestone starts.
 
 - **Junk rescue chip and spam score** (`JEV.md` 3B): show the `X-Spam-Status` score, a quiet "looks
-  real" chip with a one-tap Not junk (an IMAP move that trains the provider). Chunks 3 (move) and 4
+  real" chip with a one-tap Not junk (an IMAP move that trains the provider). Chunks 3 (move) and 5
   (the chip).
 - **In-app help glossary** with plain-English names (`PLAN.md` 3). Frontend, any time; lore names
   get an entry in the change that adds them.
@@ -116,7 +117,7 @@ Found by the round 32 audit; each needs a home before its milestone starts.
 ### Frontend
 
 - Wire the stub actions (archive, delete, tag, save rule, delete tag, Update, "Try on recent mail",
-  send) to real calls with IMAP-first writes and undo (chunks 3/5).
+  send) to real calls with IMAP-first writes and undo (chunks 3 and 4).
 - Desktop keyboard shortcuts and a help overlay; extend the axe pass beyond the eleven screens;
   day-theme review; font subsetting and preload (fonts are 303 KiB against the 60 KiB target) and
   the CDP-throttled timing budgets; real-iPhone safe areas and `100dvh`; collapse-below-minimum list
