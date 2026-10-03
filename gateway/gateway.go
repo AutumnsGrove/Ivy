@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"time"
 
 	"github.com/AutumnsGrove/Ivy/internal/asset"
 	"github.com/AutumnsGrove/Ivy/internal/compress"
@@ -17,13 +18,16 @@ type Server struct {
 	dbs     *store.DBs
 	version string
 	static  fs.FS
+	// now is the clock the read views render times against; injected so a test
+	// can pin "today".
+	now func() time.Time
 }
 
 // New builds a Server. version is the human build identifier reported by the
 // version endpoint. static is the built frontend; it may be nil before the
 // assets exist.
 func New(dbs *store.DBs, version string, static fs.FS) *Server {
-	return &Server{dbs: dbs, version: version, static: static}
+	return &Server{dbs: dbs, version: version, static: static, now: time.Now}
 }
 
 type versionResponse struct {
@@ -42,9 +46,17 @@ func (s *Server) Handler() http.Handler {
 	api := http.NewServeMux()
 	api.HandleFunc("GET /api/v1/version", s.handleVersion)
 	api.HandleFunc("GET /api/v1/health", s.handleHealth)
+	api.HandleFunc("GET /api/v1/accounts", s.handleAccounts)
+	api.HandleFunc("GET /api/v1/inbox", s.handleInbox)
+	api.HandleFunc("GET /api/v1/messages/{id}", s.handleMessage)
+	api.HandleFunc("GET /api/v1/messages/{id}/summary", s.handleMessageSummary)
+	api.HandleFunc("GET /api/v1/messages/{id}/body", s.handleMessageBody)
+	api.HandleFunc("GET /api/v1/messages/{id}/inline/{cid}", s.handleInline)
+	api.HandleFunc("GET /api/v1/messages/{id}/attachments/{part}", s.handleAttachment)
+	api.HandleFunc("GET /api/v1/mirror/health", s.handleMirrorHealth)
 
 	root := http.NewServeMux()
-	root.Handle("/api/", noStore(apiCSP(compress.Middleware(api))))
+	root.Handle("/api/", noStore(apiCSP(compress.Middleware(jsonErrors(api)))))
 	if s.static != nil {
 		root.Handle("/", asset.FileServer(s.static))
 	} else {
