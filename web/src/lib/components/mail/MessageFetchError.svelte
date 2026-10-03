@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { CircleAlert } from '#lib/icons.js';
+	import { formatMessageTime } from '#lib/time.js';
 	import type { MailSummary } from '#lib/types.js';
 	import Avatar from '../ui/Avatar.svelte';
 	import Button from '../ui/Button.svelte';
@@ -15,7 +16,7 @@
 		<Avatar initials={summary.initials} {color} size="lg" />
 		<div>
 			<div class="name">{summary.from}</div>
-			<div class="when">{summary.time}</div>
+			<div class="when">{formatMessageTime(summary.date)}</div>
 		</div>
 	</div>
 

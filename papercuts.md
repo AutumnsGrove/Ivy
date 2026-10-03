@@ -600,3 +600,27 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   message. `thread.Thread.ID` is now documented as the *proposed* id. `ListThreads` and
   `messages.thread_id` report the stored one, so the old tests pinning unscoped ids and
   replace-on-rebuild now assert the new rule.
+
+## N15 resolved: instants on the wire
+
+- **#54 (resolves N15)** · `46be4c0` · `gateway/format.go`, `api/openapi.yaml`, `web/src/lib/time.ts` ·
+  **bug** · `humanTime` rendered "15:04", "Yesterday" and weekday names server-side in
+  `now.Location()`, the server's zone, while its comment promised the viewer's. A container on the
+  potato is UTC, so the phone showed UTC clock times and the today/yesterday boundary fell at UTC
+  midnight; the tests pinned `testNow` in UTC and could not see it. Decided in round 32b:
+  `MailSummary`, `MailMessage` and `SearchHit` now carry `date` (RFC 3339, `format: date-time`,
+  UTC) instead of `time`, a contract change. `TestMessageDatesAreRFC3339InUTC` fails on the old
+  shape (the field is `time` and a zone-offset instant is not normalised); the server's
+  `humanTime` and its tests are gone. The browser formats with `formatMessageTime`
+  (`web/src/lib/time.ts`), which takes an injectable clock and IANA zone: its tests include the
+  case that motivated this (03:00 UTC on the 3rd is "Yesterday" in Los Angeles and in Tokyo),
+  locale-following output (`en-GB` is 24-hour, German says "Gestern") and future and zero
+  instants. `MessageList.test.ts` pins that the row shows the formatted date (mutation-checked:
+  passing the raw instant fails it). The mock data builds instants relative to now so the designed
+  rows still read "9:41 / Yesterday / Mon". A message with no Date header carries the zero
+  instant and shows no time.
+- **N17 (open, minor)** · `b5bfc78` · `gateway/read.go` · the account `syncNote` ("synced 4 min ago",
+  "on Jan 2") is still rendered server-side. The relative part is zone-independent, but the
+  "on Jan 2" form, used after 24 hours, takes the date in the server's zone, and the whole note is
+  English only. Send `lastSyncAt` as an instant and format the note in the browser when the
+  settings and health screens are designed (the health screen already needs a design pass).

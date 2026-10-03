@@ -91,6 +91,15 @@ export const healthAccounts: Account[] = accounts.map((a) =>
 		: failingHello(a)
 );
 
+// The API sends instants, so the designed rows ("9:41", "Yesterday", "Mon") are
+// built relative to now in the viewer's own zone and the formatter does the rest.
+const ago = (days: number, hour = 9, minute = 0): string => {
+	const d = new Date();
+	d.setDate(d.getDate() - days);
+	d.setHours(hour, minute, 0, 0);
+	return d.toISOString();
+};
+
 const mara = {
 	from: 'Mara Linden',
 	initials: 'ML'
@@ -101,7 +110,7 @@ export const inbox: MailSummary[] = [
 		id: 'm1',
 		accountId: 'a2',
 		...mara,
-		time: '9:41',
+		date: ago(0, 9, 41),
 		subject: 'Moving my blog over to Grove?',
 		preview: 'Hi! A friend pointed me to Grove and I wondered whether I can bring my old posts…',
 		unread: true,
@@ -113,7 +122,7 @@ export const inbox: MailSummary[] = [
 		accountId: 'a3',
 		from: 'Takedown requests',
 		initials: 'TR',
-		time: 'Yesterday',
+		date: ago(1, 16, 20),
 		subject: 'Notice of alleged infringement',
 		preview: 'We are writing on behalf of a rights holder to notify you of material hosted at…',
 		unread: true,
@@ -125,7 +134,7 @@ export const inbox: MailSummary[] = [
 		accountId: 'a1',
 		from: 'GitHub',
 		initials: 'GH',
-		time: '8:12',
+		date: ago(0, 8, 12),
 		subject: '[Lattice] Pull request merged into main',
 		preview: 'autumnsgrove merged 3 commits. Review the changes and the follow-up checks…',
 		unread: false,
@@ -136,7 +145,7 @@ export const inbox: MailSummary[] = [
 		accountId: 'a1',
 		from: 'Purelymail',
 		initials: 'PM',
-		time: 'Mon',
+		date: ago(3, 10, 2),
 		subject: 'Your receipt for this month',
 		preview: 'Thank you for your payment. This receipt covers your account and its users…',
 		unread: false,
@@ -148,7 +157,7 @@ export const inbox: MailSummary[] = [
 		accountId: 'a1',
 		from: 'Wildflower Weekly',
 		initials: 'WW',
-		time: 'Mon',
+		date: ago(3, 7, 30),
 		subject: 'Ten shade plants that forgive neglect',
 		preview: 'This week in the garden: ferns, hostas, and the quiet case for moss…',
 		unread: false,
@@ -222,7 +231,7 @@ export const searchCorpus: SearchHit[] = [
 		id: 's1',
 		accountId: 'a1',
 		from: 'Cloudflare',
-		time: 'Tue',
+		date: ago(4, 13, 5),
 		subject: 'Your domain renews soon',
 		preview:
 			'grove.place will renew on the 14th. No action is needed unless you want to change the domain settings…'
@@ -231,7 +240,7 @@ export const searchCorpus: SearchHit[] = [
 		id: 's2',
 		accountId: 'a1',
 		from: 'Cloudflare',
-		time: 'Oct 2025',
+		date: ago(365, 11, 15),
 		subject: 'Receipt for your renewal',
 		preview: 'Thanks for your payment. This receipt is for the domain grove.place…',
 		hasAttachment: true,
@@ -241,7 +250,7 @@ export const searchCorpus: SearchHit[] = [
 		id: 's3',
 		accountId: 'a1',
 		from: 'Namebase',
-		time: 'Mar',
+		date: ago(200, 9, 0),
 		subject: 'Your registration is expiring',
 		preview: 'Keep your name by extending it before the end of the month…',
 		semantic: true

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { colorFor } from '#lib/accounts.js';
+	import { formatMessageTime } from '#lib/time.js';
 	import type { Account, MailSummary } from '#lib/types.js';
 	import MessageCard from './MessageCard.svelte';
 
@@ -21,7 +22,7 @@
 			<MessageCard
 				from={m.from}
 				accountColor={colorFor(accounts, m.accountId)}
-				time={m.time}
+				time={formatMessageTime(m.date)}
 				subject={m.subject}
 				preview={m.preview}
 				unread={m.unread}

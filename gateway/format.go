@@ -4,37 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
-
-// humanTime renders a stored message time the way the mail list shows it:
-// today's clock time, "Yesterday", a weekday within the week, then a month and
-// day. The message time is rendered in the viewer's own location, so a message
-// arriving just after midnight does not look like it came tomorrow.
-func humanTime(now, t time.Time) string {
-	if t.IsZero() {
-		return ""
-	}
-	loc := now.Location()
-	now, t = now.In(loc), t.In(loc)
-	ny, nm, nd := now.Date()
-	ty, tm, td := t.Date()
-	today := time.Date(ny, nm, nd, 0, 0, 0, 0, loc)
-	day := time.Date(ty, tm, td, 0, 0, 0, 0, loc)
-	switch {
-	case day.Equal(today):
-		return t.Format("15:04")
-	case day.AddDate(0, 0, 1).Equal(today):
-		return "Yesterday"
-	case today.Sub(day) < 7*24*time.Hour:
-		return t.Format("Mon")
-	case ty == ny:
-		return t.Format("Jan 2")
-	default:
-		return t.Format("Jan 2, 2006")
-	}
-}
 
 // initials renders a sender badge: two letters from the display name, or one
 // from the address when there is no name.

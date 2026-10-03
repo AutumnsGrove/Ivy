@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { formatMessageTime } from '#lib/time.js';
 	import type { MailMessage } from '#lib/types.js';
 	import Avatar from '../ui/Avatar.svelte';
 	import Dot from '../ui/Dot.svelte';
@@ -10,7 +11,7 @@
 	type Props = {
 		message: Pick<
 			MailMessage,
-			'id' | 'subject' | 'from' | 'initials' | 'time' | 'toShort' | 'needs' | 'tag' | 'summary' | 'html' | 'paragraphs' | 'attachments'
+			'id' | 'subject' | 'from' | 'initials' | 'date' | 'toShort' | 'needs' | 'tag' | 'summary' | 'html' | 'paragraphs' | 'attachments'
 		>;
 		/** The account colour for the sender avatar and dot. */
 		color: string;
@@ -35,7 +36,7 @@
 		<Avatar initials={message.initials} {color} size="lg" />
 		<div class="who">
 			<div class="name">{message.from}</div>
-			<div class="to"><Dot {color} />to {message.toShort} · {message.time}</div>
+			<div class="to"><Dot {color} />to {message.toShort} · {formatMessageTime(message.date)}</div>
 		</div>
 	</div>
 

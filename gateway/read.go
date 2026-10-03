@@ -49,9 +49,8 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 		NeedCount:      page.NeedCount,
 		ReadingWaiting: 0,
 	}
-	now := s.now()
 	for _, m := range page.Items {
-		out.Items = append(out.Items, summaryView(m, now))
+		out.Items = append(out.Items, summaryView(m))
 	}
 	if page.NextCursor != "" {
 		out.NextCursor = &page.NextCursor
@@ -98,7 +97,7 @@ func (s *Server) handleMessageSummary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, summaryView(store.MessageSummary{
 		ID: m.ID, AccountID: m.AccountID, From: m.From, Subject: m.Subject,
 		Snippet: m.Snippet, Date: m.Date, Unread: !m.Seen, Needs: needs,
-	}, s.now()))
+	}))
 }
 
 // handleMirrorHealth summarizes per-account sync and index state. Search and
@@ -137,7 +136,7 @@ func (s *Server) messageView(r *http.Request, m store.Message) (api.MailMessage,
 		AccountId:   m.AccountID,
 		From:        displayName(m.From),
 		Initials:    initials(m.From.Name, m.From.Address),
-		Time:        humanTime(s.now(), m.Date),
+		Date:        m.Date.UTC(),
 		Subject:     m.Subject,
 		Preview:     m.Snippet,
 		Unread:      !m.Seen,
@@ -154,13 +153,15 @@ func (s *Server) messageView(r *http.Request, m store.Message) (api.MailMessage,
 	return v, nil
 }
 
-func summaryView(m store.MessageSummary, now time.Time) api.MailSummary {
+// summaryView projects a list row. The date is the instant in UTC; the browser
+// knows the viewer's zone and locale, the server does not (N15, round 32b).
+func summaryView(m store.MessageSummary) api.MailSummary {
 	return api.MailSummary{
 		Id:        m.ID,
 		AccountId: m.AccountID,
 		From:      displayName(m.From),
 		Initials:  initials(m.From.Name, m.From.Address),
-		Time:      humanTime(now, m.Date),
+		Date:      m.Date.UTC(),
 		Subject:   m.Subject,
 		Preview:   m.Snippet,
 		Unread:    m.Unread,

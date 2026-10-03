@@ -232,6 +232,11 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
   (send, move, delete); the outbox is the enforcement point.
 - Errors: `{code, message, detail?}` with an HTTP status that matches; the same codes the UI maps
   to its copy. Unknown `/api` paths and wrong methods answer the same JSON envelope.
+- **Instants are RFC 3339 in UTC; the API never sends a display time.** The server does not know the
+  viewer's timezone (a container's is UTC) or locale, so "9:41" or "Yesterday" rendered there is
+  wrong on the phone. Fields are named `date` and typed `format: date-time`; the browser formats
+  them with `web/src/lib/time.ts` (`formatMessageTime`), which takes an injectable clock and zone so
+  the day-boundary cases are tested. A missing instant is the zero time and shows nothing.
 - Headers: every API reply carries `Cache-Control: no-store` (a handler that serves a document may
   override it), and every response `X-Content-Type-Options: nosniff`, `Referrer-Policy:
   no-referrer` and `X-Frame-Options: SAMEORIGIN`. API replies carry a deny-all CSP; the reader's

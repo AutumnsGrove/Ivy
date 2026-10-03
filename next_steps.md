@@ -65,8 +65,11 @@ or image-publish workflow yet.
 4. ~~N12: sticky oldest-wins thread ids~~ **done** (#52, #53): the stored id is sticky and
    account-scoped, so features may key on `thread_id`. This also fixed a sync failure when one email
    reached two accounts.
-5. N15: RFC 3339 timestamps in the API, formatted in the browser (a contract change; update
-   `openapi.yaml`, regenerate, the fixture and the screens).
+5. ~~N15: RFC 3339 timestamps~~ **done** (#54): `date` replaces `time` on `MailSummary`,
+   `MailMessage` and `SearchHit`; `web/src/lib/time.ts` formats it for the viewer. Left over: the
+   account `syncNote` is still server-rendered (N17, with the health screen design).
+
+**Round 32b is fully implemented.** Next up is the remaining 2g work below.
 
 **2. Finish 2g.** The settings and stats-panel skeletons need **intentional design** (no design
 exists): Q&A first. Then the visual baselines, once the harness is regenerated in CI.

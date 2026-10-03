@@ -1,35 +1,6 @@
 package gateway
 
-import (
-	"testing"
-	"time"
-)
-
-func TestHumanTime(t *testing.T) {
-	t.Parallel()
-	now := time.Date(2026, 10, 2, 15, 30, 0, 0, time.UTC)
-
-	cases := []struct {
-		name string
-		when time.Time
-		want string
-	}{
-		{"today", time.Date(2026, 10, 2, 9, 41, 0, 0, time.UTC), "09:41"},
-		{"yesterday", time.Date(2026, 10, 1, 23, 0, 0, 0, time.UTC), "Yesterday"},
-		{"this week", time.Date(2026, 9, 29, 8, 0, 0, 0, time.UTC), "Tue"},
-		{"older this year", time.Date(2026, 9, 20, 8, 0, 0, 0, time.UTC), "Sep 20"},
-		{"previous year", time.Date(2024, 12, 31, 8, 0, 0, 0, time.UTC), "Dec 31, 2024"},
-		{"zero", time.Time{}, ""},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			if got := humanTime(now, tc.when); got != tc.want {
-				t.Errorf("humanTime = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
+import "testing"
 
 func TestInitials(t *testing.T) {
 	t.Parallel()

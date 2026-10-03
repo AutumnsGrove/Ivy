@@ -161,8 +161,8 @@ func TestListInboxNewestFirstAndCounts(t *testing.T) {
 	if inbox.UnreadCount != 1 || inbox.NeedCount != 0 || inbox.ReadingWaiting != 0 {
 		t.Errorf("counts = unread %d needs %d reading %d", inbox.UnreadCount, inbox.NeedCount, inbox.ReadingWaiting)
 	}
-	if inbox.Items[0].Time != "14:30" {
-		t.Errorf("time = %q, want 14:30", inbox.Items[0].Time)
+	if want := testNow.Add(-time.Hour); !inbox.Items[0].Date.Equal(want) {
+		t.Errorf("date = %s, want %s", inbox.Items[0].Date, want)
 	}
 	if inbox.Items[0].From != "Sender m3" || inbox.Items[0].Initials != "SM" {
 		t.Errorf("from = %q initials = %q", inbox.Items[0].From, inbox.Items[0].Initials)
@@ -680,5 +680,63 @@ func TestWriteWithNullOriginIsForbidden(t *testing.T) {
 		if resp.StatusCode != http.StatusForbidden {
 			t.Errorf("Origin %q: status = %d, want 403", origin, resp.StatusCode)
 		}
+	}
+}
+
+// The API sends instants, not display strings (N15, round 32b): the server does
+// not know the viewer's timezone, and a container's is usually UTC, so a time
+// rendered here would be wrong on the operator's phone. Every message endpoint
+// carries an RFC 3339 `date` in UTC and no `time` string.
+func TestMessageDatesAreRFC3339InUTC(t *testing.T) {
+	t.Parallel()
+	srv, dbs := newSeededServer(t)
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox})
+	// A zone-offset instant, to prove the server normalises it rather than
+	// echoing a local clock.
+	zone := time.FixedZone("UTC+9", 9*3600)
+	sent := time.Date(2026, 10, 2, 23, 45, 0, 0, zone) // 14:45 UTC
+	mustMessage(t, dbs, inboxMessage("m1", "acct-1", "inbox-1", sent, false))
+	if err := dbs.UpsertMessage(context.Background(), store.Message{
+		ID: "undated", AccountID: "acct-1", FolderID: "inbox-1", UID: 77, ContentKey: "ck:undated",
+		Subject: "No Date header", BodyStatus: store.BodyOK,
+	}); err != nil {
+		t.Fatalf("seed undated: %v", err)
+	}
+
+	fetch := func(path string) map[string]any {
+		t.Helper()
+		var out map[string]any
+		if code := getJSON(t, srv.URL+path, &out); code != http.StatusOK {
+			t.Fatalf("GET %s = %d", path, code)
+		}
+		return out
+	}
+	var inbox struct {
+		Items []map[string]any `json:"items"`
+	}
+	if code := getJSON(t, srv.URL+"/api/v1/inbox", &inbox); code != http.StatusOK {
+		t.Fatalf("inbox status = %d", code)
+	}
+	byID := map[string]map[string]any{}
+	for _, it := range inbox.Items {
+		byID[it["id"].(string)] = it
+	}
+	for name, item := range map[string]map[string]any{
+		"inbox":   byID["m1"],
+		"summary": fetch("/api/v1/messages/m1/summary"),
+		"message": fetch("/api/v1/messages/m1"),
+	} {
+		if got := item["date"]; got != "2026-10-02T14:45:00Z" {
+			t.Errorf("%s date = %v, want 2026-10-02T14:45:00Z", name, got)
+		}
+		if _, ok := item["time"]; ok {
+			t.Errorf("%s still carries a pre-rendered time: %v", name, item["time"])
+		}
+	}
+	// A message with no Date header has no instant to send; the contract still
+	// requires the field, so it is the zero instant and the browser shows nothing.
+	if got := byID["undated"]["date"]; got != "0001-01-01T00:00:00Z" {
+		t.Errorf("undated date = %v, want the zero instant", got)
 	}
 }

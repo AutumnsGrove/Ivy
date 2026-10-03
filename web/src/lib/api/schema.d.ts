@@ -375,7 +375,11 @@ export interface components {
             accountId: string;
             from: string;
             initials: string;
-            time: string;
+            /**
+             * Format: date-time
+             * @description The message's instant, RFC 3339 in UTC. The browser formats it in the viewer's own zone and locale; a message with no Date header carries the zero instant (0001-01-01T00:00:00Z) and shows no time.
+             */
+            date: string;
             subject: string;
             preview: string;
             unread: boolean;
@@ -387,7 +391,11 @@ export interface components {
             accountId: string;
             from: string;
             initials: string;
-            time: string;
+            /**
+             * Format: date-time
+             * @description The message's instant, RFC 3339 in UTC (see MailSummary).
+             */
+            date: string;
             subject: string;
             preview: string;
             unread: boolean;
@@ -425,7 +433,11 @@ export interface components {
             id: string;
             accountId: string;
             from: string;
-            time: string;
+            /**
+             * Format: date-time
+             * @description The message's instant, RFC 3339 in UTC (see MailSummary).
+             */
+            date: string;
             subject: string;
             preview: string;
             hasAttachment?: boolean;

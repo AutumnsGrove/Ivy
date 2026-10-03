@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { colorFor } from '#lib/accounts.js';
+	import { formatMessageTime } from '#lib/time.js';
 	import { ChevronDown, ChevronRight, MessageCircle, Paperclip, Search, SearchX, X } from '#lib/icons.js';
 	import Page from '#lib/components/shell/Page.svelte';
 	import Chip from '#lib/components/ui/Chip.svelte';
@@ -61,7 +62,7 @@
 							<Dot color={colorFor(data.accounts, h.accountId)} />
 							<span class="from ell">{h.from}</span>
 							{#if h.hasAttachment}<span class="clip"><Paperclip /></span>{/if}
-							<span class="time">{h.time}</span>
+							<span class="time">{formatMessageTime(h.date)}</span>
 						</div>
 						<div class="subject ell"><Highlight text={h.subject} query={data.q} /></div>
 						<div class="preview"><Highlight text={h.preview} query={data.q} /></div>

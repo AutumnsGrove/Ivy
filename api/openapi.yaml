@@ -427,7 +427,7 @@ components:
           type: boolean
     MailSummary:
       type: object
-      required: [id, accountId, from, initials, time, subject, preview, unread, needs]
+      required: [id, accountId, from, initials, date, subject, preview, unread, needs]
       properties:
         id:
           type: string
@@ -437,8 +437,13 @@ components:
           type: string
         initials:
           type: string
-        time:
+        date:
           type: string
+          format: date-time
+          description: >
+            The message's instant, RFC 3339 in UTC. The browser formats it in the
+            viewer's own zone and locale; a message with no Date header carries the
+            zero instant (0001-01-01T00:00:00Z) and shows no time.
         subject:
           type: string
         preview:
@@ -452,7 +457,7 @@ components:
     MailMessage:
       type: object
       required:
-        [id, accountId, from, initials, time, subject, preview, unread, needs,
+        [id, accountId, from, initials, date, subject, preview, unread, needs,
          toShort, toFull, paragraphs, attachments]
       properties:
         id:
@@ -463,8 +468,10 @@ components:
           type: string
         initials:
           type: string
-        time:
+        date:
           type: string
+          format: date-time
+          description: The message's instant, RFC 3339 in UTC (see MailSummary).
         subject:
           type: string
         preview:
@@ -540,7 +547,7 @@ components:
             $ref: "#/components/schemas/Issue"
     SearchHit:
       type: object
-      required: [id, accountId, from, time, subject, preview]
+      required: [id, accountId, from, date, subject, preview]
       properties:
         id:
           type: string
@@ -548,8 +555,10 @@ components:
           type: string
         from:
           type: string
-        time:
+        date:
           type: string
+          format: date-time
+          description: The message's instant, RFC 3339 in UTC (see MailSummary).
         subject:
           type: string
         preview:
