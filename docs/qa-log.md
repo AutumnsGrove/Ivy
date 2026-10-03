@@ -809,3 +809,23 @@ needed an operator decision; all took the recommended option. They are implement
 - **N11, allowed hosts:** a `allowed_hosts` config key; every API request whose `Host` is not listed
   is rejected. The default is loopback plus the configured listen address, and `ivy init` prompts
   for the Tailscale name. This closes DNS rebinding for reads and writes.
+
+## Round 33 — finishing 2g: settings and stats design (2026-10-03, operator)
+
+Settings (`/settings`, canvas board K) exists with real theme/motion/accent; "Spend and calls" is a
+dead row and no stats design exists. Four decisions, three of them the recommended option:
+
+- **Stats panel: the full panel, mock-backed.** Period totals (today, 7 days, 30 days, all time)
+  broken down by feature, account and model; month spend against the caps and how many calls the
+  gates blocked; and a filterable per-call log screen (`PLAN.md` "Stats panel"). The data sits
+  behind the API client as a mock until the ledger exists in chunk 5. It needs a new canvas board
+  first (no mockup exists).
+- **Desktop settings: the phone list in a centred column** inside the content pane; sub-screens
+  (account, health, spend) replace it. No two-pane layout.
+- **Decorative rows become real controls, through a mock settings API** (the operator chose this
+  over local-only prefs): undo-send delay, remote-images policy, digest time, photo size, strip
+  location, reply-as, junk rescue and spam score go through the typed client against a mock
+  `/settings`, so adopting `state.db` settings later is a swap behind `client.ts`. Theme, motion and
+  accent stay in `localStorage` (they are per device).
+- **Account photos are downscaled in the browser** to a small square JPEG before upload (Safari
+  decodes HEIC), which settles the 5 MiB/HEIC backlog item; the server limit stays as a backstop.
