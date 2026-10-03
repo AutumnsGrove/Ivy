@@ -89,14 +89,24 @@ Mirror tables (`mirror.db`, rebuildable from IMAP):
   A spooled message is parsed by `mime.ParseStream`, which keeps only headers, text bodies and
   small parts in memory and records the rest as `PartInfo`; an attachment is served by
   `mime.CopyPart`, which decodes it from the file straight to the response in a fixed buffer, so
-  attachments are never held in memory. The spool is part of the mirror (rebuildable from IMAP,
+  attachments are never held in memory. The same walk enumerates every attachment and inline
+  part with its path, decoded size and a SHA-256 of its decoded bytes (chunk 2f), so sync writes
+  the `attachments` rows from the message it has already read, with no extra pass. The spool is
+  part of the mirror (rebuildable from IMAP,
   not backed up). A disabled message keeps its file like its row; `sync.SweepSpool` removes only
   files no row owns (crash-leftover temp files, downloads whose row never landed) once they are
-  over an hour old. `thread_id` and `body_html_sanitized` are written by their own layers
-  (`SetMessageThread`, `SetMessageBodyHTML`) and are not touched by a re-sync.
+  over an hour old. `thread_id`, `body_html_sanitized` and the attachment rows are written by
+  their own layers (`SetMessageThread`, `SetMessageBodyHTML`, `ReplaceMessageAttachments`) and are
+  not touched by a re-sync.
 - `threads` (id, account_id, root_message_id, subject_norm, last_date, message_count)
-- `attachments` (id, message_id, filename, mime, size, content_hash, cid, storage_path)
-- `extracted_text` (attachment_id | message_id, tier, text, status)
+- `attachments` (id, message_id, filename, mime, size, content_hash, cid, storage_path).
+  `storage_path` is the part path inside the message's own raw bytes (there is no second copy of
+  the attachment), `size` is the decoded size, and `content_hash` (SHA-256 of the decoded bytes) is
+  the durable identity across messages, folders and mirror rebuilds. `id` is per `(message, part)`
+  because the row belongs to one message, so extraction and embeddings key on `content_hash`, never
+  on the row id; the reader's public attachment id is the part path (stable, and it survives a
+  rebuild).
+- `extracted_text` (content_hash | message_id, tier, text, status)
 - `chunks` / `embeddings` (account_id, content_key (or attachment content hash), chunk_ix, model,
   dims, vector BLOB; keyed by content, never by folder or UID), plus an FTS5 virtual table over
   subject/body/attachment text.

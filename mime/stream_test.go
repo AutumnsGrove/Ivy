@@ -107,8 +107,8 @@ func TestParseStreamNeverHoldsLargeAttachment(t *testing.T) {
 	if len(p.Large) != 1 || p.Large[0].Filename != "big.bin" || !p.Large[0].Attachment {
 		t.Fatalf("Large = %+v, want the one big.bin attachment", p.Large)
 	}
-	if got, want := p.Large[0].Size, int64(lines)*int64(b64LineWire); got != want {
-		t.Errorf("Large[0].Size = %d, want %d", got, want)
+	if got, want := p.Large[0].Size, lines*int64(b64LineDecoded); got != want {
+		t.Errorf("Large[0].Size = %d, want the decoded %d", got, want)
 	}
 	if p.Large[0].Path != "2" {
 		t.Errorf("Large[0].Path = %q, want 2", p.Large[0].Path)

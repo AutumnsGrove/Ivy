@@ -8,9 +8,10 @@ after a context clear.
 Last updated: 2026-10-02, after Chunk 2 sub-chunk 2f (the real gateway read handlers:
 `/accounts`, `/inbox`, `/messages/{id}`, `/messages/{id}/summary`, `/mirror/health`, plus the
 body-document endpoint with `render.ContentSecurityPolicy` as a response header and streaming
-inline/attachment parts). Chunk 1 (1a-1h) and 2a-2f are done; the cross-browser remote-content
-Playwright assertion still needs the frontend reader to point at the body-document endpoint, so it
-lands with 2g. 2g is next. The audit's ground rules are below.
+inline/attachment parts, and the `attachments` table populated at sync from the parser's skeleton
+walk, with a content hash per part). Chunk 1 (1a-1h) and 2a-2f are done; the cross-browser
+remote-content Playwright assertion still needs the frontend reader to point at the body-document
+endpoint, so it lands with 2g. 2g is next. The audit's ground rules are below.
 
 ## How to run a chunk (read this first)
 
@@ -181,28 +182,35 @@ over random reference graphs, a JSON fixture corpus, a 20k-reference hostile cha
 95 ms -> 8 ms) so a long References header stays linear. `make check` is green.
 
 **2f — gateway read handlers on the real store (Go): DONE (2026-10-02, commits
-`fe20330`..`56a5aba`).** The five contract endpoints now answer from the mirror in the generated
-`api` types: `/accounts` (with per-account unread and derived sync state), `/inbox` (keyset paging
-and whole-view counts), `/messages/{id}`, `/messages/{id}/summary` and `/mirror/health`. `store`
-gained `AccountStats`, `MessageNeeds` and `MirrorBytes`; `mime` gained `ListParts` (a bounded,
-streaming enumeration of every leaf with its `CopyPart` path, decoded size and content id) and
-`CopyCID` (serve one inline part by content id). The reader's body is its own endpoint,
+`fe20330`..`56a5aba`, plus the attachment-table follow-up).** The five contract endpoints now answer
+from the mirror in the generated `api` types: `/accounts` (with per-account unread and derived sync
+state), `/inbox` (keyset paging and whole-view counts), `/messages/{id}`, `/messages/{id}/summary`
+and `/mirror/health`. `store` gained `AccountStats`, `MessageNeeds`, `MirrorBytes` and the
+`attachments` table's one writer/reader pair (`ReplaceMessageAttachments`, `ListAttachments`,
+`GetAttachmentByPath`, `GetAttachmentByCID`). The parser's skeleton walk now enumerates every
+attachment and inline part with its path, decoded size and a SHA-256 of its decoded bytes
+(`Parsed.Parts`), so sync writes the attachment rows from the message it already read, in the same
+pass; a large part is hashed as it streams past. The gateway lists and serves parts from that table
+(`Attachment.id` is the part path, so the URL did not change), with a raw-walk fallback only for a
+message mirrored before the table existed. The reader's body is its own endpoint,
 `/messages/{id}/body`, served as `text/html` with `render.ContentSecurityPolicy` as a **response
 header** (the 2d finding), so Chromium enforces a real policy; the sanitized HTML is stored, never
 re-parsed. Inline and attachment parts stream from `raw_blob` or the spool file through
-`mime.CopyPart`, rewind-and-copy, never held in memory. Unknown `/api` paths and wrong methods now
-answer the JSON error envelope (N6 resolved) via a rewriter that touches only the mux's plain-text
-404/405. Tests: `httptest` against seeded real SQLite (both blob and spool part serving, the
-too-large body, the JSON 404/405, the CSP header, a bad cursor as a 400), formatting unit tables, and a 10k-message inbox
-benchmark. `make check` is green; the inbox list is ~15 ms/op at 10k messages (the whole-view
-counts dominate), a documented follow-up.
+`mime.CopyPart`, rewind-and-copy, never held in memory. `mime.ListParts` remains the re-derivation
+primitive; `content_hash` is the durable identity extraction and embeddings will key on. Unknown
+`/api` paths and wrong methods now answer the JSON error envelope (N6 resolved) via a rewriter that
+touches only the mux's plain-text 404/405. Tests: `httptest` against seeded real SQLite (table and
+fallback part serving, the too-large body, the JSON 404/405, the CSP header, a bad cursor as a 400),
+sync integration proving the rows (path, size, hash) for both the in-memory and spooled tiers,
+formatting unit tables, and a 10k-message inbox benchmark. `make check` is green; the inbox list is
+~15 ms/op at 10k messages (the whole-view counts dominate), a documented follow-up.
 
-Deferred within 2f (with reasons): attachment metadata is listed from the raw message on each read
-(the `attachments` table is still unpopulated) — caching it is a later optimisation; the whole-view
-inbox counts scan the account's inbox on every page (~15 ms/op at 10k) — the same follow-up; the
-body document carries a minimal inline stylesheet, and the reader's real theming arrives with 2g;
-the `body`/`inline`/`attachments` endpoints serve HTML/bytes, so they are intentionally not in
-`openapi.yaml`.
+Deferred within 2f (with reasons): the whole-view inbox counts scan the account's inbox on every
+page (~15 ms/op at 10k) — a materialised/cached count is the follow-up; the body document carries a
+minimal inline stylesheet, and the reader's real theming arrives with 2g; the
+`body`/`inline`/`attachments` endpoints serve HTML/bytes, so they are intentionally not in
+`openapi.yaml`; messages mirrored before the attachment table existed are served through the
+raw-walk fallback until a re-fetch populates their rows.
 
 **2d finding, resolved in 2f, browser assertion to 2g:** a `<meta>` Content-Security-Policy inside a
 `srcdoc` iframe is enforced by WebKit but **ignored by Chromium**, and WebKit does not report

@@ -62,6 +62,10 @@ type Parsed struct {
 	DeliveredTo []Address
 	Attachments []Part
 	Inlines     []Part
+	// Parts lists every attachment and inline part with its path, decoded size
+	// and content hash, as enumerated by the skeleton walk in ParseStream. It
+	// is empty for Parse, which reads an in-memory message with no path context.
+	Parts []PartInfo
 	// Large lists the parts ParseStream left on disk (their bodies are not in
 	// Attachments or Inlines). Empty for Parse, which keeps everything.
 	Large []PartInfo

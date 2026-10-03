@@ -3,7 +3,9 @@ package mime
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -45,17 +47,22 @@ var (
 )
 
 // PartInfo describes one leaf part of a message: a part left on disk by the
-// skeleton pass, or any part enumerated by ListParts and served by CopyPart.
+// skeleton pass or an attachment/inline part enumerated by the walk. Size and
+// Hash are of the decoded content; Hash is set for an enumerated attachment or
+// inline part, not for body text.
 type PartInfo struct {
 	Path        string // 1-based position at each level, e.g. "2.1"
 	Filename    string
 	ContentType string
-	Size        int64 // decoded bytes for ListParts; stored bytes for a skeleton part
+	Size        int64 // decoded bytes for an enumerated part
 	Attachment  bool  // a file, as opposed to the message body
 	// CID is the Content-ID without angle brackets; the reader serves it from
 	// the inline endpoint. Inline is a cid: part rather than a file.
 	CID    string
 	Inline bool
+	// Hash is the SHA-256 of the decoded bytes, the durable identity of an
+	// attachment across messages, folders and mirror rebuilds.
+	Hash string
 }
 
 // Skeleton is a message with every body that is too big to keep removed, in a
@@ -64,6 +71,9 @@ type PartInfo struct {
 type Skeleton struct {
 	Raw   []byte
 	Large []PartInfo
+	// Parts lists every attachment and inline part, small or large, with its
+	// path, decoded size and content hash.
+	Parts []PartInfo
 }
 
 // BuildSkeleton streams a message and returns its headers and every part small
@@ -81,7 +91,7 @@ func BuildSkeleton(r io.Reader) (Skeleton, error) {
 	if err := b.body(parseHeader(head), br, "", 0); err != nil {
 		return Skeleton{Raw: head}, err
 	}
-	return Skeleton{Raw: b.out.Bytes(), Large: b.large}, nil
+	return Skeleton{Raw: b.out.Bytes(), Large: b.large, Parts: b.listed}, nil
 }
 
 // ParseStream parses a message read from r without holding its large parts. It
@@ -104,6 +114,7 @@ func ParseStream(r io.Reader, trustedAuthservIDs ...string) (p Parsed) {
 	}
 	p = Parse(sk.Raw, trustedAuthservIDs...)
 	p.Large = sk.Large
+	p.Parts = sk.Parts
 	p.Attachments = withoutEmptied(p.Attachments, sk.Large)
 	p.Inlines = withoutEmptied(p.Inlines, sk.Large)
 	return p
@@ -149,6 +160,7 @@ func CopyPart(r io.Reader, path string, w io.Writer) error {
 type skeletonBuilder struct {
 	out      bytes.Buffer
 	large    []PartInfo
+	listed   []PartInfo
 	parts    int
 	retained int64
 }
@@ -192,7 +204,10 @@ func (b *skeletonBuilder) multipart(boundary string, body io.Reader, path string
 }
 
 // leaf keeps a part's body if it fits its limit and the message's remaining
-// budget, otherwise reads it through, counting, and records where it is.
+// budget, otherwise reads it through and records where it is. A part the
+// reader will list (a file or an inline image) is decoded once on the way past
+// to record its size and content hash; body text is only copied, since Parse
+// decodes it downstream.
 func (b *skeletonBuilder) leaf(hdr textproto.MIMEHeader, mediaType string, params map[string]string, body io.Reader, path string) error {
 	if path == "" {
 		path = "1"
@@ -201,6 +216,9 @@ func (b *skeletonBuilder) leaf(hdr textproto.MIMEHeader, mediaType string, param
 		}
 	}
 	name, attachment := partName(hdr, params)
+	cid := normalizeCID(hdr.Get("Content-ID"))
+	listed := attachment || cid != "" || !strings.HasPrefix(mediaType, "text/")
+
 	limit := int64(MaxLeafBytes)
 	if strings.HasPrefix(mediaType, "text/") && !attachment {
 		limit = MaxTextPartBytes
@@ -209,6 +227,41 @@ func (b *skeletonBuilder) leaf(hdr textproto.MIMEHeader, mediaType string, param
 		limit = room
 	}
 
+	if !listed {
+		return b.copyLeaf(body, path, name, mediaType, limit)
+	}
+
+	// One pass both keeps the raw bytes for the skeleton and decodes them into
+	// the content hash; the tee means the message is read once.
+	kept := &limitBuffer{limit: limit}
+	h := sha256.New()
+	n, err := io.Copy(h, decoder(hdr.Get("Content-Transfer-Encoding"), io.TeeReader(body, kept)))
+	if err != nil {
+		return err
+	}
+	info := PartInfo{
+		Path:        path,
+		Filename:    name,
+		ContentType: mediaType,
+		Size:        n,
+		Attachment:  attachment || !strings.HasPrefix(mediaType, "text/"),
+		CID:         cid,
+		Inline:      cid != "" && !attachment,
+		Hash:        hex.EncodeToString(h.Sum(nil)),
+	}
+	b.listed = append(b.listed, info)
+	if kept.total <= limit {
+		b.out.Write(kept.buf.Bytes())
+		b.retained += kept.total
+		return nil
+	}
+	b.large = append(b.large, info)
+	return nil
+}
+
+// copyLeaf is the body-text path: keep the raw bytes (which Parse decodes) up to
+// the limit, or record the part as too large.
+func (b *skeletonBuilder) copyLeaf(body io.Reader, path, name, mediaType string, limit int64) error {
 	var kept bytes.Buffer
 	n, err := io.CopyN(&kept, body, limit+1)
 	if err != nil && !errors.Is(err, io.EOF) {
@@ -228,9 +281,29 @@ func (b *skeletonBuilder) leaf(hdr textproto.MIMEHeader, mediaType string, param
 		Filename:    name,
 		ContentType: mediaType,
 		Size:        n + rest,
-		Attachment:  attachment || !strings.HasPrefix(mediaType, "text/"),
 	})
 	return nil
+}
+
+// limitBuffer keeps the first limit raw bytes written to it and counts all of
+// them, so a part's encoded size can exceed the buffer without the buffer
+// growing.
+type limitBuffer struct {
+	buf   bytes.Buffer
+	limit int64
+	total int64
+}
+
+func (w *limitBuffer) Write(p []byte) (int, error) {
+	w.total += int64(len(p))
+	if room := w.limit - int64(w.buf.Len()); room > 0 {
+		if int64(len(p)) <= room {
+			w.buf.Write(p)
+		} else {
+			w.buf.Write(p[:room])
+		}
+	}
+	return len(p), nil
 }
 
 // partCopier finds one part by path and decodes it to w.

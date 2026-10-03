@@ -404,9 +404,18 @@ func (f *Fetcher) fetchInline(ctx context.Context, c *imapclient.Client, acct Ac
 		m := f.baseMessage(acct, folderID, meta)
 		m.RawBlob = raw
 		m.ContentKey = store.ContentKey(m.MessageID, headerBlock(raw))
-		parsed := mailmime.Parse(raw, acct.TrustedAuthservIDs...)
+		// An in-memory message goes through the same bounded walk as a spooled one,
+		// so its attachment metadata and hashes are enumerated in one pass.
+		parsed := mailmime.ParseStream(bytes.NewReader(raw), acct.TrustedAuthservIDs...)
 		applyParsed(&m, parsed)
+		if parsed.BodySkipped {
+			m.BodyStatus = store.BodyUnparsed
+		}
 		if err := f.dbs.UpsertMessage(ctx, m); err != nil {
+			_ = cmd.Close()
+			return stored, err
+		}
+		if err := f.storeAttachments(ctx, m, parsed); err != nil {
 			_ = cmd.Close()
 			return stored, err
 		}
@@ -475,7 +484,36 @@ func (f *Fetcher) fetchSpooled(ctx context.Context, c *imapclient.Client, acct A
 	if err := f.dbs.UpsertMessage(ctx, m); err != nil {
 		return true, err
 	}
+	if err := f.storeAttachments(ctx, m, parsed); err != nil {
+		return true, err
+	}
 	return true, f.storeRendered(ctx, m, parsed)
+}
+
+// storeAttachments writes the message's attachment rows from the parts the
+// skeleton walk enumerated (chunk 2f). The table is derived data with one
+// writer, like the body and thread columns; the read path serves from it and
+// never re-parses the raw.
+func (f *Fetcher) storeAttachments(ctx context.Context, m store.Message, parsed mailmime.Parsed) error {
+	if len(parsed.Parts) == 0 {
+		return nil
+	}
+	rows := make([]store.Attachment, 0, len(parsed.Parts))
+	for _, p := range parsed.Parts {
+		rows = append(rows, store.Attachment{
+			MessageID:   m.ID,
+			Filename:    p.Filename,
+			MIMEType:    p.ContentType,
+			Size:        p.Size,
+			ContentHash: p.Hash,
+			CID:         p.CID,
+			StoragePath: p.Path,
+		})
+	}
+	if err := f.dbs.ReplaceMessageAttachments(ctx, m.ID, rows); err != nil {
+		return fmt.Errorf("store attachments for %s: %w", m.ID, err)
+	}
+	return nil
 }
 
 // storeRendered sanitises a parsed body and writes the derived column through
@@ -562,7 +600,7 @@ func (f *Fetcher) baseMessage(acct Account, folderID string, buf *imapclient.Fet
 func applyParsed(m *store.Message, parsed mailmime.Parsed) {
 	m.BodyText = parsed.Text
 	m.Snippet = parsed.Snippet
-	m.HasAttachments = len(parsed.Attachments) > 0 || hasLargeAttachment(parsed.Large)
+	m.HasAttachments = len(parsed.Parts) > 0
 	m.References = strings.Join(parsed.References, " ")
 	if len(parsed.InReplyTo) > 0 {
 		// Prefer the raw header; ENVELOPE is the fallback when it is absent.
@@ -575,17 +613,6 @@ func applyParsed(m *store.Message, parsed mailmime.Parsed) {
 		SPF:        parsed.Auth.SPF, DKIM: parsed.Auth.DKIM, DMARC: parsed.Auth.DMARC, Raw: parsed.Auth.Raw,
 	}
 	m.ParseErrors = parsed.Errors
-}
-
-// hasLargeAttachment reports whether any part left on disk is a file, as
-// opposed to a very large inline text body.
-func hasLargeAttachment(large []mailmime.PartInfo) bool {
-	for _, l := range large {
-		if l.Attachment {
-			return true
-		}
-	}
-	return false
 }
 
 // parsedAddresses converts the parser's own address type to the mirror's.

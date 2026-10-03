@@ -2,8 +2,9 @@ package mime_test
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
-	"io"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -110,35 +111,49 @@ func TestListPartsBoundsHostileStructure(t *testing.T) {
 	}
 }
 
-func TestCopyCIDStreamsTheInlinePart(t *testing.T) {
+// ParseStream fills Parsed.Parts from the skeleton walk it already does, so a
+// spooled message's attachment metadata (including a content hash) costs no
+// extra pass.
+func TestParseStreamEnumeratesListedParts(t *testing.T) {
 	t.Parallel()
-	var got bytes.Buffer
-	info, err := ivymime.CopyCID(bytes.NewReader(partMessage()), "logo@example", &got)
-	if err != nil {
-		t.Fatalf("CopyCID: %v", err)
+	p := ivymime.ParseStream(bytes.NewReader(partMessage()))
+	if len(p.Parts) != 2 {
+		t.Fatalf("parts = %+v, want the file and the inline image", p.Parts)
 	}
-	if got.String() != "tiny png" {
-		t.Errorf("cid body = %q, want the decoded image", got.String())
-	}
-	if info.ContentType != "image/png" || info.Filename != "logo.png" {
-		t.Errorf("CopyCID info = %+v", info)
+	byPath := map[string]ivymime.PartInfo{}
+	for _, part := range p.Parts {
+		byPath[part.Path] = part
 	}
 
-	// Angle brackets are how the header carries the id; the caller may pass
-	// either form, matching how the sanitizer rewrites cid: sources.
-	got.Reset()
-	if _, err := ivymime.CopyCID(bytes.NewReader(partMessage()), "<logo@example>", &got); err != nil {
-		t.Fatalf("CopyCID with brackets: %v", err)
+	file := byPath["2"]
+	if file.Filename != "note.txt" || file.Size != int64(len("attachment bytes")) || !file.Attachment {
+		t.Errorf("file part = %+v", file)
 	}
-	if got.String() != "tiny png" {
-		t.Errorf("bracketed cid body = %q", got.String())
+	if want := fmt.Sprintf("%x", sha256.Sum256([]byte("attachment bytes"))); file.Hash != want {
+		t.Errorf("file hash = %q, want %q", file.Hash, want)
 	}
 
-	if _, err := ivymime.CopyCID(bytes.NewReader(partMessage()), "missing", io.Discard); !errors.Is(err, ivymime.ErrPartNotFound) {
-		t.Errorf("missing cid = %v, want ErrPartNotFound", err)
+	inline := byPath["3"]
+	if inline.CID != "logo@example" || !inline.Inline || inline.Size != int64(len("tiny png")) {
+		t.Errorf("inline part = %+v", inline)
 	}
-	if _, err := ivymime.CopyCID(bytes.NewReader(partMessage()), "", io.Discard); !errors.Is(err, ivymime.ErrPartNotFound) {
-		t.Errorf("empty cid = %v, want ErrPartNotFound", err)
+	if want := fmt.Sprintf("%x", sha256.Sum256([]byte("tiny png"))); inline.Hash != want {
+		t.Errorf("inline hash = %q, want %q", inline.Hash, want)
+	}
+}
+
+// The hash of a part too big to keep is computed while the walk streams it past.
+func TestParseStreamHashesALargePartWhileWalking(t *testing.T) {
+	const lines = 64
+	p := ivymime.ParseStream(hugeAttachment(lines))
+	if len(p.Parts) != 1 {
+		t.Fatalf("parts = %+v, want the one attachment", p.Parts)
+	}
+	if want := lines * int64(b64LineDecoded); p.Parts[0].Size != want {
+		t.Errorf("size = %d, want decoded %d", p.Parts[0].Size, want)
+	}
+	if p.Parts[0].Hash == "" {
+		t.Error("the large part has no content hash")
 	}
 }
 
@@ -160,6 +175,6 @@ func FuzzListParts(f *testing.F) {
 			t.Errorf("ListParts took %v on a %d-byte input", elapsed, len(data))
 		}
 		var sink countWriter
-		_, _ = ivymime.CopyCID(bytes.NewReader(data), "x", &sink)
+		_ = ivymime.CopyPart(bytes.NewReader(data), "1", &sink)
 	})
 }

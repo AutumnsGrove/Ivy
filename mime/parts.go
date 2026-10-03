@@ -2,7 +2,6 @@ package mime
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"mime/multipart"
 	"net/textproto"
@@ -69,76 +68,6 @@ func (l *partLister) walk(hdr textproto.MIMEHeader, body io.Reader, path string,
 	}
 	l.parts = append(l.parts, describePart(hdr, params, mediaType, path, n))
 	return nil
-}
-
-// CopyCID streams the decoded body of the part whose Content-ID is cid to w and
-// returns its metadata. A cid: source in the sanitised HTML points at this
-// endpoint, so the match is by content id, never by a caller-chosen path. The
-// id may carry the angle brackets the header does.
-func CopyCID(r io.Reader, cid string, w io.Writer) (PartInfo, error) {
-	br := bufio.NewReaderSize(r, 64<<10)
-	head, err := readHeaderBlock(br)
-	if err != nil {
-		return PartInfo{}, err
-	}
-	want := normalizeCID(cid)
-	if want == "" {
-		return PartInfo{}, fmt.Errorf("%w: empty content id", ErrPartNotFound)
-	}
-	c := &cidCopier{want: want, w: w}
-	found, err := c.walk(parseHeader(head), br, "", 0)
-	if err != nil {
-		return PartInfo{}, err
-	}
-	if !found {
-		return PartInfo{}, fmt.Errorf("%w: cid:%s", ErrPartNotFound, cid)
-	}
-	return c.info, nil
-}
-
-type cidCopier struct {
-	want  string
-	w     io.Writer
-	info  PartInfo
-	count int
-}
-
-func (c *cidCopier) walk(hdr textproto.MIMEHeader, body io.Reader, path string, depth int) (bool, error) {
-	mediaType, params := contentType(hdr)
-	if boundary := params["boundary"]; strings.HasPrefix(mediaType, "multipart/") && boundary != "" {
-		if depth+1 > MaxMultipartDepth {
-			return false, ErrTooDeep
-		}
-		mr := multipart.NewReader(body, boundary)
-		for i := 1; ; i++ {
-			part, err := mr.NextRawPart()
-			if err != nil {
-				return false, nil
-			}
-			if c.count++; c.count > MaxParts {
-				return false, ErrTooManyParts
-			}
-			found, err := c.walk(part.Header, part, joinPath(path, i), depth+1)
-			if found || err != nil {
-				return found, err
-			}
-		}
-	}
-	if path == "" {
-		path = "1"
-		if c.count++; c.count > MaxParts {
-			return false, ErrTooManyParts
-		}
-	}
-	if normalizeCID(hdr.Get("Content-ID")) != c.want {
-		return false, nil
-	}
-	n, err := io.Copy(c.w, decoder(hdr.Get("Content-Transfer-Encoding"), body))
-	if err != nil {
-		return false, err
-	}
-	c.info = describePart(hdr, params, mediaType, path, n)
-	return true, nil
 }
 
 // describePart projects a leaf's headers into a PartInfo. A part counts as an

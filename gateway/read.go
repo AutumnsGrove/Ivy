@@ -239,10 +239,44 @@ func displayName(a store.Address) string {
 	return a.Address
 }
 
-// attachments lists a message's file and inline parts. It reads the raw message
-// only when the mirror recorded one, and streams it, so a spooled message is
-// never held in memory.
+// attachments lists a message's file and inline parts. It reads the stored
+// rows written by sync; only a message mirrored before the attachment table
+// was populated falls back to walking the raw bytes.
 func (s *Server) attachments(r *http.Request, m store.Message) []api.Attachment {
+	if !m.HasAttachments {
+		return []api.Attachment{}
+	}
+	rows, err := s.dbs.ListAttachments(r.Context(), m.ID)
+	if err != nil {
+		slog.WarnContext(r.Context(), "gateway: list attachments", "message", m.ID, "error", err)
+		return []api.Attachment{}
+	}
+	if len(rows) == 0 {
+		return s.attachmentsFromRaw(r, m)
+	}
+	out := make([]api.Attachment, 0, len(rows))
+	tone := 0
+	for _, a := range rows {
+		name := a.Filename
+		if name == "" {
+			name = "attachment"
+		}
+		item := api.Attachment{Id: a.StoragePath, Name: name, Size: humanSize(a.Size), Kind: api.File}
+		if strings.HasPrefix(a.MIMEType, "image/") {
+			item.Kind = api.Image
+			t := []api.AttachmentTone{api.A, api.B}[tone%2]
+			item.Tone = &t
+			tone++
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+// attachmentsFromRaw derives the list by walking the raw message. It is the
+// compatibility path for a message synced before the attachment table existed;
+// once it is re-fetched the rows make it unnecessary.
+func (s *Server) attachmentsFromRaw(r *http.Request, m store.Message) []api.Attachment {
 	if !m.HasAttachments {
 		return []api.Attachment{}
 	}

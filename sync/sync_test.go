@@ -3,7 +3,9 @@ package sync_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -384,6 +386,27 @@ func TestFetchParsesRawBodies(t *testing.T) {
 	inbox := mustFolder(t, dbs, "acct-1", "INBOX")
 	m := mustMessage(t, dbs, inbox.ID, uid)
 
+	// The parser enumerated both parts during the walk; sync wrote their rows
+	// with the path, decoded size and content hash the reader serves by.
+	atts := attachmentsFor(t, dbs, m.ID)
+	if len(atts) != 2 {
+		t.Fatalf("attachments = %+v, want notes.txt and chart.png", atts)
+	}
+	notes := atts["notes.txt"]
+	if notes.StoragePath == "" || notes.Size != int64(len("attached")) || notes.CID != "" {
+		t.Errorf("notes attachment = %+v", notes)
+	}
+	if want := fmt.Sprintf("%x", sha256.Sum256([]byte("attached"))); notes.ContentHash != want {
+		t.Errorf("notes hash = %q, want %q", notes.ContentHash, want)
+	}
+	chart := atts["chart.png"]
+	if chart.CID != "chart.png" || chart.Size != int64(len("pngdata")) {
+		t.Errorf("chart attachment = %+v", chart)
+	}
+	if want := fmt.Sprintf("%x", sha256.Sum256([]byte("pngdata"))); chart.ContentHash != want {
+		t.Errorf("chart hash = %q, want %q", chart.ContentHash, want)
+	}
+
 	if !strings.Contains(m.BodyText, "plain body here") {
 		t.Errorf("BodyText = %q, want the plain part", m.BodyText)
 	}
@@ -671,6 +694,20 @@ func attachmentMessage(subject string, n int) []byte {
 		Attach("big.bin", "application/octet-stream", bytes.Repeat([]byte{0x5a}, n)).Build()
 }
 
+// attachmentsFor indexes a message's attachment rows by file name.
+func attachmentsFor(t *testing.T, dbs *store.DBs, messageID string) map[string]store.Attachment {
+	t.Helper()
+	atts, err := dbs.ListAttachments(context.Background(), messageID)
+	if err != nil {
+		t.Fatalf("ListAttachments: %v", err)
+	}
+	byName := make(map[string]store.Attachment, len(atts))
+	for _, a := range atts {
+		byName[a.Filename] = a
+	}
+	return byName
+}
+
 func spoolFile(t *testing.T, dbs *store.DBs, m store.Message) []byte {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(dbs.Dir, filepath.FromSlash(m.RawPath)))
@@ -713,6 +750,18 @@ func TestFetchSpoolsAMidSizeMessageToDisk(t *testing.T) {
 	}
 	if m.Subject != "mid" || m.From.Address != "alice@example.com" {
 		t.Errorf("envelope fields lost: %+v", m)
+	}
+	// A part left on disk is still enumerated and hashed during the walk.
+	atts := attachmentsFor(t, dbs, m.ID)
+	big, ok := atts["big.bin"]
+	if !ok {
+		t.Fatalf("attachments = %+v, want big.bin", atts)
+	}
+	if big.StoragePath == "" || big.Size != 100_000 {
+		t.Errorf("big.bin = %+v, want the decoded size", big)
+	}
+	if want := fmt.Sprintf("%x", sha256.Sum256(bytes.Repeat([]byte{0x5a}, 100_000))); big.ContentHash != want {
+		t.Errorf("big.bin hash = %q, want %q", big.ContentHash, want)
 	}
 }
 

@@ -184,6 +184,14 @@ var mirrorMigrations = []migration{
 			`ALTER TABLE messages ADD COLUMN body_status TEXT NOT NULL DEFAULT 'ok'`,
 		},
 	},
+	{
+		version: 5,
+		statements: []string{
+			// Extraction and embeddings dedupe by content, not by row: the decoded
+			// bytes' hash is the durable key (ARCHITECTURE.md section 3).
+			`CREATE INDEX idx_attachments_hash ON attachments(content_hash)`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.

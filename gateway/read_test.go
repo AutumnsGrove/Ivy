@@ -533,6 +533,84 @@ func TestMessageListsAttachments(t *testing.T) {
 	}
 }
 
+func TestMessageListsAttachmentsFromTheTable(t *testing.T) {
+	t.Parallel()
+	srv, dbs := newSeededServer(t)
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox})
+	mustMessage(t, dbs, store.Message{
+		ID: "m1", AccountID: "acct-1", FolderID: "inbox-1", UID: 1, ContentKey: "ck:m1",
+		HasAttachments: true,
+	})
+	// No raw message at all: the listing must come from the stored rows.
+	if err := dbs.ReplaceMessageAttachments(context.Background(), "m1", []store.Attachment{
+		{Filename: "note.txt", MIMEType: "text/plain", Size: 16, ContentHash: "h", StoragePath: "2"},
+		{Filename: "logo.png", MIMEType: "image/png", Size: 8, ContentHash: "h2", CID: "logo@example", StoragePath: "3"},
+	}); err != nil {
+		t.Fatalf("seed attachments: %v", err)
+	}
+
+	var msg api.MailMessage
+	if code := getJSON(t, srv.URL+"/api/v1/messages/m1", &msg); code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", code)
+	}
+	if len(msg.Attachments) != 2 {
+		t.Fatalf("attachments = %+v, want the two stored rows", msg.Attachments)
+	}
+	if msg.Attachments[0].Id != "2" || msg.Attachments[0].Name != "note.txt" || msg.Attachments[0].Kind != api.File {
+		t.Errorf("file = %+v", msg.Attachments[0])
+	}
+	if msg.Attachments[1].Kind != api.Image {
+		t.Errorf("image = %+v", msg.Attachments[1])
+	}
+}
+
+func TestPartsAreServedFromTheTable(t *testing.T) {
+	t.Parallel()
+	srv, dbs := newSeededServer(t)
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox})
+	mustMessage(t, dbs, store.Message{
+		ID: "m1", AccountID: "acct-1", FolderID: "inbox-1", UID: 1, ContentKey: "ck:m1",
+		RawBlob: inlineMessage(), HasAttachments: true,
+	})
+	if err := dbs.ReplaceMessageAttachments(context.Background(), "m1", []store.Attachment{
+		{Filename: "note.txt", MIMEType: "text/plain", Size: 16, ContentHash: "h", StoragePath: "2"},
+		{Filename: "logo.png", MIMEType: "image/png", Size: 8, ContentHash: "h2", CID: "logo@example", StoragePath: "3"},
+	}); err != nil {
+		t.Fatalf("seed attachments: %v", err)
+	}
+
+	resp, err := http.Get(srv.URL + "/api/v1/messages/m1/attachments/2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("attachment status = %d, want 200", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != "attachment bytes" {
+		t.Errorf("attachment body = %q", body)
+	}
+
+	resp, err = http.Get(srv.URL + "/api/v1/messages/m1/inline/logo@example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("inline status = %d, want 200", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "image/png" {
+		t.Errorf("inline Content-Type = %q", ct)
+	}
+	body, _ = io.ReadAll(resp.Body)
+	if string(body) != "tiny png" {
+		t.Errorf("inline body = %q", body)
+	}
+}
+
 func twoDigits(n int) string {
 	return string(rune('0'+n/10)) + string(rune('0'+n%10))
 }

@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"html"
@@ -61,9 +62,15 @@ func bodyDocument(m store.Message) string {
 // source in the stored HTML to this path, so an image inside the body document
 // loads only from here.
 func (s *Server) handleInline(w http.ResponseWriter, r *http.Request) {
-	s.servePart(w, r, func(p mailmime.PartInfo) bool {
-		return p.CID != "" && trimCID(p.CID) == trimCID(r.PathValue("cid"))
-	}, "inline")
+	want := trimCID(r.PathValue("cid"))
+	s.servePart(w, r, "inline",
+		func(ctx context.Context) (store.Attachment, error) {
+			return s.dbs.GetAttachmentByCID(ctx, r.PathValue("id"), want)
+		},
+		func(p mailmime.PartInfo) bool {
+			return p.CID != "" && trimCID(p.CID) == want
+		},
+	)
 }
 
 // handleAttachment streams one file attachment by its part path, the id the
@@ -71,30 +78,68 @@ func (s *Server) handleInline(w http.ResponseWriter, r *http.Request) {
 // through mime.CopyPart, never held whole.
 func (s *Server) handleAttachment(w http.ResponseWriter, r *http.Request) {
 	want := r.PathValue("part")
-	s.servePart(w, r, func(p mailmime.PartInfo) bool {
-		return p.Path == want && (p.Attachment || p.CID != "")
-	}, "attachment")
+	s.servePart(w, r, "attachment",
+		func(ctx context.Context) (store.Attachment, error) {
+			return s.dbs.GetAttachmentByPath(ctx, r.PathValue("id"), want)
+		},
+		func(p mailmime.PartInfo) bool {
+			return p.Path == want && (p.Attachment || p.CID != "")
+		},
+	)
 }
 
-// servePart loads a message, finds the part match selects, and streams it. The
-// raw message is walked once to find the part (headers before any body byte)
-// then rewound and copied, so a spooled message is never held in memory.
-func (s *Server) servePart(w http.ResponseWriter, r *http.Request, match func(mailmime.PartInfo) bool, disposition string) {
+// servePart resolves a part from the stored attachment rows and streams it.
+// Only a message mirrored before the table was populated falls back to walking
+// the raw message; either way the bytes are streamed, never held whole.
+func (s *Server) servePart(w http.ResponseWriter, r *http.Request, kind string, lookup func(context.Context) (store.Attachment, error), match func(mailmime.PartInfo) bool) {
 	m, err := s.dbs.GetMessage(r.Context(), r.PathValue("id"))
 	if err != nil {
 		s.messageError(w, r, err)
 		return
 	}
+	att, err := lookup(r.Context())
+	switch {
+	case err == nil:
+		s.streamStored(w, r, m, att, kind)
+	case errors.Is(err, store.ErrNotFound):
+		s.streamFromRaw(w, r, m, match, kind)
+	default:
+		s.serverError(w, r, err)
+	}
+}
+
+// streamStored serves a part by the path the table recorded, rewinding the raw
+// message and copying the decoded part.
+func (s *Server) streamStored(w http.ResponseWriter, r *http.Request, m store.Message, att store.Attachment, kind string) {
 	rc, ok := s.rawReader(m)
 	if !ok {
-		s.notFound(w, r, disposition)
+		s.notFound(w, r, kind)
+		return
+	}
+	defer func() { _ = rc.Close() }()
+	if _, err := rc.Seek(0, 0); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	setPartHeaders(w, att.MIMEType, att.Filename, kind)
+	if err := mailmime.CopyPart(rc, att.StoragePath, w); err != nil {
+		slog.WarnContext(r.Context(), "gateway: serve message part", "message", m.ID, "part", att.StoragePath, "error", err)
+	}
+}
+
+// streamFromRaw is the compatibility path: walk the raw message to find the
+// part, then rewind and copy it.
+func (s *Server) streamFromRaw(w http.ResponseWriter, r *http.Request, m store.Message, match func(mailmime.PartInfo) bool, kind string) {
+	rc, ok := s.rawReader(m)
+	if !ok {
+		s.notFound(w, r, kind)
 		return
 	}
 	defer func() { _ = rc.Close() }()
 
 	parts, err := mailmime.ListParts(rc)
 	if err != nil {
-		s.notFound(w, r, disposition)
+		s.notFound(w, r, kind)
 		return
 	}
 	for _, p := range parts {
@@ -105,26 +150,29 @@ func (s *Server) servePart(w http.ResponseWriter, r *http.Request, match func(ma
 			s.serverError(w, r, err)
 			return
 		}
-		contentType := p.ContentType
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
-		h := w.Header()
-		h.Set("Content-Type", contentType)
-		h.Set("Cache-Control", "no-store")
-		if disposition == "attachment" {
-			h.Set("Content-Disposition", stdmime.FormatMediaType("attachment", map[string]string{"filename": p.Filename}))
-		} else {
-			h.Set("Content-Disposition", "inline")
-		}
+		setPartHeaders(w, p.ContentType, p.Filename, kind)
 		if err := mailmime.CopyPart(rc, p.Path, w); err != nil {
-			// The status and headers are already sent, so a mid-stream decode
-			// failure can only be logged; the client sees a truncated body.
 			slog.WarnContext(r.Context(), "gateway: serve message part", "message", m.ID, "part", p.Path, "error", err)
 		}
 		return
 	}
-	s.notFound(w, r, disposition)
+	s.notFound(w, r, kind)
+}
+
+// setPartHeaders writes the response headers before any body byte. A mid-stream
+// decode failure can then only be logged; the client sees a truncated body.
+func setPartHeaders(w http.ResponseWriter, contentType, filename, kind string) {
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	h := w.Header()
+	h.Set("Content-Type", contentType)
+	h.Set("Cache-Control", "no-store")
+	if kind == "attachment" {
+		h.Set("Content-Disposition", stdmime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+	} else {
+		h.Set("Content-Disposition", "inline")
+	}
 }
 
 // messageError maps a load failure onto the error envelope: a hidden or absent
