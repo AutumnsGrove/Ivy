@@ -144,9 +144,11 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   uses the library default concurrency (GOMAXPROCS goroutines and buffers per encoder). For
   one-response-at-a-time streaming `zstd.WithEncoderConcurrency(1)` is the usual setting and
   matters on a 4-core, ~800 MB box. Benchmark on the potato before changing.
-- **N6 (open)** · `gateway/gateway.go` · unknown `/api/...` paths and wrong methods answer with
-  the mux's plain-text 404/405, but the contract promises a JSON `Error` body. Lands with the
-  2f handlers.
+- **N6 (resolved, 2f)** · `gateway/gateway.go` · unknown `/api/...` paths and wrong methods
+  answered with the mux's plain-text 404/405, but the contract promises a JSON `Error` body. The
+  read handlers wrap the API mux in a rewriter that turns only the mux's own `text/plain` errors
+  into `{code, message}` and leaves a handler's JSON 404 alone; `TestUnknownAPIPathsAreJSON`
+  covers both the 404 and the 405.
 
 ## CI pipeline and load budgets (`1d2ebbb`..`9e3f6d3`)
 

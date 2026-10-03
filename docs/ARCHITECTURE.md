@@ -211,9 +211,9 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   real destination before leaving. **Chunk 2d finding:** `render/` produces the sanitised HTML and
   the policy, and the reader frames it with `sandbox="allow-same-origin"` and a deny-all CSP. A
   `<meta>` CSP inside a `srcdoc` frame is enforced by WebKit but ignored by Chromium, so the
-  cross-browser remote-content assertion moves to the body-document endpoint (2f), which will carry
-  the policy as a response header; the app's own CSP needs SvelteKit build-time script hashes and
-  lands with the frontend swap (2g).
+  cross-browser remote-content assertion moves to the body-document endpoint (2f, now in place),
+  which carries the policy as a response header; the app's own CSP needs SvelteKit build-time script
+  hashes and lands with the frontend swap (2g).
 - **Threading (chunk 2e):** JWZ from Message-ID/References/In-Reply-To with a normalized-subject
   fallback, implemented in `thread/` as pure logic and stored on each message and in the
   `threads` table. A thread's id is the **content key** of its root message, so a move or a

@@ -5,11 +5,12 @@ It **is tracked in git** so every step is recoverable. **Update this file and co
 stage at the end of every sub-chunk (not just every chunk)** so the next session can pick up cleanly
 after a context clear.
 
-Last updated: 2026-10-02, after Chunk 2 sub-chunk 2e (the `thread/` JWZ threading pass, the store
-`thread_id`/`threads` writes and the sync wiring). Chunk 1 (1a-1h) and 2a-2e are done, except one
-item: the cross-browser remote-content Playwright assertion, which needs the body-document
-endpoint (2f) because Chromium ignores a `<meta>` CSP inside a `srcdoc` frame (finding recorded
-under "Now"). 2f is next. The audit's ground rules are below.
+Last updated: 2026-10-02, after Chunk 2 sub-chunk 2f (the real gateway read handlers:
+`/accounts`, `/inbox`, `/messages/{id}`, `/messages/{id}/summary`, `/mirror/health`, plus the
+body-document endpoint with `render.ContentSecurityPolicy` as a response header and streaming
+inline/attachment parts). Chunk 1 (1a-1h) and 2a-2f are done; the cross-browser remote-content
+Playwright assertion still needs the frontend reader to point at the body-document endpoint, so it
+lands with 2g. 2g is next. The audit's ground rules are below.
 
 ## How to run a chunk (read this first)
 
@@ -59,7 +60,8 @@ enforced by tests and CI, not just stated here.
 - **Config and scenario YAML are strict** (unknown keys fail). Keep new keys in the structs.
 - **API responses carry** `Cache-Control: no-store`, and every response `nosniff`,
   `Referrer-Policy: no-referrer` and `X-Frame-Options: SAMEORIGIN`. 2d added a deny-all CSP to API
-  replies; the reader body document's own policy (`render.ContentSecurityPolicy`) lands with 2f.
+  replies; 2f adds the body document, which overrides it with `render.ContentSecurityPolicy` as a
+  response header (a `<meta>` CSP inside a frame is ignored by Chromium).
 - **Failure paths are first-class** (`STANDARDS.md` 4a, with a limits table). Anything sized by the
   sender is bounded and streamed through disk. Sync tiers a message by size: up to 2 MiB in
   `raw_blob`, up to 64 MiB streamed to `spool/<folder>/<uid>.eml` (`raw_path`), above that not
@@ -73,18 +75,20 @@ enforced by tests and CI, not just stated here.
 - **Derived columns have their own setters.** 2d writes `store.SetMessageBodyHTML`, 2e writes
   `store.SetMessageThread`; `UpsertMessage` never overwrites them after the first insert.
 - **Open items** are `N`-numbered in `papercuts.md`: N3 (the fake `/systemone` has no `score`
-  questions, chunk 5), N6 (unknown `/api` paths answer the mux's plain-text 404/405, part of 2f),
-  N8 (identical `Message-ID`s share a content key and its tags/verdict; needs a threat-model line).
-  N4/N5 are resolved (laptop numbers in `PERFORMANCE.md`; re-measure on the potato when available).
+  questions, chunk 5), N8 (identical `Message-ID`s share a content key and its tags/verdict; needs a
+  threat-model line). N4/N5 are resolved (laptop numbers in `PERFORMANCE.md`; re-measure on the
+  potato when available) and N6 is resolved by 2f (JSON error envelope for unknown `/api` paths and
+  wrong methods).
 
-## ▶ Now: Chunk 2 (Milestone 1: Read) — 2a-2e done, start 2f
+## ▶ Now: Chunk 2 (Milestone 1: Read) — 2a-2f done, start 2g
 
 Chunk 1's sub-chunks (1a-1h) are **complete** and the day-one smoke slice is the gate that passed,
 so Chunk 2 is unblocked. **Chunk 2 is split into 2a-2h at chunk 1's granularity**: it is a full
 feature milestone spanning eight layers — store, IMAP read fetch, MIME parse, sanitize/render, JWZ
 threading, REST handlers, frontend swap, state seeder — each with its own TDD loop and its own
-definition-of-done layers, and the dependency chain is strictly sequential. **2a-2e are done;
-start at 2f.** Chunk 1's deliberately deferred items land in named sub-chunks below. The 1a-1h sub-chunk
+definition-of-done layers, and the dependency chain is strictly sequential. **2a-2f are done;
+start at 2g.** The backend read surface is real now; 2g swaps the frontend reader (`client.ts`)
+onto it. Chunk 1's deliberately deferred items land in named sub-chunks below. The 1a-1h sub-chunk
 notes are kept below for reference.
 
 ### Chunk 2 sub-chunks
@@ -94,14 +98,14 @@ notes are kept below for reference.
 | **2a** — DONE | Mirror schema migration (`threads`, `attachments`, `accounts.icon`/`photo_blob`, indexed `seen`) + store query layer: content key, account/folder/message upsert+get, paged inbox (per-account and combined), unread + needs counts | Integration on temp SQLite; append-only + v1→v2 upgrade tests |
 | **2b** — DONE | `sync/` read fetch: go-imap client connect → `LIST` + role heuristics → envelope/flags → raw body → upsert by `(folder_id, uid)` + content key, newest-first, checkpointed | Through the real `imapclient` against mailworld; resumes cleanly |
 | **2c** — DONE | `mime/` parse (enmime): text/html, attachments, inline `cid:`, `Authentication-Results`, snippet, non-fatal errors; wired into `sync/` + store columns | Corpus + fuzz |
-| **2d** — DONE (one item to 2f) | `render/` sanitize + sandboxed iframe/CSP: bluemonday, remote-image policy + allow-list, tracking-pixel strip, `cid:` rewrite, plain-text fallback | XSS corpus + fuzz done; the cross-browser remote-content Playwright assertion needs the body-document endpoint (2f) |
+| **2d** — DONE (browser item to 2g) | `render/` sanitize + sandboxed iframe/CSP: bluemonday, remote-image policy + allow-list, tracking-pixel strip, `cid:` rewrite, plain-text fallback | XSS corpus + fuzz done; 2f adds the body-document endpoint with the policy as a header, so the cross-browser remote-content Playwright assertion now needs only the reader to point at it (2g) |
 | **2e** — DONE | `thread/` JWZ threading + store `thread_id`, normalized-subject fallback | Invariant/property tests + fixtures |
-| **2f** | Gateway read handlers on the real store: `/accounts`, `/inbox`, `/messages/{id}`, `/messages/{id}/summary`, `/mirror/health` | `httptest` against the generated contract |
+| **2f** — DONE | Gateway read handlers on the real store: `/accounts`, `/inbox`, `/messages/{id}`, `/messages/{id}/summary`, `/mirror/health`, plus the body-document, inline and attachment endpoints | `httptest` against the generated contract |
 | **2g** | Frontend swap for the reader (real `client.ts` bodies) + settings skeleton + stats-panel skeleton + account customization (rename, icon, photo); E2E both viewports, visual baselines, axe; non-reader routes stay mocked | Playwright phone + desktop |
 | **2h** | `state.db` fast seeder + `ivy-dev --mode fast` + the `full == fast` agreement test for `demo` + named-state Playwright | `DEV.md` 8; seeder determinism |
 
 Order: 2a → 2b → 2c, then 2d and 2e (threading depends only on parse, not on render), then
-2f → 2g → 2h (2h needs 2a-2e to produce the same visible mailbox as `full`). 2d may overlap 2e.
+2f → 2g → 2h (2h needs 2a-2f to produce the same visible mailbox as `full`). 2d may overlap 2e.
 
 **2a — mirror schema + store query layer (Go): DONE (2026-10-02, commits `42f86f3`..`229fefa`).**
 `store/` migration 2 adds `threads`, `attachments`, `needs_me`, `accounts.icon`/`photo_blob` and
@@ -176,12 +180,30 @@ over random reference graphs, a JSON fixture corpus, a 20k-reference hostile cha
 `BenchmarkBuild`. The quadratic ancestor walk in `setParent` was fixed for fresh leaves (10k chain:
 95 ms -> 8 ms) so a long References header stays linear. `make check` is green.
 
-**2d finding, deferred to 2f:** a `<meta>` Content-Security-Policy inside a `srcdoc` iframe is
-enforced by WebKit but **ignored by Chromium**, and WebKit does not report `srcdoc` subresource
-requests to Playwright, so a meaningful cross-browser network assertion needs the body served as
-its own same-origin document with the policy as a response header. That document endpoint belongs
-with the 2f read handlers; until then the server-side removal of remote content (Go tests) is the
-enforcement and the frame CSP is defence in depth. The SPA's own CSP additionally needs SvelteKit
+**2f — gateway read handlers on the real store (Go): DONE (2026-10-02, commits
+`fe20330`..`7e7c468`).** The five contract endpoints now answer from the mirror in the generated
+`api` types: `/accounts` (with per-account unread and derived sync state), `/inbox` (keyset paging
+and whole-view counts), `/messages/{id}`, `/messages/{id}/summary` and `/mirror/health`. `store`
+gained `AccountStats`, `MessageNeeds` and `MirrorBytes`; `mime` gained `ListParts` (a bounded,
+streaming enumeration of every leaf with its `CopyPart` path, decoded size and content id) and
+`CopyCID` (serve one inline part by content id). The reader's body is its own endpoint,
+`/messages/{id}/body`, served as `text/html` with `render.ContentSecurityPolicy` as a **response
+header** (the 2d finding), so Chromium enforces a real policy; the sanitized HTML is stored, never
+re-parsed. Inline and attachment parts stream from `raw_blob` or the spool file through
+`mime.CopyPart`, rewind-and-copy, never held in memory. Unknown `/api` paths and wrong methods now
+answer the JSON error envelope (N6 resolved) via a rewriter that touches only the mux's plain-text
+404/405. Tests: `httptest` against seeded real SQLite (both blob and spool part serving, the
+too-large body, the JSON 404/405, the CSP header), formatting unit tables, and a 10k-message inbox
+benchmark. `make check` is green; the inbox list is ~15 ms/op at 10k messages (the whole-view
+counts dominate), a documented follow-up.
+
+**2d finding, resolved in 2f, browser assertion to 2g:** a `<meta>` Content-Security-Policy inside a
+`srcdoc` iframe is enforced by WebKit but **ignored by Chromium**, and WebKit does not report
+`srcdoc` subresource requests to Playwright, so a meaningful cross-browser network assertion needs
+the body served as its own same-origin document with the policy as a response header. 2f adds that
+endpoint (`/api/v1/messages/{id}/body`, tested in Go) and the inline endpoint it loads images from.
+The Playwright assertion still cannot run until the reader's frame points at the endpoint instead
+of using `srcdoc` (the frontend swap is 2g); the SPA's own CSP additionally needs SvelteKit
 build-time script hashes and is folded into 2g.
 
 Two seams are fixed up front so the chunks stay independently committable:
@@ -191,9 +213,12 @@ Two seams are fixed up front so the chunks stay independently committable:
   checkpointed. No IDLE, no QRESYNC, no outbox, no writes or moves. Chunk 3 generalizes this
   boundary rather than replacing it, so 2b must not grow into the sync engine.
 - **Mock seam.** Only `/accounts`, `/inbox`, `/messages/{id}`, `/messages/{id}/summary` and
-  `/mirror/health` become real in 2f. `/search` (chunk 3), `/ask` + `/checks` (chunk 5),
-  `/tags`/`/rules`/`/people` (chunk 3) and `/reading` (chunk 3 triage) stay mock-backed behind the
-  unchanged `client.ts` signatures. Swapping them is per-milestone work, not chunk 2.
+  `/mirror/health` become real in 2f, plus the non-contract document endpoints the reader needs
+  (`/messages/{id}/body`, `/messages/{id}/inline/{cid}`, `/messages/{id}/attachments/{part}`);
+  these serve HTML/bytes, not JSON, so they are not in `openapi.yaml`. `/search` (chunk 3), `/ask`
+  + `/checks` (chunk 5), `/tags`/`/rules`/`/people` (chunk 3) and `/reading` (chunk 3 triage) stay
+  mock-backed behind the unchanged `client.ts` signatures. Swapping them is per-milestone work, not
+  chunk 2.
 
 Assumed defaults for 2g/2h, veto if wrong: `/reading` stays a mock skeleton; the stats panel is UI
 over any seeded `api_calls` rows while the real ledger endpoint waits for the chunk-4 gate; account
@@ -357,8 +382,7 @@ Chunk 1 (a-1h) is done, but these were deliberately left for later. Each names w
   version waits until there is more than one migration; `sqlc` waits for real queries (chunk 2/3).
 
 **Doc folds and probes still open** (see the "Still-open prerequisites" note under "Where we
-stand"): QRESYNC sync, outbox APPEND-to-Sent, the body-document CSP (2f; the render/iframe fold is
-in `ARCHITECTURE.md` 5) and PDF extraction tiers are not
+stand"): QRESYNC sync, outbox APPEND-to-Sent, and PDF extraction tiers are not
 folded; Jev real-mail accuracy (needs a labelled corpus), send-as scope, DMARC and the iPhone/HEIC
 checks remain unprobed.
 
@@ -372,8 +396,8 @@ the local Go toolchain off 1.26.1, which `govulncheck` flags.
   seam is `web/src/lib/api/client.ts` over `web/src/lib/api/mock.ts`; `web/src/lib/types.ts` now
   re-exports the OpenAPI-generated schema (only `Settings` is hand-written). Mutating actions still
   only toast.
-- **Backend: Chunk 0 done; Chunk 1 (a-1h) done; Chunk 2 (2a-2d) in progress.** Root Go module
-  `github.com/AutumnsGrove/Ivy`;
+- **Backend: Chunk 0 done; Chunk 1 (a-1h) done; Chunk 2 (2a-2f) done; 2g next.** Root Go
+  module `github.com/AutumnsGrove/Ivy`;
   `store/` (two DBs, pragmas, positional migrations), `config/`, `gateway/` (`/api/v1/version`,
   `/api/v1/health`), `cmd/` + `main.go` (`ivy run|init|doctor`), `api/openapi.yaml` with Go + TS
   codegen committed and a `make drift` check, and a root `Makefile`. `internal/mailworld` has the
@@ -386,27 +410,28 @@ the local Go toolchain off 1.26.1, which `govulncheck` flags.
   API responses, `internal/asset` serves the precompressed embedded frontend, and `make web-assets`
   builds and precompresses it. CI is live: `.github/workflows/ci.yml` (`go`, `nocgo`, `drift`, `web`,
   `e2e`, `smoke`, `guard`, `deps`, `codeql`) plus `docs.yml`, with the real-binary smoke as the
-  day-one gate. Chunk 2 started: `store/` has the read-path schema and query layer (2a) and `sync/`
+  day-one gate. Chunk 2: `store/` has the read-path schema and query layer (2a) and `sync/`
   has the one-shot IMAP read fetch that upserts by `(folder, uid)` + content key, newest first and
   resumable (2b), and `mime/` parses the raw bodies into text, snippet, attachments, threading
   headers and auth results, which `sync/` now stores (2c), `render/` sanitises each HTML body into
-  `body_html_sanitized` (2d), and `thread/` groups messages into conversations with JWZ threading,
-  which `sync/` writes to `thread_id` and the `threads` table (2e). Still no `Dockerfile` and no
-  image-publish workflow (chunk 1/3).
+  `body_html_sanitized` (2d), `thread/` groups messages into conversations with JWZ threading,
+  which `sync/` writes to `thread_id` and the `threads` table (2e), and `gateway/` now serves the
+  real read API (the five contract endpoints plus the body-document, inline and attachment
+  endpoints) from the mirror (2f). Still no `Dockerfile` and no image-publish workflow (chunk 1/3).
 - **Spikes: all run**; findings in `docs/spikes/`. Gates that matter to chunk 1: `mailworld` must
   implement CONDSTORE/QRESYNC (S2, because Purelymail offers them per S1); Purelymail SMTP does not
   file a Sent copy (Ivy must APPEND); custom keywords persist; SMTP `SIZE` ~48.8 MiB.
 - **Still-open prerequisites**: `api/openapi.yaml` is now written for the read surface; the doc
-  folds for QRESYNC sync, outbox APPEND-to-Sent, the body-document CSP (2f) and PDF extraction tiers are
+  folds for QRESYNC sync, outbox APPEND-to-Sent, and PDF extraction tiers are
   not done; Jev real-mail accuracy is deferred until a labelled corpus; send-as scope, DMARC and the
   iPhone/HEIC checks remain unprobed. (Consolidated with the rest under **Open items** above.)
 
-**2d deferred item:** the reader's cross-browser remote-content Playwright assertion waits for the
-body-document endpoint (2f), which must serve the sanitised HTML with
-`render.ContentSecurityPolicy` as a response header. Chromium ignores a `<meta>` CSP in `srcdoc`;
-WebKit enforces it but hides `srcdoc` subresource requests from Playwright. The reader's frame
-(`web/src/lib/components/mail/MessageBody.svelte`) is already in place and the server-side removal
-is tested in Go.
+**2d item now folded:** 2f adds the body-document endpoint (`/api/v1/messages/{id}/body`) that
+serves the sanitised HTML with `render.ContentSecurityPolicy` as a response header, and the inline
+endpoint it loads `cid:` images from. The server-side policy is tested in Go; the cross-browser
+remote-content Playwright assertion lands with 2g, when the reader's frame points at the endpoint
+instead of using `srcdoc`. Chromium ignores a `<meta>` CSP in `srcdoc`; WebKit enforces it but hides
+`srcdoc` subresource requests from Playwright.
 
 ## The chunk plan
 
@@ -419,7 +444,7 @@ and triage is chunk 5** (send needs no LLM gate); 4 and 5 can still be narrowed.
 |---|---|---|---|
 | **0** | Contract + Go skeleton | `STANDARDS.md` 4/6, `ARCHITECTURE.md` 2/3 | **done** (2026-10-02, commits `aa0e438`..`68e5fce`) |
 | **1** | Harness = `mailworld` + `ivy-dev` + `make dev` + day-one E2E + CI | `DEV.md`, `STANDARDS.md` 3, `TESTING.md` 1/2/8, `CI.md`, `PERFORMANCE.md` 1 | **done** (2026-10-02; open items listed above) |
-| **2** | Milestone 1: Read (real mirror behind the screens) | `PLAN.md` 5, `ARCHITECTURE.md` 3/5, `TESTING.md` 3 | **in progress** (2a-2e done; 2f next) |
+| **2** | Milestone 1: Read (real mirror behind the screens) | `PLAN.md` 5, `ARCHITECTURE.md` 3/5, `TESTING.md` 3 | **in progress** (2a-2f done; 2g next) |
 | **3** | Milestone 2: Sync (backfill, QRESYNC/IDLE, outbox, tags, attachments, search, backup, update) | `ARCHITECTURE.md` 4/9, `TESTING.md` 2/6 | not started |
 | **4** | Milestone 3: Send (compose, identities, undo send, drafts, SMTP + APPEND to Sent) | `PLAN.md` 5, `ARCHITECTURE.md` 5 | not started |
 | **5** | Milestone 4: Triage (Jev, the gate + ledger, cascade, newsletters, receipts, vision, ask, stats) | `JEV.md`, `ARCHITECTURE.md` 6/7, `TESTING.md` 4 | not started |
