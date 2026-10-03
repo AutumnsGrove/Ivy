@@ -2,7 +2,7 @@
 GO        ?= go
 GENERATED := api/api.gen.go web/src/lib/api/schema.d.ts
 
-.PHONY: check generate drift fmt vet lint test web-check dev dev-fake web-assets e2e smoke guard golangci web-budget
+.PHONY: check generate drift fmt vet lint test web-check dev dev-fake web-assets e2e smoke guard golangci web-budget docs
 
 # Local dev stack: mailworld + Ivy + Vite against seeded, offline-safe data.
 dev:
@@ -66,6 +66,12 @@ smoke: web-assets
 # and no test that could reach a live provider (CI.md section 2).
 guard:
 	bash .github/scripts/guard.sh
+
+# Local markdown link integrity, the same offline check docs.yml runs. Tracked
+# files only: CI checks out a clean tree, but a local one has node_modules full
+# of other projects' READMEs. Needs lychee (brew install lychee).
+docs:
+	git ls-files '*.md' | xargs lychee --offline --no-progress
 
 # Build the frontend into the embed directory and precompress it (brotli 11,
 # zstd, gzip 9). The generated files are git-ignored; only the placeholder is
