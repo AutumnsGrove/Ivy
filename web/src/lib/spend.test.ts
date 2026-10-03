@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from './api/errors';
-import { callsToCsv, formatMicros, pageCalls, summarise } from './spend';
+import { callsToCsv, formatMicros, outcomeOf, pageCalls, periodOf, summarise } from './spend';
 import type { Account, CallRecord } from './types';
 
 const NOW = new Date('2026-10-15T14:00:00Z');
@@ -143,5 +143,20 @@ describe('callsToCsv', () => {
 		const csv = callsToCsv([call({ model: 'a,"b"' }), call({ model: '=HYPERLINK("http://x")' })], accounts);
 		expect(csv).toContain('"a,""b"""');
 		expect(csv).toContain(`"'=HYPERLINK(""http://x"")"`);
+	});
+});
+
+describe('query parsing', () => {
+	const url = (q: string) => new URL(`http://ivy.test/?${q}`);
+
+	it('reads a known period and defaults to a week', () => {
+		expect(periodOf(url('period=30d'))).toBe('30d');
+		expect(periodOf(url(''))).toBe('7d');
+	});
+
+	it('ignores anything that is not an exact period or outcome name', () => {
+		for (const bad of ['__proto__', '30D', '', 'week', '7d%20']) expect(periodOf(url(`period=${bad}`))).toBe('7d');
+		for (const bad of ['__proto__', 'ERROR', '', 'all']) expect(outcomeOf(url(`outcome=${bad}`))).toBeUndefined();
+		expect(outcomeOf(url('outcome=held'))).toBe('held');
 	});
 });

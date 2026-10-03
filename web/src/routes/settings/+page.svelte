@@ -215,7 +215,7 @@
 			Back up tags and rules
 			<span class="sub">Your mail itself stays on the server</span>
 		</ListRow>
-		<ListRow chevron>
+		<ListRow href="/settings/spend" chevron>
 			{#snippet leading()}<span class="ico"><Eye /></span>{/snippet}
 			Spend and calls
 		</ListRow>

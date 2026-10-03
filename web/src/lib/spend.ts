@@ -37,6 +37,25 @@ export const OUTCOMES: { value: CallOutcome; label: string }[] = [
 	{ value: 'held', label: 'Held back' }
 ];
 
+/** How the total reads under each period, e.g. "Spent in the last 7 days". */
+export const PERIOD_PHRASE: Record<SpendPeriod, string> = {
+	today: 'Spent today',
+	'7d': 'Spent in the last 7 days',
+	'30d': 'Spent in the last 30 days',
+	all: 'Spent so far'
+};
+
+// The query string is untrusted: only exact names are honoured, anything else is the default.
+export function periodOf(url: URL): SpendPeriod {
+	const raw = url.searchParams.get('period');
+	return PERIODS.find((p) => p.value === raw)?.value ?? '7d';
+}
+
+export function outcomeOf(url: URL): CallOutcome | undefined {
+	const raw = url.searchParams.get('outcome');
+	return OUTCOMES.find((o) => o.value === raw)?.value;
+}
+
 export const MAX_PAGE = 100;
 export const DEFAULT_PAGE = 25;
 
