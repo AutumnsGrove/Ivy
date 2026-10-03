@@ -5,12 +5,11 @@ It **is tracked in git** so every step is recoverable. **Update this file and co
 stage at the end of every sub-chunk (not just every chunk)** so the next session can pick up cleanly
 after a context clear.
 
-Last updated: 2026-10-02, after Chunk 2 sub-chunk 2d (the `render/` sanitizer, its wiring into
-`sync/`, the sandboxed body frame, the optional `html` contract field and the API CSP). Chunk 1
-(1a-1h) and 2a-2d are done, except one item: the cross-browser remote-content Playwright
-assertion, which needs the body-document endpoint (2f) because Chromium ignores a `<meta>` CSP
-inside a `srcdoc` frame (finding recorded under "Now"). 2e is next. The audit's ground rules are
-below.
+Last updated: 2026-10-02, after Chunk 2 sub-chunk 2e (the `thread/` JWZ threading pass, the store
+`thread_id`/`threads` writes and the sync wiring). Chunk 1 (1a-1h) and 2a-2e are done, except one
+item: the cross-browser remote-content Playwright assertion, which needs the body-document
+endpoint (2f) because Chromium ignores a `<meta>` CSP inside a `srcdoc` frame (finding recorded
+under "Now"). 2f is next. The audit's ground rules are below.
 
 ## How to run a chunk (read this first)
 
@@ -78,14 +77,14 @@ enforced by tests and CI, not just stated here.
   N8 (identical `Message-ID`s share a content key and its tags/verdict; needs a threat-model line).
   N4/N5 are resolved (laptop numbers in `PERFORMANCE.md`; re-measure on the potato when available).
 
-## ▶ Now: Chunk 2 (Milestone 1: Read) — 2a-2d done, start 2e
+## ▶ Now: Chunk 2 (Milestone 1: Read) — 2a-2e done, start 2f
 
 Chunk 1's sub-chunks (1a-1h) are **complete** and the day-one smoke slice is the gate that passed,
 so Chunk 2 is unblocked. **Chunk 2 is split into 2a-2h at chunk 1's granularity**: it is a full
 feature milestone spanning eight layers — store, IMAP read fetch, MIME parse, sanitize/render, JWZ
 threading, REST handlers, frontend swap, state seeder — each with its own TDD loop and its own
-definition-of-done layers, and the dependency chain is strictly sequential. **2a-2d are done;
-start at 2e.** Chunk 1's deliberately deferred items land in named sub-chunks below. The 1a-1h sub-chunk
+definition-of-done layers, and the dependency chain is strictly sequential. **2a-2e are done;
+start at 2f.** Chunk 1's deliberately deferred items land in named sub-chunks below. The 1a-1h sub-chunk
 notes are kept below for reference.
 
 ### Chunk 2 sub-chunks
@@ -96,7 +95,7 @@ notes are kept below for reference.
 | **2b** — DONE | `sync/` read fetch: go-imap client connect → `LIST` + role heuristics → envelope/flags → raw body → upsert by `(folder_id, uid)` + content key, newest-first, checkpointed | Through the real `imapclient` against mailworld; resumes cleanly |
 | **2c** — DONE | `mime/` parse (enmime): text/html, attachments, inline `cid:`, `Authentication-Results`, snippet, non-fatal errors; wired into `sync/` + store columns | Corpus + fuzz |
 | **2d** — DONE (one item to 2f) | `render/` sanitize + sandboxed iframe/CSP: bluemonday, remote-image policy + allow-list, tracking-pixel strip, `cid:` rewrite, plain-text fallback | XSS corpus + fuzz done; the cross-browser remote-content Playwright assertion needs the body-document endpoint (2f) |
-| **2e** | `thread/` JWZ threading + store `thread_id`, normalized-subject fallback | Invariant/property tests + fixtures |
+| **2e** — DONE | `thread/` JWZ threading + store `thread_id`, normalized-subject fallback | Invariant/property tests + fixtures |
 | **2f** | Gateway read handlers on the real store: `/accounts`, `/inbox`, `/messages/{id}`, `/messages/{id}/summary`, `/mirror/health` | `httptest` against the generated contract |
 | **2g** | Frontend swap for the reader (real `client.ts` bodies) + settings skeleton + stats-panel skeleton + account customization (rename, icon, photo); E2E both viewports, visual baselines, axe; non-reader routes stay mocked | Playwright phone + desktop |
 | **2h** | `state.db` fast seeder + `ivy-dev --mode fast` + the `full == fast` agreement test for `demo` + named-state Playwright | `DEV.md` 8; seeder determinism |
@@ -162,6 +161,20 @@ sanitises each parsed HTML body and writes it through `store.SetMessageBodyHTML`
 `UpsertMessage`), so a re-sync cannot lose it. The web reader frames `MailMessage.html` in a
 sandboxed iframe and falls back to `paragraphs`; the API adds an optional `html` field and a
 deny-all CSP.
+
+**2e — `thread/` JWZ threading + store writes (Go): DONE (2026-10-02).** `thread/` is a pure,
+unit-tested JWZ implementation (link via References/In-Reply-To, prune placeholders, group the
+root set by normalized subject, sort members chronologically) with no database or clock. A thread's
+id is the content key of its root, so the assignment is stable across moves and UID changes; the
+placeholder root of a reply whose parent is absent stands when it has several children and is
+promoted when it has one (JWZ step 4.2). The subject fallback strips repeated `Re:`-family prefixes
+only, so `Fwd:` stays a separate conversation. The store gained `MessagesForThreading` (headers
+only, disabled excluded) and `ReplaceThreads` (one transaction: drop the account's thread rows,
+clear every `thread_id`, rewrite both), and `sync/` re-threads an account after each fetch so a
+reply filed in Archive joins its inbox root. Tests: table cases plus a shuffle-determinism property
+over random reference graphs, a JSON fixture corpus, a 20k-reference hostile chain (bounded), and a
+`BenchmarkBuild`. The quadratic ancestor walk in `setParent` was fixed for fresh leaves (10k chain:
+95 ms -> 8 ms) so a long References header stays linear. `make check` is green.
 
 **2d finding, deferred to 2f:** a `<meta>` Content-Security-Policy inside a `srcdoc` iframe is
 enforced by WebKit but **ignored by Chromium**, and WebKit does not report `srcdoc` subresource
@@ -376,8 +389,9 @@ the local Go toolchain off 1.26.1, which `govulncheck` flags.
   day-one gate. Chunk 2 started: `store/` has the read-path schema and query layer (2a) and `sync/`
   has the one-shot IMAP read fetch that upserts by `(folder, uid)` + content key, newest first and
   resumable (2b), and `mime/` parses the raw bodies into text, snippet, attachments, threading
-  headers and auth results, which `sync/` now stores (2c), and `render/` sanitises each HTML body into
-  `body_html_sanitized` (2d). Still no `Dockerfile` and no
+  headers and auth results, which `sync/` now stores (2c), `render/` sanitises each HTML body into
+  `body_html_sanitized` (2d), and `thread/` groups messages into conversations with JWZ threading,
+  which `sync/` writes to `thread_id` and the `threads` table (2e). Still no `Dockerfile` and no
   image-publish workflow (chunk 1/3).
 - **Spikes: all run**; findings in `docs/spikes/`. Gates that matter to chunk 1: `mailworld` must
   implement CONDSTORE/QRESYNC (S2, because Purelymail offers them per S1); Purelymail SMTP does not
@@ -405,7 +419,7 @@ and triage is chunk 5** (send needs no LLM gate); 4 and 5 can still be narrowed.
 |---|---|---|---|
 | **0** | Contract + Go skeleton | `STANDARDS.md` 4/6, `ARCHITECTURE.md` 2/3 | **done** (2026-10-02, commits `aa0e438`..`68e5fce`) |
 | **1** | Harness = `mailworld` + `ivy-dev` + `make dev` + day-one E2E + CI | `DEV.md`, `STANDARDS.md` 3, `TESTING.md` 1/2/8, `CI.md`, `PERFORMANCE.md` 1 | **done** (2026-10-02; open items listed above) |
-| **2** | Milestone 1: Read (real mirror behind the screens) | `PLAN.md` 5, `ARCHITECTURE.md` 3/5, `TESTING.md` 3 | **in progress** (2a-2d done; 2e next) |
+| **2** | Milestone 1: Read (real mirror behind the screens) | `PLAN.md` 5, `ARCHITECTURE.md` 3/5, `TESTING.md` 3 | **in progress** (2a-2e done; 2f next) |
 | **3** | Milestone 2: Sync (backfill, QRESYNC/IDLE, outbox, tags, attachments, search, backup, update) | `ARCHITECTURE.md` 4/9, `TESTING.md` 2/6 | not started |
 | **4** | Milestone 3: Send (compose, identities, undo send, drafts, SMTP + APPEND to Sent) | `PLAN.md` 5, `ARCHITECTURE.md` 5 | not started |
 | **5** | Milestone 4: Triage (Jev, the gate + ledger, cascade, newsletters, receipts, vision, ask, stats) | `JEV.md`, `ARCHITECTURE.md` 6/7, `TESTING.md` 4 | not started |

@@ -214,8 +214,15 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   cross-browser remote-content assertion moves to the body-document endpoint (2f), which will carry
   the policy as a response header; the app's own CSP needs SvelteKit build-time script hashes and
   lands with the frontend swap (2g).
-- **Threading:** JWZ from Message-ID/References/In-Reply-To with a normalized-subject fallback;
-  computed on arrival and stored.
+- **Threading (chunk 2e):** JWZ from Message-ID/References/In-Reply-To with a normalized-subject
+  fallback, implemented in `thread/` as pure logic and stored on each message and in the
+  `threads` table. A thread's id is the **content key** of its root message, so a move or a
+  UIDVALIDITY reset never re-derives it. The fallback strips only the `Re:` family (`RE[5]:`, `Re: Re:`), not
+  `Fwd:`, because a forward is a different subject (JWZ step 5). The pass runs over a whole
+  account after each fetch so a reply filed in Archive still joins its inbox root; it reads
+  headers only. Disabled messages are excluded, so they never anchor a thread. The subject pass
+  is a re-thread of the account, not incremental; chunk 3's steady-state sync narrows it once
+  it owns the flag/move updates.
 - **Composing with attachments and images (settled need, round 18):** the editor can attach
   photos and files and place images inline. **Browser limits:** a web page cannot browse the device
   photo library, so there is no "recent photos" grid. Photos, Camera and Files are buttons that open
