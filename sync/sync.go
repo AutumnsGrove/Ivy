@@ -137,7 +137,7 @@ func (f *Fetcher) Fetch(ctx context.Context, acct Account) (Result, error) {
 	if _, err := SweepSpool(ctx, f.dbs, f.now()); err != nil {
 		return Result{}, fmt.Errorf("sync account %s: %w", acct.ID, err)
 	}
-	if err := f.ensureAccount(ctx, acct); err != nil {
+	if err := f.EnsureAccount(ctx, acct); err != nil {
 		return Result{}, fmt.Errorf("sync account %s: %w", acct.ID, err)
 	}
 	c, err := dial(ctx, acct)
@@ -156,13 +156,8 @@ func (f *Fetcher) Fetch(ctx context.Context, acct Account) (Result, error) {
 	// cancelled run skips it, since the connection is gone and nothing more can
 	// be read.
 	if ctx.Err() == nil {
-		// Heal derived data first: it can change has_attachments, and a message
-		// fixed by a newer parser should read correctly from the next screen on.
-		if _, rerr := f.Rederive(ctx, acct.ID, rederiveBatch); rerr != nil && ferr == nil {
-			ferr = rerr
-		}
-		if terr := f.threadAccount(ctx, acct.ID); terr != nil && ferr == nil {
-			ferr = terr
+		if serr := f.Settle(ctx, acct.ID); serr != nil && ferr == nil {
+			ferr = serr
 		}
 	}
 	if ferr != nil && ctx.Err() != nil {
@@ -170,6 +165,20 @@ func (f *Fetcher) Fetch(ctx context.Context, acct Account) (Result, error) {
 		return res, fmt.Errorf("sync account %s: %w", acct.ID, ctx.Err())
 	}
 	return res, ferr
+}
+
+// Settle runs the passes that follow any batch of stored messages: heal derived
+// data, then rebuild the account's threads. The fetch and the fast dev seeder
+// both end with it, so they cannot disagree about either.
+func (f *Fetcher) Settle(ctx context.Context, accountID string) error {
+	// Heal derived data first: it can change has_attachments, and a message
+	// fixed by a newer parser should read correctly from the next screen on.
+	_, rerr := f.Rederive(ctx, accountID, rederiveBatch)
+	// Thread even when healing failed: the rows already mirrored are usable.
+	if terr := f.threadAccount(ctx, accountID); rerr == nil {
+		return terr
+	}
+	return rerr
 }
 
 // threadAccount rebuilds one account's conversations from the mirrored headers
@@ -231,10 +240,10 @@ func (f *Fetcher) fetchAll(ctx context.Context, c *imapclient.Client, acct Accou
 	return res, nil
 }
 
-// ensureAccount creates the mirror account row the first time sync runs. An
+// EnsureAccount creates the mirror account row the first time sync runs. An
 // existing row is left alone: display name, icon, colour and photo belong to
 // the settings UI (2g), not to the read path.
-func (f *Fetcher) ensureAccount(ctx context.Context, acct Account) error {
+func (f *Fetcher) EnsureAccount(ctx context.Context, acct Account) error {
 	if _, err := f.dbs.GetAccount(ctx, acct.ID); err == nil {
 		return nil
 	} else if !errors.Is(err, store.ErrNotFound) {
@@ -252,6 +261,37 @@ func (f *Fetcher) ensureAccount(ctx context.Context, acct Account) error {
 	return nil
 }
 
+// newFolder is the row a synced mailbox gets, whichever way its numbers arrived.
+func (f *Fetcher) newFolder(acct Account, name string, attrs []imap.MailboxAttr, uidValidity uint32, modSeq uint64) store.Folder {
+	return store.Folder{
+		ID:            folderRowID(acct.ID, name),
+		AccountID:     acct.ID,
+		Name:          name,
+		Role:          RoleFor(name, attrs),
+		UIDValidity:   uidValidity,
+		HighestModSeq: modSeq,
+		LastSyncAt:    f.now(),
+	}
+}
+
+// RecordFolder writes a mailbox's row without a connection, for the fast dev
+// seeder, which already knows the numbers a SELECT would have returned. A row
+// that exists keeps its id, as a re-sync would.
+func (f *Fetcher) RecordFolder(ctx context.Context, acct Account, name string, attrs []imap.MailboxAttr, uidValidity uint32, modSeq uint64) (store.Folder, error) {
+	folder := f.newFolder(acct, name, attrs, uidValidity, modSeq)
+	existing, err := f.dbs.GetFolderByName(ctx, acct.ID, name)
+	switch {
+	case err == nil:
+		folder.ID = existing.ID
+	case !errors.Is(err, store.ErrNotFound):
+		return store.Folder{}, fmt.Errorf("look up folder %s: %w", name, err)
+	}
+	if err := f.dbs.UpsertFolder(ctx, folder); err != nil {
+		return store.Folder{}, err
+	}
+	return folder, nil
+}
+
 // fetchFolder selects one mailbox, records it, and fetches the messages the
 // mirror does not already hold, newest UID first. It returns how many messages
 // it stored and how many it skipped because the mirror already had them.
@@ -262,15 +302,7 @@ func (f *Fetcher) fetchFolder(ctx context.Context, c *imapclient.Client, acct Ac
 	if err != nil {
 		return 0, 0, fmt.Errorf("select %s: %w", mb.Mailbox, err)
 	}
-	folder := store.Folder{
-		ID:            folderRowID(acct.ID, mb.Mailbox),
-		AccountID:     acct.ID,
-		Name:          mb.Mailbox,
-		Role:          RoleFor(mb.Mailbox, mb.Attrs),
-		UIDValidity:   data.UIDValidity,
-		HighestModSeq: data.HighestModSeq,
-		LastSyncAt:    f.now(),
-	}
+	folder := f.newFolder(acct, mb.Mailbox, mb.Attrs, data.UIDValidity, data.HighestModSeq)
 	// Reuse the row id an earlier sync assigned and, when UIDVALIDITY still
 	// matches, treat the stored UIDs as the checkpoint. A UIDVALIDITY change
 	// invalidates UIDs, so the whole folder is re-read; chunk 3 owns the
@@ -407,22 +439,7 @@ func (f *Fetcher) fetchInline(ctx context.Context, c *imapclient.Client, acct Ac
 		if !ok {
 			continue // the server sent a message we did not ask about
 		}
-		raw := buf.FindBodySection(section)
-		m := f.baseMessage(acct, folderID, meta)
-		m.RawBlob = raw
-		m.ContentKey = store.ContentKey(m.MessageID, headerBlock(raw))
-		// An in-memory message goes through the same bounded walk as a spooled one,
-		// so its attachment metadata and hashes are enumerated in one pass.
-		parsed := mailmime.ParseStream(bytes.NewReader(raw), acct.TrustedAuthservIDs...)
-		applyParsed(&m, parsed)
-		if parsed.BodySkipped {
-			m.BodyStatus = store.BodyUnparsed
-		}
-		if err := f.dbs.UpsertMessage(ctx, m); err != nil {
-			_ = cmd.Close()
-			return stored, err
-		}
-		if err := f.dbs.SetMessageDerived(ctx, m.ID, derivedFrom(m.ID, parsed)); err != nil {
+		if err := f.storeInline(ctx, acct, folderID, meta, buf.FindBodySection(section)); err != nil {
 			_ = cmd.Close()
 			return stored, err
 		}
@@ -434,6 +451,51 @@ func (f *Fetcher) fetchInline(ctx context.Context, c *imapclient.Client, acct Ac
 	return stored, nil
 }
 
+// storeInline writes a message whose raw bytes are already in memory (up to
+// InlineMessageBytes) into its row.
+func (f *Fetcher) storeInline(ctx context.Context, acct Account, folderID string, meta *imapclient.FetchMessageBuffer, raw []byte) error {
+	m := f.baseMessage(acct, folderID, meta)
+	m.RawBlob = raw
+	m.ContentKey = store.ContentKey(m.MessageID, headerBlock(raw))
+	// An in-memory message goes through the same bounded walk as a spooled one,
+	// so its attachment metadata and hashes are enumerated in one pass.
+	parsed := mailmime.ParseStream(bytes.NewReader(raw), acct.TrustedAuthservIDs...)
+	applyParsed(&m, parsed)
+	if parsed.BodySkipped {
+		m.BodyStatus = store.BodyUnparsed
+	}
+	if err := f.dbs.UpsertMessage(ctx, m); err != nil {
+		return err
+	}
+	return f.dbs.SetMessageDerived(ctx, m.ID, derivedFrom(m.ID, parsed))
+}
+
+// StoreRaw mirrors one message whose bytes the caller already holds, applying
+// the same three size tiers as a fetch. The fast dev seeder uses it in place of
+// IMAP; sharing storeInline, storeSpooled and envelopeOnly with the fetch is
+// what lets a test say the two modes agree.
+func (f *Fetcher) StoreRaw(ctx context.Context, acct Account, folderID string, meta *imapclient.FetchMessageBuffer, raw []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	switch {
+	case int64(len(raw)) > f.max:
+		return f.dbs.UpsertMessage(ctx, f.envelopeOnly(acct, folderID, meta))
+	case int64(len(raw)) <= f.inline:
+		return f.storeInline(ctx, acct, folderID, meta, raw)
+	}
+	rel := spoolRel(folderID, uint32(meta.UID))
+	if _, err := writeSpool(filepath.Join(f.dbs.Dir, filepath.FromSlash(rel)), bytes.NewReader(raw), f.max); err != nil {
+		return err
+	}
+	return f.storeSpooled(ctx, acct, folderID, meta, rel)
+}
+
+// spoolRel is where a message's spool file lives, relative to the data dir.
+func spoolRel(folderID string, uid uint32) string {
+	return path.Join("spool", folderID, strconv.FormatUint(uint64(uid), 10)+".eml")
+}
+
 // fetchSpooled streams one message's body to a file under the data directory
 // and parses it from there, so the message and its attachments are never held
 // whole in memory. It reports whether a row was stored; a message that expunged
@@ -443,7 +505,7 @@ func (f *Fetcher) fetchSpooled(ctx context.Context, c *imapclient.Client, acct A
 	section := &imap.FetchItemBodySection{Peek: true}
 	cmd := c.Fetch(imap.UIDSetNum(meta.UID), &imap.FetchOptions{UID: true, BodySection: []*imap.FetchItemBodySection{section}})
 
-	rel := path.Join("spool", folderID, strconv.FormatUint(uint64(meta.UID), 10)+".eml")
+	rel := spoolRel(folderID, uint32(meta.UID))
 	var spoolErr error
 	got := false
 	for msg := cmd.Next(); msg != nil; msg = cmd.Next() {
@@ -473,11 +535,19 @@ func (f *Fetcher) fetchSpooled(ctx context.Context, c *imapclient.Client, acct A
 		return false, nil
 	}
 
+	if err := f.storeSpooled(ctx, acct, folderID, meta, rel); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// storeSpooled parses a message already written to the spool and stores its row.
+func (f *Fetcher) storeSpooled(ctx context.Context, acct Account, folderID string, meta *imapclient.FetchMessageBuffer, rel string) error {
 	m := f.baseMessage(acct, folderID, meta)
 	m.RawPath = rel
 	parsed, header, err := parseSpooled(filepath.Join(f.dbs.Dir, filepath.FromSlash(rel)), acct.TrustedAuthservIDs)
 	if err != nil {
-		return false, err
+		return err
 	}
 	m.ContentKey = store.ContentKey(m.MessageID, headerBlock(header))
 	applyParsed(&m, parsed)
@@ -485,9 +555,9 @@ func (f *Fetcher) fetchSpooled(ctx context.Context, c *imapclient.Client, acct A
 		m.BodyStatus = store.BodyUnparsed
 	}
 	if err := f.dbs.UpsertMessage(ctx, m); err != nil {
-		return true, err
+		return err
 	}
-	return true, f.dbs.SetMessageDerived(ctx, m.ID, derivedFrom(m.ID, parsed))
+	return f.dbs.SetMessageDerived(ctx, m.ID, derivedFrom(m.ID, parsed))
 }
 
 // DerivedVersion names the pipeline that turns a raw message into its derived
