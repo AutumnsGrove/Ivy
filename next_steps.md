@@ -73,8 +73,20 @@ or image-publish workflow yet.
 **Round 32b is fully implemented, and its follow-ups N13, N16 and N17 are closed** (#55 to #57).
 Next up is the remaining 2g work below.
 
-**2. Finish 2g.** The settings and stats-panel skeletons need **intentional design** (no design
-exists): Q&A first. Then the visual baselines, once the harness is regenerated in CI.
+**2. Finish 2g** (decided in round 33, one commit per stage, each test first):
+
+1. ~~Settings API~~ **done**: `api.getSettings`/`updateSettings` over a mock in `api/settings.ts`
+   (persisted in `localStorage`, validated, bad input is `bad_request`); undo send, photo size,
+   remote images, digest time, reply-as, strip location, junk rescue and spam score are real
+   controls (`Select` is a native `<select>`). The mock lives in the client, not at the network
+   boundary, so there is no `e2e/api.ts` fake. The Go side adopts these in chunks 3-5.
+2. Photo downscale in the browser (square, ~512 px JPEG) before upload; pure helper, Vitest first.
+3. Stats panel design: a canvas board (summary and call log) shown to the operator first.
+4. Stats panel build: `/settings/spend` and `/settings/spend/calls`, mock-backed, `?scenario=`
+   edge states, `e2e/routes.ts`, axe.
+5. Fold the round 33 decisions into `PLAN.md`/`ARCHITECTURE.md` and `BUILD-LOG.md`.
+
+Then the visual baselines, once the harness is regenerated in CI.
 
 **3. 2h.** The `state.db` fast seeder, `ivy-dev --mode fast`, the `full == fast` agreement test and
 named-state Playwright (`DEV.md` 4, 8).

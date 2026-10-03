@@ -10,17 +10,51 @@
 	import Toggle from '#lib/components/ui/Toggle.svelte';
 	import TopBar from '#lib/components/ui/TopBar.svelte';
 	import { prefs, type Accent } from '#lib/prefs.svelte.js';
+	import { api } from '#lib/api/client.js';
+	import Select from '#lib/components/ui/Select.svelte';
 	import { toasts } from '#lib/toast.js';
+	import type { Settings } from '#lib/types.js';
 
 	let { data } = $props();
 	let smart = $state<Record<string, boolean>>({});
 	$effect.pre(() => {
 		for (const a of data.accounts) smart[a.id] ??= a.smart;
 	});
-	let replyAs = $state(true);
-	let stripGps = $state(true);
-	let junkRescue = $state(true);
-	let spamScore = $state(false);
+	// svelte-ignore state_referenced_locally
+	let s = $state<Settings>({ ...data.settings });
+
+	/** Optimistic: the control already shows the choice; a refusal puts the stored value back. */
+	async function save(patch: Partial<Settings>) {
+		try {
+			s = await api.updateSettings(patch);
+		} catch {
+			s = await api.getSettings();
+			toasts.push({ text: "That setting didn't save", tone: 'warn' });
+		}
+	}
+
+	const undoOptions = [
+		{ value: '0', label: 'Off' },
+		...[5, 10, 20, 30].map((n) => ({ value: String(n), label: `${n} s` }))
+	];
+	const photoOptions = [
+		{ value: 'small', label: 'Small' },
+		{ value: 'medium', label: 'Medium' },
+		{ value: 'large', label: 'Large' },
+		{ value: 'original', label: 'Original' }
+	];
+	const remoteOptions = [
+		{ value: 'ask', label: 'Ask first' },
+		{ value: 'always', label: 'Always show' },
+		{ value: 'never', label: 'Never show' }
+	];
+	const digestOptions = [
+		{ value: 'off', label: 'Off' },
+		...Array.from({ length: 17 }, (_, i) => {
+			const h = i + 6;
+			return { value: `${String(h).padStart(2, '0')}:00`, label: `${h}:00` };
+		})
+	];
 
 	const accents: { value: Accent; label: string }[] = [
 		{ value: 'lilac', label: 'Lilac' },
@@ -109,31 +143,53 @@
 		<ListRow tall>
 			Undo send
 			<span class="sub">A short wait before mail leaves</span>
-			{#snippet trailing()}<span class="val">10 s</span>{/snippet}
+			{#snippet trailing()}
+				<Select
+					label="Undo send"
+					options={undoOptions}
+					value={String(s.undoSendSeconds)}
+					onchange={(v) => save({ undoSendSeconds: Number(v) as Settings['undoSendSeconds'] })}
+				/>
+			{/snippet}
 		</ListRow>
 		<ListRow>
 			Reply as the address it was sent to
-			{#snippet trailing()}<Toggle label="Reply as the address it was sent to" bind:checked={replyAs} />{/snippet}
+			{#snippet trailing()}
+				<Toggle label="Reply as the address it was sent to" checked={s.replyAsRecipient} onchange={(v) => save({ replyAsRecipient: v })} />
+			{/snippet}
 		</ListRow>
-		<ListRow tall chevron>
+		<ListRow tall>
 			Photo size
 			<span class="sub">Applies to photos you attach</span>
-			{#snippet trailing()}<span class="val">Large</span>{/snippet}
+			{#snippet trailing()}
+				<Select label="Photo size" options={photoOptions} value={s.photoSize} onchange={(v) => save({ photoSize: v as Settings['photoSize'] })} />
+			{/snippet}
 		</ListRow>
 		<ListRow>
 			Remove location from photos
-			{#snippet trailing()}<Toggle label="Remove location from photos" bind:checked={stripGps} />{/snippet}
+			{#snippet trailing()}
+				<Toggle label="Remove location from photos" checked={s.stripLocation} onchange={(v) => save({ stripLocation: v })} />
+			{/snippet}
 		</ListRow>
 	</Group>
 
 	<Group label="Reading">
-		<ListRow chevron>
+		<ListRow>
 			Remote images
-			{#snippet trailing()}<span class="val">Ask first</span>{/snippet}
+			{#snippet trailing()}
+				<Select label="Remote images" options={remoteOptions} value={s.remoteImages} onchange={(v) => save({ remoteImages: v as Settings['remoteImages'] })} />
+			{/snippet}
 		</ListRow>
 		<ListRow>
 			Daily digest of newsletters
-			{#snippet trailing()}<span class="val">7:00</span>{/snippet}
+			{#snippet trailing()}
+				<Select
+					label="Daily digest time"
+					options={digestOptions}
+					value={s.digestTime ?? 'off'}
+					onchange={(v) => save({ digestTime: v === 'off' ? null : v })}
+				/>
+			{/snippet}
 		</ListRow>
 	</Group>
 
@@ -141,11 +197,11 @@
 		<ListRow tall>
 			Look for real mail in Junk
 			<span class="sub">Quietly point out anything that looks genuine</span>
-			{#snippet trailing()}<Toggle label="Look for real mail in Junk" bind:checked={junkRescue} />{/snippet}
+			{#snippet trailing()}<Toggle label="Look for real mail in Junk" checked={s.junkRescue} onchange={(v) => save({ junkRescue: v })} />{/snippet}
 		</ListRow>
 		<ListRow>
 			Show the spam score
-			{#snippet trailing()}<Toggle label="Show the spam score" bind:checked={spamScore} />{/snippet}
+			{#snippet trailing()}<Toggle label="Show the spam score" checked={s.spamScore} onchange={(v) => save({ spamScore: v })} />{/snippet}
 		</ListRow>
 	</Group>
 

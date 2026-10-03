@@ -44,8 +44,16 @@ export type Check = Schema['Check'];
 export type CheckDetail = Schema['CheckDetail'];
 export type HealthOverview = Schema['HealthOverview'];
 
+/** Behaviour settings (state.db once the backend lands). Look-and-feel stays per device in `prefs`. */
 export type Settings = {
-	theme: 'night' | 'day' | 'auto';
-	motion: 'gentle' | 'still';
-	accent: 'lilac' | 'green' | 'amber';
+	/** 0 sends immediately. */
+	undoSendSeconds: 0 | 5 | 10 | 20 | 30;
+	replyAsRecipient: boolean;
+	photoSize: 'small' | 'medium' | 'large' | 'original';
+	stripLocation: boolean;
+	remoteImages: 'ask' | 'always' | 'never';
+	/** Local "HH:MM", or null when the digest is off. */
+	digestTime: string | null;
+	junkRescue: boolean;
+	spamScore: boolean;
 };

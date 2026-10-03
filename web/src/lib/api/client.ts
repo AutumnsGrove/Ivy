@@ -16,11 +16,13 @@ import type {
 	ReadingFeed,
 	Rule,
 	SearchResults,
+	Settings,
 	TagsOverview
 } from '../types';
 import { ApiError, type ErrorCode } from './errors';
 import { apiPath, request } from './http';
 import * as mock from './mock';
+import { patchSettings, readSettings } from './settings';
 
 import type { Scenario } from './scenario';
 export type { Scenario };
@@ -66,6 +68,9 @@ export const api = {
 		request<Account>(`/accounts/${encodeURIComponent(id)}/photo`, { method: 'DELETE' }),
 
 	// --- still mock-backed until their chunks land ---------------------------
+	getSettings: (): Promise<Settings> => Promise.resolve(readSettings()),
+	updateSettings: async (patch: Partial<Settings>): Promise<Settings> => patchSettings(patch),
+
 	listReading: (): Promise<ReadingFeed> => tick(mock.reading),
 
 	async search(query: string): Promise<SearchResults> {
