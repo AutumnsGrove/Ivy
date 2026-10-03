@@ -146,3 +146,39 @@ type literal struct{ *bytes.Reader }
 func newLiteral(b []byte) literal { return literal{bytes.NewReader(b)} }
 
 func (l literal) Size() int64 { return int64(l.Len()) }
+
+// MailboxInfo is what a client learns about one mailbox from LIST and SELECT.
+type MailboxInfo struct {
+	Name          string
+	Attrs         []imap.MailboxAttr
+	UIDValidity   uint32
+	UIDNext       uint32
+	HighestModSeq uint64
+}
+
+// Mailboxes lists every mailbox with the values sync records, selected read-only
+// exactly as the sync does so a direct seed and a real sync see the same numbers.
+func (a *Account) Mailboxes() ([]MailboxInfo, error) {
+	var out []MailboxInfo
+	err := a.withClient(func(c *imapclient.Client) error {
+		list, err := c.List("", "*", nil).Collect()
+		if err != nil {
+			return err
+		}
+		for _, mb := range list {
+			sel, err := c.Select(mb.Mailbox, &imap.SelectOptions{ReadOnly: true}).Wait()
+			if err != nil {
+				return err
+			}
+			out = append(out, MailboxInfo{
+				Name:          mb.Mailbox,
+				Attrs:         mb.Attrs,
+				UIDValidity:   sel.UIDValidity,
+				UIDNext:       uint32(sel.UIDNext),
+				HighestModSeq: sel.HighestModSeq,
+			})
+		}
+		return nil
+	})
+	return out, err
+}

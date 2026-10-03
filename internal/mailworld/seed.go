@@ -55,7 +55,26 @@ type Profile struct {
 type SeedOption func(*seedConfig)
 
 type seedConfig struct {
-	seed int64
+	seed    int64
+	observe func(Delivery)
+}
+
+// Delivery is one seeded message as the server stored it, reported to a
+// WithObserver callback. Raw is only valid during the callback.
+type Delivery struct {
+	Account string
+	Mailbox string
+	UID     uint32
+	Raw     []byte
+	Flags   []imap.Flag
+	At      time.Time
+}
+
+// WithObserver streams each delivery to fn as it is made, so the fast dev
+// seeder can write the same messages to the databases without holding a large
+// profile in memory or going back through IMAP.
+func WithObserver(fn func(Delivery)) SeedOption {
+	return func(c *seedConfig) { c.observe = fn }
 }
 
 // WithSeed picks the pseudo-random stream; the same seed and profile always
@@ -79,6 +98,8 @@ func Seed(w *World, p Profile, opts ...SeedOption) (SeedResult, error) {
 		w:    w,
 		rnd:  rand.New(rand.NewSource(cfg.seed)), //nolint:gosec // G404: seeded on purpose so a profile is byte-reproducible
 		hash: sha256.New(),
+
+		observe: cfg.observe,
 	}
 	if err := p.generate(s); err != nil {
 		return SeedResult{}, fmt.Errorf("seed %s: %w", p.Name, err)
@@ -236,6 +257,7 @@ type seeder struct {
 	hash      hash.Hash
 	accounts  []SeedAccount
 	delivered int
+	observe   func(Delivery)
 }
 
 func (s *seeder) account(address string) *Account {
@@ -251,10 +273,14 @@ func (s *seeder) standardMailboxes(acc *Account) {
 }
 
 func (s *seeder) deliver(acc *Account, mailbox string, raw []byte, flags []imap.Flag, at time.Time) {
-	if _, err := acc.user.Append(mailbox, newLiteral(raw), &imap.AppendOptions{Flags: flags, Time: at}); err != nil {
+	data, err := acc.user.Append(mailbox, newLiteral(raw), &imap.AppendOptions{Flags: flags, Time: at})
+	if err != nil {
 		panic("mailworld: seed append to " + mailbox + ": " + err.Error())
 	}
 	s.delivered++
+	if s.observe != nil {
+		s.observe(Delivery{Account: acc.Address(), Mailbox: mailbox, UID: uint32(data.UID), Raw: raw, Flags: flags, At: at})
+	}
 	writeSeedField(s.hash, acc.Address())
 	writeSeedField(s.hash, mailbox)
 	writeSeedField(s.hash, string(raw))
