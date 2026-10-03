@@ -457,3 +457,29 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   four cases survived before the fix). Fixed: after the prefix the remainder must be one segment
   that is not empty, `.` or `..` once percent-decoded and has no `/` or `\`; the renderer's own
   `pathEscape` output is unchanged.
+- **#47** · `fe20330` · `gateway/body.go` · **risk (security)** · `/messages/{id}/inline/{cid}`
+  served the part under the sender's declared `Content-Type` with `Content-Disposition: inline`,
+  from the operator's own origin. A part with a Content-ID but type `text/html` or `image/svg+xml`
+  could be opened as a sender-authored page (the deny-all API CSP blocks script but not a phishing
+  form, because `form-action` does not fall back to `default-src`). Reproduced by
+  `TestInlineServesOnlyRasterImagesAsThemselves` (both parts came back as themselves, inline).
+  Fixed: only PNG, JPEG, GIF, WebP, AVIF and BMP go out as themselves; anything else is served as
+  `application/octet-stream` with `Content-Disposition: attachment`. Attachments were already
+  forced to download. `TestWriteWithNullOriginIsForbidden` was added as coverage for the Origin
+  guard (`null`, a foreign host, a suffix-spoofed host); it passed before any change, so that guard
+  is sound for what it claims.
+- **N10 (open, needs a design decision)** · `2fc22b1` · `sync/sync.go`, `gateway/body.go` ·
+  `body_html_sanitized` is written once at sync and served as-is, with no record of which sanitizer
+  produced it. Fixes like #45 and #46 therefore never reach mail that is already mirrored, and a
+  stored body keeps whatever policy was current the day it arrived. Recommendation: store a
+  `sanitizer_version` beside the HTML (bumped with any policy change) and re-render rows whose
+  version is behind, from the raw message, in a bounded background pass; the CSP header is the
+  second layer meanwhile. Not done here because the schema and the re-render pass are a decision
+  (the mirror is seeded dev data today, so nothing real is exposed yet).
+- **N11 (open, needs a design decision)** · `46be4c0` · `gateway/gateway.go` · the Origin guard
+  compares `Origin` to `Host`, and both come from the attacker in a DNS-rebinding attack (the
+  attacker's own name resolving to the tailnet address), so a rebound page is same-origin and can
+  write. Reads are equally open to it. Recommendation: an allowed-hosts list in config (the
+  tailnet name, `localhost`, the dev address) checked on every API request, defaulting to loopback
+  plus the configured listen address. Not fixed because the list needs a config key and a
+  decision about how Tailscale hostnames are discovered.

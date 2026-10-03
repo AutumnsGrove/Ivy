@@ -165,6 +165,14 @@ func setPartHeaders(w http.ResponseWriter, contentType, filename, kind string) {
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
+	// An inline part is loaded by the reader as an image, but its type is the
+	// sender's claim and it is served from our origin. Anything that is not a
+	// raster image (HTML, SVG) is demoted to a download rather than shown as a
+	// sender-authored page.
+	if kind == "inline" && !rasterImage(contentType) {
+		contentType = "application/octet-stream"
+		kind = "attachment"
+	}
 	h := w.Header()
 	h.Set("Content-Type", contentType)
 	h.Set("Cache-Control", "no-store")
@@ -173,6 +181,20 @@ func setPartHeaders(w http.ResponseWriter, contentType, filename, kind string) {
 	} else {
 		h.Set("Content-Disposition", "inline")
 	}
+}
+
+// rasterImage reports whether a declared type is an image format that cannot
+// carry script (SVG can, so it is not here).
+func rasterImage(contentType string) bool {
+	mt, _, err := stdmime.ParseMediaType(contentType)
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(mt) {
+	case "image/png", "image/jpeg", "image/gif", "image/webp", "image/avif", "image/bmp":
+		return true
+	}
+	return false
 }
 
 // messageError maps a load failure onto the error envelope: a hidden or absent
