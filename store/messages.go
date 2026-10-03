@@ -69,6 +69,10 @@ type Message struct {
 	DisabledAt     time.Time
 	DisabledReason string
 	Seen           bool
+	// DerivedVersion is the pipeline version that last wrote this row's derived
+	// data (body text, sanitised HTML, attachment rows). Only SetMessageDerived
+	// changes it; UpsertMessage leaves it alone.
+	DerivedVersion int
 }
 
 // Body statuses: whether the mirror holds a parsed body for the message.
@@ -88,9 +92,13 @@ const (
 // has its disabled fields cleared, re-enabling it with its derived data intact
 // (ARCHITECTURE.md 4).
 //
-// thread_id and body_html_sanitized are written on the first insert only. Later
-// layers own them (SetMessageThread, SetMessageBodyHTML), and sync, which knows
-// neither, must not blank them when it sees the message again.
+// The derived columns (thread_id, body_text, snippet, has_attachments,
+// parse_errors, body_status, body_html_sanitized, derived_version) are written
+// on the first insert only; later layers own them (SetMessageThread,
+// SetMessageDerived), and a row built from the envelope alone must not blank
+// them. The raw bytes (raw_blob, raw_path) are the source everything is derived
+// from, so a row that carries none keeps the ones already stored: nothing is
+// ever erased.
 func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 	from, err := marshalAddress(m.From)
 	if err != nil {
@@ -144,12 +152,11 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 			to_json=excluded.to_json, cc_json=excluded.cc_json,
 			reply_to_json=excluded.reply_to_json, delivered_to_json=excluded.delivered_to_json,
 			date=excluded.date, size=excluded.size, flags_json=excluded.flags_json,
-			internaldate=excluded.internaldate, has_attachments=excluded.has_attachments,
-			raw_blob=excluded.raw_blob, body_text=excluded.body_text,
-			snippet=excluded.snippet, auth_results=excluded.auth_results,
-			parse_errors=excluded.parse_errors, disabled_at=excluded.disabled_at,
-			disabled_reason=excluded.disabled_reason, seen=excluded.seen,
-			raw_path=excluded.raw_path, body_status=excluded.body_status`,
+			internaldate=excluded.internaldate,
+			raw_blob=CASE WHEN length(excluded.raw_blob) > 0 THEN excluded.raw_blob ELSE messages.raw_blob END,
+			raw_path=COALESCE(excluded.raw_path, messages.raw_path),
+			auth_results=excluded.auth_results, disabled_at=excluded.disabled_at,
+			disabled_reason=excluded.disabled_reason, seen=excluded.seen`,
 		m.ID, m.AccountID, m.FolderID, m.UID, m.ContentKey, m.MessageID, m.InReplyTo,
 		m.References, m.Subject, from, to, cc, replyTo, deliveredTo,
 		nullableTime(m.Date), m.Size, flags, nullableTime(m.InternalDate),
@@ -170,14 +177,8 @@ func (d *DBs) SetMessageThread(ctx context.Context, id, threadID string) error {
 	return d.setMessageColumn(ctx, `UPDATE messages SET thread_id = ? WHERE id = ?`, id, threadID)
 }
 
-// SetMessageBodyHTML stores the server-sanitised HTML for a message (chunk 2d),
-// for the same reason as SetMessageThread.
-func (d *DBs) SetMessageBodyHTML(ctx context.Context, id, html string) error {
-	return d.setMessageColumn(ctx, `UPDATE messages SET body_html_sanitized = ? WHERE id = ?`, id, html)
-}
-
-// setMessageColumn runs one of the fixed single-column UPDATE statements above,
-// which take the new value first and the message id second.
+// setMessageColumn runs a fixed single-column UPDATE statement, which takes the
+// new value first and the message id second.
 func (d *DBs) setMessageColumn(ctx context.Context, update, id, value string) error {
 	res, err := d.Mirror.Write.ExecContext(ctx, update, value, id)
 	if err != nil {
@@ -264,7 +265,7 @@ const messageSelect = `
 	       COALESCE(thread_id, ''), COALESCE(snippet, ''),
 	       COALESCE(auth_results, ''), COALESCE(parse_errors, ''),
 	       COALESCE(disabled_at, ''), COALESCE(disabled_reason, ''), seen,
-	       COALESCE(raw_path, ''), body_status
+	       COALESCE(raw_path, ''), body_status, derived_version
 	FROM messages`
 
 func scanMessage(s scanner) (Message, error) {
@@ -286,6 +287,7 @@ func scanMessage(s scanner) (Message, error) {
 		&m.BodyText, &m.BodyHTML, &m.ThreadID, &m.Snippet,
 		&authResultsJSON, &parseErrorsJSON,
 		&disabledAt, &m.DisabledReason, &m.Seen, &m.RawPath, &m.BodyStatus,
+		&m.DerivedVersion,
 	)
 	if err != nil {
 		return Message{}, err

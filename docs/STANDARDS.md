@@ -123,9 +123,12 @@ parallel one.
   check, SQL kept D1-compatible. Migrations are append-only and positional (`user_version`);
   queries live next to their package; every query that can run on a
   large table has an `EXPLAIN QUERY PLAN` test asserting it uses an index.
-  **A derived column has exactly one writer and its own setter** (`SetMessageBodyHTML`,
-  `ReplaceThreads`, `ReplaceMessageAttachments`); `UpsertMessage` never overwrites it after the
-  first insert, so a re-sync cannot lose derived data. Config and scenario YAML are strict (unknown
+  **A derived column has exactly one writer and its own setter** (`SetMessageDerived` for body
+  text, sanitised HTML, snippet and attachment rows, `ReplaceThreads` for threads);
+  `UpsertMessage` never overwrites it after the first insert, so a re-sync cannot lose derived
+  data. Derived data carries a version: **when you change the output of `mime`, `render` or the
+  part walk, bump `sync.DerivedVersion` and add the new fingerprint** the failing
+  `TestDerivedVersionMatchesTheCorpusOutput` prints, or already-mirrored mail keeps the old output. Config and scenario YAML are strict (unknown
   keys fail), so a new key goes in the struct.
 - **Logging:** `slog`, structured, levels used honestly, no secrets, no message bodies or subjects
   at info level (mail is private; the log is a support artifact).

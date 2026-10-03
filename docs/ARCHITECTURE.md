@@ -87,7 +87,7 @@ Mirror tables (`mirror.db`, rebuildable from IMAP):
 - `messages` (id, account_id, folder_id, uid, content_key, message_id_hdr, in_reply_to, references, subject,
   from/to/cc/reply_to/delivered_to JSON, date, size, flags JSON, internaldate, auth_results JSON,
   has_attachments, raw_blob, raw_path, body_status, body_text, body_html_sanitized,
-  thread_id, snippet, parse_errors JSON). Unique (folder_id, uid).
+  thread_id, snippet, parse_errors JSON, derived_version). Unique (folder_id, uid).
   **Where the raw message lives depends on its size** (limits in `STANDARDS.md` 4a): up to 2 MiB
   it is `raw_blob` in the row; from 2 MiB to 64 MiB it is a file at `raw_path` (relative to the data
   directory, `spool/<folder row id>/<uid>.eml`, mode 0600, written atomically) and `raw_blob` is
@@ -102,9 +102,19 @@ Mirror tables (`mirror.db`, rebuildable from IMAP):
   part of the mirror (rebuildable from IMAP,
   not backed up). A disabled message keeps its file like its row; `sync.SweepSpool` removes only
   files no row owns (crash-leftover temp files, downloads whose row never landed) once they are
-  over an hour old. `thread_id`, `body_html_sanitized` and the attachment rows are written by
-  their own layers (`SetMessageThread`, `SetMessageBodyHTML`, `ReplaceMessageAttachments`) and are
-  not touched by a re-sync.
+  over an hour old. **Derived data is versioned and written atomically (round 32b).** The body
+  text, snippet, `has_attachments`, parse errors, `body_status`, `body_html_sanitized` and the
+  attachment rows are computed from the raw message by one pipeline (the parser, the sanitizer and
+  the part walk), and `SetMessageDerived` writes all of it plus `derived_version` in a single
+  transaction, so a crash leaves the previous data and version rather than half of the new. The
+  version is `sync.DerivedVersion`; **bump it whenever that pipeline's output changes**, and a
+  fingerprint test over a fixed corpus fails if the output moves without a bump. Every row behind
+  the current version is re-derived from its raw message (the row's blob, or the spool file
+  streamed) by `Fetcher.Rederive`, newest first and at most 200 per sync run, which is how a parser
+  or sanitizer fix reaches mail that is already mirrored. `thread_id` has its own writer
+  (`SetMessageThread`/`ReplaceThreads`). `UpsertMessage` writes none of these after the first insert
+  and never blanks `raw_blob`/`raw_path` with a row that carries none, so a re-sync or a flag
+  refresh cannot erase derived data or the raw message.
 - `threads` (id, account_id, root_message_id, subject_norm, last_date, message_count)
 - `attachments` (id, message_id, filename, mime, size, content_hash, cid, storage_path).
   `storage_path` is the part path inside the message's own raw bytes (there is no second copy of

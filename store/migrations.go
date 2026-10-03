@@ -192,6 +192,16 @@ var mirrorMigrations = []migration{
 			`CREATE INDEX idx_attachments_hash ON attachments(content_hash)`,
 		},
 	},
+	{
+		version: 6,
+		statements: []string{
+			// Which pipeline (parser, sanitizer, attachment walk) produced a row's
+			// derived data. 0 is "never derived, or derived before versions existed";
+			// sync re-derives rows behind its current version from the raw message.
+			`ALTER TABLE messages ADD COLUMN derived_version INTEGER NOT NULL DEFAULT 0`,
+			`CREATE INDEX idx_messages_derived_version ON messages(account_id, derived_version)`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.

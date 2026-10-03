@@ -137,7 +137,7 @@ func TestMirrorReadSchema(t *testing.T) {
 		"accounts": {"icon", "photo_blob"},
 		"messages": {
 			"seen", "reply_to_json", "delivered_to_json", "auth_results", "parse_errors",
-			"raw_path", "body_status",
+			"raw_path", "body_status", "derived_version",
 		},
 	}
 	for table, columns := range wantColumns {

@@ -57,8 +57,11 @@ or image-publish workflow yet.
    a once-only copy from the old mirror columns on `Open`, the mirror columns now unused.
 2. ~~N11: `allowed_hosts`~~ **done** (#49): checked on every API request; loopback plus the listen
    host are always allowed. `ivy init` writes no config, so it prints guidance instead of prompting.
-3. N10/N14: `derived_version` column set last in the same transaction as the derived data, plus a
-   bounded re-derive pass for rows behind the current version.
+3. ~~N10/N14: `derived_version`~~ **done** (#50, #51): `SetMessageDerived` writes the derived data and
+   the version in one transaction; `Fetcher.Rederive` heals rows behind `sync.DerivedVersion` (200
+   per run, newest first). **Bump `DerivedVersion` whenever `mime`, `render` or the part walk
+   changes output**; a fingerprint test fails if you forget. The remote-image allow-list work
+   (backlog) reuses this to re-render.
 4. N12: sticky oldest-wins thread ids in `ReplaceThreads`.
 5. N15: RFC 3339 timestamps in the API, formatted in the browser (a contract change; update
    `openapi.yaml`, regenerate, the fixture and the screens).

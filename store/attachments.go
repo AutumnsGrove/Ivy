@@ -35,6 +35,19 @@ func (d *DBs) ReplaceMessageAttachments(ctx context.Context, messageID string, a
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	if err := replaceAttachmentsTx(ctx, tx, messageID, atts); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("replace attachments for %s: %w", messageID, err)
+	}
+	return nil
+}
+
+// replaceAttachmentsTx is the one place attachment rows are written, inside the
+// caller's transaction, so SetMessageDerived can make them part of a larger
+// all-or-nothing write.
+func replaceAttachmentsTx(ctx context.Context, tx *sql.Tx, messageID string, atts []Attachment) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM attachments WHERE message_id = ?`, messageID); err != nil {
 		return fmt.Errorf("replace attachments for %s: %w", messageID, err)
 	}
@@ -50,9 +63,6 @@ func (d *DBs) ReplaceMessageAttachments(ctx context.Context, messageID string, a
 			nullableString(a.ContentHash), nullableString(a.CID), nullableString(a.StoragePath)); err != nil {
 			return fmt.Errorf("replace attachments for %s: %w", messageID, err)
 		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("replace attachments for %s: %w", messageID, err)
 	}
 	return nil
 }

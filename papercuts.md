@@ -543,3 +543,37 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   a hint when a network listen address has no configured name. `ivy init` writes no config file, so
   the "prompt for the Tailscale name" in the decision became that guidance. The static shell is not
   guarded by design (tested).
+
+## N10 and N14 resolved: versioned, atomic derived data
+
+- **#50 (resolves N10 and N14)** · `2fc22b1`, `a965999` · `store/derived.go`, `sync/sync.go` ·
+  **risk** · derived data was written in separate statements after the row (HTML, then attachment
+  rows) with no record of which sanitizer or parser produced it. A crash between them left a row
+  sync would skip forever, and a fix like #45/#46/#48 never reached mail already mirrored. Decided in
+  round 32b. Reproduced by `TestSetMessageDerivedIsAllOrNothing` (a failing attachment insert left
+  `BodyText:new BodyHTML:<p>new</p>` at version 0, the half-written state of N14) and the sync
+  integration tests below. Fixed: migration 6 adds `messages.derived_version`; `SetMessageDerived`
+  writes the text columns, sanitised HTML, attachment rows and the version in one transaction;
+  `Fetcher.Rederive` re-derives rows behind `sync.DerivedVersion` from the raw message (blob or
+  spool file, one message in memory at a time), newest first, at most 200 per `Fetch`, which runs it
+  before threading. A message whose raw bytes cannot be read is logged and left behind without
+  stopping the pass (`TestRederiveSkipsAnUnreadableMessage`; a pile of such rows at the top of the
+  list would starve older ones, noted below). `TestRederiveHealsRowsBehindInBoundedPasses` shows a
+  mangled-attachment message getting its body back, and `TestDerivedVersionMatchesTheCorpusOutput`
+  fails if the pipeline's output for a fixed corpus changes without a `DerivedVersion` bump
+  (mutation-checked: weakening a style rule fails it). The old `SetMessageBodyHTML` is gone.
+- **#51** · `d9dd8fc`, `2fc22b1` · `store/messages.go` · **bug (latent)** · `UpsertMessage`'s conflict
+  clause overwrote `body_text`, `snippet`, `has_attachments`, `parse_errors`, `body_status`,
+  `raw_blob` and `raw_path` with whatever the incoming row carried. A re-upsert built from the
+  envelope alone (what a chunk 3 flag refresh would do) would blank a healed message's text and,
+  worse, **erase the raw message it is derived from**, against "nothing is ever erased". Found
+  while moving derived data into one writer. Reproduced by `TestUpsertKeepsDerivedColumns` and
+  `TestUpsertKeepsTheRawPath` (text, snippet, attachments flag, raw blob and raw path all came back
+  empty). Fixed: the derived columns are written on the first insert only, and `raw_blob`/`raw_path`
+  keep their stored value when the incoming row has none. `TestUpsertMessageUpdatesInPlace` pinned
+  the old overwrite of `body_text` and now asserts the new rule.
+- **N16 (open, minor)** · `Fetcher.Rederive` · a message whose spool file is missing or unreadable is
+  skipped each pass but stays behind, so enough of them at the top of the newest-first list would
+  starve older rows within the 200-per-run limit. None can occur today (nothing deletes a spool
+  file). When chunk 3 can disable and restore messages, either record the failure on the row or
+  page past rows that failed.

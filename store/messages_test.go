@@ -91,8 +91,13 @@ func TestUpsertMessageUpdatesInPlace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetMessage: %v", err)
 	}
-	if got.Subject != "Second" || got.BodyText != "new" || !got.Seen {
+	if got.Subject != "Second" || !got.Seen {
 		t.Errorf("update not applied: %+v", got)
+	}
+	// The body text is derived data: after the first insert only SetMessageDerived
+	// changes it, so a re-sync cannot overwrite what the pipeline produced.
+	if got.BodyText != "old" {
+		t.Errorf("BodyText = %q, want the first-insert value kept", got.BodyText)
 	}
 }
 
@@ -237,20 +242,29 @@ func TestUpsertKeepsDerivedColumns(t *testing.T) {
 	seedAccount(t, dbs, "acct-1")
 	seedFolder(t, dbs, "acct-1", "folder-1")
 
-	m := Message{ID: "msg-1", AccountID: "acct-1", FolderID: "folder-1", UID: 10, ContentKey: "ck", Subject: "First"}
+	m := Message{
+		ID: "msg-1", AccountID: "acct-1", FolderID: "folder-1", UID: 10, ContentKey: "ck", Subject: "First",
+		RawBlob: []byte("raw message bytes"),
+	}
 	if err := dbs.UpsertMessage(ctx, m); err != nil {
 		t.Fatalf("first upsert: %v", err)
 	}
 	if err := dbs.SetMessageThread(ctx, "msg-1", "thread-9"); err != nil {
 		t.Fatalf("SetMessageThread: %v", err)
 	}
-	if err := dbs.SetMessageBodyHTML(ctx, "msg-1", "<p>clean</p>"); err != nil {
-		t.Fatalf("SetMessageBodyHTML: %v", err)
+	if err := dbs.SetMessageDerived(ctx, "msg-1", Derived{
+		Version: 1, BodyHTML: "<p>clean</p>", BodyText: "clean text", Snippet: "clean",
+		HasAttachments: true, ParseErrors: []string{"[W] x"}, BodyStatus: BodyOK,
+	}); err != nil {
+		t.Fatalf("SetMessageDerived: %v", err)
 	}
 
 	m.Subject = "Second"
 	m.Flags = []string{`\Seen`}
-	if err := dbs.UpsertMessage(ctx, m); err != nil { // thread and html are empty here
+	// A flag refresh builds the row from the envelope alone: no body, no text, and
+	// no raw bytes (nothing is ever erased, so it must not erase them either).
+	m.RawBlob = nil
+	if err := dbs.UpsertMessage(ctx, m); err != nil {
 		t.Fatalf("re-sync upsert: %v", err)
 	}
 
@@ -267,6 +281,37 @@ func TestUpsertKeepsDerivedColumns(t *testing.T) {
 	if got.BodyHTML != "<p>clean</p>" {
 		t.Errorf("BodyHTML = %q after a re-sync, want the sanitised html", got.BodyHTML)
 	}
+	if got.BodyText != "clean text" || got.Snippet != "clean" || !got.HasAttachments ||
+		got.BodyStatus != BodyOK || len(got.ParseErrors) != 1 || got.DerivedVersion != 1 {
+		t.Errorf("a re-sync from the envelope blanked derived data: %+v", got)
+	}
+	if string(got.RawBlob) != "raw message bytes" {
+		t.Errorf("RawBlob = %q after an envelope-only re-sync, want the original bytes", got.RawBlob)
+	}
+}
+
+// A spooled message keeps its file pointer when a later upsert carries none.
+func TestUpsertKeepsTheRawPath(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct-1")
+	seedFolder(t, dbs, "acct-1", "folder-1")
+	m := Message{ID: "msg-1", AccountID: "acct-1", FolderID: "folder-1", UID: 10, ContentKey: "ck", RawPath: "spool/f/10.eml"}
+	if err := dbs.UpsertMessage(ctx, m); err != nil {
+		t.Fatalf("first upsert: %v", err)
+	}
+	m.RawPath = ""
+	if err := dbs.UpsertMessage(ctx, m); err != nil {
+		t.Fatalf("second upsert: %v", err)
+	}
+	got, err := dbs.GetMessage(ctx, "msg-1")
+	if err != nil {
+		t.Fatalf("GetMessage: %v", err)
+	}
+	if got.RawPath != "spool/f/10.eml" {
+		t.Errorf("RawPath = %q after a re-upsert with none, want it kept", got.RawPath)
+	}
 }
 
 func TestSetDerivedColumnsOnMissingMessage(t *testing.T) {
@@ -276,8 +321,8 @@ func TestSetDerivedColumnsOnMissingMessage(t *testing.T) {
 	if err := dbs.SetMessageThread(ctx, "nope", "t"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("SetMessageThread on a missing id = %v, want ErrNotFound", err)
 	}
-	if err := dbs.SetMessageBodyHTML(ctx, "nope", "<p>"); !errors.Is(err, ErrNotFound) {
-		t.Errorf("SetMessageBodyHTML on a missing id = %v, want ErrNotFound", err)
+	if err := dbs.SetMessageDerived(ctx, "nope", Derived{Version: 1}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("SetMessageDerived on a missing id = %v, want ErrNotFound", err)
 	}
 }
 

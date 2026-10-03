@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"path"
@@ -154,6 +155,11 @@ func (f *Fetcher) Fetch(ctx context.Context, acct Account) (Result, error) {
 	// cancelled run skips it, since the connection is gone and nothing more can
 	// be read.
 	if ctx.Err() == nil {
+		// Heal derived data first: it can change has_attachments, and a message
+		// fixed by a newer parser should read correctly from the next screen on.
+		if _, rerr := f.Rederive(ctx, acct.ID, rederiveBatch); rerr != nil && ferr == nil {
+			ferr = rerr
+		}
 		if terr := f.threadAccount(ctx, acct.ID); terr != nil && ferr == nil {
 			ferr = terr
 		}
@@ -415,11 +421,7 @@ func (f *Fetcher) fetchInline(ctx context.Context, c *imapclient.Client, acct Ac
 			_ = cmd.Close()
 			return stored, err
 		}
-		if err := f.storeAttachments(ctx, m, parsed); err != nil {
-			_ = cmd.Close()
-			return stored, err
-		}
-		if err := f.storeRendered(ctx, m, parsed); err != nil {
+		if err := f.dbs.SetMessageDerived(ctx, m.ID, derivedFrom(m.ID, parsed)); err != nil {
 			_ = cmd.Close()
 			return stored, err
 		}
@@ -484,24 +486,44 @@ func (f *Fetcher) fetchSpooled(ctx context.Context, c *imapclient.Client, acct A
 	if err := f.dbs.UpsertMessage(ctx, m); err != nil {
 		return true, err
 	}
-	if err := f.storeAttachments(ctx, m, parsed); err != nil {
-		return true, err
-	}
-	return true, f.storeRendered(ctx, m, parsed)
+	return true, f.dbs.SetMessageDerived(ctx, m.ID, derivedFrom(m.ID, parsed))
 }
 
-// storeAttachments writes the message's attachment rows from the parts the
-// skeleton walk enumerated (chunk 2f). The table is derived data with one
-// writer, like the body and thread columns; the read path serves from it and
-// never re-parses the raw.
-func (f *Fetcher) storeAttachments(ctx context.Context, m store.Message, parsed mailmime.Parsed) error {
-	if len(parsed.Parts) == 0 {
-		return nil
+// DerivedVersion names the pipeline that turns a raw message into its derived
+// data: the parser's text and part walk, the sanitizer's policy and the
+// attachment rows. **Bump it whenever the output of mime.Parse, render or the
+// part walk changes**; every row behind it is then re-derived from its raw
+// message by Rederive (N10/N14 in papercuts.md, decided in round 32b). Rows
+// mirrored before versions existed are at 0, so they heal on the next run.
+const DerivedVersion = 1
+
+// rederiveBatch bounds how many messages one sync run re-derives, so a large
+// backlog heals across runs instead of stalling a fetch.
+const rederiveBatch = 200
+
+// derivedFrom turns one parse into the whole derived record. It is pure, and
+// the same function serves a fresh message and a re-derived one. The default
+// policy blocks remote images and strips tracking pixels; an operator allow-list
+// is served by re-rendering from the raw message, so the cached copy never
+// carries live remote content.
+func derivedFrom(id string, parsed mailmime.Parsed) store.Derived {
+	d := store.Derived{
+		Version:        DerivedVersion,
+		BodyText:       parsed.Text,
+		Snippet:        parsed.Snippet,
+		HasAttachments: len(parsed.Parts) > 0,
+		ParseErrors:    parsed.Errors,
+		BodyStatus:     store.BodyOK,
 	}
-	rows := make([]store.Attachment, 0, len(parsed.Parts))
+	if parsed.BodySkipped {
+		d.BodyStatus = store.BodyUnparsed
+	}
+	if parsed.HTML != "" {
+		d.BodyHTML = render.Body(parsed, render.Options{MessageID: id}).HTML
+	}
 	for _, p := range parsed.Parts {
-		rows = append(rows, store.Attachment{
-			MessageID:   m.ID,
+		d.Attachments = append(d.Attachments, store.Attachment{
+			MessageID:   id,
 			Filename:    p.Filename,
 			MIMEType:    p.ContentType,
 			Size:        p.Size,
@@ -510,26 +532,52 @@ func (f *Fetcher) storeAttachments(ctx context.Context, m store.Message, parsed 
 			StoragePath: p.Path,
 		})
 	}
-	if err := f.dbs.ReplaceMessageAttachments(ctx, m.ID, rows); err != nil {
-		return fmt.Errorf("store attachments for %s: %w", m.ID, err)
-	}
-	return nil
+	return d
 }
 
-// storeRendered sanitises a parsed body and writes the derived column through
-// its own setter, which UpsertMessage deliberately never touches
-// (ARCHITECTURE.md section 3). The default policy blocks remote images and
-// strips tracking pixels; an operator allow-list is served by re-rendering from
-// the raw message, so the cached copy never carries live remote content.
-func (f *Fetcher) storeRendered(ctx context.Context, m store.Message, parsed mailmime.Parsed) error {
-	if parsed.HTML == "" {
-		return nil
+// Rederive brings up to limit of an account's messages up to DerivedVersion,
+// newest first, by parsing each one's raw bytes again (the row's blob or its
+// spool file, streamed, never held whole) and writing the result in one
+// transaction. It returns how many it healed. A message whose raw bytes cannot
+// be read is logged and left behind rather than stopping the others; an error
+// from the database or a cancelled context ends the pass.
+func (f *Fetcher) Rederive(ctx context.Context, accountID string, limit int) (int, error) {
+	ids, err := f.dbs.MessageIDsBehind(ctx, accountID, DerivedVersion, limit)
+	if err != nil {
+		return 0, fmt.Errorf("rederive %s: %w", accountID, err)
 	}
-	res := render.Body(parsed, render.Options{MessageID: m.ID})
-	if res.HTML == "" {
-		return nil
+	healed := 0
+	for _, id := range ids {
+		if err := ctx.Err(); err != nil {
+			return healed, fmt.Errorf("rederive %s: %w", accountID, err)
+		}
+		m, err := f.dbs.GetMessage(ctx, id)
+		if errors.Is(err, store.ErrNotFound) {
+			continue // disabled since the list was taken
+		}
+		if err != nil {
+			return healed, fmt.Errorf("rederive %s: %w", accountID, err)
+		}
+		parsed, err := f.parseRaw(m)
+		if err != nil {
+			slog.WarnContext(ctx, "sync: cannot re-derive message", "message", id, "error", err)
+			continue
+		}
+		if err := f.dbs.SetMessageDerived(ctx, id, derivedFrom(id, parsed)); err != nil {
+			return healed, fmt.Errorf("rederive %s: %w", accountID, err)
+		}
+		healed++
 	}
-	return f.dbs.SetMessageBodyHTML(ctx, m.ID, res.HTML)
+	return healed, nil
+}
+
+// parseRaw parses a mirrored message from wherever its raw bytes live.
+func (f *Fetcher) parseRaw(m store.Message) (mailmime.Parsed, error) {
+	if m.RawPath != "" {
+		parsed, _, err := parseSpooled(filepath.Join(f.dbs.Dir, filepath.FromSlash(m.RawPath)), nil)
+		return parsed, err
+	}
+	return mailmime.ParseStream(bytes.NewReader(m.RawBlob)), nil
 }
 
 // parseSpooled reads a spooled message from disk in a single pass, returning the
