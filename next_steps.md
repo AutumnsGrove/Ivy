@@ -53,8 +53,8 @@ or image-publish workflow yet.
 
 **1. Finish the review fallout (decided in rounds 32/32b; each test first).** In this order:
 
-1. Move account name/icon/photo to `state.db` (migration, one-time copy from the mirror columns,
-   gateway reads `State`, drop `UpsertAccount`'s write of those columns).
+1. ~~Move account name/icon/photo to `state.db`~~ **done**: `account_profiles` (state migration 2),
+   a once-only copy from the old mirror columns on `Open`, the mirror columns now unused.
 2. N11: `allowed_hosts` config key checked on every API request (default loopback plus the listen
    address; `ivy init` prompts for the Tailscale name).
 3. N10/N14: `derived_version` column set last in the same transaction as the derived data, plus a

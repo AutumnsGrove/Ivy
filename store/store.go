@@ -76,7 +76,12 @@ func Open(ctx context.Context, dir string) (*DBs, error) {
 		_ = mirror.Close()
 		return nil, fmt.Errorf("state: %w", err)
 	}
-	return &DBs{Mirror: mirror, State: state, Dir: dir}, nil
+	dbs := &DBs{Mirror: mirror, State: state, Dir: dir}
+	if err := dbs.moveLegacyProfiles(ctx); err != nil {
+		_ = dbs.Close()
+		return nil, err
+	}
+	return dbs, nil
 }
 
 // Close closes both databases, returning the first error.

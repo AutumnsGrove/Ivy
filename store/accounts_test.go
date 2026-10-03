@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -16,8 +18,6 @@ func TestAccountRoundTrip(t *testing.T) {
 	in := Account{
 		ID:            "acct-1",
 		Address:       "me@example.test",
-		DisplayName:   "Me",
-		Icon:          "leaf",
 		Color:         "fern",
 		SortOrder:     2,
 		LLMEnabled:    true,
@@ -37,7 +37,11 @@ func TestAccountRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAccount: %v", err)
 	}
-	if got.Address != in.Address || got.DisplayName != in.DisplayName || got.Icon != in.Icon ||
+	// A fresh account has no profile; DisplayName and Icon are the operator's.
+	if got.DisplayName != "" || got.Icon != "" {
+		t.Errorf("fresh profile = %q/%q, want empty", got.DisplayName, got.Icon)
+	}
+	if got.Address != in.Address ||
 		got.Color != in.Color || got.SortOrder != in.SortOrder || got.LLMEnabled != in.LLMEnabled ||
 		got.IMAPPort != in.IMAPPort || got.Username != in.Username {
 		t.Errorf("GetAccount = %+v, want %+v", got, in)
@@ -61,7 +65,7 @@ func TestUpsertAccountPreservesCreatedAt(t *testing.T) {
 		t.Fatalf("first upsert: %v", err)
 	}
 
-	acct.DisplayName = "Renamed"
+	acct.Address = "moved@example.test"
 	acct.CreatedAt = created.Add(48 * time.Hour)
 	if err := dbs.UpsertAccount(ctx, acct); err != nil {
 		t.Fatalf("second upsert: %v", err)
@@ -74,8 +78,8 @@ func TestUpsertAccountPreservesCreatedAt(t *testing.T) {
 	if len(accounts) != 1 {
 		t.Fatalf("got %d accounts, want 1", len(accounts))
 	}
-	if accounts[0].DisplayName != "Renamed" {
-		t.Errorf("DisplayName = %q, want Renamed", accounts[0].DisplayName)
+	if accounts[0].Address != "moved@example.test" {
+		t.Errorf("Address = %q, want the updated one", accounts[0].Address)
 	}
 	if !accounts[0].CreatedAt.Equal(created) {
 		t.Errorf("CreatedAt = %s, want the original %s", accounts[0].CreatedAt, created)
@@ -203,4 +207,145 @@ func ids(accounts []Account) []string {
 		out[i] = a.ID
 	}
 	return out
+}
+
+// The profile is the operator's own state (CLAUDE.md non-negotiable 5): the
+// mirror is rebuilt from IMAP and never backed up, so a rename or a photo must
+// survive losing mirror.db entirely.
+func TestAccountProfileSurvivesAMirrorRebuild(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := t.TempDir()
+	acct := Account{ID: "acct-1", Address: "me@example.test", CreatedAt: time.Date(2026, 10, 2, 9, 0, 0, 0, time.UTC)}
+	png := []byte{0x89, 0x50, 0x4e, 0x47}
+
+	dbs, err := Open(ctx, dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := dbs.UpsertAccount(ctx, acct); err != nil {
+		t.Fatalf("UpsertAccount: %v", err)
+	}
+	if err := dbs.SetAccountProfile(ctx, "acct-1", "Autumn", "leaf"); err != nil {
+		t.Fatalf("SetAccountProfile: %v", err)
+	}
+	if err := dbs.SetAccountPhoto(ctx, "acct-1", png); err != nil {
+		t.Fatalf("SetAccountPhoto: %v", err)
+	}
+	if err := dbs.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	for _, name := range []string{"mirror.db", "mirror.db-wal", "mirror.db-shm"} {
+		if err := os.Remove(filepath.Join(dir, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("remove %s: %v", name, err)
+		}
+	}
+
+	dbs, err = Open(ctx, dir)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer func() { _ = dbs.Close() }()
+	if err := dbs.UpsertAccount(ctx, acct); err != nil {
+		t.Fatalf("UpsertAccount after rebuild: %v", err)
+	}
+	got, err := dbs.GetAccount(ctx, "acct-1")
+	if err != nil {
+		t.Fatalf("GetAccount: %v", err)
+	}
+	if got.DisplayName != "Autumn" || got.Icon != "leaf" || !got.HasPhoto {
+		t.Errorf("profile after rebuild = %q/%q photo=%v, want Autumn/leaf/true", got.DisplayName, got.Icon, got.HasPhoto)
+	}
+	if stored, err := dbs.GetAccountPhoto(ctx, "acct-1"); err != nil || string(stored) != string(png) {
+		t.Errorf("photo after rebuild = %v, %v", stored, err)
+	}
+}
+
+// A sync or config reload upserts the account row; it must not reach the
+// operator's profile in either direction.
+func TestUpsertAccountNeverTouchesTheProfile(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	acct := Account{ID: "acct-1", Address: "me@example.test", CreatedAt: time.Now()}
+	if err := dbs.UpsertAccount(ctx, acct); err != nil {
+		t.Fatalf("UpsertAccount: %v", err)
+	}
+	if err := dbs.SetAccountProfile(ctx, "acct-1", "Autumn", "leaf"); err != nil {
+		t.Fatalf("SetAccountProfile: %v", err)
+	}
+
+	acct.DisplayName, acct.Icon = "From config", "x"
+	if err := dbs.UpsertAccount(ctx, acct); err != nil {
+		t.Fatalf("second upsert: %v", err)
+	}
+	got, err := dbs.GetAccount(ctx, "acct-1")
+	if err != nil {
+		t.Fatalf("GetAccount: %v", err)
+	}
+	if got.DisplayName != "Autumn" || got.Icon != "leaf" {
+		t.Errorf("profile after upsert = %q/%q, want Autumn/leaf", got.DisplayName, got.Icon)
+	}
+}
+
+// Before round 32 the profile lived on the mirror row. Opening such a data
+// directory copies it into state.db once and empties the mirror columns, and a
+// profile already in state wins over a stale mirror value.
+func TestLegacyMirrorProfileMovesToState(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := t.TempDir()
+	png := []byte{0x89, 0x50, 0x4e, 0x47}
+
+	dbs, err := Open(ctx, dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	for _, id := range []string{"acct-1", "acct-2"} {
+		if err := dbs.UpsertAccount(ctx, Account{ID: id, Address: id + "@example.test", CreatedAt: time.Now()}); err != nil {
+			t.Fatalf("UpsertAccount %s: %v", id, err)
+		}
+	}
+	if err := dbs.SetAccountProfile(ctx, "acct-2", "Chosen", "leaf"); err != nil {
+		t.Fatalf("SetAccountProfile: %v", err)
+	}
+	legacy := `UPDATE accounts SET display_name = ?, icon = ?, photo_blob = ? WHERE id = ?`
+	if _, err := dbs.Mirror.Write.ExecContext(ctx, legacy, "Old", "moss", png, "acct-1"); err != nil {
+		t.Fatalf("seed legacy acct-1: %v", err)
+	}
+	if _, err := dbs.Mirror.Write.ExecContext(ctx, legacy, "Stale", "old", nil, "acct-2"); err != nil {
+		t.Fatalf("seed legacy acct-2: %v", err)
+	}
+	if err := dbs.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	dbs, err = Open(ctx, dir)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer func() { _ = dbs.Close() }()
+
+	one, err := dbs.GetAccount(ctx, "acct-1")
+	if err != nil {
+		t.Fatalf("GetAccount acct-1: %v", err)
+	}
+	if one.DisplayName != "Old" || one.Icon != "moss" || !one.HasPhoto {
+		t.Errorf("acct-1 = %q/%q photo=%v, want the legacy profile", one.DisplayName, one.Icon, one.HasPhoto)
+	}
+	two, err := dbs.GetAccount(ctx, "acct-2")
+	if err != nil {
+		t.Fatalf("GetAccount acct-2: %v", err)
+	}
+	if two.DisplayName != "Chosen" || two.Icon != "leaf" {
+		t.Errorf("acct-2 = %q/%q, want the state profile to win", two.DisplayName, two.Icon)
+	}
+
+	var left int
+	err = dbs.Mirror.Read.QueryRowContext(ctx,
+		`SELECT count(*) FROM accounts WHERE display_name != '' OR icon != '' OR photo_blob IS NOT NULL`).Scan(&left)
+	if err != nil || left != 0 {
+		t.Errorf("mirror rows still holding a profile = %d (%v), want 0", left, err)
+	}
 }

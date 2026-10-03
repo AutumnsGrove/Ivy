@@ -220,4 +220,18 @@ var stateMigrations = []migration{
 			)`,
 		},
 	},
+	{
+		version: 2,
+		statements: []string{
+			// The operator's name, icon and photo for an account (PLAN.md 3). They are
+			// locally owned, so they live here and not on the rebuildable mirror row;
+			// account_id is the config id the mirror's accounts table also uses.
+			`CREATE TABLE account_profiles (
+				account_id   TEXT PRIMARY KEY,
+				display_name TEXT NOT NULL DEFAULT '',
+				icon         TEXT NOT NULL DEFAULT '',
+				photo_blob   BLOB
+			)`,
+		},
+	},
 }

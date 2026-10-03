@@ -73,13 +73,15 @@ about 0.4 MiB per message with an attachment (1.2 to 5.6 GiB at 100k messages), 
 potato's disk.
 
 Mirror tables (`mirror.db`, rebuildable from IMAP):
-- `accounts` (id, address, imap/smtp host+port, username, display_name, icon, photo_blob,
-  llm_enabled, vision_enabled, color, sort_order, created_at). Password/app-password lives in env/file, never here.
-  `display_name`, `icon` and `photo_blob` are the user's and are written only by
-  `SetAccountProfile`/`SetAccountPhoto`; a list reads `HasPhoto`, never the blob, so `/accounts` does
-  not load image bytes. `GET /accounts/{id}/photo` streams them, and only a sniffed raster image
-  (JPEG/PNG/GIF/WebP, not SVG) is ever stored. Renaming and uploading are mutating requests, so
-  they sit behind the same-origin `Origin` check (section 8).
+- `accounts` (id, address, imap/smtp host+port, username, llm_enabled, vision_enabled, color,
+  sort_order, created_at). Password/app-password lives in env/file, never here. The operator's
+  name, icon and photo are **not** here: they are typed by the operator, so they live in `state.db`
+  (`account_profiles`, below) and `GetAccount`/`ListAccounts` lay them over this row. Older builds
+  kept them on this row; `Open` copies any such values into `state.db` once and empties the columns.
+  A list reads `HasPhoto`, never the blob, so `/accounts` does not load image bytes.
+  `GET /accounts/{id}/photo` streams the photo, and only a sniffed raster image (JPEG/PNG/GIF/WebP,
+  not SVG) is ever stored. Renaming and uploading are mutating requests, so they sit behind the
+  same-origin `Origin` check (section 8).
 - `folders` (id, account_id, name, role[inbox|sent|drafts|trash|archive|junk|other], uidvalidity,
   highestmodseq, last_sync_at)
 - `messages` (id, account_id, folder_id, uid, content_key, message_id_hdr, in_reply_to, references, subject,
@@ -121,7 +123,8 @@ Locally owned state (`state.db`, not on the server and not rebuildable, so backe
   | model | server), `rules` (conditions JSON incl. fuzzy Jev questions, actions JSON, account
   scope, enabled), `snoozes` (account, content_key, until), `image_allow` (sender/domain),
   `settings` (key/value + per-account overrides), `jev_questions` (user-defined and overrides),
-  account display fields above.
+  `account_profiles` (account_id, display_name, icon, photo_blob; written only by
+  `SetAccountProfile`/`SetAccountPhoto`, which require the mirror account to exist).
 - **Tags live in both places (settled, round 30).** The definition (name, color) and the durable
   membership are local, in `state.db`. Membership is also written to the server as an IMAP
   keyword `$ivy-<slug>` (the slug is ASCII, because a keyword is an IMAP atom and tag names are

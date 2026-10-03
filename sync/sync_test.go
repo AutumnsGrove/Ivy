@@ -88,6 +88,12 @@ func seedAccountRow(t *testing.T, dbs *store.DBs, a store.Account) {
 	if err := dbs.UpsertAccount(context.Background(), a); err != nil {
 		t.Fatalf("UpsertAccount: %v", err)
 	}
+	// The operator's profile is state, not a mirror column, so it has its own writer.
+	if a.DisplayName != "" || a.Icon != "" {
+		if err := dbs.SetAccountProfile(context.Background(), a.ID, a.DisplayName, a.Icon); err != nil {
+			t.Fatalf("SetAccountProfile: %v", err)
+		}
+	}
 }
 
 // TestFetchMirrorsFoldersAndMessages is the core read slice: LIST discovers the
