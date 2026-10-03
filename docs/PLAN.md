@@ -1,8 +1,9 @@
 # Ivy — Plan
 
 **Status:** approved 2026-10-02 (`qa-log.md` round 28); product decisions settled through round 31.
-Work goes directly on `main` for this phase. Milestone 1 (Read) is in progress: 2a-2c done, 2d next
-(`next_steps.md`).
+Work goes directly on `main` for this phase. Milestone 1 (Read) is nearly done: 2a-2f done, 2g
+finishing, 2h next (`../next_steps.md` has the live status; `BUILD-LOG.md` has what each chunk
+delivered).
 
 **Doc map:** `PLAN.md` (this: product, features, milestones, risks) · `ARCHITECTURE.md` (how it's
 built) · `STANDARDS.md` (engineering standards, TDD workflow) · `STACK.md` (libraries, pure-Go
