@@ -829,3 +829,18 @@ dead row and no stats design exists. Four decisions, three of them the recommend
   accent stay in `localStorage` (they are per device).
 - **Account photos are downscaled in the browser** to a small square JPEG before upload (Safari
   decodes HEIC), which settles the 5 MiB/HEIC backlog item; the server limit stays as a backstop.
+
+## Round 34 — starting 2h: what `fast` and `full` populate (2026-10-03, operator)
+
+Reading the code before 2h found that `--mode` was parsed and stored in the snapshot recipe but read
+nowhere, that neither `up` path ever ran the sync (so `make dev` served empty databases), and that
+`state.db` has no rules, snoozes, ledger or Jev tables yet. Two decisions, both the recommended option:
+
+- **`state.db` seed is only what exists.** The fast seeder writes tags, message tags, settings and
+  account profiles. Rules, snoozes, the ledger and Jev rows are added by the chunk that creates each
+  table, in the same stage, so the seeder never gets ahead of the schema.
+- **`full` is a one-shot sync at startup.** Before serving, `ivy-dev` runs `sync.Fetcher` once per
+  account against mailworld, in both the watched and in-process `up` paths (the watched child only
+  opens the databases `ivy-dev` filled). `fast` writes the same rows without IMAP by feeding each
+  seeded delivery through the same store code the sync uses, so the `full == fast` test compares
+  two runs of one code path rather than two implementations.
