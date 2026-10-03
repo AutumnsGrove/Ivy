@@ -577,3 +577,26 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   starve older rows within the 200-per-run limit. None can occur today (nothing deletes a spool
   file). When chunk 3 can disable and restore messages, either record the failure on the row or
   page past rows that failed.
+
+## N12 resolved: sticky thread ids
+
+- **#52** · `d9dd8fc` · `store/threads.go` · **bug** · `threads.id` is a global primary key and a
+  thread's id was its root's content key, which is not account-scoped. The same email delivered to
+  two of the operator's addresses (routine on one domain) has one Message-ID, so the second
+  account's thread write failed with `UNIQUE constraint failed: threads.id` and that account's
+  whole sync run returned an error. Reproduced through the real fetch path by
+  `TestFetchThreadsTheSameMessageInTwoAccounts` and at the store by
+  `TestReplaceThreadsSameProposedIdInTwoAccounts`, both failing before the fix. Fixed with the
+  change below: a minted id is `<account>:<proposed key>`.
+- **#53 (resolves N12)** · `4e103a3` · `store/threads.go` · **risk** · a thread's id was the root's
+  content key, and sync is newest-first, so as history backfilled the root arrived, the id changed,
+  and anything later keyed on it (a snooze, a mute, a thread tag) would detach. Decided in round 32b.
+  Reproduced by `TestFetchKeepsAThreadIdWhenTheRootArrivesLater` (mutation-checked: switching the
+  rule off fails it) and the store tests for backfill, merge and split. Fixed: `ReplaceThreads`
+  assigns ids in two passes, so stickiness always beats minting: a rebuilt thread keeps the existing
+  id carried by its oldest member that has one (each id claimed once, in the caller's order), and
+  only a thread with none mints a scoped id, with a `~n` suffix if one is already claimed. A merge
+  collapses onto the older conversation; a split leaves the id with the half holding the oldest
+  message. `thread.Thread.ID` is now documented as the *proposed* id. `ListThreads` and
+  `messages.thread_id` report the stored one, so the old tests pinning unscoped ids and
+  replace-on-rebuild now assert the new rule.

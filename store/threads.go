@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 )
@@ -75,6 +76,16 @@ func (d *DBs) MessagesForThreading(ctx context.Context, accountID string) ([]Thr
 // the new assignment is written. Threads are derived from the mirror, so
 // dropping a stale row loses nothing that a rebuild cannot recreate.
 //
+// A thread's stored id is not the one the caller proposes. Sync is newest-first,
+// so a conversation's root can arrive after its replies and the algorithm then
+// proposes a different id for the same conversation; anything later attached to
+// the id (a snooze, a tag) would detach. So the id is sticky (N12, round 32b): a
+// rebuilt thread keeps the existing id carried by its oldest member that has one
+// (a merge collapses onto the older conversation, a split leaves the id with the
+// half holding the oldest message) and only a thread with none mints a new id,
+// which is scoped to the account because the same email delivered to two
+// addresses has one content key and the threads id is a global primary key.
+//
 // It is one transaction so a reader never sees a half-rethreaded account, and
 // one writer so it queues behind sync instead of racing it.
 func (d *DBs) ReplaceThreads(ctx context.Context, accountID string, threads []Thread) error {
@@ -84,23 +95,30 @@ func (d *DBs) ReplaceThreads(ctx context.Context, accountID string, threads []Th
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	existing, err := existingThreadIDs(ctx, tx, accountID)
+	if err != nil {
+		return err
+	}
+	ids := assignThreadIDs(accountID, threads, existing)
+
 	if _, err := tx.ExecContext(ctx, `DELETE FROM threads WHERE account_id = ?`, accountID); err != nil {
 		return fmt.Errorf("replace threads for %s: %w", accountID, err)
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE messages SET thread_id = NULL WHERE account_id = ?`, accountID); err != nil {
 		return fmt.Errorf("replace threads for %s: %w", accountID, err)
 	}
-	for _, th := range threads {
+	for i, th := range threads {
+		id := ids[i]
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO threads (id, account_id, root_message_id, subject_norm, last_date, message_count)
 			VALUES (?, ?, ?, ?, ?, ?)`,
-			th.ID, accountID, nullableString(th.RootMessageID), nullableString(th.SubjectNorm),
+			id, accountID, nullableString(th.RootMessageID), nullableString(th.SubjectNorm),
 			nullableTime(th.LastDate), len(th.MessageIDs)); err != nil {
 			return fmt.Errorf("replace threads for %s: %w", accountID, err)
 		}
-		for _, id := range th.MessageIDs {
+		for _, msg := range th.MessageIDs {
 			if _, err := tx.ExecContext(ctx,
-				`UPDATE messages SET thread_id = ? WHERE id = ? AND account_id = ?`, th.ID, id, accountID); err != nil {
+				`UPDATE messages SET thread_id = ? WHERE id = ? AND account_id = ?`, id, msg, accountID); err != nil {
 				return fmt.Errorf("replace threads for %s: %w", accountID, err)
 			}
 		}
@@ -146,4 +164,59 @@ func (d *DBs) ListThreads(ctx context.Context, accountID string) ([]Thread, erro
 		return nil, fmt.Errorf("list threads for %s: %w", accountID, err)
 	}
 	return out, nil
+}
+
+// existingThreadIDs maps each of an account's messages to the thread id it
+// carries now. The rows are read fully and closed before anything else runs on
+// the one write connection.
+func existingThreadIDs(ctx context.Context, tx *sql.Tx, accountID string) (map[string]string, error) {
+	rows, err := tx.QueryContext(ctx,
+		`SELECT id, thread_id FROM messages WHERE account_id = ? AND thread_id IS NOT NULL`, accountID)
+	if err != nil {
+		return nil, fmt.Errorf("replace threads for %s: %w", accountID, err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := make(map[string]string)
+	for rows.Next() {
+		var msg, thread string
+		if err := rows.Scan(&msg, &thread); err != nil {
+			return nil, fmt.Errorf("replace threads for %s: %w", accountID, err)
+		}
+		out[msg] = thread
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("replace threads for %s: %w", accountID, err)
+	}
+	return out, nil
+}
+
+// assignThreadIDs picks the stored id of each thread, in the caller's order. A
+// first pass lets every thread keep an existing id (from its oldest member that
+// carries one, each id claimed once) so stickiness always beats minting; a
+// second pass mints an account-scoped id for the rest, never reusing a claimed
+// one.
+func assignThreadIDs(accountID string, threads []Thread, existing map[string]string) []string {
+	ids := make([]string, len(threads))
+	claimed := make(map[string]bool, len(threads))
+	for i, th := range threads {
+		for _, member := range th.MessageIDs { // oldest first
+			if prev := existing[member]; prev != "" && !claimed[prev] {
+				ids[i] = prev
+				claimed[prev] = true
+				break
+			}
+		}
+	}
+	for i, th := range threads {
+		if ids[i] != "" {
+			continue
+		}
+		id := accountID + ":" + th.ID
+		for n := 2; claimed[id]; n++ {
+			id = fmt.Sprintf("%s:%s~%d", accountID, th.ID, n)
+		}
+		ids[i] = id
+		claimed[id] = true
+	}
+	return ids
 }

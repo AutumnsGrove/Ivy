@@ -1055,3 +1055,78 @@ func TestFetchThreadsSubjectFallback(t *testing.T) {
 		t.Errorf("subject fallback did not group: a=%q b=%q", a.ThreadID, b.ThreadID)
 	}
 }
+
+// The same email sent to two of the operator's addresses is routine on one
+// domain. It has one Message-ID, so one content key, in both mirrors; each
+// account still needs its own conversation row.
+func TestFetchThreadsTheSameMessageInTwoAccounts(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	one := w.Account("me@grove.test", "secret")
+	two := w.Account("you@grove.test", "secret")
+	dbs := newStore(t)
+	raw := mailworld.Msg().From("Alice <alice@example.com>").Subject("To both").
+		MessageID("<both@grove.test>").Date(time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)).Text("hello both").Build()
+	uidOne := one.Deliver("INBOX", raw)
+	uidTwo := two.Deliver("INBOX", raw)
+
+	f := ivysync.NewFetcher(dbs)
+	if _, err := f.Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret")); err != nil {
+		t.Fatalf("first account: %v", err)
+	}
+	if _, err := f.Fetch(ctx, accountFor(t, w, "acct-2", "you@grove.test", "secret")); err != nil {
+		t.Fatalf("second account: %v", err)
+	}
+
+	m1 := mustMessage(t, dbs, mustFolder(t, dbs, "acct-1", "INBOX").ID, uidOne)
+	m2 := mustMessage(t, dbs, mustFolder(t, dbs, "acct-2", "INBOX").ID, uidTwo)
+	if m1.ThreadID == "" || m2.ThreadID == "" || m1.ThreadID == m2.ThreadID {
+		t.Errorf("thread ids = %q and %q, want one distinct conversation per account", m1.ThreadID, m2.ThreadID)
+	}
+	for _, acct := range []string{"acct-1", "acct-2"} {
+		threads, err := dbs.ListThreads(ctx, acct)
+		if err != nil || len(threads) != 1 {
+			t.Errorf("%s threads = %+v, %v; want exactly one", acct, threads, err)
+		}
+	}
+}
+
+// Sync is newest-first, so a reply is mirrored before the root it answers. When
+// the root arrives in a later run the conversation must keep the id it already
+// had (N12), or a snooze or tag attached to it would detach.
+func TestFetchKeepsAThreadIdWhenTheRootArrivesLater(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+	t0 := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	reply := mailworld.Msg().From("me@grove.test").Subject("Re: Plan").MessageID("<reply@grove.test>").
+		Header("References", "<root@grove.test>").Header("In-Reply-To", "<root@grove.test>").
+		Date(t0.Add(time.Hour)).Text("reply body").Build()
+	uidReply := acc.Deliver("INBOX", reply)
+
+	f := ivysync.NewFetcher(dbs)
+	acct := accountFor(t, w, "acct-1", "me@grove.test", "secret")
+	if _, err := f.Fetch(ctx, acct); err != nil {
+		t.Fatalf("first Fetch: %v", err)
+	}
+	inbox := mustFolder(t, dbs, "acct-1", "INBOX")
+	before := mustMessage(t, dbs, inbox.ID, uidReply).ThreadID
+	if before == "" {
+		t.Fatal("the reply has no thread id after the first run")
+	}
+
+	uidRoot := acc.Deliver("INBOX", mailworld.Msg().From("Alice <alice@example.com>").Subject("Plan").
+		MessageID("<root@grove.test>").Date(t0).Text("root body").Build())
+	if _, err := f.Fetch(ctx, acct); err != nil {
+		t.Fatalf("second Fetch: %v", err)
+	}
+	if got := mustMessage(t, dbs, inbox.ID, uidReply).ThreadID; got != before {
+		t.Errorf("the reply's thread id changed from %q to %q when its root arrived", before, got)
+	}
+	if got := mustMessage(t, dbs, inbox.ID, uidRoot).ThreadID; got != before {
+		t.Errorf("the root's thread id = %q, want it to join the existing conversation %q", got, before)
+	}
+}

@@ -244,8 +244,13 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   app's own CSP still needs SvelteKit build-time script hashes and remains open.
 - **Threading (chunk 2e):** JWZ from Message-ID/References/In-Reply-To with a normalized-subject
   fallback, implemented in `thread/` as pure logic and stored on each message and in the
-  `threads` table. A thread's id is the **content key** of its root message, so a move or a
-  UIDVALIDITY reset never re-derives it. The fallback strips only the `Re:` family (`RE[5]:`, `Re: Re:`), not
+  `threads` table. **A thread's stored id is sticky (round 32b):** `thread/` proposes the content
+  key of the root, but `store.ReplaceThreads` keeps the existing id carried by a rebuilt thread's
+  oldest member (a merge collapses onto the older conversation, a split leaves the id with the half
+  holding the oldest message) and mints a new one only for a thread with none, scoped to the
+  account as `<account>:<key>` because the same email delivered to two addresses has one content
+  key and `threads.id` is a global primary key. So the id survives a move, a UIDVALIDITY reset and
+  the arrival of an older root during backfill, and features may key on `thread_id`. The fallback strips only the `Re:` family (`RE[5]:`, `Re: Re:`), not
   `Fwd:`, because a forward is a different subject (JWZ step 5). The pass runs over a whole
   account after each fetch so a reply filed in Archive still joins its inbox root; it reads
   headers only. Disabled messages are excluded, so they never anchor a thread. The subject pass

@@ -41,9 +41,12 @@ type Message struct {
 	Date       time.Time
 }
 
-// Thread is one conversation. ID is the Key of the message at the root (or of
-// the earliest message when the root is a placeholder for a message the mirror
-// does not hold). MessageIDs are the input IDs, oldest first.
+// Thread is one conversation. ID is the *proposed* id: the Key of the message at
+// the root (or of the earliest message when the root is a placeholder for a
+// message the mirror does not hold). It is not what gets stored:
+// store.ReplaceThreads keeps a conversation's existing id when it has one and
+// scopes a new one to the account. MessageIDs are the input IDs, oldest first,
+// which that rule depends on.
 type Thread struct {
 	ID            string
 	RootMessageID string

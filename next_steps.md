@@ -62,7 +62,9 @@ or image-publish workflow yet.
    per run, newest first). **Bump `DerivedVersion` whenever `mime`, `render` or the part walk
    changes output**; a fingerprint test fails if you forget. The remote-image allow-list work
    (backlog) reuses this to re-render.
-4. N12: sticky oldest-wins thread ids in `ReplaceThreads`.
+4. ~~N12: sticky oldest-wins thread ids~~ **done** (#52, #53): the stored id is sticky and
+   account-scoped, so features may key on `thread_id`. This also fixed a sync failure when one email
+   reached two accounts.
 5. N15: RFC 3339 timestamps in the API, formatted in the browser (a contract change; update
    `openapi.yaml`, regenerate, the fixture and the screens).
 
