@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/AutumnsGrove/Ivy/internal/asset"
@@ -47,6 +48,10 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/version", s.handleVersion)
 	api.HandleFunc("GET /api/v1/health", s.handleHealth)
 	api.HandleFunc("GET /api/v1/accounts", s.handleAccounts)
+	api.HandleFunc("PATCH /api/v1/accounts/{id}", s.handleUpdateAccountProfile)
+	api.HandleFunc("GET /api/v1/accounts/{id}/photo", s.handleAccountPhoto)
+	api.HandleFunc("PUT /api/v1/accounts/{id}/photo", s.handleUploadAccountPhoto)
+	api.HandleFunc("DELETE /api/v1/accounts/{id}/photo", s.handleDeleteAccountPhoto)
 	api.HandleFunc("GET /api/v1/inbox", s.handleInbox)
 	api.HandleFunc("GET /api/v1/messages/{id}", s.handleMessage)
 	api.HandleFunc("GET /api/v1/messages/{id}/summary", s.handleMessageSummary)
@@ -56,7 +61,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/mirror/health", s.handleMirrorHealth)
 
 	root := http.NewServeMux()
-	root.Handle("/api/", noStore(apiCSP(compress.Middleware(jsonErrors(api)))))
+	root.Handle("/api/", noStore(apiCSP(compress.Middleware(originGuard(jsonErrors(api))))))
 	if s.static != nil {
 		root.Handle("/", asset.FileServer(s.static))
 	} else {
@@ -96,6 +101,29 @@ func apiCSP(next http.Handler) http.Handler {
 func noStore(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// originGuard rejects a browser cross-site write. With no auth, a mutating
+// request is only as trusted as its Origin: a page on another site open in the
+// same browser must not be able to rename an account (STANDARDS.md section 8).
+// A non-browser client sends no Origin and already had network access, so it is
+// allowed; GET/HEAD stay open so a link can be shared.
+func originGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			next.ServeHTTP(w, r)
+			return
+		}
+		if origin := r.Header.Get("Origin"); origin != "" {
+			u, err := url.Parse(origin)
+			if err != nil || u.Host != r.Host {
+				writeError(w, http.StatusForbidden, "forbidden", "This request came from another site")
+				return
+			}
+		}
 		next.ServeHTTP(w, r)
 	})
 }

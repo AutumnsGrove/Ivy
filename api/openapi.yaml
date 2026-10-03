@@ -53,6 +53,31 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Account"
+  /accounts/{id}:
+    patch:
+      operationId: updateAccountProfile
+      summary: Rename an account or choose its icon
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountProfile"
+      responses:
+        "200":
+          description: The updated account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /inbox:
     get:
       operationId: listInbox
@@ -339,7 +364,7 @@ components:
       enum: [ok, syncing, auth-failed, unreachable]
     Account:
       type: object
-      required: [id, address, short, initial, slot, unread, smart, sync, syncNote]
+      required: [id, address, short, initial, slot, unread, smart, sync, syncNote, name, icon, photo]
       properties:
         id:
           type: string
@@ -349,6 +374,15 @@ components:
           type: string
         initial:
           type: string
+        name:
+          type: string
+          description: The account's display name, empty when it has none
+        icon:
+          type: string
+          description: A chosen emoji or glyph, empty when it has none
+        photo:
+          type: boolean
+          description: Whether GET /accounts/{id}/photo serves a photo
         slot:
           $ref: "#/components/schemas/AccountSlot"
         unread:
@@ -363,6 +397,16 @@ components:
           type: number
           minimum: 0
           maximum: 1
+    AccountProfile:
+      type: object
+      description: A partial rename; omitted fields keep their current value
+      properties:
+        displayName:
+          type: string
+          maxLength: 120
+        icon:
+          type: string
+          maxLength: 16
     Attachment:
       type: object
       required: [id, name, size, kind]

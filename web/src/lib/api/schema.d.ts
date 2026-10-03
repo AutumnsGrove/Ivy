@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename an account or choose its icon */
+        patch: operations["updateAccountProfile"];
+        trace?: never;
+    };
     "/inbox": {
         parameters: {
             query?: never;
@@ -325,12 +342,23 @@ export interface components {
             address: string;
             short: string;
             initial: string;
+            /** @description The account's display name, empty when it has none */
+            name: string;
+            /** @description A chosen emoji or glyph, empty when it has none */
+            icon: string;
+            /** @description Whether GET /accounts/{id}/photo serves a photo */
+            photo: boolean;
             slot: components["schemas"]["AccountSlot"];
             unread: number;
             smart: boolean;
             sync: components["schemas"]["SyncState"];
             syncNote: string;
             progress?: number;
+        };
+        /** @description A partial rename; omitted fields keep their current value */
+        AccountProfile: {
+            displayName?: string;
+            icon?: string;
         };
         Attachment: {
             id: string;
@@ -585,6 +613,33 @@ export interface operations {
                     "application/json": components["schemas"]["Account"][];
                 };
             };
+        };
+    };
+    updateAccountProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountProfile"];
+            };
+        };
+        responses: {
+            /** @description The updated account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     listInbox: {

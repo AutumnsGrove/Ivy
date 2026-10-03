@@ -75,6 +75,11 @@ potato's disk.
 Mirror tables (`mirror.db`, rebuildable from IMAP):
 - `accounts` (id, address, imap/smtp host+port, username, display_name, icon, photo_blob,
   llm_enabled, vision_enabled, color, sort_order, created_at). Password/app-password lives in env/file, never here.
+  `display_name`, `icon` and `photo_blob` are the user's and are written only by
+  `SetAccountProfile`/`SetAccountPhoto`; a list reads `HasPhoto`, never the blob, so `/accounts` does
+  not load image bytes. `GET /accounts/{id}/photo` streams them, and only a sniffed raster image
+  (JPEG/PNG/GIF/WebP, not SVG) is ever stored. Renaming and uploading are mutating requests, so
+  they sit behind the same-origin `Origin` check (section 8).
 - `folders` (id, account_id, name, role[inbox|sent|drafts|trash|archive|junk|other], uidvalidity,
   highestmodseq, last_sync_at)
 - `messages` (id, account_id, folder_id, uid, content_key, message_id_hdr, in_reply_to, references, subject,

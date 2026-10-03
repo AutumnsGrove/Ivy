@@ -22,7 +22,6 @@ func TestAccountRoundTrip(t *testing.T) {
 		SortOrder:     2,
 		LLMEnabled:    true,
 		VisionEnabled: false,
-		Photo:         []byte{0x89, 0x50, 0x4e, 0x47},
 		IMAPHost:      "imap.example.test",
 		IMAPPort:      993,
 		SMTPHost:      "smtp.example.test",
@@ -43,8 +42,8 @@ func TestAccountRoundTrip(t *testing.T) {
 		got.IMAPPort != in.IMAPPort || got.Username != in.Username {
 		t.Errorf("GetAccount = %+v, want %+v", got, in)
 	}
-	if string(got.Photo) != string(in.Photo) {
-		t.Errorf("Photo = %v, want %v", got.Photo, in.Photo)
+	if got.HasPhoto {
+		t.Error("HasPhoto = true, want false before a photo is set")
 	}
 	if !got.CreatedAt.Equal(created) {
 		t.Errorf("CreatedAt = %s, want %s", got.CreatedAt, created)
@@ -111,6 +110,80 @@ func TestGetAccountMissing(t *testing.T) {
 	_, err := openTemp(t).GetAccount(context.Background(), "nope")
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestSetAccountProfile(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	run := Account{ID: "acct-1", Address: "me@example.test", SortOrder: 3, LLMEnabled: true, IMAPHost: "imap.test", CreatedAt: time.Date(2026, 10, 2, 9, 0, 0, 0, time.UTC)}
+	if err := dbs.UpsertAccount(ctx, run); err != nil {
+		t.Fatalf("UpsertAccount: %v", err)
+	}
+
+	if err := dbs.SetAccountProfile(ctx, "acct-1", "Autumn", "\U0001F33F"); err != nil {
+		t.Fatalf("SetAccountProfile: %v", err)
+	}
+	got, err := dbs.GetAccount(ctx, "acct-1")
+	if err != nil {
+		t.Fatalf("GetAccount: %v", err)
+	}
+	if got.DisplayName != "Autumn" || got.Icon != "\U0001F33F" {
+		t.Errorf("profile = %q/%q, want Autumn/leaf", got.DisplayName, got.Icon)
+	}
+	// The connection fields the sync owns are untouched by a rename.
+	if got.Address != run.Address || got.SortOrder != run.SortOrder || !got.LLMEnabled || got.IMAPHost != run.IMAPHost {
+		t.Errorf("rename disturbed sync-owned fields: %+v", got)
+	}
+
+	err = dbs.SetAccountProfile(ctx, "nope", "x", "")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing account err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestSetAccountPhoto(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	if err := dbs.UpsertAccount(ctx, Account{ID: "acct-1", Address: "me@example.test", CreatedAt: time.Now()}); err != nil {
+		t.Fatalf("UpsertAccount: %v", err)
+	}
+	png := []byte{0x89, 0x50, 0x4e, 0x47}
+	if err := dbs.SetAccountPhoto(ctx, "acct-1", png); err != nil {
+		t.Fatalf("SetAccountPhoto: %v", err)
+	}
+	got, err := dbs.GetAccount(ctx, "acct-1")
+	if err != nil {
+		t.Fatalf("GetAccount: %v", err)
+	}
+	if !got.HasPhoto {
+		t.Error("HasPhoto = false after a photo was set")
+	}
+	stored, err := dbs.GetAccountPhoto(ctx, "acct-1")
+	if err != nil {
+		t.Fatalf("GetAccountPhoto: %v", err)
+	}
+	if string(stored) != string(png) {
+		t.Errorf("photo = %v, want %v", stored, png)
+	}
+
+	if err := dbs.SetAccountPhoto(ctx, "acct-1", nil); err != nil {
+		t.Fatalf("clear photo: %v", err)
+	}
+	got, _ = dbs.GetAccount(ctx, "acct-1")
+	if got.HasPhoto {
+		t.Error("HasPhoto = true after clear")
+	}
+	if _, err := dbs.GetAccountPhoto(ctx, "acct-1"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("GetAccountPhoto after clear = %v, want ErrNotFound", err)
+	}
+
+	if err := dbs.SetAccountPhoto(ctx, "nope", png); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing account err = %v, want ErrNotFound", err)
 	}
 }
 

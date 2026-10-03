@@ -200,9 +200,18 @@ func (e TagColor) Valid() bool {
 
 // Account defines model for Account.
 type Account struct {
-	Address  string      `json:"address"`
-	Id       string      `json:"id"`
-	Initial  string      `json:"initial"`
+	Address string `json:"address"`
+
+	// Icon A chosen emoji or glyph, empty when it has none
+	Icon    string `json:"icon"`
+	Id      string `json:"id"`
+	Initial string `json:"initial"`
+
+	// Name The account's display name, empty when it has none
+	Name string `json:"name"`
+
+	// Photo Whether GET /accounts/{id}/photo serves a photo
+	Photo    bool        `json:"photo"`
 	Progress *float32    `json:"progress,omitempty"`
 	Short    string      `json:"short"`
 	Slot     AccountSlot `json:"slot"`
@@ -210,6 +219,12 @@ type Account struct {
 	Sync     SyncState   `json:"sync"`
 	SyncNote string      `json:"syncNote"`
 	Unread   int         `json:"unread"`
+}
+
+// AccountProfile A partial rename; omitted fields keep their current value
+type AccountProfile struct {
+	DisplayName *string `json:"displayName,omitempty"`
+	Icon        *string `json:"icon,omitempty"`
 }
 
 // AccountSlot defines model for AccountSlot.
@@ -482,6 +497,9 @@ type SearchParams struct {
 	Q      string  `form:"q" json:"q"`
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
+
+// UpdateAccountProfileJSONRequestBody defines body for UpdateAccountProfile for application/json ContentType.
+type UpdateAccountProfileJSONRequestBody = AccountProfile
 
 // AskJSONRequestBody defines body for Ask for application/json ContentType.
 type AskJSONRequestBody = AskRequest

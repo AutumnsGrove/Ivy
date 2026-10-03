@@ -185,6 +185,8 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Parts per message (`mime.MaxParts`) | 1000 | body not parsed, headers kept, error recorded |
 | Non-fatal parse errors kept per message | 20 | dropped after the 20th |
 | Inbox page (`maxInboxLimit`) | 200 | clamped |
+| Account display name / icon | 120 / 16 runes | rejected with 400 |
+| Account photo upload (`maxAccountPhotoBytes`) | 5 MiB | rejected with 413; only a sniffed JPEG/PNG/GIF/WebP is kept, SVG is refused |
 | Sanitised HTML body (`render.MaxHTMLBytes`) | 8 MiB | body is not rendered; the plain-text view carries the message |
 | IMAP dial and TLS handshake | 15 s | error, retried by the caller |
 | Dev control-socket call | 30 s | error |
