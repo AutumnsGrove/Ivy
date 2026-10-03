@@ -788,3 +788,24 @@ Three decisions, all taken from the recommended options:
 - **Review before cleanup.** The unreviewed range `6f29d15..HEAD` (2d through account
   customization) is audited with the review-deepseek process first, fixes test-first and logged in
   `papercuts.md`, so the cleaned docs include the findings.
+
+### Round 32b — review findings that needed a decision (2026-10-03, operator)
+
+The review of `6f29d15..HEAD` fixed four defects (#45-#48 in `papercuts.md`) and left six open. Four
+needed an operator decision; all took the recommended option. They are implemented as backlog items
+(`next_steps.md`), each test first.
+
+- **N15, timestamps:** the API sends RFC 3339 timestamps and the browser formats "Yesterday"/"Mon"
+  in the viewer's own zone and locale. The `MailSummary`/`MailMessage` `time` strings become
+  timestamps, a contract change. No timezone setting for now.
+- **N12, thread identity:** a thread's id is sticky and oldest-wins. When a rebuilt thread contains
+  messages that already carry a `thread_id`, it keeps the oldest existing one; a new id is minted
+  only for a thread with none; a merge collapses to the oldest. Features may therefore key on
+  `thread_id`.
+- **N10/N14, derived data:** a `derived_version` column, set last in the same transaction as the
+  derived data (sanitised HTML, attachment rows), plus a bounded sync/boot pass that re-derives rows
+  behind the current version from the raw message. The sanitizer, parser and attachment walk each
+  bump it when their output changes.
+- **N11, allowed hosts:** a `allowed_hosts` config key; every API request whose `Host` is not listed
+  is rejected. The default is loopback plus the configured listen address, and `ivy init` prompts
+  for the Tailscale name. This closes DNS rebinding for reads and writes.
