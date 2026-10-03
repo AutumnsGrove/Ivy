@@ -8,6 +8,8 @@ export type ErrorCode =
 	| 'provider_error'
 	| 'offline'
 	| 'bad_request'
+	| 'forbidden'
+	| 'too_large'
 	| 'internal_error'
 	| 'method_not_allowed';
 

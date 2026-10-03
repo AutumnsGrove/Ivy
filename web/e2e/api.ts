@@ -1,8 +1,8 @@
 import { test as base } from '@playwright/test';
 import * as mock from '../src/lib/api/mock';
-import type { Attachment, MailMessage, MailSummary } from '../src/lib/types';
+import type { Account, Attachment, MailMessage, MailSummary } from '../src/lib/types';
 
-// The reader client does a real fetch, so the mock E2E suite serves the
+// The reader client does real fetches, so the mock E2E suite serves the
 // contract from the same fixtures at the network boundary instead of inside
 // the client. The browser makes the same requests the gateway answers in the
 // smoke suite; only the reply source differs. Specs import `test` from here.
@@ -16,6 +16,25 @@ const BODY_CSP =
 	"default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
 
 const notFound = (message: string): Reply => ({ status: 404, body: { code: 'not_found', message } });
+const badRequest = (message: string): Reply => ({ status: 400, body: { code: 'bad_request', message } });
+const tooLarge = (message: string): Reply => ({ status: 413, body: { code: 'too_large', message } });
+
+export const MAX_PHOTO_BYTES = 5 << 20;
+
+/** The mutable account state a customization flow edits, cloned per test. */
+export type AccountState = {
+	accounts: Account[];
+	photos: Map<string, { type: string; bytes: Buffer }>;
+};
+
+/** The known image formats the server accepts; SVG is deliberately absent. */
+function sniffedImageType(bytes: Uint8Array): string {
+	if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
+	if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+	if (bytes.length >= 6 && String.fromCharCode(...bytes.slice(0, 6)).startsWith('GIF8')) return 'image/gif';
+	if (bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP') return 'image/webp';
+	return '';
+}
 
 function inboxReply(accountId: string | null, scenario: string | null): Reply {
 	if (scenario === 'empty') {
@@ -67,10 +86,23 @@ function bodyDocument(id: string): Reply | null {
 const escapeHTML = (s: string) =>
 	s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
-function respond(path: string, params: URLSearchParams, scenario: string | null): Reply | null {
+function updateProfile(state: AccountState, id: string, body: { displayName?: string; icon?: string }): Reply {
+	const account = state.accounts.find((a) => a.id === id);
+	if (!account) return notFound('No such account');
+	if (body.displayName !== undefined) {
+		if ([...body.displayName].length > 120) return badRequest('That name is too long');
+		account.name = body.displayName.trim();
+	}
+	if (body.icon !== undefined) {
+		if ([...body.icon].length > 16) return badRequest('That icon is too long');
+		account.icon = body.icon.trim();
+	}
+	return { body: account };
+}
+
+function storage(path: string, method: string, params: URLSearchParams, scenario: string | null, state: AccountState, raw: Buffer | null): Reply | null {
 	if (path === '/accounts') {
-		const accounts = scenario === 'sync-error' ? mock.accounts.map(mock.failingHello) : mock.accounts;
-		return { body: accounts };
+		return { body: scenario === 'sync-error' ? state.accounts.map(mock.failingHello) : state.accounts };
 	}
 	if (path === '/inbox') return inboxReply(params.get('account_id'), scenario);
 	if (path === '/mirror/health') {
@@ -83,6 +115,45 @@ function respond(path: string, params: URLSearchParams, scenario: string | null)
 			}
 		};
 	}
+
+	const photo = /^\/accounts\/([^/]+)\/photo$/.exec(path);
+	if (photo) {
+		const id = photo[1];
+		const account = state.accounts.find((a) => a.id === id);
+		if (!account) return notFound('No such account');
+		switch (method) {
+			case 'GET': {
+				const stored = state.photos.get(id);
+				if (!stored) return notFound('No photo');
+				return { contentType: stored.type, body: stored.bytes };
+			}
+			case 'PUT': {
+				const bytes = raw ?? Buffer.alloc(0);
+				if (bytes.length > MAX_PHOTO_BYTES) return tooLarge('That photo is too big');
+				const type = sniffedImageType(bytes);
+				if (!type) return badRequest('That is not a JPEG, PNG, GIF or WebP image');
+				state.photos.set(id, { type, bytes });
+				account.photo = true;
+				return { body: account };
+			}
+			case 'DELETE':
+				state.photos.delete(id);
+				account.photo = false;
+				return { body: account };
+			default:
+				return null;
+		}
+	}
+
+	const profile = /^\/accounts\/([^/]+)$/.exec(path);
+	if (profile && method === 'PATCH' && raw) {
+		try {
+			return updateProfile(state, profile[1], JSON.parse(raw.toString('utf8')));
+		} catch {
+			return badRequest('That request is not valid');
+		}
+	}
+
 	const match = /^\/messages\/([^/]+)(\/summary|\/body)?$/.exec(path);
 	if (match) {
 		const [, id, kind] = match;
@@ -95,27 +166,36 @@ function respond(path: string, params: URLSearchParams, scenario: string | null)
 	return null;
 }
 
+/** The fixture's account state, exposed so a spec can assert what it changed. */
+export const state: { current: AccountState } = {
+	current: { accounts: structuredClone(mock.accounts), photos: new Map() }
+};
+
 export const test = base.extend({
-	// An automatic fixture: every mock-suite page answers the reader endpoints
-	// from fixtures, including the designed ?scenario= edge states.
+	// An automatic fixture: every mock-suite page answers the reader and
+	// customization endpoints from mutable fixtures, including the designed
+	// ?scenario= edge states.
 	page: async ({ page }, use) => {
+		state.current = { accounts: structuredClone(mock.accounts), photos: new Map() };
 		await page.route('**/api/v1/**', async (route) => {
+			const request = route.request();
 			const scenario = new URL(page.url()).searchParams.get('scenario');
 			if (scenario === 'offline') {
 				// A real network failure, so the client takes its offline path.
 				await route.abort('failed');
 				return;
 			}
-			const url = new URL(route.request().url());
+			const url = new URL(request.url());
 			const path = url.pathname.replace(/^\/api\/v1/, '');
-			const reply = respond(path, url.searchParams, scenario);
+			const reply = storage(path, request.method(), url.searchParams, scenario, state.current, request.postDataBuffer());
 			await route.fulfill({
 				status: reply?.status ?? 200,
 				contentType: reply?.contentType ?? 'application/json',
 				headers: reply?.headers,
-				body: reply?.contentType?.startsWith('text/html')
-					? (reply.body as string)
-					: JSON.stringify(reply?.body ?? { code: 'not_found', message: 'No such resource' })
+				body:
+					reply?.contentType && !reply.contentType.startsWith('application/json')
+						? (reply.body as string | Buffer)
+						: JSON.stringify(reply?.body ?? { code: 'not_found', message: 'No such resource' })
 			});
 		});
 		await use(page);

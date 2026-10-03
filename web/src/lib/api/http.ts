@@ -11,6 +11,8 @@ const CODES = new Set<string>([
 	'provider_error',
 	'offline',
 	'bad_request',
+	'forbidden',
+	'too_large',
 	'internal_error',
 	'method_not_allowed'
 ]);
@@ -64,8 +66,12 @@ function fallbackCode(status: number): ErrorCode {
 	switch (status) {
 		case 400:
 			return 'bad_request';
+		case 403:
+			return 'forbidden';
 		case 404:
 			return 'not_found';
+		case 413:
+			return 'too_large';
 		case 429:
 			return 'ask_limit';
 		case 502:

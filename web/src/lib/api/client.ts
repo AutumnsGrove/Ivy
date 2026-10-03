@@ -45,6 +45,26 @@ export const api = {
 
 	getHealth: (): Promise<HealthOverview> => request<HealthOverview>('/mirror/health'),
 
+	/** Rename an account or choose its icon; omitted fields keep their value. */
+	updateAccountProfile: (id: string, profile: { displayName?: string; icon?: string }): Promise<Account> =>
+		request<Account>(`/accounts/${encodeURIComponent(id)}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(profile)
+		}),
+
+	setAccountPhoto: async (id: string, photo: Blob): Promise<Account> =>
+		request<Account>(`/accounts/${encodeURIComponent(id)}/photo`, {
+			method: 'PUT',
+			headers: { 'Content-Type': photo.type || 'application/octet-stream' },
+			// An ArrayBuffer rather than the Blob itself, so the body is a plain
+			// buffer every engine (and Playwright's request capture) can see.
+			body: await photo.arrayBuffer()
+		}),
+
+	clearAccountPhoto: (id: string): Promise<Account> =>
+		request<Account>(`/accounts/${encodeURIComponent(id)}/photo`, { method: 'DELETE' }),
+
 	// --- still mock-backed until their chunks land ---------------------------
 	listReading: (): Promise<ReadingFeed> => tick(mock.reading),
 

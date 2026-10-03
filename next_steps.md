@@ -5,12 +5,13 @@ It **is tracked in git** so every step is recoverable. **Update this file and co
 stage at the end of every sub-chunk (not just every chunk)** so the next session can pick up cleanly
 after a context clear.
 
-Last updated: 2026-10-03, mid Chunk 2 sub-chunk 2g. Chunk 1 (1a-1h) and 2a-2f are done. 2g has
+last updated: 2026-10-03, mid Chunk 2 sub-chunk 2g. Chunk 1 (1a-1h) and 2a-2f are done. 2g has
 started: the reader client fetches the real read API, the body frame points at
 `/api/v1/messages/{id}/body` so the browser enforces the policy as a response header, the mock E2E
-suite now fakes the API at the network boundary, and an `@axe-core/playwright` pass (with the shell
-landmarks it required) is green. Account customization, the settings/stats skeletons and committed
-visual baselines remain in 2g. The audit's ground rules are below.
+suite now fakes the API at the network boundary, account customization (rename, icon, photo) is real
+end to end, and an `@axe-core/playwright` pass (with the shell landmarks it required) is green. The
+settings/stats skeletons and committed visual baselines remain in 2g. The audit's ground rules are
+below.
 
 ## How to run a chunk (read this first)
 
@@ -101,7 +102,7 @@ notes are kept below for reference.
 | **2d** — DONE (browser item to 2g) | `render/` sanitize + sandboxed iframe/CSP: bluemonday, remote-image policy + allow-list, tracking-pixel strip, `cid:` rewrite, plain-text fallback | XSS corpus + fuzz done; 2f adds the body-document endpoint with the policy as a header, so the cross-browser remote-content Playwright assertion now needs only the reader to point at it (2g) |
 | **2e** — DONE | `thread/` JWZ threading + store `thread_id`, normalized-subject fallback | Invariant/property tests + fixtures |
 | **2f** — DONE | Gateway read handlers on the real store: `/accounts`, `/inbox`, `/messages/{id}`, `/messages/{id}/summary`, `/mirror/health`, plus the body-document, inline and attachment endpoints | `httptest` against the generated contract |
-| **2g** | Frontend swap for the reader (real `client.ts` bodies) + settings skeleton + stats-panel skeleton + account customization (rename, icon, photo); E2E both viewports, visual baselines, axe; non-reader routes stay mocked — **in progress**: reader swap, body endpoint and axe done; customization, settings/stats skeleton, visual baselines left | Playwright phone + desktop |
+| **2g** | Frontend swap for the reader (real `client.ts` bodies) + settings skeleton + stats-panel skeleton + account customization (rename, icon, photo); E2E both viewports, visual baselines, axe; non-reader routes stay mocked — **in progress**: reader swap, body endpoint, account customization and axe done; settings/stats skeleton and visual baselines left | Playwright phone + desktop |
 | **2h** | `state.db` fast seeder + `ivy-dev --mode fast` + the `full == fast` agreement test for `demo` + named-state Playwright | `DEV.md` 8; seeder determinism |
 
 Order: 2a → 2b → 2c, then 2d and 2e (threading depends only on parse, not on render), then
@@ -222,13 +223,30 @@ E2E suite no longer mocks inside the client: a Playwright fixture (`e2e/api.ts`)
 drives the same requests the gateway answers; the smoke slice now boots the real binary and renders
 the real (empty) mirror until sync or the 2h seeder fills it. An `@axe-core/playwright` suite covers
 eleven screens on phone and desktop; the pass added the missing `<main>` landmarks to both shells
-and an h1 to Search and Ask. `@axe-core/playwright` is a new dev dependency (`STACK.md`). Deferred
-within 2g (with reasons): account customization (rename/icon/photo) needs targeted store setters
-(so a re-sync cannot clobber them), a gateway write surface and a screen, and is the next step; the
-settings/stats skeletons have no design yet; committed visual baselines wait until the harness is
-regenerated in CI (macOS and Linux font rendering differ). `+layout.ts` still uses `window.fetch`,
-so SvelteKit logs its `window_fetch_in_load` warning; threading the load-time `fetch` through the
-client is the follow-up.
+and an h1 to Search and Ask. `@axe-core/playwright` is a new dev dependency (`STACK.md`).
+
+Account customization is real end to end (same day). The store gained `SetAccountProfile`
+(display name + icon) and `SetAccountPhoto` (bytes, nil clears), and now exposes `HasPhoto` rather
+than the blob, so `/accounts` never loads image bytes; `GetAccountPhoto` is the one read that
+touches them. The contract adds `name`/`icon`/`photo` to `Account` and a `PATCH /accounts/{id}`
+(`AccountProfile`), plus document endpoints `GET`/`PUT`/`DELETE /accounts/{id}/photo`. Uploads are
+bounded at 5 MiB, sniffed with `http.DetectContentType` and kept only when the result is JPEG, PNG,
+GIF or WebP (SVG is refused because it can script same-origin); the limits are in `STANDARDS.md`
+4a. The first mutating endpoints arrived, so a same-origin `Origin` guard now runs on every
+non-GET API request (STANDARDS.md 8) and answers 403 otherwise. The frontend adds
+`api.updateAccountProfile`/`setAccountPhoto`/`clearAccountPhoto`, renders the photo or icon in the
+account badges (`Avatar`, `AccountButton`, `NavPanel`, settings, health), and has a new
+`/settings/account/[id]` screen for rename, icon and photo; the settings account row now points at
+it. The E2E fixture holds mutable account state so the flow is asserted on both viewports, and the
+screen is in the axe set. The photo upload sends an `ArrayBuffer` rather than the `Blob`: WebKit
+hides a Blob request body from Playwright's capture.
+
+Deferred within 2g (with reasons): the settings/stats skeletons have no design yet; committed
+visual baselines wait until the harness is regenerated in CI (macOS and Linux font rendering
+differ). `+layout.ts` still uses `window.fetch`, so SvelteKit logs its `window_fetch_in_load`
+warning; threading the load-time `fetch` through the client is the follow-up. Account customization
+writes the mirror `accounts` row (the columns 2a added for it); unlike tags it is not in `state.db`,
+so a full mirror rebuild would lose it — worth revisiting when the mirror-rebuild path lands.
 
 **2d finding, resolved in 2f, browser assertion to 2g:** a `<meta>` Content-Security-Policy inside a
 `srcdoc` iframe is enforced by WebKit but **ignored by Chromium**, and WebKit does not report
@@ -430,7 +448,8 @@ the local Go toolchain off 1.26.1, which `govulncheck` flags.
   `web/src/lib/api/http.ts`; `web/src/lib/api/mock.ts` still backs search/ask/tags/rules/people/
   checks/reading until chunks 3/4, and the mock E2E suite fakes those real requests with
   `e2e/api.ts`. `web/src/lib/types.ts` re-exports the OpenAPI-generated schema (only `Settings` is
-  hand-written). Mutating actions still only toast.
+  hand-written). Mutating actions still only toast, except account rename/icon/photo, which are
+  real (`PATCH /accounts/{id}`, `GET`/`PUT`/`DELETE /accounts/{id}/photo`, `/settings/account/[id]`).
 - **Backend: Chunk 0 done; Chunk 1 (a-1h) done; Chunk 2 (2a-2f) done; 2g in progress.** Root Go
   module `github.com/AutumnsGrove/Ivy`;
   `store/` (two DBs, pragmas, positional migrations), `config/`, `gateway/` (`/api/v1/version`,

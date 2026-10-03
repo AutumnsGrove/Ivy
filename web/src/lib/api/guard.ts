@@ -8,6 +8,8 @@ const STATUS = {
 	provider_error: 502,
 	ask_limit: 429,
 	bad_request: 400,
+	forbidden: 403,
+	too_large: 413,
 	internal_error: 500,
 	method_not_allowed: 405
 } as const satisfies Record<ApiError['code'], number>;

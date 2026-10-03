@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { slotColor } from '#lib/accounts.js';
+	import { accountAvatar } from '#lib/accounts.js';
 	import { withScenario, type Scenario } from '#lib/api/scenario.js';
 	import { PenLine, Search } from '#lib/icons.js';
 	import type { Account, Inbox } from '#lib/types.js';
@@ -27,6 +27,7 @@
 
 	const current = $derived(accounts.find((a) => a.id === accountId));
 	const failing = $derived(accounts.find((a) => a.sync === 'auth-failed'));
+	const badge = $derived(current ? accountAvatar(current) : { initials: '', color: 'var(--accent)' });
 	const subtitle = $derived(`${inbox.needCount} need you · ${inbox.unreadCount} unread`);
 </script>
 
@@ -34,7 +35,7 @@
 	<div class="bar">
 		<AccountButton
 			label={current ? current.short : 'All inboxes'}
-			color={current ? slotColor(current.slot) : 'var(--accent)'}
+			{...badge}
 			warn={!!failing}
 			onclick={() => (ui.drawerOpen = true)}
 		/>

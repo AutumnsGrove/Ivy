@@ -4,11 +4,19 @@
 		/** Any CSS colour, usually an account or tag token such as `var(--acct-2)`. */
 		color: string;
 		size?: 'sm' | 'md' | 'lg' | 'xl' | 'hero';
+		/** A stored photo; takes precedence over `icon` and `initials`. */
+		src?: string;
+		/** A chosen emoji or glyph, shown when there is no photo. */
+		icon?: string;
 	};
-	let { initials, color, size = 'md' }: Props = $props();
+	let { initials, color, size = 'md', src, icon }: Props = $props();
 </script>
 
-<span class="av {size}" style:--c={color} aria-hidden="true">{initials}</span>
+{#if src}
+	<img class="av {size}" style:--c={color} {src} alt="" />
+{:else}
+	<span class="av {size}" style:--c={color} aria-hidden="true">{icon ?? initials}</span>
+{/if}
 
 <style>
 	.av {
@@ -22,6 +30,9 @@
 		color: var(--c);
 		background: color-mix(in srgb, var(--c) 14%, transparent);
 		border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+	}
+	img.av {
+		object-fit: cover;
 	}
 	.sm {
 		width: var(--sp-30);

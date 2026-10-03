@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { slotColor } from '#lib/accounts.js';
+	import { accountAvatar } from '#lib/accounts.js';
 	import Page from '#lib/components/shell/Page.svelte';
 	import Avatar from '#lib/components/ui/Avatar.svelte';
 	import Button from '#lib/components/ui/Button.svelte';
@@ -20,7 +20,7 @@
 			<li>
 				<Glass radius="group" class="acc {tone(a.sync)}">
 					<div class="top">
-						<Avatar initials={a.initial} color={slotColor(a.slot)} />
+						<Avatar {...accountAvatar(a)} />
 						<div class="t">
 							<div class="addr">{a.address}</div>
 							<div class="st {tone(a.sync)}"><i></i>{a.syncNote}</div>

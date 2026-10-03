@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Archive, Inbox, PenLine, Trash2 } from '#lib/icons.js';
-	import { slotColor } from '#lib/accounts.js';
+	import { accountAvatar } from '#lib/accounts.js';
 	import type { Account } from '#lib/types.js';
+	import Avatar from '../ui/Avatar.svelte';
 	import Button from '../ui/Button.svelte';
 	import Dot from '../ui/Dot.svelte';
 	import GroupLabel from '../ui/GroupLabel.svelte';
@@ -34,7 +35,7 @@
 	</NavRow>
 	{#each accounts as a (a.id)}
 		<NavRow href="/?account={a.id}" on={selectedId === a.id} meta={String(a.unread)}>
-			{#snippet leading()}<Dot color={slotColor(a.slot)} size="md" />{/snippet}
+			{#snippet leading()}<Avatar size="sm" {...accountAvatar(a)} />{/snippet}
 			{a.short}
 		</NavRow>
 	{/each}

@@ -80,6 +80,43 @@ describe('reader api (gateway backed)', () => {
 	});
 });
 
+describe('account customization', () => {
+	it('renames an account and sets its icon with a PATCH', async () => {
+		const calls: { url: string; init: RequestInit }[] = [];
+		vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+			calls.push({ url, init });
+			return reply({ ...mock.accounts[0], name: 'Autumn', icon: '🌿' });
+		});
+		const updated = await api.updateAccountProfile('a1', { displayName: 'Autumn', icon: '🌿' });
+		expect(updated.name).toBe('Autumn');
+		expect(calls[0].url).toBe('/api/v1/accounts/a1');
+		expect(calls[0].init.method).toBe('PATCH');
+		expect(JSON.parse(calls[0].init.body as string)).toEqual({ displayName: 'Autumn', icon: '🌿' });
+	});
+
+	it('uploads and clears a photo without ever leaving the client module', async () => {
+		const calls: { url: string; init: RequestInit }[] = [];
+		vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+			calls.push({ url, init });
+			return reply({ ...mock.accounts[0], photo: true });
+		});
+		const file = new Blob(['png'], { type: 'image/png' });
+		await api.setAccountPhoto('a1', file);
+		expect(calls[0].url).toBe('/api/v1/accounts/a1/photo');
+		expect(calls[0].init.method).toBe('PUT');
+		expect((calls[0].init.body as ArrayBuffer).byteLength).toBe(3);
+
+		await api.clearAccountPhoto('a1');
+		expect(calls[1].url).toBe('/api/v1/accounts/a1/photo');
+		expect(calls[1].init.method).toBe('DELETE');
+	});
+
+	it('keeps the stable code the server rejects a bad photo with', async () => {
+		vi.stubGlobal('fetch', async () => reply({ code: 'too_large', message: 'That photo is too big' }, 413));
+		await expect(api.setAccountPhoto('a1', new Blob(['x']))).rejects.toMatchObject({ code: 'too_large' });
+	});
+});
+
 describe('still-mocked routes', () => {
 	it('searches case-insensitively and reports a total', async () => {
 		const found = await api.search('DOMAIN renewal');

@@ -8,6 +8,7 @@ const SCREENS: Record<string, string> = {
 	inbox: '/',
 	'message': '/m/m1',
 	'settings': '/settings',
+	'account profile': '/settings/account/a1',
 	'mirror health': '/settings/health',
 	search: '/search?q=domain+renewal',
 	tags: '/tags',

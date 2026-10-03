@@ -29,6 +29,7 @@ export const ROUTES: Record<string, string> = {
 	'compose-attach': '/compose?reply=m1&attach',
 	'compose-send-failed': '/compose?reply=m1&scenario=send-failed',
 	'settings': '/settings',
+	'account-profile': '/settings/account/a1',
 	'mirror-health': '/settings/health',
 	'welcome': '/welcome',
 	'welcome-account': '/welcome/account',

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { slotColor } from '#lib/accounts.js';
+	import { accountAvatar } from '#lib/accounts.js';
 	import { Activity, Archive, ChevronRight, Download, Eye, Plus } from '#lib/icons.js';
 	import Page from '#lib/components/shell/Page.svelte';
 	import Avatar from '#lib/components/ui/Avatar.svelte';
@@ -34,8 +34,8 @@
 <Page>
 	<Group label="Accounts">
 		{#each data.accounts as a (a.id)}
-			<ListRow href="/welcome/account" chevron tall={a.id === 'a1'}>
-				{#snippet leading()}<Avatar initials={a.initial} color={slotColor(a.slot)} />{/snippet}
+			<ListRow href="/settings/account/{a.id}" chevron tall={a.id === 'a1'}>
+				{#snippet leading()}<Avatar {...accountAvatar(a)} />{/snippet}
 				<span>{a.address}</span>
 				{#if a.id === 'a1'}<span class="sub">Tap to rename, change icon or photo</span>{/if}
 			</ListRow>

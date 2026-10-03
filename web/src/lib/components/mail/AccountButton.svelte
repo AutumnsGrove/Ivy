@@ -1,19 +1,23 @@
 <script lang="ts">
 	import { ChevronDown } from '#lib/icons.js';
-	import Dot from '../ui/Dot.svelte';
+	import Avatar from '../ui/Avatar.svelte';
 
 	type Props = {
 		label: string;
 		color?: string;
+		initials?: string;
+		/** The account's stored photo, when it has one. */
+		src?: string;
+		icon?: string;
 		/** An account needs attention (can't sign in); shown as a small amber mark. */
 		warn?: boolean;
 		onclick?: () => void;
 	};
-	let { label, color = 'var(--accent)', warn = false, onclick }: Props = $props();
+	let { label, color = 'var(--accent)', initials = '', src, icon, warn = false, onclick }: Props = $props();
 </script>
 
 <button type="button" class="acct" aria-label="Switch account, currently {label}" {onclick}>
-	<Dot {color} size="md" />
+	<Avatar size="sm" {initials} {color} {src} {icon} />
 	{label}
 	<ChevronDown />
 	{#if warn}<span class="warn" title="An account needs attention"></span>{/if}
