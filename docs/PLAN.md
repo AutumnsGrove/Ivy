@@ -152,7 +152,8 @@ potato), one-line restore. **Server-deleted mail is disabled, not erased:** hidd
 deletion, never purged automatically, restorable (`ARCHITECTURE.md` section 4).
 
 **Stats panel (like Polaris's).** One place to see everything the LLM layer did and cost, viewable
-at a glance and drillable to individual calls:
+at a glance and drillable to individual calls. The screens (`/settings/spend`, `/settings/spend/calls`)
+are built against a mock ledger; chunk 5 supplies the real one (`BUILD-LOG.md`, round 33):
 - Totals for today / 7 days / 30 days / all time, broken down by **feature** (needs-me stage 1,
   stage 2, categories, rules, digest, ask, extraction, vision, embeddings), by **account**, by
   **provider/model**, with exact costs from provider responses (`usage.cost`).

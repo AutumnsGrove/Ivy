@@ -5,9 +5,10 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-03 (round 32, cleanup phase). Chunks 0, 1 and 2a-2f are done; 2g is nearly
-done. Baseline at this date: svelte-check and Vitest (169) green, Playwright 158 passed / 8
-viewport-conditional skips (`make check` not re-run since the Go side was untouched).
+last updated: 2026-10-03 (round 33). Chunks 0, 1 and 2a-2g are done except the 2g visual
+baselines (they need the CI harness regenerated). Baseline at this date: svelte-check and Vitest
+(205) green, Playwright 196 passed / 8 viewport-conditional skips (`make check` not re-run since
+the Go side was untouched).
 
 ## How to run a chunk
 
@@ -32,7 +33,7 @@ viewport-conditional skips (`make check` not re-run since the Go side was untouc
 | 0 Contract + Go skeleton | done |
 | 1 Harness (mailworld, ivy-dev, compression, CI, smoke) | done |
 | 2a-2f Read: store, fetch, parse, render, thread, gateway | done |
-| 2g Frontend reader swap + account customization | nearly done: settings/stats skeletons and visual baselines left |
+| 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
 | 2h `state.db` fast seeder + named-state Playwright | not started |
 | 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | not started |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | not started |
@@ -71,28 +72,12 @@ or image-publish workflow yet.
    note followed (#57, N17): `syncedAt` is an instant and `syncLine` words it in the browser.
 
 **Round 32b is fully implemented, and its follow-ups N13, N16 and N17 are closed** (#55 to #57).
-Next up is the remaining 2g work below.
-
-**2. Finish 2g** (decided in round 33, one commit per stage, each test first):
-
-1. ~~Settings API~~ **done**: `api.getSettings`/`updateSettings` over a mock in `api/settings.ts`
-   (persisted in `localStorage`, validated, bad input is `bad_request`); undo send, photo size,
-   remote images, digest time, reply-as, strip location, junk rescue and spam score are real
-   controls (`Select` is a native `<select>`). The mock lives in the client, not at the network
-   boundary, so there is no `e2e/api.ts` fake. The Go side adopts these in chunks 3-5.
-2. ~~Photo downscale~~ **done**: `lib/photo.ts` crops the centre square and resizes to at most 512
-   px in the browser (JPEG for photos, PNG for sources that can carry transparency), with
-   `createImageBitmap` so Safari decodes HEIC and EXIF rotation is applied; an undecodable file
-   says so and uploads nothing. The server's 5 MiB limit and sniff are the backstop. The old 1x1
-   E2E fixture was not a valid PNG (WebKit tolerated it, Chromium did not), so it was replaced.
-3. Stats panel design: **boards drawn, awaiting the operator's review** (`Spend.dc.html` summary,
-   `SpendCalls.dc.html` call log, both under "States" on the canvas). Do not build stage 4 until
-   they are approved or changed.
-4. Stats panel build: `/settings/spend` and `/settings/spend/calls`, mock-backed, `?scenario=`
-   edge states, `e2e/routes.ts`, axe.
-5. Fold the round 33 decisions into `PLAN.md`/`ARCHITECTURE.md` and `BUILD-LOG.md`.
-
-Then the visual baselines, once the harness is regenerated in CI.
+**2. 2g is done** (round 33: settings controls, browser photo downscale, spend and calls; the
+detail is in `docs/BUILD-LOG.md`). Only the visual baselines remain, once the harness is
+regenerated in CI. Seams the backend must honour later: the settings mock (`api/settings.ts`) and
+the ledger mock (`mock.makeLedger`, `lib/spend.ts` `summarise`/`pageCalls`) are the contracts for
+the chunk 3-5 Go endpoints; the mock ledger marks half the accounts smart-off, so the call log is
+heavy with "held back" rows (mock realism only).
 
 **3. 2h.** The `state.db` fast seeder, `ivy-dev --mode fast`, the `full == fast` agreement test and
 named-state Playwright (`DEV.md` 4, 8).

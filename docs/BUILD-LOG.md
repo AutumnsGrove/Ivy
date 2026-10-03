@@ -278,6 +278,32 @@ The seams fixed up front so the chunks stayed independently committable:
   (chunk 3), `/ask` + `/checks` (chunk 5), `/tags`/`/rules`/`/people` (chunk 3) and `/reading`
   (chunk 3 triage) stay mock-backed behind the unchanged `client.ts` signatures.
 
+## 2g finished: settings controls, photo downscale, spend and calls (round 33)
+
+- **Settings.** `api.getSettings`/`updateSettings` (`web/src/lib/api/settings.ts`): a validated mock
+  persisted in `localStorage`; unknown keys and out-of-range values are `bad_request`. Undo send,
+  photo size, remote images, digest time, reply-as, strip location, junk rescue and spam score are
+  real controls; `Select` is a native `<select>` so Safari gives the system wheel. The mock sits in
+  the client rather than at the network boundary (the Go side has no `/settings` yet). Theme, motion
+  and accent stay per device in `prefs`.
+- **Photo downscale.** `lib/photo.ts` crops the centre square and resizes to at most 512 px in the
+  browser (JPEG, or PNG when the source can carry transparency) using `createImageBitmap`, so Safari
+  decodes HEIC and EXIF rotation is applied. The decode/encode pieces are injected, so the logic is
+  unit-tested without a canvas. An undecodable file says so and uploads nothing. The old E2E fixture
+  was a 1x1 PNG that only had valid magic bytes; Chromium rejected it once the browser decoded the
+  file, so it was replaced with a valid image.
+- **Spend and calls** (`/settings/spend`, `/settings/spend/calls`; boards `Spend.dc.html` and
+  `SpendCalls.dc.html`). A deterministic mock ledger, one row per call (`mock.makeLedger`, built from
+  the gateway's real account list), is aggregated by the pure `summarise` in `lib/spend.ts`, so the
+  by-feature, by-account and by-model totals always equal the total. Costs are integer
+  micro-dollars. A held call (smart features off, cap reached, mail kept private) is counted under
+  "held back", never as sent or spent. Period and outcome live in the URL (`?period=`, `?outcome=`)
+  and are parsed by exact name only. The log is cursor-paged (`pageCalls`, page size capped at 100)
+  and exports the loaded rows as CSV with formula cells defused. `?scenario=no-spend` and
+  `?scenario=cap-hit` force the two edge states. The monthly cap is a fixed $5 in the mock until the
+  gate makes it a setting.
+- Not done: the visual baselines (they need the CI harness regenerated).
+
 ## Other history worth keeping
 
 - Frontend facts: SvelteKit **3** config lives in `vite.config.ts`; aliases are the `#lib/...`
@@ -286,5 +312,8 @@ The seams fixed up front so the chunks stayed independently committable:
 - Process slips from round 28: `sed` was used on a few files against the Edit/Write rule (results
   checked); work went on main per the operator's instruction. A similar slip in 2d (a one-line import
   add and one probe edit via `sed`/`python3`) was checked and formatted with gofumpt.
+- Process slips in round 33: a few file edits went through `sed`, a `node` script and `cat >>`
+  against the Edit/Write rule (the settings mock's `types.ts` and `mock.ts` appends, one test
+  import); results were checked by the type check and tests.
 - The 2026-10-02 audit of chunks 1-2c and the 2026-10-03 review of 2d-2g are in `../papercuts.md`;
   their decisions are in `qa-log.md` (the audit section and rounds 32 and 32b).
