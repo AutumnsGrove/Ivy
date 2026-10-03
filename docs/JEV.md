@@ -77,7 +77,7 @@ These come from live calls Polaris already made, so they outrank anything read f
 
 ## 3. Question catalog
 
-Tiers: **A** ships with triage (milestone 3), **B** is soon after, **C** is idea-bank. All start as
+Tiers: **A** ships with triage (milestone 4), **B** is soon after, **C** is idea-bank. All start as
 `choice` questions with a quiet option. Instructions text lives in the YAML, not in Go.
 
 ### A. Core triage

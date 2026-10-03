@@ -74,7 +74,7 @@ enforced by tests and CI, not just stated here.
 - **Derived columns have their own setters.** 2d writes `store.SetMessageBodyHTML`, 2e writes
   `store.SetMessageThread`; `UpsertMessage` never overwrites them after the first insert.
 - **Open items** are `N`-numbered in `papercuts.md`: N3 (the fake `/systemone` has no `score`
-  questions, chunk 4), N6 (unknown `/api` paths answer the mux's plain-text 404/405, part of 2f),
+  questions, chunk 5), N6 (unknown `/api` paths answer the mux's plain-text 404/405, part of 2f),
   N8 (identical `Message-ID`s share a content key and its tags/verdict; needs a threat-model line).
   N4/N5 are resolved (laptop numbers in `PERFORMANCE.md`; re-measure on the potato when available).
 
@@ -178,7 +178,7 @@ Two seams are fixed up front so the chunks stay independently committable:
   checkpointed. No IDLE, no QRESYNC, no outbox, no writes or moves. Chunk 3 generalizes this
   boundary rather than replacing it, so 2b must not grow into the sync engine.
 - **Mock seam.** Only `/accounts`, `/inbox`, `/messages/{id}`, `/messages/{id}/summary` and
-  `/mirror/health` become real in 2f. `/search` (chunk 3), `/ask` + `/checks` (chunk 4),
+  `/mirror/health` become real in 2f. `/search` (chunk 3), `/ask` + `/checks` (chunk 5),
   `/tags`/`/rules`/`/people` (chunk 3) and `/reading` (chunk 3 triage) stay mock-backed behind the
   unchanged `client.ts` signatures. Swapping them is per-milestone work, not chunk 2.
 
@@ -224,7 +224,7 @@ compressed-rendered-body cache (done in 2d: `render/` stores the sanitised HTML 
   768).
   `QueueChat`/`QueueJev` pin exact replies for tests. A guard test fails if any `_test.go` hardcodes
   a live provider host (proven failing on a probe, then green); the gate-level "no live in tests"
-  assertion lands with the gate in chunk 4.
+  assertion lands with the gate in chunk 5.
 - **1e — seeder: DONE.** `internal/mailworld/seed.go`: `Seed(w, Empty()|Minimal()|Demo()|Large(n), WithSeed(n))`
   returns `SeedResult{Accounts, Delivered, Hash}` (hash = stable digest of every delivered message,
   for the snapshot keys in `DEV.md` 3). Profiles deliver through the real in-process APPEND path, so
@@ -254,7 +254,7 @@ compressed-rendered-body cache (done in 2d: `render/` stores the sanitised HTML 
     `scenario run`, `advance-clock`; `make dev` = `ivy-dev up`, `make dev-fake` = `--llm fake`.
     `--accounts 0` means "all the profile seeds".
   - **Deferred because the layers do not exist yet (not 1f blockers):** `fast` mode needs the
-    `state.db` seeder (chunk 2/3); `--llm live|fake` does nothing until the gate (chunk 4), and the
+    `state.db` seeder (chunk 2/3); `--llm live|fake` does nothing until the gate (chunk 5), and the
     OpenRouter-only-external-host rail waits with it; Playwright named-state/visual baselines and a
     browser inbox need chunk 2+.
 - **1g — compression skeleton** + budget tests (`PERFORMANCE.md` 1). **DONE (2026-10-02, commits
@@ -322,7 +322,7 @@ Chunk 1 (a-1h) is done, but these were deliberately left for later. Each names w
 **Harness (from 1f/1g/1h):**
 - `fast` mode: the `state.db` fast seeder does not exist yet, so `--mode fast` is effectively a
   no-op and the `full` == `fast` agreement test for `demo` cannot run. Lands as sub-chunk **2h**.
-- `--llm live|fake` does nothing until the LLM gate (chunk 4); the "only OpenRouter may be an
+- `--llm live|fake` does nothing until the LLM gate (chunk 5); the "only OpenRouter may be an
   external host" rail waits with it. Tests and CI already pass `--llm fake`.
 - Named-state Playwright tests and visual baselines (`DEV.md` 4 states have no browser coverage
   yet); they need the real read API, so they land in sub-chunks **2g/2h**, together with the
@@ -398,7 +398,8 @@ is tested in Go.
 
 The backend is five planned milestones (`PLAN.md` section 5). We execute it as chunks, one per
 session, each independently committable and verifiable. Order 0 -> 1 -> 2 is a hard dependency
-chain; 3/4/5 can be reordered or narrowed, but send (5) is deliberately last.
+chain, and 3 (sync) must precede 4 (send) and 5 (triage). **Reordered 2026-10-03: send is chunk 4
+and triage is chunk 5** (send needs no LLM gate); 4 and 5 can still be narrowed.
 
 | Chunk | Scope | Docs | Status |
 |---|---|---|---|
@@ -406,8 +407,8 @@ chain; 3/4/5 can be reordered or narrowed, but send (5) is deliberately last.
 | **1** | Harness = `mailworld` + `ivy-dev` + `make dev` + day-one E2E + CI | `DEV.md`, `STANDARDS.md` 3, `TESTING.md` 1/2/8, `CI.md`, `PERFORMANCE.md` 1 | **done** (2026-10-02; open items listed above) |
 | **2** | Milestone 1: Read (real mirror behind the screens) | `PLAN.md` 5, `ARCHITECTURE.md` 3/5, `TESTING.md` 3 | **in progress** (2a-2d done; 2e next) |
 | **3** | Milestone 2: Sync (backfill, QRESYNC/IDLE, outbox, tags, attachments, search, backup, update) | `ARCHITECTURE.md` 4/9, `TESTING.md` 2/6 | not started |
-| **4** | Milestone 3: Triage (Jev, the gate + ledger, cascade, newsletters, receipts, vision, ask, stats) | `JEV.md`, `ARCHITECTURE.md` 6/7, `TESTING.md` 4 | not started |
-| **5** | Milestone 4: Send (compose, identities, undo send, drafts, SMTP + APPEND to Sent) | `PLAN.md` 5, `ARCHITECTURE.md` 5 | not started |
+| **4** | Milestone 3: Send (compose, identities, undo send, drafts, SMTP + APPEND to Sent) | `PLAN.md` 5, `ARCHITECTURE.md` 5 | not started |
+| **5** | Milestone 4: Triage (Jev, the gate + ledger, cascade, newsletters, receipts, vision, ask, stats) | `JEV.md`, `ARCHITECTURE.md` 6/7, `TESTING.md` 4 | not started |
 
 ### Chunk 0 — Contract + Go skeleton (DONE 2026-10-02)
 
@@ -460,17 +461,18 @@ alert, tags both ways (`$ivy-<slug>` keywords), rules/snooze, attachments + tier
 FTS5 + OpenRouter embeddings + hybrid search, People, `state.db` daily backups, `ivy update`.
 Highest-risk code: the convergence property test.
 
-### Chunk 4 — Milestone 3: Triage
+### Chunk 4 — Milestone 3: Send
+
+Compose (markdown then rich text), identities/signatures, undo send (delay setting), drafts in the
+server Drafts folder, Reply-To handling, SMTP + APPEND to Sent, EXIF strip / photo downscale,
+size checks against the provider. Runs after sync and before triage, so it must not depend on the
+LLM gate.
+
+### Chunk 5 — Milestone 4: Triage
 
 Jev layer + question registry, the single LLM gate + cost ledger, needs-me cascade, categories,
 newsletters (feed/digest/unsubscribe), receipts/ledger/renewals, vision, Ask Ivy agent loop, full
 stats panel. Safety assertions are part of done, not polish.
-
-### Chunk 5 — Milestone 4: Send
-
-Compose (markdown then rich text), identities/signatures, undo send (delay setting), drafts in the
-server Drafts folder, Reply-To handling, SMTP + APPEND to Sent, EXIF strip / photo downscale,
-size checks against the provider.
 
 ## Standing decisions for the backend sessions
 

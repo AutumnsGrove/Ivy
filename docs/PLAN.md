@@ -124,7 +124,7 @@ toasts with undo and "will keep trying", smart-feature limits and provider error
 empty/no-result states. Principle: say what happened, what is safe, and what to do; never lose or
 silently drop anything. See `ARCHITECTURE.md` section 9b.
 
-**Compose (built last).** Markdown and a rich-text editor (markdown first), per-address signatures,
+**Compose (milestone 3, after sync and before triage).** Markdown and a rich-text editor (markdown first), per-address signatures,
 **undo send with a configurable delay** (setting; default 10 s, 0 = off), drafts in the server's
 Drafts folder (visible in Apple Mail), reply-as-the-right-address. **Images and attachments can be
 added to outgoing mail** (photos, camera, files; inline images; EXIF stripped by default; optional
@@ -182,7 +182,10 @@ for IMAP (verify the v2 API); bluemonday for sanitizing; embeddings via OpenRout
 host-side update watcher (`ivy update`, also an in-app button). Access control (passkeys / Face ID, password fallback) is later; Tailscale-only for now.
 Raw RFC 822 messages are stored so everything derived can be rebuilt and exported.
 
-## 5. Milestones (order settled: read -> sync -> triage -> send)
+## 5. Milestones (order settled: read -> sync -> send -> triage)
+
+Reordered 2026-10-03 (`qa-log.md`): send moved ahead of triage so Ivy can replace the operator's
+mail client as early as possible; the LLM features come after. Send needs no part of the LLM gate.
 
 Every milestone's exit criteria include the TESTING.md definition of done (unit + integration +
 E2E on both viewports + a live check on the dev mailbox/potato).
@@ -207,26 +210,26 @@ E2E on both viewports + a live check on the dev mailbox/potato).
    FTS5 + embeddings + hybrid search, People view, backup/restore, `ivy update`. *Exit:* the
    convergence property test passes; Apple Mail and Ivy stay in sync on the dev mailbox; potato
    resource budgets recorded.
-3. **Triage.** Jev layer + question registry, the needs-me cascade, categories, newsletters
+3. **Send.** Compose (markdown, then rich text), identities/signatures, undo send, drafts, replies
+   (Reply-To aware), SMTP + Sent handling. *Exit:* send-as verified live per address.
+4. **Triage.** Jev layer + question registry, the needs-me cascade, categories, newsletters
    (feed, digest, unsubscribe), receipts/ledger/renewals, vision, ask-your-mailbox with the account
    picker, full stats panel and the LLM gate. *Exit:* eval report on a labeled corpus; the safety
    assertions (opt-in, isolation, injection) green; caps work.
-4. **Send.** Compose (markdown, then rich text), identities/signatures, undo send, drafts, replies
-   (Reply-To aware), SMTP + Sent handling. *Exit:* send-as verified live per address.
 
 ## 6. Risks and spikes (each owned by a milestone)
 
 | Risk / spike | Milestone | Notes |
 |---|---|---|
 | `ANNOTATION` or custom keywords as a server-side home for tags; check `PERMANENTFLAGS` | 2 | CAPABILITY already read live; ANNOTATION advertised |
-| ~~Does Purelymail file a copy in Sent, or must Ivy `APPEND`?~~ Answered by S1: it does not, Ivy `APPEND`s. Send-as from a routed alias works (S1c); its exact scope is unprobed | 4 (spike early in 2) | Docs say send-as works; verify live |
+| ~~Does Purelymail file a copy in Sent, or must Ivy `APPEND`?~~ Answered by S1: it does not, Ivy `APPEND`s. Send-as from a routed alias works (S1c); its exact scope is unprobed | 3 (spike early in 2) | Docs say send-as works; verify live |
 | Purelymail connection limits for N accounts (IDLE + work connections) | 2 | Budget RAM/connections on the potato |
 | Pure-Go SQLite compile time/RAM on the potato; FTS5 availability | 1 | Build while serving is the squeeze; cache warm |
 | Embedding scan cost and memory at 50k-100k messages | 2 | Measured (S8): int8 768d, 73 MiB and 340 ms at 100k on the potato. Embedding itself is 17 s per chunk there, so backfill runs on a faster host (configurable endpoint) |
-| Jev `noul`/`score` shapes; accuracy and thresholds per question; per-email cost; injection behavior | 3 | JEV.md section 5; needs the operator's key |
-| Vision: do scanned PDFs go straight to a model? default cheap multimodal model | 3 | Pure Go cannot rasterize PDFs |
+| Jev `noul`/`score` shapes; accuracy and thresholds per question; per-email cost; injection behavior | 4 | JEV.md section 5; needs the operator's key |
+| Vision: do scanned PDFs go straight to a model? default cheap multimodal model | 4 | Pure Go cannot rasterize PDFs |
 | HTML sanitization edge cases and tracker coverage | 1 | Fuzz + XSS corpus + browser checks |
-| Prompt injection via email into stage 2 / ask / vision | 3 | Gate, tripwire, plain-text output, tests |
+| Prompt injection via email into stage 2 / ask / vision | 4 | Gate, tripwire, plain-text output, tests |
 | Update flow: digest resolve, CI race, health check, rollback | 2 | `ivy update` tests with a fake registry and watcher |
 | Committed frontend build output bloats git history | all | Accepted; CI builds it on merge to main, PRs never touch it (round 24). No compiled Go binary is ever committed or released (round 25) |
 | go-imap v2 API vs the v1 snippet seen in the original thread | 1 | Verify before pinning |
