@@ -740,3 +740,34 @@ triage -> send") near the top of this log.
   stats panel move with triage.
 - Renumbered references in `docs/PLAN.md` (milestones and risk table), `docs/JEV.md`,
   `docs/DEV.md`, `next_steps.md` and `papercuts.md`. No Go or web code names these chunks.
+
+## Account customization: where the fields live and how writes are guarded (2026-10-03, during 2g)
+
+Chunk 2g made account rename, icon and photo real. Three decisions were taken without a new operator
+round, because the schema (2a) and the standards already pointed the way; they are recorded here so
+they are not re-litigated.
+
+- **The fields stay on the mirror `accounts` row.** Migration 2 added `display_name`, `icon` and
+  `photo_blob` "for account customization", so the store keeps them there and gained targeted
+  setters (`SetAccountProfile`, `SetAccountPhoto`) instead of routing them through `UpsertAccount`.
+  This is the one local-ownership exception to "owned state lives in `state.db`": accounts are
+  config-derived rather than mail-derived, so the content-key rule does not apply, and sync's
+  `ensureAccount` returns early and never clobbers the row. The cost, recorded in `next_steps.md`,
+  is that a full mirror rebuild would lose the customization; if that path grows a hard rebuild,
+  the fields move to `state.db`.
+- **A list never loads the photo bytes.** `store.Account` now reports `HasPhoto` (a
+  `photo_blob IS NOT NULL AND length(...) > 0` expression) and `GetAccountPhoto` is the only read
+  that touches the blob, so `/accounts` cannot inherit a multi-megabyte response from three
+  accounts with photos.
+- **An upload is untrusted input.** The photo is bounded at 5 MiB, sniffed with
+  `http.DetectContentType`, and kept only when the sniff is JPEG, PNG, GIF or WebP. SVG is refused
+  even though it is an image, because served same-origin it can carry script. The two limits are in
+  `STANDARDS.md` 4a.
+- **`Origin` is checked on every mutation.** These are the first mutating endpoints, and with no
+  auth a cross-site page open in the operator's browser could otherwise rename an account. A
+  non-GET API request whose `Origin` host differs from the request `Host` is answered `403
+  forbidden`; an absent `Origin` (a non-browser client, which already had network access) is
+  allowed, and reads stay open. `forbidden` joins the stable error codes.
+
+Recorded in `docs/ARCHITECTURE.md` section 3, `docs/STANDARDS.md` 4a, `web/src/lib/api/errors.ts`
+and `next_steps.md`.
