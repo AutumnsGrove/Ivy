@@ -154,3 +154,35 @@ func TestMessageIDsBehindIsBoundedNewestFirstAndOnlyRealWork(t *testing.T) {
 		t.Errorf("another account's behind = %v, want none", got)
 	}
 }
+
+// A message whose raw bytes are gone can never be derived, so it is marked and
+// left out of the passes at that version: otherwise a few of them at the top of
+// the newest-first list would occupy every slot of every pass (N16). A later
+// version bump retries it, since whatever made it unreadable may have changed.
+func TestMessageIDsBehindSkipsRowsMarkedFailedForThisVersion(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	base := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	seedRawMessage(t, dbs, "a", 1, base.Add(time.Hour)) // the newest
+	seedRawMessage(t, dbs, "b", 2, base)
+
+	if err := dbs.MarkDeriveFailed(ctx, "a", 2); err != nil {
+		t.Fatalf("MarkDeriveFailed: %v", err)
+	}
+	got, _ := dbs.MessageIDsBehind(ctx, "acct-1", 2, 10)
+	if want := []string{"b"}; !slices.Equal(got, want) {
+		t.Errorf("behind version 2 = %v, want %v (a failed at 2)", got, want)
+	}
+	got, _ = dbs.MessageIDsBehind(ctx, "acct-1", 3, 10)
+	if want := []string{"a", "b"}; !slices.Equal(got, want) {
+		t.Errorf("behind version 3 = %v, want %v (a is retried after a bump)", got, want)
+	}
+	// Failing is not deriving: the row is still behind, never stamped current.
+	if m, _ := dbs.GetMessage(ctx, "a"); m.DerivedVersion != 0 {
+		t.Errorf("DerivedVersion = %d, want 0", m.DerivedVersion)
+	}
+	if err := dbs.MarkDeriveFailed(ctx, "nope", 2); !errors.Is(err, ErrNotFound) {
+		t.Errorf("MarkDeriveFailed on a missing id = %v, want ErrNotFound", err)
+	}
+}

@@ -644,3 +644,19 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   The row is in the `STANDARDS.md` 4a limits table. Laptop numbers only; the potato is slower, so
   the ratio is the claim, not the milliseconds. The choice (first plus last 128) was the recommendation
   in N13, taken as the default when the work was started.
+
+## N16 resolved: a broken message cannot starve the re-derive pass
+
+- **#56 (resolves N16)** · `a965999` · `sync/sync.go`, `store/derived.go` · **risk** · `Rederive`
+  skipped a message whose spool file was gone, but left it behind, so it came back first in the
+  newest-first list on every pass; enough of them would take all 200 slots and no healthy message
+  behind them would ever heal. Nothing deletes a spool file today (hence minor), but chunk 3's
+  disable and restore will. Reproduced by `TestRederiveMarksAMissingSpoolFileAndHealsPastIt` (limit 1,
+  the broken newest message held the only slot: `first pass = 0`). Fixed: migration 7 adds
+  `messages.derive_failed_version`; a missing file (`fs.ErrNotExist`) is recorded with
+  `MarkDeriveFailed` and `MessageIDsBehind` skips rows failed at the current version, so the next
+  `DerivedVersion` bump retries them; the pass keeps going until it has healed its quota, so a broken
+  row does not cost the healthy ones their turn. `TestRederiveDoesNotMarkATransientFailure` pins the
+  other half: a permission error is skipped without a mark and the message heals once the file is
+  readable again. The first draft of that test was nondeterministic (the two messages had no `Date`,
+  so "newest" was a tiebreak on a hashed id); it now sets explicit dates.

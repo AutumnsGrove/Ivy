@@ -111,7 +111,9 @@ Mirror tables (`mirror.db`, rebuildable from IMAP):
   fingerprint test over a fixed corpus fails if the output moves without a bump. Every row behind
   the current version is re-derived from its raw message (the row's blob, or the spool file
   streamed) by `Fetcher.Rederive`, newest first and at most 200 per sync run, which is how a parser
-  or sanitizer fix reaches mail that is already mirrored. `thread_id` has its own writer
+  or sanitizer fix reaches mail that is already mirrored. A message whose spool file is gone is
+  marked `derive_failed_version` and skipped until the version moves on, so it cannot hold a slot in
+  every pass; a failure that may clear (permissions, a busy disk) is skipped unmarked and retried. `thread_id` has its own writer
   (`SetMessageThread`/`ReplaceThreads`). `UpsertMessage` writes none of these after the first insert
   and never blanks `raw_blob`/`raw_path` with a row that carries none, so a re-sync or a flag
   refresh cannot erase derived data or the raw message.

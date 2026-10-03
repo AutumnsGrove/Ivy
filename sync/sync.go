@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"os"
@@ -538,35 +539,57 @@ func derivedFrom(id string, parsed mailmime.Parsed) store.Derived {
 // Rederive brings up to limit of an account's messages up to DerivedVersion,
 // newest first, by parsing each one's raw bytes again (the row's blob or its
 // spool file, streamed, never held whole) and writing the result in one
-// transaction. It returns how many it healed. A message whose raw bytes cannot
-// be read is logged and left behind rather than stopping the others; an error
-// from the database or a cancelled context ends the pass.
+// transaction. It returns how many it healed.
+//
+// A message whose raw bytes are gone (the spool file is missing) can never be
+// derived, so it is marked failed at this version and left out of later passes;
+// otherwise a few of them at the top of the newest-first list would fill every
+// slot of every pass (N16). The pass then carries on, so a broken message does
+// not cost the healthy ones behind it their turn. A failure that may clear (a
+// permission error, a busy disk) is logged and skipped without a mark, so the
+// next pass tries again. An error from the database or a cancelled context ends
+// the pass.
 func (f *Fetcher) Rederive(ctx context.Context, accountID string, limit int) (int, error) {
-	ids, err := f.dbs.MessageIDsBehind(ctx, accountID, DerivedVersion, limit)
-	if err != nil {
-		return 0, fmt.Errorf("rederive %s: %w", accountID, err)
-	}
 	healed := 0
-	for _, id := range ids {
-		if err := ctx.Err(); err != nil {
-			return healed, fmt.Errorf("rederive %s: %w", accountID, err)
-		}
-		m, err := f.dbs.GetMessage(ctx, id)
-		if errors.Is(err, store.ErrNotFound) {
-			continue // disabled since the list was taken
-		}
+	for healed < limit {
+		ids, err := f.dbs.MessageIDsBehind(ctx, accountID, DerivedVersion, limit-healed)
 		if err != nil {
 			return healed, fmt.Errorf("rederive %s: %w", accountID, err)
 		}
-		parsed, err := f.parseRaw(m)
-		if err != nil {
-			slog.WarnContext(ctx, "sync: cannot re-derive message", "message", id, "error", err)
-			continue
+		progressed := false // a heal or a mark; skipped transients alone must end the loop
+		for _, id := range ids {
+			if err := ctx.Err(); err != nil {
+				return healed, fmt.Errorf("rederive %s: %w", accountID, err)
+			}
+			m, err := f.dbs.GetMessage(ctx, id)
+			if errors.Is(err, store.ErrNotFound) {
+				continue // disabled since the list was taken
+			}
+			if err != nil {
+				return healed, fmt.Errorf("rederive %s: %w", accountID, err)
+			}
+			parsed, err := f.parseRaw(m)
+			switch {
+			case errors.Is(err, fs.ErrNotExist):
+				slog.WarnContext(ctx, "sync: raw message is gone, not re-deriving it", "message", id, "error", err)
+				if err := f.dbs.MarkDeriveFailed(ctx, id, DerivedVersion); err != nil {
+					return healed, fmt.Errorf("rederive %s: %w", accountID, err)
+				}
+				progressed = true
+				continue
+			case err != nil:
+				slog.WarnContext(ctx, "sync: cannot re-derive message yet", "message", id, "error", err)
+				continue
+			}
+			if err := f.dbs.SetMessageDerived(ctx, id, derivedFrom(id, parsed)); err != nil {
+				return healed, fmt.Errorf("rederive %s: %w", accountID, err)
+			}
+			healed++
+			progressed = true
 		}
-		if err := f.dbs.SetMessageDerived(ctx, id, derivedFrom(id, parsed)); err != nil {
-			return healed, fmt.Errorf("rederive %s: %w", accountID, err)
+		if !progressed {
+			break
 		}
-		healed++
 	}
 	return healed, nil
 }

@@ -202,6 +202,15 @@ var mirrorMigrations = []migration{
 			`CREATE INDEX idx_messages_derived_version ON messages(account_id, derived_version)`,
 		},
 	},
+	{
+		version: 7,
+		statements: []string{
+			// The derived_version a re-derive pass last gave up on, because the raw
+			// bytes were gone. The pass skips a row until the version moves past it,
+			// so a few unreadable messages cannot fill every pass (N16).
+			`ALTER TABLE messages ADD COLUMN derive_failed_version INTEGER NOT NULL DEFAULT 0`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.

@@ -236,3 +236,96 @@ func TestRederiveSkipsAnUnreadableMessage(t *testing.T) {
 		t.Error("the unreadable message was stamped as derived")
 	}
 }
+
+// Two spooled messages of the same size: "newest" is delivered last, so it is
+// first in the newest-first list.
+func twoSpooled(t *testing.T) (*ivysync.Fetcher, *store.DBs, store.Message, store.Message) {
+	t.Helper()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+	// Explicit dates: "newest" must really be first in the newest-first list, not
+	// first by the tiebreak on a hashed id.
+	spooled := func(subject string, date time.Time) []byte {
+		return mailworld.Msg().From("Alice <alice@example.com>").To("me@grove.test").Subject(subject).
+			MessageID("<" + subject + "@grove.test>").Date(date).Text("the readable part").
+			Attach("big.bin", "application/octet-stream", bytes.Repeat([]byte{0x5a}, 100_000)).Build()
+	}
+	t0 := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	uidOld := acc.Deliver("INBOX", spooled("older", t0))
+	uidNew := acc.Deliver("INBOX", spooled("newest", t0.Add(time.Hour)))
+	f := ivysync.NewFetcher(dbs, ivysync.WithMessageLimits(4<<10, 1<<20))
+	if _, err := f.Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret")); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	inbox := mustFolder(t, dbs, "acct-1", "INBOX")
+	older, newest := mustMessage(t, dbs, inbox.ID, uidOld), mustMessage(t, dbs, inbox.ID, uidNew)
+	if older.RawPath == "" || newest.RawPath == "" {
+		t.Fatal("the test needs spooled messages")
+	}
+	return f, dbs, older, newest
+}
+
+// A message whose spool file is gone is marked failed for this version, so it
+// stops occupying the first slot of every pass and the healthy message behind it
+// still heals, within the same pass.
+func TestRederiveMarksAMissingSpoolFileAndHealsPastIt(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f, dbs, older, newest := twoSpooled(t)
+	stale(t, dbs, older.ID)
+	stale(t, dbs, newest.ID)
+	if err := os.Remove(filepath.Join(dbs.Dir, filepath.FromSlash(newest.RawPath))); err != nil {
+		t.Fatalf("remove spool file: %v", err)
+	}
+
+	// limit 1: the unreadable newest message would take the only slot, forever.
+	n, err := f.Rederive(ctx, "acct-1", 1)
+	if err != nil || n != 1 {
+		t.Fatalf("first pass = %d, %v; want the older message healed past the broken one", n, err)
+	}
+	if versionOf(t, dbs, older.ID) != ivysync.DerivedVersion {
+		t.Error("the healthy message behind the broken one was not healed")
+	}
+	if versionOf(t, dbs, newest.ID) != 0 {
+		t.Error("the unreadable message was stamped as derived")
+	}
+	ids, err := dbs.MessageIDsBehind(ctx, "acct-1", ivysync.DerivedVersion, 10)
+	if err != nil || len(ids) != 0 {
+		t.Errorf("still behind after marking = %v, %v; want the failed row out of the pass", ids, err)
+	}
+	if n, err = f.Rederive(ctx, "acct-1", 1); err != nil || n != 0 {
+		t.Errorf("second pass = %d, %v; want nothing left to do", n, err)
+	}
+}
+
+// A file that is merely unreadable right now (permissions, a busy disk) may
+// recover, so it is skipped without being marked and retried on the next pass.
+func TestRederiveDoesNotMarkATransientFailure(t *testing.T) {
+	t.Parallel()
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file permissions")
+	}
+	ctx := context.Background()
+	f, dbs, _, newest := twoSpooled(t)
+	stale(t, dbs, newest.ID)
+	spool := filepath.Join(dbs.Dir, filepath.FromSlash(newest.RawPath))
+	if err := os.Chmod(spool, 0); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(spool, 0o600) })
+
+	if n, err := f.Rederive(ctx, "acct-1", 5); err != nil || n != 0 {
+		t.Fatalf("pass over an unreadable file = %d, %v; want skipped without error", n, err)
+	}
+	if err := os.Chmod(spool, 0o600); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	if n, err := f.Rederive(ctx, "acct-1", 5); err != nil || n != 1 {
+		t.Fatalf("pass after recovery = %d, %v; want the message healed (it must not have been marked)", n, err)
+	}
+	if versionOf(t, dbs, newest.ID) != ivysync.DerivedVersion {
+		t.Error("the recovered message was not derived")
+	}
+}

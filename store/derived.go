@@ -60,18 +60,39 @@ func (d *DBs) SetMessageDerived(ctx context.Context, id string, v Derived) error
 	return nil
 }
 
+// MarkDeriveFailed records that a re-derive pass gave up on a message at
+// version because its raw bytes are gone. It is not a derivation: the row stays
+// behind (its derived_version is untouched), but MessageIDsBehind skips it until
+// the version moves past this one.
+func (d *DBs) MarkDeriveFailed(ctx context.Context, id string, version int) error {
+	res, err := d.Mirror.Write.ExecContext(ctx,
+		`UPDATE messages SET derive_failed_version = ? WHERE id = ?`, version, id)
+	if err != nil {
+		return fmt.Errorf("mark message %s derive-failed: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("mark message %s derive-failed: %w", id, err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // MessageIDsBehind returns up to limit ids of visible, downloaded messages in an
-// account whose derived data is older than version, newest first. An empty
-// account id means every account. Only ids are returned, so a pass holds one
-// message in memory at a time.
+// account whose derived data is older than version, newest first, leaving out
+// those a pass already gave up on at this version. An empty account id means
+// every account. Only ids are returned, so a pass holds one message in memory
+// at a time.
 func (d *DBs) MessageIDsBehind(ctx context.Context, accountID string, version, limit int) ([]string, error) {
 	rows, err := d.Mirror.Read.QueryContext(ctx, `
 		SELECT id FROM messages
-		WHERE derived_version < ? AND disabled_at IS NULL
+		WHERE derived_version < ? AND derive_failed_version < ? AND disabled_at IS NULL
 		  AND (account_id = ? OR ? = '')
 		  AND (length(raw_blob) > 0 OR raw_path IS NOT NULL)
 		ORDER BY date DESC, id DESC
-		LIMIT ?`, version, accountID, accountID, limit)
+		LIMIT ?`, version, version, accountID, accountID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("messages behind version %d: %w", version, err)
 	}
