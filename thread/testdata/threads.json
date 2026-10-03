@@ -1,0 +1,95 @@
+{
+  "name": "mixed real-world shapes",
+  "messages": [
+    {
+      "id": "root",
+      "key": "ck-root",
+      "message_id": "<root@list.example>",
+      "subject": "Weekly digest",
+      "date": "2026-03-01T09:00:00Z"
+    },
+    {
+      "id": "reply",
+      "key": "ck-reply",
+      "message_id": "<reply@list.example>",
+      "references": "<root@list.example>",
+      "in_reply_to": "<root@list.example>",
+      "subject": "Re: Weekly digest",
+      "date": "2026-03-01T10:00:00Z"
+    },
+    {
+      "id": "deep",
+      "key": "ck-deep",
+      "message_id": "<deep@list.example>",
+      "references": "<root@list.example> <reply@list.example>",
+      "in_reply_to": "<reply@list.example>",
+      "subject": "Re: Weekly digest",
+      "date": "2026-03-01T11:00:00Z"
+    },
+    {
+      "id": "nohead",
+      "key": "ck-nohead",
+      "message_id": "<nohead@example.com>",
+      "subject": "Coffee order",
+      "date": "2026-03-01T09:30:00Z"
+    },
+    {
+      "id": "nohead2",
+      "key": "ck-nohead2",
+      "message_id": "<nohead2@example.com>",
+      "subject": "RE[2]: Coffee order",
+      "date": "2026-03-01T09:45:00Z"
+    },
+    {
+      "id": "orphan",
+      "key": "ck-orphan",
+      "message_id": "<orphan@example.com>",
+      "references": "<missing@example.com>",
+      "in_reply_to": "<missing@example.com>",
+      "subject": "Re: Budget",
+      "date": "2026-03-01T12:00:00Z"
+    },
+    {
+      "id": "orphan2",
+      "key": "ck-orphan2",
+      "message_id": "<orphan2@example.com>",
+      "references": "<missing@example.com>",
+      "in_reply_to": "<missing@example.com>",
+      "subject": "Re: Budget",
+      "date": "2026-03-01T12:05:00Z"
+    },
+    {
+      "id": "unrelated",
+      "key": "ck-unrelated",
+      "message_id": "<unrelated@example.com>",
+      "subject": "Invoice",
+      "date": "2026-03-01T08:00:00Z"
+    }
+  ],
+  "want": [
+    {
+      "id": "ck-root",
+      "root_message_id": "<root@list.example>",
+      "subject_norm": "Weekly digest",
+      "members": ["root", "reply", "deep"]
+    },
+    {
+      "id": "ck-nohead",
+      "root_message_id": "<nohead@example.com>",
+      "subject_norm": "Coffee order",
+      "members": ["nohead", "nohead2"]
+    },
+    {
+      "id": "ck-orphan",
+      "root_message_id": "<missing@example.com>",
+      "subject_norm": "Budget",
+      "members": ["orphan", "orphan2"]
+    },
+    {
+      "id": "ck-unrelated",
+      "root_message_id": "<unrelated@example.com>",
+      "subject_norm": "Invoice",
+      "members": ["unrelated"]
+    }
+  ]
+}
