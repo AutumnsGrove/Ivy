@@ -771,3 +771,20 @@ they are not re-litigated.
 
 Recorded in `docs/ARCHITECTURE.md` section 3, `docs/STANDARDS.md` 4a, `web/src/lib/api/errors.ts`
 and `next_steps.md`.
+
+## Round 32 — cleanup phase: account data home, doc split, review first (2026-10-03, operator)
+
+The operator brought a second model in after 2g to audit and tidy. Baseline first: `make check`,
+Vitest (132), svelte-check and Playwright (150 passed, 8 viewport-conditional skips) were all green.
+Three decisions, all taken from the recommended options:
+
+- **Account name, icon and photo move to `state.db`.** This supersedes the 2g note that kept them on
+  the mirror `accounts` row: a mirror rebuild would erase them and the mirror is never backed up,
+  which contradicts non-negotiable 5. Needs a state migration, a one-time copy from the mirror
+  columns, and the gateway reading them from `State`. The mirror columns become unused.
+- **`next_steps.md` is split three ways.** `next_steps.md` keeps only the Now pointer, one
+  deduplicated backlog and operator actions. The finished 1a-2g narratives move verbatim to
+  `docs/BUILD-LOG.md`. The audit ground rules fold into `STANDARDS.md` and `CLAUDE.md`.
+- **Review before cleanup.** The unreviewed range `6f29d15..HEAD` (2d through account
+  customization) is audited with the review-deepseek process first, fixes test-first and logged in
+  `papercuts.md`, so the cleaned docs include the findings.
