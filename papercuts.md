@@ -660,3 +660,17 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   other half: a permission error is skipped without a mark and the message heals once the file is
   readable again. The first draft of that test was nondeterministic (the two messages had no `Date`,
   so "newest" was a tiebreak on a hashed id); it now sets explicit dates.
+
+## N17 resolved: the sync note carries no time
+
+- **#57 (resolves N17)** · `b5bfc78` · `gateway/read.go`, `api/openapi.yaml`, `web/src/lib/accounts.ts` ·
+  **bug** · the account's `syncNote` was rendered server-side with a time in it ("Up to date · synced
+  4 min ago", and "on Jan 2" after a day, in the server's zone), the same N15 defect as the message
+  times and English-only. `Account` now carries `syncedAt` (RFC 3339, UTC, absent until the first
+  folder has synced) and `syncNote` is the state phrase alone. The browser composes the line:
+  `syncLine` adds "synced 4 minutes ago" for an account that is up to date, "last synced" for one
+  that is failing, and nothing while it is still reading, using `formatSince` (relative in the
+  viewer's language, a date after a month). Reproduced by `TestListAccounts` (the note still held
+  the time and `SyncedAt` was missing). With no view left that renders a time, `gateway.since`, the
+  `Server.now` clock and its test hook were removed. Web tests: `formatSince` (units, German, the
+  month cut-over, skew) and `syncLine` (three cases).

@@ -14,6 +14,10 @@ import type {
 	TagsOverview
 } from '../types';
 
+// The API sends the sync time as an instant and the browser words it ("synced 4
+// minutes ago"), so the designed accounts are given instants relative to now.
+const minutesAgo = (minutes: number): string => new Date(Date.now() - minutes * 60_000).toISOString();
+
 export const accounts: Account[] = [
 	{
 		id: 'a1',
@@ -27,7 +31,8 @@ export const accounts: Account[] = [
 		unread: 9,
 		smart: true,
 		sync: 'ok',
-		syncNote: 'Up to date · synced just now'
+		syncNote: 'Up to date',
+		syncedAt: minutesAgo(0)
 	},
 	{
 		id: 'a2',
@@ -41,7 +46,8 @@ export const accounts: Account[] = [
 		unread: 5,
 		smart: true,
 		sync: 'ok',
-		syncNote: 'Up to date · synced just now'
+		syncNote: 'Up to date',
+		syncedAt: minutesAgo(0)
 	},
 	{
 		id: 'a3',
@@ -55,7 +61,8 @@ export const accounts: Account[] = [
 		unread: 1,
 		smart: false,
 		sync: 'ok',
-		syncNote: 'Up to date · synced 4 min ago'
+		syncNote: 'Up to date',
+		syncedAt: minutesAgo(4)
 	},
 	{
 		id: 'a4',
@@ -69,14 +76,15 @@ export const accounts: Account[] = [
 		unread: 1,
 		smart: false,
 		sync: 'ok',
-		syncNote: 'Up to date · synced 2 min ago'
+		syncNote: 'Up to date',
+		syncedAt: minutesAgo(2)
 	}
 ];
 
 /** hello@ can't sign in; used by the sync-error scenario and the mirror health screen. */
 export const failingHello = (a: Account): Account =>
 	a.id === 'a2'
-		? { ...a, sync: 'auth-failed', syncNote: "Can't sign in · last synced 14 min ago" }
+		? { ...a, sync: 'auth-failed', syncNote: "Can't sign in", syncedAt: minutesAgo(14) }
 		: a;
 
 /** Mirror health shows the whole spread: healthy, failing, and still backfilling. */

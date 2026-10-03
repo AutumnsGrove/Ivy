@@ -8,9 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/AutumnsGrove/Ivy/api"
 	mailmime "github.com/AutumnsGrove/Ivy/mime"
@@ -178,16 +176,15 @@ func (s *Server) accountViews(r *http.Request) ([]api.Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	now := s.now()
 	out := make([]api.Account, 0, len(accounts))
 	for _, a := range accounts {
-		out = append(out, accountView(a, stats[a.ID], now))
+		out = append(out, accountView(a, stats[a.ID]))
 	}
 	return out, nil
 }
 
-func accountView(a store.Account, st store.AccountStat, now time.Time) api.Account {
-	state, note, progress := syncState(st, now)
+func accountView(a store.Account, st store.AccountStat) api.Account {
+	state, note, progress := syncState(st)
 	v := api.Account{
 		Id:       a.ID,
 		Address:  a.Address,
@@ -206,33 +203,25 @@ func accountView(a store.Account, st store.AccountStat, now time.Time) api.Accou
 		p := float32(progress)
 		v.Progress = &p
 	}
+	if !st.LastSync.IsZero() {
+		synced := st.LastSync.UTC()
+		v.SyncedAt = &synced
+	}
 	return v
 }
 
-func syncState(st store.AccountStat, now time.Time) (api.SyncState, string, float64) {
+// syncState is the account's sync state and a short phrase for it. The phrase
+// carries no time: "synced 4 min ago" depends on the viewer's clock, zone and
+// language, so the browser composes it from syncedAt (N17, round 32b).
+func syncState(st store.AccountStat) (api.SyncState, string, float64) {
 	switch {
 	case st.Folders == 0:
 		return api.SyncStateOk, "Waiting for the first sync", 0
 	case st.SyncedFolders < st.Folders:
 		return api.SyncStateSyncing, "Reading your mailbox, newest first",
 			float64(st.SyncedFolders) / float64(st.Folders)
-	case !st.LastSync.IsZero():
-		return api.SyncStateOk, "Up to date · synced " + since(now, st.LastSync), 0
 	default:
 		return api.SyncStateOk, "Up to date", 0
-	}
-}
-
-func since(now, t time.Time) string {
-	switch d := now.Sub(t); {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		return strconv.Itoa(int(d.Minutes())) + " min ago"
-	case d < 24*time.Hour:
-		return strconv.Itoa(int(d.Hours())) + " h ago"
-	default:
-		return "on " + t.In(now.Location()).Format("Jan 2")
 	}
 }
 

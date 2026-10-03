@@ -352,7 +352,13 @@ export interface components {
             unread: number;
             smart: boolean;
             sync: components["schemas"]["SyncState"];
+            /** @description What the sync is doing, as a short phrase with no time in it ("Up to date", "Reading your mailbox, newest first"). The browser appends "synced 4 min ago" from syncedAt. */
             syncNote: string;
+            /**
+             * Format: date-time
+             * @description When the account's mailbox last synced, RFC 3339 in UTC. Absent until the first folder has synced.
+             */
+            syncedAt?: string;
             progress?: number;
         };
         /** @description A partial rename; omitted fields keep their current value */

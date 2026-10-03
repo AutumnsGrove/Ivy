@@ -393,6 +393,16 @@ components:
           $ref: "#/components/schemas/SyncState"
         syncNote:
           type: string
+          description: >
+            What the sync is doing, as a short phrase with no time in it ("Up to
+            date", "Reading your mailbox, newest first"). The browser appends
+            "synced 4 min ago" from syncedAt.
+        syncedAt:
+          type: string
+          format: date-time
+          description: >
+            When the account's mailbox last synced, RFC 3339 in UTC. Absent until
+            the first folder has synced.
         progress:
           type: number
           minimum: 0

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatMessageTime } from './time';
+import { formatMessageTime, formatSince } from './time';
 
 // Saturday 3 October 2026, 15:30 UTC.
 const now = new Date('2026-10-03T15:30:00Z');
@@ -49,5 +49,30 @@ describe('formatMessageTime', () => {
 		expect(at('0001-01-01T00:00:00Z')).toBe('');
 		expect(at('not a date')).toBe('');
 		expect(at('')).toBe('');
+	});
+});
+
+describe('formatSince', () => {
+	const since = (iso: string, opts: Parameters<typeof formatSince>[1] = {}) =>
+		formatSince(iso, { now, locale: 'en-US', timeZone: 'UTC', ...opts });
+
+	it('says how long ago, in the viewer\'s language', () => {
+		expect(since('2026-10-03T15:29:50Z')).toBe('now');
+		expect(since('2026-10-03T15:26:00Z')).toBe('4 minutes ago');
+		expect(since('2026-10-03T12:30:00Z')).toBe('3 hours ago');
+		expect(since('2026-10-02T15:30:00Z')).toBe('yesterday');
+		expect(since('2026-09-30T15:30:00Z')).toBe('3 days ago');
+		expect(since('2026-10-03T15:26:00Z', { locale: 'de' })).toBe('vor 4 Minuten');
+	});
+
+	it('falls back to a date after a month, with the year when it is not this one', () => {
+		expect(since('2026-08-01T10:00:00Z')).toBe('Aug 1');
+		expect(since('2025-12-24T10:00:00Z')).toBe('Dec 24, 2025');
+	});
+
+	it('treats a slightly future instant as now (clock skew) and an unknown one as nothing', () => {
+		expect(since('2026-10-03T15:31:00Z')).toBe('now');
+		expect(since('')).toBe('');
+		expect(since('0001-01-01T00:00:00Z')).toBe('');
 	});
 });

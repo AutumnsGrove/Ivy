@@ -156,5 +156,5 @@ func (s *Server) accountByID(r *http.Request, id string) (api.Account, error) {
 	if err != nil {
 		return api.Account{}, err
 	}
-	return accountView(a, stats[a.ID], s.now()), nil
+	return accountView(a, stats[a.ID]), nil
 }

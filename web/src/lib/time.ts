@@ -75,3 +75,30 @@ export function formatMessageTime(iso: string, opts: TimeOptions = {}): string {
 	}
 	return dateFormat(locale, timeZone, { month: 'short', day: 'numeric', year: 'numeric' }).format(when);
 }
+
+/**
+ * How long ago an instant was, for "synced 4 minutes ago": relative up to a
+ * month, in the viewer's language ("vor 4 Minuten", "yesterday"), then a date.
+ * An instant in the near future is clock skew and reads as now; an unknown one
+ * is the empty string.
+ */
+export function formatSince(iso: string, opts: TimeOptions = {}): string {
+	const when = new Date(iso);
+	if (Number.isNaN(when.getTime()) || when.getUTCFullYear() < 1971) return '';
+
+	const { now = new Date(), locale, timeZone } = opts;
+	const seconds = Math.round((now.getTime() - when.getTime()) / 1000);
+	const relative = relativeFormat(locale);
+	if (seconds < 45) return relative.format(0, 'second');
+	if (seconds < 3600) return relative.format(-Math.round(seconds / 60), 'minute');
+	if (seconds < 86_400) return relative.format(-Math.round(seconds / 3600), 'hour');
+	const days = Math.round(seconds / 86_400);
+	if (days < 30) return relative.format(-days, 'day');
+
+	const sameYear = calendarDay(when, timeZone).year === calendarDay(now, timeZone).year;
+	return dateFormat(locale, timeZone, {
+		month: 'short',
+		day: 'numeric',
+		...(sameYear ? {} : { year: 'numeric' })
+	}).format(when);
+}

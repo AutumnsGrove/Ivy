@@ -249,7 +249,7 @@ func twoSpooled(t *testing.T) (*ivysync.Fetcher, *store.DBs, store.Message, stor
 	// first by the tiebreak on a hashed id.
 	spooled := func(subject string, date time.Time) []byte {
 		return mailworld.Msg().From("Alice <alice@example.com>").To("me@grove.test").Subject(subject).
-			MessageID("<" + subject + "@grove.test>").Date(date).Text("the readable part").
+			MessageID("<"+subject+"@grove.test>").Date(date).Text("the readable part").
 			Attach("big.bin", "application/octet-stream", bytes.Repeat([]byte{0x5a}, 100_000)).Build()
 	}
 	t0 := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)

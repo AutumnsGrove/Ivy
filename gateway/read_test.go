@@ -32,9 +32,7 @@ func newSeededServer(t *testing.T) (*httptest.Server, *store.DBs) {
 		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = dbs.Close() })
-	s := New(dbs, "test-version", testStaticFS())
-	s.now = func() time.Time { return testNow }
-	srv := httptest.NewServer(s.Handler())
+	srv := httptest.NewServer(New(dbs, "test-version", testStaticFS()).Handler())
 	t.Cleanup(srv.Close)
 	return srv, dbs
 }
@@ -109,8 +107,13 @@ func TestListAccounts(t *testing.T) {
 	if one.Slot != 1 || one.Unread != 1 || !one.Smart {
 		t.Errorf("slot/unread/smart = %d/%d/%v, want 1/1/true", one.Slot, one.Unread, one.Smart)
 	}
-	if one.Sync != api.SyncStateOk || one.SyncNote != "Up to date · synced 4 min ago" {
-		t.Errorf("sync = %q %q, want ok / synced 4 min ago", one.Sync, one.SyncNote)
+	// The note is state only; "synced 4 min ago" is composed in the browser from
+	// the instant, which knows the viewer's zone and language (N17, N15).
+	if one.Sync != api.SyncStateOk || one.SyncNote != "Up to date" {
+		t.Errorf("sync = %q %q, want ok / Up to date", one.Sync, one.SyncNote)
+	}
+	if want := testNow.Add(-4 * time.Minute); one.SyncedAt == nil || !one.SyncedAt.Equal(want) {
+		t.Errorf("SyncedAt = %v, want %s", one.SyncedAt, want)
 	}
 
 	two := accounts[1]
@@ -122,6 +125,9 @@ func TestListAccounts(t *testing.T) {
 	}
 	if two.Progress != nil {
 		t.Errorf("Progress = %v, want nil at zero", *two.Progress)
+	}
+	if two.SyncedAt != nil {
+		t.Errorf("SyncedAt = %v, want none for an account that has never synced", two.SyncedAt)
 	}
 }
 

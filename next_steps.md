@@ -66,10 +66,11 @@ or image-publish workflow yet.
    account-scoped, so features may key on `thread_id`. This also fixed a sync failure when one email
    reached two accounts.
 5. ~~N15: RFC 3339 timestamps~~ **done** (#54): `date` replaces `time` on `MailSummary`,
-   `MailMessage` and `SearchHit`; `web/src/lib/time.ts` formats it for the viewer. Left over: the
-   account `syncNote` is still server-rendered (N17, with the health screen design).
+   `MailMessage` and `SearchHit`; `web/src/lib/time.ts` formats it for the viewer. The account sync
+   note followed (#57, N17): `syncedAt` is an instant and `syncLine` words it in the browser.
 
-**Round 32b is fully implemented.** Next up is the remaining 2g work below.
+**Round 32b is fully implemented, and its follow-ups N13, N16 and N17 are closed** (#55 to #57).
+Next up is the remaining 2g work below.
 
 **2. Finish 2g.** The settings and stats-panel skeletons need **intentional design** (no design
 exists): Q&A first. Then the visual baselines, once the harness is regenerated in CI.
@@ -85,9 +86,8 @@ Grouped by where it lands. Each item names its source so it can be found again.
 
 ### Open review findings (`papercuts.md`)
 
-- **N13** `References` is honoured without a cap (linear, 20 µs per id per message). Cap it
-  (recommendation: first id plus the last 128) and add the `STANDARDS.md` 4a row; re-measure on the
-  potato first.
+- Re-measure the `References` scan (N13, 51 hostile messages: 4.2 s to 0.15 s on a laptop) on the
+  potato; the ratio is the claim, not the milliseconds.
 - **N8** identical `Message-ID`s share a content key, and so tags and verdicts; needs a threat-model
   line before chunk 3.
 - **N3** the fake `/systemone` has no `score` questions (chunk 5).

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { accountAvatar } from '#lib/accounts.js';
+	import { accountAvatar, syncLine } from '#lib/accounts.js';
 	import Page from '#lib/components/shell/Page.svelte';
 	import Avatar from '#lib/components/ui/Avatar.svelte';
 	import Button from '#lib/components/ui/Button.svelte';
@@ -23,7 +23,7 @@
 						<Avatar {...accountAvatar(a)} />
 						<div class="t">
 							<div class="addr">{a.address}</div>
-							<div class="st {tone(a.sync)}"><i></i>{a.syncNote}</div>
+							<div class="st {tone(a.sync)}"><i></i>{syncLine(a)}</div>
 						</div>
 						{#if a.progress !== undefined}<span class="pct">{Math.round(a.progress * 100)}%</span>{/if}
 					</div>

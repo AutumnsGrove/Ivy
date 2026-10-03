@@ -205,7 +205,7 @@ func scanMessageIDs(s string, keepLast int) []string {
 		first    string
 		haveLast bool
 		ring     = make([]string, 0, min(keepLast, MaxReferences)) // sized by the usual cap, never by the argument
-		next     int // ring slot to overwrite once it is full
+		next     int                                               // ring slot to overwrite once it is full
 	)
 	for i := 0; i < len(s); {
 		start := strings.IndexByte(s[i:], '<')

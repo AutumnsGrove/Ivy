@@ -1,3 +1,4 @@
+import { formatSince, type TimeOptions } from './time';
 import type { Account, AccountSlot } from './types';
 
 /** CSS colour for an account's dot and avatar; the tokens flip between night and day on their own. */
@@ -24,4 +25,17 @@ export function accountAvatar(a: Account) {
 		src: a.photo ? accountPhotoUrl(a.id) : undefined,
 		icon: a.icon || undefined
 	};
+}
+
+/**
+ * The account's sync line for the health screen: the server's phrase for the
+ * state ("Up to date") plus how long ago, composed here because the viewer's
+ * clock and language are only known here (N17). A failing account says "last
+ * synced"; an account still reading its mailbox shows only the phrase.
+ */
+export function syncLine(a: Pick<Account, 'sync' | 'syncNote' | 'syncedAt'>, opts: TimeOptions = {}): string {
+	if (!a.syncedAt || a.sync === 'syncing') return a.syncNote;
+	const ago = formatSince(a.syncedAt, opts);
+	if (!ago) return a.syncNote;
+	return `${a.syncNote} · ${a.sync === 'ok' ? 'synced' : 'last synced'} ${ago}`;
 }

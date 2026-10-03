@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/AutumnsGrove/Ivy/internal/asset"
 	"github.com/AutumnsGrove/Ivy/internal/compress"
@@ -21,9 +20,6 @@ type Server struct {
 	dbs     *store.DBs
 	version string
 	static  fs.FS
-	// now is the clock the read views render times against; injected so a test
-	// can pin "today".
-	now func() time.Time
 	// allowedHosts are the names, besides loopback, the API answers to.
 	allowedHosts map[string]bool
 }
@@ -42,7 +38,7 @@ func (s *Server) WithAllowedHosts(hosts []string) *Server {
 // version endpoint. static is the built frontend; it may be nil before the
 // assets exist.
 func New(dbs *store.DBs, version string, static fs.FS) *Server {
-	return &Server{dbs: dbs, version: version, static: static, now: time.Now}
+	return &Server{dbs: dbs, version: version, static: static}
 }
 
 type versionResponse struct {
