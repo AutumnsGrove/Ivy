@@ -236,8 +236,15 @@ func (b *skeletonBuilder) leaf(hdr textproto.MIMEHeader, mediaType string, param
 	kept := &limitBuffer{limit: limit}
 	h := sha256.New()
 	n, err := io.Copy(h, decoder(hdr.Get("Content-Transfer-Encoding"), io.TeeReader(body, kept)))
+	hash := hex.EncodeToString(h.Sum(nil))
 	if err != nil {
-		return err
+		// A malformed encoding is routine in real mail and must cost the message
+		// only this part's hash, not its body. Read the rest raw so the skeleton
+		// keeps the whole part; a failure of the stream itself surfaces here too.
+		if _, derr := io.Copy(kept, body); derr != nil {
+			return derr
+		}
+		hash = ""
 	}
 	info := PartInfo{
 		Path:        path,
@@ -247,7 +254,7 @@ func (b *skeletonBuilder) leaf(hdr textproto.MIMEHeader, mediaType string, param
 		Attachment:  attachment || !strings.HasPrefix(mediaType, "text/"),
 		CID:         cid,
 		Inline:      cid != "" && !attachment,
-		Hash:        hex.EncodeToString(h.Sum(nil)),
+		Hash:        hash,
 	}
 	b.listed = append(b.listed, info)
 	if kept.total <= limit {

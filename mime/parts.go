@@ -64,7 +64,11 @@ func (l *partLister) walk(hdr textproto.MIMEHeader, body io.Reader, path string,
 	}
 	n, err := io.Copy(io.Discard, decoder(hdr.Get("Content-Transfer-Encoding"), body))
 	if err != nil {
-		return err
+		// A malformed encoding must not hide the other parts; the size is what
+		// decoded before it. A failure of the stream itself fails again here.
+		if _, derr := io.Copy(io.Discard, body); derr != nil {
+			return derr
+		}
 	}
 	l.parts = append(l.parts, describePart(hdr, params, mediaType, path, n))
 	return nil

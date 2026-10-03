@@ -178,3 +178,48 @@ func FuzzListParts(f *testing.F) {
 		_ = ivymime.CopyPart(bytes.NewReader(data), "1", &sink)
 	})
 }
+
+// badBase64Message has a good body, an attachment whose base64 is malformed (a
+// routine thing in real mail: stray characters, a mangled gateway) and a good
+// attachment after it.
+func badBase64Message() []byte {
+	return []byte("From: a@example.com\r\nSubject: hi\r\nMIME-Version: 1.0\r\n" +
+		"Content-Type: multipart/mixed; boundary=\"b\"\r\n\r\n" +
+		"--b\r\nContent-Type: text/plain\r\n\r\nthe real body text\r\n" +
+		"--b\r\nContent-Type: application/pdf; name=\"a.pdf\"\r\nContent-Disposition: attachment; filename=\"a.pdf\"\r\nContent-Transfer-Encoding: base64\r\n\r\nQUJD*#$%^&REVGR0hJ\r\nzzz!!\r\n" +
+		"--b\r\nContent-Type: text/plain; name=\"n.txt\"\r\nContent-Disposition: attachment; filename=\"n.txt\"\r\n\r\nafter\r\n" +
+		"--b--\r\n")
+}
+
+// One undecodable attachment must cost the message nothing but that part's hash:
+// before the fix ParseStream abandoned the whole walk and the body was lost.
+func TestParseStreamSurvivesAMalformedAttachment(t *testing.T) {
+	t.Parallel()
+	p := ivymime.ParseStream(bytes.NewReader(badBase64Message()))
+	if p.BodySkipped {
+		t.Fatalf("body skipped for one bad attachment: %v", p.Errors)
+	}
+	if !strings.Contains(p.Text, "the real body text") {
+		t.Errorf("Text = %q, want the body", p.Text)
+	}
+	if len(p.Parts) != 2 {
+		t.Fatalf("Parts = %+v, want the bad attachment and the good one", p.Parts)
+	}
+	if p.Parts[0].Hash != "" {
+		t.Errorf("undecodable part has hash %q, want none", p.Parts[0].Hash)
+	}
+	if p.Parts[1].Hash == "" || p.Parts[1].Size != int64(len("after")) {
+		t.Errorf("part after the bad one = %+v, want it hashed and sized", p.Parts[1])
+	}
+}
+
+func TestListPartsSurvivesAMalformedAttachment(t *testing.T) {
+	t.Parallel()
+	parts, err := ivymime.ListParts(bytes.NewReader(badBase64Message()))
+	if err != nil {
+		t.Fatalf("ListParts: %v", err)
+	}
+	if len(parts) != 3 {
+		t.Fatalf("parts = %+v, want body, bad attachment and good attachment", parts)
+	}
+}

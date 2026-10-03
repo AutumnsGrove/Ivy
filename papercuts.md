@@ -508,3 +508,14 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   not). Recommendation: a `derived_version` column set last, in the same transaction as the derived
   data, and a bounded boot/sync pass that re-derives rows behind the current version from the raw
   message. That is also the mechanism N10 needs, so one design covers both.
+- **#48** · `a965999` (walk from `fe20330`) · `mime/stream.go`, `mime/parts.go` · **bug** · the
+  part-hashing walk returned the decoder's error, so one attachment with malformed base64 (routine in
+  real mail) aborted `BuildSkeleton`, and `ParseStream` then reported the whole message as
+  `body not parsed`: no text, no snippet, no parts. It was a regression: before 2f the in-memory path
+  used the tolerant `Parse`, and `a965999` moved every message onto `ParseStream`. `ListParts` had
+  the same flaw, which made the gateway's raw-walk fallback 404 every part of such a message.
+  Reproduced by `TestParseStreamSurvivesAMalformedAttachment` (`body skipped ... illegal base64 data
+  at input byte 4`) and `TestListPartsSurvivesAMalformedAttachment`, both failing before the fix.
+  Fixed: on a decode error the rest of the part is drained raw (so the skeleton keeps it whole and
+  a failure of the stream itself still surfaces), the part is listed with the size that decoded and
+  no hash, and the walk continues.
