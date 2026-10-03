@@ -483,3 +483,28 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   tailnet name, `localhost`, the dev address) checked on every API request, defaulting to loopback
   plus the configured listen address. Not fixed because the list needs a config key and a
   decision about how Tailscale hostnames are discovered.
+- **N12 (open, needs a design decision)** · `4e103a3` · `thread/thread.go` · a thread's id is the
+  content key of its root, or of its earliest message when the root is a placeholder. Sync is
+  newest-first, so as history backfills an older message arrives, becomes the root, and the
+  thread's id changes. The id is stable across moves and UID changes (what the docs promise) but
+  not across backfill, so anything later keyed on it (a snooze or mute on a conversation, a thread
+  tag) would silently detach. Recommendation: make the id sticky: when a rebuilt thread contains
+  messages that already carry a `thread_id`, keep the oldest existing id and only mint a new one
+  for a thread with none. Not done because `ReplaceThreads` is delete-and-rewrite today and the
+  rule needs choosing for merges (two old ids become one) before chunk 3 hangs state on it.
+- **N13 (open, measure-first, needs a decision)** · `4e103a3` · `thread/thread.go` ·
+  `References` is parsed without a cap; a header can be 1 MiB (`MaxHeaderBytes`), so one message can
+  name ~250k ids. Measured on a laptop: `Build` is linear at about 20 µs per id per message
+  (50 messages x 200k ids: 4.2 s), run for the whole account after every fetch. Not super-linear,
+  so not a hang, but `STANDARDS.md` 4a has no row for it. Recommendation: honour at most the
+  last 128 ids of a References header (the nearest ancestors; the true root is usually also the
+  first, so keep the first id as well) and add the row; the choice of which ids to keep is the
+  decision. Re-measure on the potato before choosing the number.
+- **N14 (open, same fix as N10)** · `2fc22b1`, `a965999` · `sync/sync.go` · `UpsertMessage` writes
+  the row, then `storeAttachments` and `storeRendered` write derived data in separate statements.
+  A crash or error between them leaves a mirrored row with no sanitised HTML or attachment rows,
+  and because the checkpoint is the set of live UIDs the next run skips it, so the gap never
+  heals (the body falls back to plain text; attachments have a raw-walk fallback, the HTML does
+  not). Recommendation: a `derived_version` column set last, in the same transaction as the derived
+  data, and a bounded boot/sync pass that re-derives rows behind the current version from the raw
+  message. That is also the mechanism N10 needs, so one design covers both.
