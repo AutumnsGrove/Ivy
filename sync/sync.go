@@ -31,6 +31,7 @@ import (
 	mailmime "github.com/AutumnsGrove/Ivy/mime"
 	"github.com/AutumnsGrove/Ivy/render"
 	"github.com/AutumnsGrove/Ivy/store"
+	"github.com/AutumnsGrove/Ivy/thread"
 )
 
 // defaultBatchSize bounds a FETCH so a large folder never arrives in one
@@ -147,12 +148,51 @@ func (f *Fetcher) Fetch(ctx context.Context, acct Account) (Result, error) {
 	stop := context.AfterFunc(ctx, func() { _ = c.Close() })
 	defer stop()
 
-	res, err := f.fetchAll(ctx, c, acct)
-	if err != nil && ctx.Err() != nil {
+	res, ferr := f.fetchAll(ctx, c, acct)
+	// Re-thread even after a partial fetch: the messages already mirrored are
+	// usable, and the next run rebuilds the assignment from scratch anyway. A
+	// cancelled run skips it, since the connection is gone and nothing more can
+	// be read.
+	if ctx.Err() == nil {
+		if terr := f.threadAccount(ctx, acct.ID); terr != nil && ferr == nil {
+			ferr = terr
+		}
+	}
+	if ferr != nil && ctx.Err() != nil {
 		// The connection error is a symptom; report the cancellation that caused it.
 		return res, fmt.Errorf("sync account %s: %w", acct.ID, ctx.Err())
 	}
-	return res, err
+	return res, ferr
+}
+
+// threadAccount rebuilds one account's conversations from the mirrored headers
+// and writes them back (chunk 2e). Threading is a whole-account pass because
+// JWZ merges across folders, so a reply filed in Archive still joins its inbox
+// root; it reads only headers, never bodies.
+func (f *Fetcher) threadAccount(ctx context.Context, accountID string) error {
+	msgs, err := f.dbs.MessagesForThreading(ctx, accountID)
+	if err != nil {
+		return fmt.Errorf("thread account %s: %w", accountID, err)
+	}
+	inputs := make([]thread.Message, len(msgs))
+	for i, m := range msgs {
+		inputs[i] = thread.Message{
+			ID: m.ID, Key: m.ContentKey, MessageID: m.MessageID,
+			References: m.References, InReplyTo: m.InReplyTo, Subject: m.Subject, Date: m.Date,
+		}
+	}
+	built := thread.Build(inputs)
+	records := make([]store.Thread, len(built))
+	for i, t := range built {
+		records[i] = store.Thread{
+			ID: t.ID, AccountID: accountID, RootMessageID: t.RootMessageID,
+			SubjectNorm: t.SubjectNorm, LastDate: t.LastDate, MessageIDs: t.MessageIDs,
+		}
+	}
+	if err := f.dbs.ReplaceThreads(ctx, accountID, records); err != nil {
+		return fmt.Errorf("thread account %s: %w", accountID, err)
+	}
+	return nil
 }
 
 // fetchAll logs in on an open connection and mirrors every selectable mailbox.

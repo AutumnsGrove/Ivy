@@ -915,3 +915,88 @@ func TestFetchSweepsOrphansFirst(t *testing.T) {
 		t.Error("a stale spool temp file survived a sync run")
 	}
 }
+
+// TestFetchThreadsConversations proves the read path leaves a usable
+// conversation behind: a root and its reply share one thread_id, unrelated mail
+// does not, and the threads table carries the summary the reader needs.
+func TestFetchThreadsConversations(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+	seedAccountRow(t, dbs, store.Account{ID: "acct-1", Address: "me@grove.test"})
+
+	t0 := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	root := mailworld.Msg().From("Alice <alice@example.com>").Subject("Plan").
+		MessageID("<root@grove.test>").Date(t0).Text("root body").Build()
+	reply := mailworld.Msg().From("me@grove.test").Subject("Re: Plan").
+		MessageID("<reply@grove.test>").
+		Header("References", "<root@grove.test>").Header("In-Reply-To", "<root@grove.test>").
+		Date(t0.Add(time.Hour)).Text("reply body").Build()
+	other := mailworld.Msg().From("Bob <bob@example.com>").Subject("Unrelated").
+		MessageID("<other@grove.test>").Date(t0).Text("other body").Build()
+	uidRoot := acc.Deliver("INBOX", root)
+	uidReply := acc.Deliver("INBOX", reply)
+	uidOther := acc.Deliver("INBOX", other)
+
+	if _, err := ivysync.NewFetcher(dbs).Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret")); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+
+	inbox := mustFolder(t, dbs, "acct-1", "INBOX")
+	mRoot := mustMessage(t, dbs, inbox.ID, uidRoot)
+	mReply := mustMessage(t, dbs, inbox.ID, uidReply)
+	mOther := mustMessage(t, dbs, inbox.ID, uidOther)
+	if mRoot.ThreadID == "" {
+		t.Fatal("root has no thread id")
+	}
+	if mReply.ThreadID != mRoot.ThreadID {
+		t.Errorf("reply thread = %q, root thread = %q; want the same", mReply.ThreadID, mRoot.ThreadID)
+	}
+	if mOther.ThreadID == mRoot.ThreadID {
+		t.Errorf("unrelated message shares thread %q", mRoot.ThreadID)
+	}
+
+	threads, err := dbs.ListThreads(ctx, "acct-1")
+	if err != nil {
+		t.Fatalf("ListThreads: %v", err)
+	}
+	if len(threads) != 2 {
+		t.Fatalf("threads = %+v, want 2", threads)
+	}
+	// Newest last_date first: the Plan thread.
+	if threads[0].SubjectNorm != "Plan" || threads[0].MessageCount != 2 {
+		t.Errorf("thread summary = %+v, want Plan with 2 messages", threads[0])
+	}
+	if threads[0].RootMessageID != "<root@grove.test>" {
+		t.Errorf("root message id = %q, want <root@grove.test>", threads[0].RootMessageID)
+	}
+}
+
+// TestFetchThreadsSubjectFallback covers mail with no threading headers: the
+// normalized subject still groups a reply with its base.
+func TestFetchThreadsSubjectFallback(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+	seedAccountRow(t, dbs, store.Account{ID: "acct-1", Address: "me@grove.test"})
+
+	t0 := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	uidA := acc.Deliver("INBOX", mailworld.Msg().From("a@example.com").Subject("Coffee").
+		MessageID("<coffee-a@grove.test>").Date(t0).Build())
+	uidB := acc.Deliver("INBOX", mailworld.Msg().From("b@example.com").Subject("Re: Coffee").
+		MessageID("<coffee-b@grove.test>").Date(t0.Add(time.Minute)).Build())
+
+	if _, err := ivysync.NewFetcher(dbs).Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret")); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	inbox := mustFolder(t, dbs, "acct-1", "INBOX")
+	a := mustMessage(t, dbs, inbox.ID, uidA)
+	b := mustMessage(t, dbs, inbox.ID, uidB)
+	if a.ThreadID == "" || a.ThreadID != b.ThreadID {
+		t.Errorf("subject fallback did not group: a=%q b=%q", a.ThreadID, b.ThreadID)
+	}
+}
