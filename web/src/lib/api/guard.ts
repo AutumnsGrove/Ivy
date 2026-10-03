@@ -6,7 +6,10 @@ const STATUS = {
 	not_found: 404,
 	fetch_failed: 502,
 	provider_error: 502,
-	ask_limit: 429
+	ask_limit: 429,
+	bad_request: 400,
+	internal_error: 500,
+	method_not_allowed: 405
 } as const satisfies Record<ApiError['code'], number>;
 
 /**

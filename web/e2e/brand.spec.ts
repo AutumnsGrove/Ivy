@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './api';
 
 test.describe('app icon', () => {
 	test('declares a favicon, an iOS home-screen icon and a manifest', async ({ page }) => {

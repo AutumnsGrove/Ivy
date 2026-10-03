@@ -10,7 +10,7 @@
 	type Props = {
 		message: Pick<
 			MailMessage,
-			'subject' | 'from' | 'initials' | 'time' | 'toShort' | 'needs' | 'tag' | 'summary' | 'html' | 'paragraphs' | 'attachments'
+			'id' | 'subject' | 'from' | 'initials' | 'time' | 'toShort' | 'needs' | 'tag' | 'summary' | 'html' | 'paragraphs' | 'attachments'
 		>;
 		/** The account colour for the sender avatar and dot. */
 		color: string;
@@ -18,6 +18,7 @@
 		wide?: boolean;
 	};
 	let { message, color, wide = false }: Props = $props();
+	const bodySrc = $derived(`/api/v1/messages/${encodeURIComponent(message.id)}/body`);
 </script>
 
 <article class="msg" class:wide>
@@ -44,7 +45,7 @@
 
 	<div class="body">
 		{#if message.html}
-			<MessageBody html={message.html} />
+			<MessageBody src={bodySrc} />
 		{:else}
 			{#each message.paragraphs as p}<p>{p}</p>{/each}
 		{/if}

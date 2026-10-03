@@ -3,8 +3,8 @@ import { expect, test } from '@playwright/test';
 // The thin end-to-end slice that exists from day one (TESTING.md 0): the real
 // Go binary boots, answers the contract, and serves the embedded frontend on
 // both viewports. It grows with each milestone (deliver, read, flag, restart)
-// as those layers land; today the backend only owns version, health and static
-// assets, and the screens still read from the mock client.
+// as those layers land; the reader now calls the real read API, so the screens
+// render the gateway's answer (the empty mirror until sync is wired).
 
 test('boots and answers the API contract', async ({ request }) => {
 	const version = await request.get('/api/v1/version');
@@ -33,7 +33,7 @@ test('serves the precompressed frontend with the right caching headers', async (
 	expect(bundle.headers()['cache-control']).toContain('immutable');
 });
 
-test('renders the inbox on load', async ({ page }) => {
+test('renders the inbox shell from the real read API', async ({ page }) => {
 	const problems: string[] = [];
 	page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 	page.on('console', (m) => {
@@ -42,16 +42,14 @@ test('renders the inbox on load', async ({ page }) => {
 
 	await page.goto('/');
 	await page.waitForLoadState('networkidle');
-	await expect(page.getByRole('heading', { name: 'Inbox' })).toBeVisible();
-	await expect(page.getByText('2 need you · 2 unread')).toBeVisible();
+	// The dev stack has no wired sync yet (chunk 3), so the mirror is empty and
+	// the honest state is the caught-up screen. The inbox assertions grow once
+	// sync or the fast seeder fills the mirror.
+	await expect(page.getByRole('heading', { name: 'All caught up' })).toBeVisible();
 	expect(problems).toEqual([]);
 });
 
 test('client-side routes survive a cold load (SPA fallback)', async ({ page }) => {
-	await page.goto('/m/m1');
-	await expect(
-		page.getByRole('region', { name: 'Message', exact: true }).getByRole('heading', {
-			name: 'Moving my blog over to Grove?'
-		})
-	).toBeVisible();
+	await page.goto('/settings');
+	await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 });

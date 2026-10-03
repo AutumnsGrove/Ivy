@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './api';
 import { toast } from './helpers';
 
 test.describe('search', () => {

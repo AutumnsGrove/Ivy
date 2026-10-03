@@ -1,40 +1,86 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from './client';
+import * as mock from './mock';
 
-describe('api (mock backed)', () => {
-	it('lists the inbox across all accounts with counts', async () => {
-		const inbox = await api.listInbox();
-		expect(inbox.items.length).toBeGreaterThan(3);
-		expect(inbox.needCount).toBe(inbox.items.filter((m) => m.needs).length);
-		expect(inbox.unreadCount).toBe(inbox.items.filter((m) => m.unread).length);
+/** A fetch reply with just what the transport reads, so the tests need no DOM. */
+const reply = (body: unknown, status = 200) => ({ ok: status < 400, status, json: async () => body });
+
+/** Stubs fetch with a table keyed by the request path (query included), returning the body. */
+function route(table: Record<string, unknown>) {
+	const calls: string[] = [];
+	vi.stubGlobal('fetch', async (url: string) => {
+		calls.push(url);
+		if (!(url in table)) throw new TypeError(`unexpected request to ${url}`);
+		const value = table[url];
+		if (value instanceof Error) throw value;
+		return reply(value);
+	});
+	return calls;
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('reader api (gateway backed)', () => {
+	it('lists accounts from the contract', async () => {
+		route({ '/api/v1/accounts': mock.accounts });
+		await expect(api.listAccounts()).resolves.toEqual(mock.accounts);
 	});
 
-	it('narrows the inbox to one account', async () => {
-		const [first] = await api.listAccounts();
-		const inbox = await api.listInbox({ accountId: first.id });
-		expect(inbox.items.length).toBeGreaterThan(0);
-		expect(inbox.items.every((m) => m.accountId === first.id)).toBe(true);
+	it('lists the combined inbox and narrows it per account', async () => {
+		route({ '/api/v1/inbox': { items: mock.inbox, needCount: 2, unreadCount: 2, readingWaiting: 0 } });
+		const all = await api.listInbox();
+		expect(all.items.length).toBeGreaterThan(3);
+
+		const calls = route({
+			'/api/v1/inbox?account_id=a1': { items: mock.inbox.filter((m) => m.accountId === 'a1'), needCount: 0, unreadCount: 0, readingWaiting: 0 }
+		});
+		const one = await api.listInbox({ accountId: 'a1' });
+		expect(one.items.every((m) => m.accountId === 'a1')).toBe(true);
+		expect(calls[0]).toBe('/api/v1/inbox?account_id=a1');
 	});
 
-	it('returns an empty inbox for the empty scenario, still pointing at Reading', async () => {
-		const inbox = await api.listInbox({ scenario: 'empty' });
-		expect(inbox.items).toEqual([]);
-		expect(inbox.readingWaiting).toBeGreaterThan(0);
+	it('follows the cursor the server hands back', async () => {
+		route({
+			'/api/v1/inbox': {
+				items: mock.inbox,
+				needCount: 0,
+				unreadCount: 0,
+				readingWaiting: 0,
+				nextCursor: 'page-2'
+			}
+		});
+		expect((await api.listInbox()).nextCursor).toBe('page-2');
 	});
 
-	it('finds a message by id and rejects unknown ids with a stable code', async () => {
-		const [first] = (await api.listInbox()).items;
-		expect((await api.getMessage(first.id)).subject).toBe(first.subject);
+	it('fetches a message and its summary by id', async () => {
+		route({
+			'/api/v1/messages/m1': { ...mock.inbox[0], ...mock.messageBody('m1') },
+			'/api/v1/messages/m1/summary': mock.inbox[0]
+		});
+		expect((await api.getMessage('m1')).subject).toBe(mock.inbox[0].subject);
+		expect((await api.getSummary('m1')).id).toBe('m1');
+	});
+
+	it('keeps the stable not_found code a missing message returns', async () => {
+		vi.stubGlobal('fetch', async () => reply({ code: 'not_found', message: 'No such message' }, 404));
 		await expect(api.getMessage('nope')).rejects.toMatchObject({ code: 'not_found' });
 	});
 
-	it('fails the body fetch in the fetch-error scenario but keeps the header', async () => {
-		const [first] = (await api.listInbox()).items;
-		await expect(api.getMessage(first.id, { scenario: 'fetch-error' })).rejects.toMatchObject({
-			code: 'fetch_failed'
+	it('reads mirror health from the gateway', async () => {
+		route({
+			'/api/v1/mirror/health': {
+				accounts: mock.healthAccounts,
+				searchIndex: 'Not built yet',
+				meaningSearch: 'Not built yet',
+				storage: '1.8 GB'
+			}
 		});
+		const health = await api.getHealth();
+		expect(health.storage).toBe('1.8 GB');
 	});
+});
 
+describe('still-mocked routes', () => {
 	it('searches case-insensitively and reports a total', async () => {
 		const found = await api.search('DOMAIN renewal');
 		expect(found.total).toBe(found.hits.length);
@@ -42,8 +88,7 @@ describe('api (mock backed)', () => {
 	});
 
 	it('returns no hits for a query nothing matches', async () => {
-		const found = await api.search('xylophone invoice');
-		expect(found).toMatchObject({ total: 0, hits: [] });
+		expect(await api.search('xylophone invoice')).toMatchObject({ total: 0, hits: [] });
 	});
 
 	it('resolves an ask with cited sources that exist in the answer', async () => {
@@ -58,38 +103,10 @@ describe('api (mock backed)', () => {
 			code: 'provider_error'
 		});
 	});
-});
-
-describe('accounts and health', () => {
-	it('reports every account healthy by default', async () => {
-		const accounts = await api.listAccounts();
-		expect(accounts.every((a) => a.sync === 'ok')).toBe(true);
-	});
-
-	it('fails one account sign-in in the sync-error scenario', async () => {
-		const accounts = await api.listAccounts({ scenario: 'sync-error' });
-		expect(accounts.filter((a) => a.sync === 'auth-failed')).toHaveLength(1);
-	});
-
-	it('shows the full spread of states on the mirror health screen', async () => {
-		const { accounts } = await api.getHealth();
-		const states = new Set(accounts.map((a) => a.sync));
-		expect(states).toEqual(new Set(['ok', 'auth-failed', 'syncing']));
-		expect(accounts.find((a) => a.sync === 'syncing')?.progress).toBeGreaterThan(0);
-	});
 
 	it('finds a rule by id for the editor', async () => {
 		const [first] = await api.listRules();
 		expect((await api.getRule(first.id)).id).toBe(first.id);
 		await expect(api.getRule('nope')).rejects.toMatchObject({ code: 'not_found' });
-	});
-});
-
-describe('attachment errors', () => {
-	it('marks one attachment as failed to load while the message itself opens', async () => {
-		const msg = await api.getMessage('m1', { scenario: 'attachment-error' });
-		const failed = msg.attachments.filter((a) => a.failed);
-		expect(failed).toHaveLength(1);
-		expect(msg.paragraphs.length).toBeGreaterThan(0);
 	});
 });

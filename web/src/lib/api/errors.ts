@@ -1,0 +1,23 @@
+// The stable error codes the UI maps to its own copy (STANDARDS.md section 6).
+// The server sends one of these in its `{code, message}` envelope; anything the
+// transport cannot classify becomes `internal_error`.
+export type ErrorCode =
+	| 'not_found'
+	| 'fetch_failed'
+	| 'ask_limit'
+	| 'provider_error'
+	| 'offline'
+	| 'bad_request'
+	| 'internal_error'
+	| 'method_not_allowed';
+
+/** Every API failure the UI can branch on; never a bare Error. */
+export class ApiError extends Error {
+	constructor(
+		readonly code: ErrorCode,
+		message: string
+	) {
+		super(message);
+		this.name = 'ApiError';
+	}
+}
