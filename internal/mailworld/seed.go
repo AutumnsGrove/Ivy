@@ -1,6 +1,7 @@
 package mailworld
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -273,6 +274,7 @@ func (s *seeder) standardMailboxes(acc *Account) {
 }
 
 func (s *seeder) deliver(acc *Account, mailbox string, raw []byte, flags []imap.Flag, at time.Time) {
+	raw = crlf(raw)
 	data, err := acc.user.Append(mailbox, newLiteral(raw), &imap.AppendOptions{Flags: flags, Time: at})
 	if err != nil {
 		panic("mailworld: seed append to " + mailbox + ": " + err.Error())
@@ -287,6 +289,13 @@ func (s *seeder) deliver(acc *Account, mailbox string, raw []byte, flags []imap.
 	for _, f := range flags {
 		writeSeedField(s.hash, string(f))
 	}
+}
+
+// crlf gives raw the line endings the server hands back on FETCH. The corpus
+// files are written with bare LF, and the fake server would convert them on the
+// way out, so a delivery reported before that would not match what a sync reads.
+func crlf(raw []byte) []byte {
+	return bytes.ReplaceAll(bytes.ReplaceAll(raw, []byte("\r\n"), []byte("\n")), []byte("\n"), []byte("\r\n"))
 }
 
 func writeSeedField(h hash.Hash, value string) {
