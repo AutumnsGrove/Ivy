@@ -478,10 +478,11 @@ func (f *Fetcher) StoreRaw(ctx context.Context, acct Account, folderID string, m
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	// The tiers are chosen on the size FETCH reported, as fetchBatch does.
 	switch {
-	case int64(len(raw)) > f.max:
+	case meta.RFC822Size > f.max:
 		return f.dbs.UpsertMessage(ctx, f.envelopeOnly(acct, folderID, meta))
-	case int64(len(raw)) <= f.inline:
+	case meta.RFC822Size > 0 && meta.RFC822Size <= f.inline:
 		return f.storeInline(ctx, acct, folderID, meta, raw)
 	}
 	rel := spoolRel(folderID, uint32(meta.UID))

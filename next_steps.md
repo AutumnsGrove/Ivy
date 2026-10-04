@@ -84,10 +84,15 @@ fast`, the `full == fast` agreement test and named-state Playwright (`DEV.md` 4,
 - ~~`full` runs a one-shot sync at startup~~ **done**: `devstack.Populate` runs `sync.Fetcher` per
   account before either `up` path serves (the watched child only opens the databases). `--mode fast`
   is rejected by `Populate` until the next stage.
-- `fast`: a `mailworld.WithObserver` seed option streams each delivery into an exported `sync`
-  store-from-raw entry point (same tiers, same code as the IMAP path), plus the `state.db` seed
-  (tags, message tags, settings, account profiles only).
-- The `full == fast` agreement test for `demo`, then `reset` under 5 s.
+- ~~`fast` mirror seeder~~ **done**: `Populate` replays the seeder into a throwaway mailworld
+  through `mailworld.WithObserver` and writes each delivery with the sync's own `StoreRaw`,
+  `RecordFolder` and `Settle`. `TestFastAndFullAgreeForDemo` compares every mirror and state table
+  (masking write times and ephemeral ports) and the spool files. It found two real differences:
+  the corpus is bare LF while a fetch returns CRLF (fixed in the seeder), and a server may list
+  flags in any order (the store now keeps them as a sorted set).
+- The `state.db` seed (account profiles, tags and message tags; settings only if something reads
+  them) runs in both modes after the mirror; it needs a small tag API in `store/`. Then `reset`
+  under 5 s.
 - Named-state Playwright: each `DEV.md` 4 state, run against `ivy-dev up --mode fast`.
 
 **4. Chunk 3**, once the gating spikes (`docs/SPIKES.md`) are confirmed.

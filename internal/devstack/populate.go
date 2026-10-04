@@ -20,15 +20,36 @@ type Summary struct {
 // process that only opens what is already under the data directory, which is
 // why the harness does this and not Ivy.
 func Populate(ctx context.Context, stack *Stack, opts Options) (Summary, error) {
-	if opts.Mode != ModeFull {
-		return Summary{}, fmt.Errorf("devstack: mode %q cannot populate yet", opts.Mode)
-	}
 	dbs, err := store.Open(ctx, stack.Config.DataDir)
 	if err != nil {
 		return Summary{}, fmt.Errorf("devstack: open store: %w", err)
 	}
 	defer dbs.Close()
-	return populateFull(ctx, dbs, stack.Config.Accounts)
+	switch opts.Mode {
+	case ModeFull:
+		return populateFull(ctx, dbs, stack.Config.Accounts)
+	case ModeFast:
+		return populateFast(ctx, dbs, stack, opts)
+	}
+	return Summary{}, fmt.Errorf("devstack: unknown mode %q", opts.Mode)
+}
+
+// syncAccount is the connection descriptor sync uses for a configured dev
+// account. Mailworld speaks plaintext on loopback; ValidateConfig has already
+// refused any other host.
+func syncAccount(a config.Account) ivysync.Account {
+	return ivysync.Account{
+		ID:                 a.ID,
+		Address:            a.Address,
+		IMAPHost:           a.IMAPHost,
+		IMAPPort:           a.IMAPPort,
+		SMTPHost:           a.SMTPHost,
+		SMTPPort:           a.SMTPPort,
+		Username:           a.Username,
+		Password:           a.Password,
+		Insecure:           true,
+		TrustedAuthservIDs: a.TrustedAuthservIDs,
+	}
 }
 
 // populateFull runs the real sync once per account over IMAP. The fetcher skips
@@ -37,20 +58,7 @@ func populateFull(ctx context.Context, dbs *store.DBs, accounts []config.Account
 	var sum Summary
 	fetcher := ivysync.NewFetcher(dbs)
 	for _, a := range accounts {
-		res, err := fetcher.Fetch(ctx, ivysync.Account{
-			ID:       a.ID,
-			Address:  a.Address,
-			IMAPHost: a.IMAPHost,
-			IMAPPort: a.IMAPPort,
-			SMTPHost: a.SMTPHost,
-			SMTPPort: a.SMTPPort,
-			Username: a.Username,
-			Password: a.Password,
-			// Mailworld speaks plaintext on loopback; ValidateConfig has already
-			// refused any other host.
-			Insecure:           true,
-			TrustedAuthservIDs: a.TrustedAuthservIDs,
-		})
+		res, err := fetcher.Fetch(ctx, syncAccount(a))
 		if err != nil {
 			return sum, fmt.Errorf("devstack: populate %s: %w", a.ID, err)
 		}
