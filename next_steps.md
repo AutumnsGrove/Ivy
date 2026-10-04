@@ -5,7 +5,8 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-04 (round 36). Chunks 0, 1 and 2a-2h are done except the visual baselines of
+last updated: 2026-10-04 (round 38: 3a groundwork, waiting at C1; the sync test is red on purpose,
+see "Waiting at"). Chunks 0, 1 and 2a-2h are done except the visual baselines of
 2g and 2h (they need the CI harness regenerated). Baseline at this date: svelte-check (0 errors) and
 Vitest (205) green, Playwright 240 passed / 10 viewport-conditional or gap skips, `go test -race`
 green on the packages 2h touched and the real-binary smoke slice passing (8/8). `make check` as a
@@ -248,8 +249,13 @@ fixed checkpoints C0-C5 and stop-triggers T1-T10, each leaving a committed file 
 inside 3a: whether 3a needs the backfill/steady-state split (decide at checkpoint C2; the model may
 propose it).
 
-**Waiting at:** nothing yet (chunk 3 not started). When work stops at a checkpoint or trigger, put
-the line here.
+**Waiting at C1** (2026-10-04): see `docs/handoffs/2026-10-04-C1-convergence-test.md`. The
+convergence test is written and red for the right reason (`go test -run TestSyncConvergesToTheServer
+./sync` is the only failing test in the repo); the runner is not started. 3a groundwork already in
+and green: `sync_state` (mirror migration 8), the `events` hub and `/api/v1/events` (wired into `ivy
+run` and `ivy-dev up`), and mailworld `Unflag`/`RenameMailbox`/`DeleteMailbox`/`Messages`. Open:
+the frontend `EventSource` client, and the three questions in the handoff. **Expect `make test` to
+be red until the runner lands.**
 
 ## Operator actions still open
 

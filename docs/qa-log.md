@@ -879,6 +879,15 @@ push, so it is cut the way 1 and 2 were. Four answers settled it:
 The stage table and the constraints are in `next_steps.md` ("The chunk plan"). Still open inside
 3a: the backfill/steady-state split, and the N8 threat-model line for duplicate `Message-ID`s.
 
+## Round 38 — 3a groundwork and the C1 harness (2026-10-04, agent; no operator answers)
+
+Decisions made while building, for the operator to veto: the SSE hub lives in its own `events/`
+package (so sync can publish without importing the HTTP layer; `STANDARDS.md` and `ARCHITECTURE.md`
+updated, and the stale "event ids and `Last-Event-ID`" line corrected to round 37); `sync_state` lives
+in `mirror.db` (it describes the connection, so it is rebuildable); the convergence oracle reads the
+server, never the model. The three open questions (folder rows of deleted folders, the removal
+reason string, mapping `error` to the API) are in `docs/handoffs/2026-10-04-C1-convergence-test.md`.
+
 ## Round 37 — the open design questions before chunk 3 (2026-10-04, operator)
 
 Chunk 3 is the hardest chunk (about 8 of 10; 3a and 3d are 9). Four design calls were open and each
