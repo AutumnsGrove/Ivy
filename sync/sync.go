@@ -1152,6 +1152,12 @@ const dialTimeout = 15 * time.Second
 // dial opens the IMAP connection under ctx. It does not use imapclient.Dial*,
 // which take no context, so cancellation also reaches the connect and handshake.
 func dial(ctx context.Context, acct Account) (*imapclient.Client, error) {
+	return dialWith(ctx, acct, nil)
+}
+
+// dialWith is dial with extra imapclient options, so the IDLE connection can
+// install a unilateral-data handler and be woken by a server notification.
+func dialWith(ctx context.Context, acct Account, options *imapclient.Options) (*imapclient.Client, error) {
 	addr := net.JoinHostPort(acct.IMAPHost, strconv.Itoa(acct.IMAPPort))
 	d := net.Dialer{Timeout: dialTimeout}
 	conn, err := d.DialContext(ctx, "tcp", addr)
@@ -1159,7 +1165,7 @@ func dial(ctx context.Context, acct Account) (*imapclient.Client, error) {
 		return nil, err
 	}
 	if acct.Insecure {
-		return imapclient.New(conn, nil), nil
+		return imapclient.New(conn, options), nil
 	}
 	tlsConn := tls.Client(conn, &tls.Config{
 		ServerName: acct.IMAPHost,
@@ -1172,7 +1178,7 @@ func dial(ctx context.Context, acct Account) (*imapclient.Client, error) {
 		_ = conn.Close()
 		return nil, err
 	}
-	return imapclient.New(tlsConn, nil), nil
+	return imapclient.New(tlsConn, options), nil
 }
 
 // folderRowID is the stable mirror id for a mailbox, derived from its account
