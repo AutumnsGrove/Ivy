@@ -113,6 +113,14 @@ func runCmd(configPath *string, version string) *cobra.Command {
 						if err == nil && res.Stored > 0 {
 							hub.Publish(events.Event{Type: events.MessageChanged, AccountID: acct.ID})
 						}
+						// A sweep that hid enough mail to look like a mistake is a Mirror
+						// health alert, not a reason to stop syncing (ARCHITECTURE.md 4).
+						for _, md := range res.MassDisabled {
+							hub.Publish(events.Event{
+								Type: events.HealthAlert, AccountID: acct.ID,
+								Folder: md.Folder, Code: "mass_disable",
+							})
+						}
 					}))
 				workers.Add(1)
 				go func() {
