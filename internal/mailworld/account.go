@@ -6,6 +6,7 @@ import (
 	"net"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
@@ -149,7 +150,7 @@ func (a *Account) Status(mailbox string) (num, unseen uint32, err error) {
 }
 
 func (a *Account) withClient(fn func(*imapclient.Client) error) error {
-	conn, err := net.Dial("tcp", a.world.IMAPAddr())
+	conn, err := (&net.Dialer{Timeout: 10 * time.Second}).Dial("tcp", a.world.IMAPAddr()) //nolint:noctx // a loopback fake: these harness helpers take no context, and the dial is bounded by the timeout
 	if err != nil {
 		return err
 	}
