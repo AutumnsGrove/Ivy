@@ -5,10 +5,10 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-03 (round 33). Chunks 0, 1 and 2a-2g are done except the 2g visual
-baselines (they need the CI harness regenerated). Baseline at this date: svelte-check and Vitest
-(205) green, Playwright 196 passed / 8 viewport-conditional skips (`make check` not re-run since
-the Go side was untouched).
+last updated: 2026-10-04 (round 36; the round 33 baseline below). Chunks 0, 1 and 2a-2g are done
+except the 2g visual baselines (they need the CI harness regenerated). Baseline at this date:
+svelte-check and Vitest (205) green, Playwright 196 passed / 8 viewport-conditional skips
+(`make check` not re-run since the Go side was untouched).
 
 ## How to run a chunk
 
@@ -103,7 +103,10 @@ fast`, the `full == fast` agreement test and named-state Playwright (`DEV.md` 4,
   or batch the seeder in one transaction (measure first), or relax the claim.
 - Named-state Playwright: each `DEV.md` 4 state, run against `ivy-dev up --mode fast`.
 
-**4. Chunk 3**, once the gating spikes (`docs/SPIKES.md`) are confirmed.
+**4. Chunk 3 is split into eight stages (round 36; the plan is in "The chunk plan" below).** 3a
+(sync core) is next once 2h and the gating spikes (`docs/SPIKES.md`) are confirmed; 3h (the deploy
+track: `Dockerfile`, GHCR publish, `ivy update`) is pulled forward and runs in parallel because it
+touches no mail code.
 
 ## Backlog
 
@@ -156,7 +159,7 @@ Found by the round 32 audit; each needs a home before its milestone starts.
   toward IMAP arrive with sync (`PERFORMANCE.md` 1).
 - Re-measure N4/N5 (static serving, zstd encoder) on the potato.
 
-### Chunk 3 constraints already known
+### Chunk 3 constraints already known (apply to the stages in "The chunk plan")
 
 - `sync/` is not wired to config: the runner must copy `config.Account.TrustedAuthservIDs` into
   `sync.Account`. Purelymail adds no SPF/DKIM/DMARC verdicts (spike S1), so the signal is empty until
@@ -190,9 +193,40 @@ replace the operator's mail client sooner); 4 and 5 can still be narrowed.
 
 | Chunk | Scope | Docs |
 |---|---|---|
-| **3** Sync | Backfill, QRESYNC/IDLE steady state, write path + outbox, disabled-not-deleted with mass-disable alert, tags both ways (`$ivy-<slug>` keywords), rules/snooze, attachments + tier 0-1 extraction, FTS5 + OpenRouter embeddings + hybrid search, People, daily `state.db` backups, `ivy update`. Highest-risk code: the convergence property test | `ARCHITECTURE.md` 4/9, `TESTING.md` 2/6 |
+| **3** Sync | Split into stages 3a-3h (table below). Highest-risk code: the convergence property test (3a) | `ARCHITECTURE.md` 4/9, `TESTING.md` 2/6 |
 | **4** Send | Compose (markdown then rich text), identities/signatures, undo send (delay setting), drafts in the server Drafts folder, Reply-To handling, SMTP + APPEND to Sent, EXIF strip / photo downscale, size checks against the provider | `PLAN.md` 5, `ARCHITECTURE.md` 5 |
-| **5** Triage | Jev layer + question registry, the single LLM gate + cost ledger, needs-me cascade, categories, newsletters (feed/digest/unsubscribe), receipts/ledger/renewals, vision, Ask Ivy agent loop, full stats panel. Safety assertions are part of done | `JEV.md`, `ARCHITECTURE.md` 6/7, `TESTING.md` 4 |
+| **5** Triage | Jev layer + question registry, the single LLM gate + cost ledger (the embeddings-only piece shipped in 3f), needs-me cascade, categories, newsletters (feed/digest/unsubscribe), receipts/ledger/renewals, vision, Ask Ivy agent loop, full stats panel. Safety assertions are part of done | `JEV.md`, `ARCHITECTURE.md` 6/7, `TESTING.md` 4 |
+
+### Chunk 3 stages (split in round 36)
+
+Approved by the operator on 2026-10-04. This chunk as originally scoped bundled six independent
+subsystems and was larger than chunks 1 and 2 together, so it is cut the way 1 and 2 were. Execution
+order is the table order (3c, backups, runs before 3d; 3h is a parallel track). Each stage ends with
+test-first work seen failing, `make check`, Playwright where a screen changes, the docs folded in,
+and this file committed with the work.
+
+| Stage | Scope | Depends | Size |
+|---|---|---|---|
+| **3a Sync core** | Per-account runner + `sync_state`; resumable envelope-first backfill; IDLE on INBOX; `QRESYNC`/`CHANGEDSINCE` with a UID/flags fallback; UIDVALIDITY change; SSE hub; model-based convergence property test (seeded sequences, shrinking) | 2 | L (may split at the backfill/steady-state line if it proves too big) |
+| **3b Disabled-not-deleted** | Expunge/`VANISHED` disable with the row **and** spool kept; re-enable on reappearance; mass-disable alert; Restore/Purge endpoints + Mirror health | 3a | M |
+| **3c Backups** | Daily `state.db` `VACUUM INTO` + zstd + verify; prune after 15 days with the floor of 10; targets; one-line restore; `ivy doctor` warnings. **Runs before the outbox exists**, because `outbox`/`send_queue` are the only unrecoverable state | any | S-M |
+| **3d Outbox + write path** | `outbox` table; IMAP-first STORE/MOVE/EXPUNGE; retry across restarts; optimistic UI rollback; reader actions (archive, delete, flag, junk move) | 3a, 3b | L |
+| **3e Tags both ways** | `$ivy-<slug>` keyword writer + server read-back (source `server`); `/tags` + membership; local-only fallback for servers without arbitrary keywords | 3d | M |
+| **3f Search** | FTS5 (+ tokenizer decision); tier 0-1 extraction into `extracted_text`; the `Embedder` interface with OpenRouter default and Ollama optional; **a minimal embeddings-only gate and ledger**; embed-once queue; hybrid RRF; `/search` | 3c/2f | L |
+| **3g Rules + snooze + People + reading** | Rules stored as data, header conditions evaluated locally, actions through the outbox; snooze; People; `/reading`. Jev fuzzy conditions stay in chunk 5 | 3e, 3f | M |
+| **3h Deploy track** *(parallel, pulled forward)* | `Dockerfile` (frontend + pure-Go cross-build), multi-arch GHCR publish on main, host-side update watcher, in-app Update + SSE progress. Touches no mail code | none | M |
+
+Three decisions recorded with the split:
+
+- **Embeddings gate (3f):** the `Embedder` interface, the per-account opt-in check, the monthly cap
+  and one ledger row per call are pulled forward from chunk 5, so "nothing paid is reachable except
+  through the gate" holds from the first paid path. Jev, chat and vision stay behind the full gate.
+- **Deploy (3h):** its own track, done early or in parallel; it blocks neither sync nor chunk 4.
+- **Backups (3c):** before 3d, because the outbox is unrecoverable and must be backed up as soon as
+  it exists.
+
+Still to decide inside 3a: whether 3a itself needs the backfill/steady-state split, and the **N8**
+threat-model line (identical `Message-ID`s share a content key) before 3a/3b land.
 
 ## Operator actions still open
 

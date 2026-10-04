@@ -855,3 +855,26 @@ keyed by profile, seed, accounts, both schema versions and `DerivedVersion`, and
 copy, as `DEV.md` 3 already says. The cache is only written from a data directory that started empty
 (so it never holds the operator's edits) and only restored into one, a bad cache falls back to a
 build, and the agreement test keeps guarding the build itself.
+
+## Round 36 — splitting chunk 3 into stages (2026-10-04, operator)
+
+Chunk 3 as scoped (backfill, QRESYNC/IDLE, write path + outbox, disabled-not-deleted, tags both
+ways, rules/snooze, extraction, FTS5 + embeddings + hybrid search, People, backups, `ivy update`)
+bundled six independent subsystems; it is larger than chunks 1 and 2 combined and cannot be one
+push, so it is cut the way 1 and 2 were. Four answers settled it:
+
+- **Eight stages 3a-3h** (sync core; disabled-not-deleted; backups; outbox + write path; tags both
+  ways; search; rules/snooze/People/reading; the deploy track). 3a may still split at the
+  backfill/steady-state line.
+- **A minimal embeddings gate in 3f.** The `Embedder` interface, the per-account opt-in, the
+  monthly cap and one ledger row per call ship with search rather than with chunk 5, so "nothing
+  paid is reachable except through the gate" holds from the first paid path. The full Jev/chat/
+  vision gate stays chunk 5.
+- **The deploy track is its own track, pulled forward.** The `Dockerfile`, GHCR publish workflow
+  and `ivy update` watcher touch no mail code and block nothing, so they are not the tail of the
+  sync milestone.
+- **Backups run before the outbox.** `outbox`/`send_queue` are the only state that cannot be
+  rebuilt from IMAP, so backups land as 3c, ahead of the write path.
+
+The stage table and the constraints are in `next_steps.md` ("The chunk plan"). Still open inside
+3a: the backfill/steady-state split, and the N8 threat-model line for duplicate `Message-ID`s.
