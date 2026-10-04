@@ -401,9 +401,109 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /outbox:
+    post:
+      operationId: enqueueOutbox
+      summary: Apply a reader action through the outbox
+      description: >
+        The one write path to IMAP. The op row is committed before the action is
+        reported accepted; the IMAP command follows, and the mirror follows that.
+        A move or delete needs an explicit confirmation from the UI before this
+        call; an undo is the inverse action, enqueued the same way. A repeat of a
+        live action returns the existing op instead of queueing a second one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OutboxAction"
+      responses:
+        "202":
+          description: The action is queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutboxItem"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: >
+            The action cannot be queued: `no_archive_folder` / `no_trash_folder`
+            / `no_junk_folder` when the account has no folder for the role,
+            `outbox_full` when the queue cap is reached, or `not_trash` when an
+            expunge names a folder that is not the trash.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      operationId: listOutbox
+      summary: Live and recent outbox ops
+      parameters:
+        - name: account_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Live ops (the overlay) and recent terminal ones (history)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutboxList"
+  /outbox/{id}:
+    delete:
+      operationId: dismissOutbox
+      summary: Dismiss a terminal op
+      description: >
+        Removes a terminal row from the history. A live op is refused; it is
+        never silently dropped.
+      parameters:
+        - $ref: "#/components/parameters/OutboxID"
+      responses:
+        "204":
+          description: Dismissed
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The op is still live
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /outbox/{id}/retry:
+    post:
+      operationId: retryOutbox
+      summary: Retry a failed op now
+      description: >
+        Returns a failed op to the queue immediately, clearing its attempt count
+        so the retry cap is measured afresh.
+      parameters:
+        - $ref: "#/components/parameters/OutboxID"
+      responses:
+        "200":
+          description: The op is queued again
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutboxItem"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The op is not failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   parameters:
     MessageID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    OutboxID:
       name: id
       in: path
       required: true
@@ -926,3 +1026,82 @@ components:
       properties:
         restored:
           type: integer
+    OutboxAction:
+      type: object
+      required: [messageId, action]
+      properties:
+        messageId:
+          type: string
+          description: The mirror row the action applies to
+        action:
+          type: string
+          enum: [archive, trash, spam, not_junk, flag, unflag, seen, unseen, move, expunge]
+          x-enum-varnames:
+            [OutboxActionArchive, OutboxActionTrash, OutboxActionSpam, OutboxActionNotJunk,
+             OutboxActionFlag, OutboxActionUnflag, OutboxActionSeen, OutboxActionUnseen,
+             OutboxActionMove, OutboxActionExpunge]
+        destinationFolderId:
+          type: string
+          description: The destination folder for `move` (an undo sends the source folder back)
+    OutboxItem:
+      type: object
+      description: One outbox op, naming a postcondition rather than a command
+      required: [id, accountId, messageId, kind, state, attempts, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        accountId:
+          type: string
+        messageId:
+          type: string
+          description: The mirror row id, resolved from the content key and folder
+        seq:
+          type: integer
+        kind:
+          type: string
+          enum: [flags, move, expunge]
+          x-enum-varnames: [OutboxKindFlags, OutboxKindMove, OutboxKindExpunge]
+        state:
+          type: string
+          enum: [pending, in_flight, done, failed, cancelled]
+          x-enum-varnames:
+            [OutboxStatePending, OutboxStateInFlight, OutboxStateDone, OutboxStateFailed, OutboxStateCancelled]
+        sourceFolderId:
+          type: string
+        destinationFolderId:
+          type: string
+        flagsAdd:
+          type: array
+          items:
+            type: string
+        flagsClear:
+          type: array
+          items:
+            type: string
+        attempts:
+          type: integer
+        lastErrorCode:
+          type: string
+        lastErrorDetail:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+    OutboxList:
+      type: object
+      required: [active, recent]
+      properties:
+        active:
+          type: array
+          items:
+            $ref: "#/components/schemas/OutboxItem"
+        recent:
+          type: array
+          items:
+            $ref: "#/components/schemas/OutboxItem"

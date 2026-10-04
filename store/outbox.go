@@ -53,6 +53,11 @@ const (
 // failure rather than dropping the action silently.
 var ErrOutboxFull = errors.New("outbox full")
 
+// ErrOutboxLive reports an attempt to dismiss an op that is still pending or
+// in flight. Only a terminal row may be dismissed; a live one is never silently
+// dropped.
+var ErrOutboxLive = errors.New("outbox op is still live")
+
 // OutboxExpect is the postcondition an op asks for, in the op's own terms. It
 // is canonical JSON, so the same intention always hashes to the same
 // idempotency key. Only the fields the kind uses are set.
@@ -317,10 +322,12 @@ func (d *DBs) NextOutbox(ctx context.Context, accountID string, now time.Time) (
 }
 
 // OutboxByAccount returns one account's non-terminal ops, lowest sequence first,
-// so the UI can overlay them and sync can defer to them.
+// so the UI can overlay them and sync can defer to them. An empty accountID
+// returns every account's, for the combined view.
 func (d *DBs) OutboxByAccount(ctx context.Context, accountID string) ([]OutboxOp, error) {
 	rows, err := d.State.Read.QueryContext(ctx, outboxSelect+`
-		WHERE account_id = ? AND state IN (?, ?) ORDER BY seq`, accountID, OutboxPending, OutboxInFlight)
+		WHERE (? = '' OR account_id = ?) AND state IN (?, ?) ORDER BY seq`,
+		accountID, accountID, OutboxPending, OutboxInFlight)
 	if err != nil {
 		return nil, fmt.Errorf("outbox for %s: %w", accountID, err)
 	}
@@ -329,14 +336,15 @@ func (d *DBs) OutboxByAccount(ctx context.Context, accountID string) ([]OutboxOp
 }
 
 // OutboxHistory returns one account's terminal ops newest first, for the queue
-// screen's recent failures and undo history.
+// screen's recent failures and undo history. An empty accountID returns every
+// account's.
 func (d *DBs) OutboxHistory(ctx context.Context, accountID string, limit int) ([]OutboxOp, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 	rows, err := d.State.Read.QueryContext(ctx, outboxSelect+`
-		WHERE account_id = ? AND state NOT IN (?, ?)
-		ORDER BY completed_at DESC LIMIT ?`, accountID, OutboxPending, OutboxInFlight, limit)
+		WHERE (? = '' OR account_id = ?) AND state NOT IN (?, ?)
+		ORDER BY completed_at DESC LIMIT ?`, accountID, accountID, OutboxPending, OutboxInFlight, limit)
 	if err != nil {
 		return nil, fmt.Errorf("outbox history for %s: %w", accountID, err)
 	}
@@ -420,6 +428,52 @@ func (d *DBs) CancelOutbox(ctx context.Context, id string, now time.Time) error 
 	return d.updateOutbox(ctx, `
 		UPDATE outbox SET state = ?, updated_at = ?, completed_at = ?
 		WHERE id = ?`, OutboxCancelled, formatTime(now), formatTime(now), id)
+}
+
+// RetryOutbox returns a failed op to the queue now, clearing its attempt count
+// and its backoff so the retry cap is measured afresh. A non-failed op is
+// ErrOutboxLive; an unknown id is ErrNotFound.
+func (d *DBs) RetryOutbox(ctx context.Context, id string, now time.Time) error {
+	res, err := d.State.Write.ExecContext(ctx, `
+		UPDATE outbox SET state = ?, attempts = 0, next_attempt_at = NULL,
+			last_error_code = '', last_error_detail = '', updated_at = ?, completed_at = NULL
+		WHERE id = ? AND state = ?`, OutboxPending, formatTime(now), id, OutboxFailed)
+	if err != nil {
+		return fmt.Errorf("retry outbox op %s: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("retry outbox op %s: %w", id, err)
+	}
+	if n == 0 {
+		if _, gerr := d.GetOutbox(ctx, id); gerr != nil {
+			return gerr
+		}
+		return ErrOutboxLive
+	}
+	return nil
+}
+
+// DeleteOutbox dismisses a terminal op. A live op is refused with ErrOutboxLive;
+// an unknown id is ErrNotFound. This is not an erasure of mail, only of the op
+// row the operator has seen.
+func (d *DBs) DeleteOutbox(ctx context.Context, id string) error {
+	res, err := d.State.Write.ExecContext(ctx, `
+		DELETE FROM outbox WHERE id = ? AND state NOT IN (?, ?)`, id, OutboxPending, OutboxInFlight)
+	if err != nil {
+		return fmt.Errorf("delete outbox op %s: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete outbox op %s: %w", id, err)
+	}
+	if n == 0 {
+		if _, gerr := d.GetOutbox(ctx, id); gerr != nil {
+			return gerr
+		}
+		return ErrOutboxLive
+	}
+	return nil
 }
 
 func cancelOutboxTx(ctx context.Context, tx *sql.Tx, id string, now time.Time) error {

@@ -157,6 +157,96 @@ func (e LivenessStatus) Valid() bool {
 	}
 }
 
+// Defines values for OutboxActionAction.
+const (
+	OutboxActionArchive OutboxActionAction = "archive"
+	OutboxActionExpunge OutboxActionAction = "expunge"
+	OutboxActionFlag    OutboxActionAction = "flag"
+	OutboxActionMove    OutboxActionAction = "move"
+	OutboxActionNotJunk OutboxActionAction = "not_junk"
+	OutboxActionSeen    OutboxActionAction = "seen"
+	OutboxActionSpam    OutboxActionAction = "spam"
+	OutboxActionTrash   OutboxActionAction = "trash"
+	OutboxActionUnflag  OutboxActionAction = "unflag"
+	OutboxActionUnseen  OutboxActionAction = "unseen"
+)
+
+// Valid indicates whether the value is a known member of the OutboxActionAction enum.
+func (e OutboxActionAction) Valid() bool {
+	switch e {
+	case OutboxActionArchive:
+		return true
+	case OutboxActionExpunge:
+		return true
+	case OutboxActionFlag:
+		return true
+	case OutboxActionMove:
+		return true
+	case OutboxActionNotJunk:
+		return true
+	case OutboxActionSeen:
+		return true
+	case OutboxActionSpam:
+		return true
+	case OutboxActionTrash:
+		return true
+	case OutboxActionUnflag:
+		return true
+	case OutboxActionUnseen:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OutboxItemKind.
+const (
+	OutboxKindExpunge OutboxItemKind = "expunge"
+	OutboxKindFlags   OutboxItemKind = "flags"
+	OutboxKindMove    OutboxItemKind = "move"
+)
+
+// Valid indicates whether the value is a known member of the OutboxItemKind enum.
+func (e OutboxItemKind) Valid() bool {
+	switch e {
+	case OutboxKindExpunge:
+		return true
+	case OutboxKindFlags:
+		return true
+	case OutboxKindMove:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OutboxItemState.
+const (
+	OutboxStateCancelled OutboxItemState = "cancelled"
+	OutboxStateDone      OutboxItemState = "done"
+	OutboxStateFailed    OutboxItemState = "failed"
+	OutboxStateInFlight  OutboxItemState = "in_flight"
+	OutboxStatePending   OutboxItemState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the OutboxItemState enum.
+func (e OutboxItemState) Valid() bool {
+	switch e {
+	case OutboxStateCancelled:
+		return true
+	case OutboxStateDone:
+		return true
+	case OutboxStateFailed:
+		return true
+	case OutboxStateInFlight:
+		return true
+	case OutboxStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SyncState.
 const (
 	SyncStateAuthFailed  SyncState = "auth-failed"
@@ -461,6 +551,54 @@ type MailSummary struct {
 	Unread   bool      `json:"unread"`
 }
 
+// OutboxAction defines model for OutboxAction.
+type OutboxAction struct {
+	Action OutboxActionAction `json:"action"`
+
+	// DestinationFolderId The destination folder for `move` (an undo sends the source folder back)
+	DestinationFolderId *string `json:"destinationFolderId,omitempty"`
+
+	// MessageId The mirror row the action applies to
+	MessageId string `json:"messageId"`
+}
+
+// OutboxActionAction defines model for OutboxAction.Action.
+type OutboxActionAction string
+
+// OutboxItem One outbox op, naming a postcondition rather than a command
+type OutboxItem struct {
+	AccountId           string         `json:"accountId"`
+	Attempts            int            `json:"attempts"`
+	CompletedAt         *time.Time     `json:"completedAt,omitempty"`
+	CreatedAt           time.Time      `json:"createdAt"`
+	DestinationFolderId *string        `json:"destinationFolderId,omitempty"`
+	FlagsAdd            *[]string      `json:"flagsAdd,omitempty"`
+	FlagsClear          *[]string      `json:"flagsClear,omitempty"`
+	Id                  string         `json:"id"`
+	Kind                OutboxItemKind `json:"kind"`
+	LastErrorCode       *string        `json:"lastErrorCode,omitempty"`
+	LastErrorDetail     *string        `json:"lastErrorDetail,omitempty"`
+
+	// MessageId The mirror row id, resolved from the content key and folder
+	MessageId      string          `json:"messageId"`
+	Seq            *int            `json:"seq,omitempty"`
+	SourceFolderId *string         `json:"sourceFolderId,omitempty"`
+	State          OutboxItemState `json:"state"`
+	UpdatedAt      time.Time       `json:"updatedAt"`
+}
+
+// OutboxItemKind defines model for OutboxItem.Kind.
+type OutboxItemKind string
+
+// OutboxItemState defines model for OutboxItem.State.
+type OutboxItemState string
+
+// OutboxList defines model for OutboxList.
+type OutboxList struct {
+	Active []OutboxItem `json:"active"`
+	Recent []OutboxItem `json:"recent"`
+}
+
 // Person defines model for Person.
 type Person struct {
 	Conversations []Conversation `json:"conversations"`
@@ -559,6 +697,9 @@ type Version struct {
 // MessageID defines model for MessageID.
 type MessageID = string
 
+// OutboxID defines model for OutboxID.
+type OutboxID = string
+
 // NotFound defines model for NotFound.
 type NotFound = Error
 
@@ -566,6 +707,11 @@ type NotFound = Error
 type ListInboxParams struct {
 	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
 	Cursor    *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListOutboxParams defines parameters for ListOutbox.
+type ListOutboxParams struct {
+	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
 }
 
 // SearchParams defines parameters for Search.
@@ -579,3 +725,6 @@ type UpdateAccountProfileJSONRequestBody = AccountProfile
 
 // AskJSONRequestBody defines body for Ask for application/json ContentType.
 type AskJSONRequestBody = AskRequest
+
+// EnqueueOutboxJSONRequestBody defines body for EnqueueOutbox for application/json ContentType.
+type EnqueueOutboxJSONRequestBody = OutboxAction

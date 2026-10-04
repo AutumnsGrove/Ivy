@@ -390,6 +390,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/outbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Live and recent outbox ops */
+        get: operations["listOutbox"];
+        put?: never;
+        /**
+         * Apply a reader action through the outbox
+         * @description The one write path to IMAP. The op row is committed before the action is reported accepted; the IMAP command follows, and the mirror follows that. A move or delete needs an explicit confirmation from the UI before this call; an undo is the inverse action, enqueued the same way. A repeat of a live action returns the existing op instead of queueing a second one.
+         */
+        post: operations["enqueueOutbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/outbox/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Dismiss a terminal op
+         * @description Removes a terminal row from the history. A live op is refused; it is never silently dropped.
+         */
+        delete: operations["dismissOutbox"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/outbox/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry a failed op now
+         * @description Returns a failed op to the queue immediately, clearing its attempt count so the retry cap is measured afresh.
+         */
+        post: operations["retryOutbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -646,6 +707,43 @@ export interface components {
         RestoreResult: {
             restored: number;
         };
+        OutboxAction: {
+            /** @description The mirror row the action applies to */
+            messageId: string;
+            /** @enum {string} */
+            action: "archive" | "trash" | "spam" | "not_junk" | "flag" | "unflag" | "seen" | "unseen" | "move" | "expunge";
+            /** @description The destination folder for `move` (an undo sends the source folder back) */
+            destinationFolderId?: string;
+        };
+        /** @description One outbox op, naming a postcondition rather than a command */
+        OutboxItem: {
+            id: string;
+            accountId: string;
+            /** @description The mirror row id, resolved from the content key and folder */
+            messageId: string;
+            seq?: number;
+            /** @enum {string} */
+            kind: "flags" | "move" | "expunge";
+            /** @enum {string} */
+            state: "pending" | "in_flight" | "done" | "failed" | "cancelled";
+            sourceFolderId?: string;
+            destinationFolderId?: string;
+            flagsAdd?: string[];
+            flagsClear?: string[];
+            attempts: number;
+            lastErrorCode?: string;
+            lastErrorDetail?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            completedAt?: string;
+        };
+        OutboxList: {
+            active: components["schemas"]["OutboxItem"][];
+            recent: components["schemas"]["OutboxItem"][];
+        };
     };
     responses: {
         /** @description No such resource */
@@ -660,6 +758,7 @@ export interface components {
     };
     parameters: {
         MessageID: string;
+        OutboxID: string;
     };
     requestBodies: never;
     headers: never;
@@ -1188,6 +1287,124 @@ export interface operations {
             };
             /** @description Too many streams are open (`too_many_streams`) or Ivy is shutting down (`unavailable`) */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listOutbox: {
+        parameters: {
+            query?: {
+                account_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Live ops (the overlay) and recent terminal ones (history) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxList"];
+                };
+            };
+        };
+    };
+    enqueueOutbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutboxAction"];
+            };
+        };
+        responses: {
+            /** @description The action is queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxItem"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description The action cannot be queued: `no_archive_folder` / `no_trash_folder` / `no_junk_folder` when the account has no folder for the role, `outbox_full` when the queue cap is reached, or `not_trash` when an expunge names a folder that is not the trash. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    dismissOutbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["OutboxID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dismissed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description The op is still live */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    retryOutbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["OutboxID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The op is queued again */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxItem"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description The op is not failed */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

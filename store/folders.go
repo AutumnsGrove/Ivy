@@ -94,6 +94,22 @@ func (d *DBs) GetFolderByID(ctx context.Context, id string) (Folder, error) {
 	return f, nil
 }
 
+// FolderByRole returns the live folder that fills a role, or ErrNotFound. A
+// reader action resolves its destination here, so "archive" means the account's
+// Archive-role folder and never a guessed name.
+func (d *DBs) FolderByRole(ctx context.Context, accountID, role string) (Folder, error) {
+	row := d.Mirror.Read.QueryRowContext(ctx,
+		folderSelect+` WHERE account_id=? AND role=? AND gone_at IS NULL ORDER BY name LIMIT 1`, accountID, role)
+	f, err := scanFolder(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Folder{}, ErrNotFound
+	}
+	if err != nil {
+		return Folder{}, fmt.Errorf("get %s folder of %s: %w", role, accountID, err)
+	}
+	return f, nil
+}
+
 // ListFolders returns one account's live folders, ordered by name. A folder the
 // server has deleted or renamed away is gone and not listed.
 func (d *DBs) ListFolders(ctx context.Context, accountID string) ([]Folder, error) {

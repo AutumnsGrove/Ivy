@@ -147,6 +147,24 @@ func runCmd(configPath *string, version string) *cobra.Command {
 						slog.WarnContext(workerCtx, "sync worker stopped", "account", acct.ID, "error", err)
 					}
 				}()
+
+				// The outbox is the one writer to IMAP; it owns its own connection and
+				// publishes a hint whenever an op changes, so a screen can drop its
+				// optimistic overlay once the server has it.
+				outboxWorker := ivysync.NewOutboxWorker(ivysync.NewFetcher(dbs), acct,
+					ivysync.WithOutboxNotify(func(op store.OutboxOp) {
+						hub.Publish(events.Event{Type: events.OutboxState, AccountID: acct.ID})
+						if op.State == store.OutboxDone {
+							hub.Publish(events.Event{Type: events.MessageChanged, AccountID: acct.ID})
+						}
+					}))
+				workers.Add(1)
+				go func() {
+					defer workers.Done()
+					if err := outboxWorker.Run(workerCtx); err != nil && !errors.Is(err, context.Canceled) {
+						slog.WarnContext(workerCtx, "outbox worker stopped", "account", acct.ID, "error", err)
+					}
+				}()
 			}
 
 			// The daily state.db snapshot is its own owned goroutine, started with

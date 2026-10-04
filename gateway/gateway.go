@@ -2,7 +2,10 @@
 package gateway
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"net"
 	"net/http"
@@ -31,6 +34,15 @@ type Server struct {
 	// "purge forever" includes the off-device copies (N24). Empty is fine for a
 	// server with no backup configured.
 	backupTargets []string
+	// newID generates an outbox op id (C3: the store never invents one). Tests
+	// replace it with a deterministic generator.
+	newID func() string
+}
+
+// WithIDFunc replaces the outbox op id generator, so a test can assert on ids.
+func (s *Server) WithIDFunc(fn func() string) *Server {
+	s.newID = fn
+	return s
 }
 
 // WithBackupTargets sets the folders a purge erases blobs from in addition to
@@ -54,7 +66,21 @@ func (s *Server) WithAllowedHosts(hosts []string) *Server {
 // version endpoint. static is the built frontend; it may be nil before the
 // assets exist.
 func New(dbs *store.DBs, version string, static fs.FS) *Server {
-	return &Server{dbs: dbs, version: version, static: static}
+	return &Server{dbs: dbs, version: version, static: static, newID: randomID}
+}
+
+// randomID is a 128-bit random hex string, unique enough for an op id without a
+// dependency. An op id is never derived from mail, so a collision is harmless to
+// correctness (the idempotency key is separate), but the primary key needs it
+// unique.
+func randomID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		// crypto/rand never fails on the platforms Ivy runs on; if it somehow
+		// does, fall back to the clock so an op is still created.
+		return fmt.Sprintf("%x", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b[:])
 }
 
 type versionResponse struct {
@@ -88,6 +114,10 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("POST /api/v1/mirror/messages/{id}/restore", s.handleRestoreMessage)
 	api.HandleFunc("POST /api/v1/mirror/accounts/{id}/restore", s.handleRestoreAccountHidden)
 	api.HandleFunc("DELETE /api/v1/mirror/messages/{id}", s.handlePurgeMessage)
+	api.HandleFunc("POST /api/v1/outbox", s.handleEnqueueOutbox)
+	api.HandleFunc("GET /api/v1/outbox", s.handleListOutbox)
+	api.HandleFunc("POST /api/v1/outbox/{id}/retry", s.handleRetryOutbox)
+	api.HandleFunc("DELETE /api/v1/outbox/{id}", s.handleDismissOutbox)
 	if s.events != nil {
 		api.HandleFunc("GET /api/v1/events", s.handleEvents)
 	}
