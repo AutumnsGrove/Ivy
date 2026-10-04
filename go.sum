@@ -1,5 +1,5 @@
-github.com/AutumnsGrove/go-imap/v2 v2.0.0-beta.8-ivy.2 h1:yMKVCwTa0l97O/tzrHMsxKA7xMKmGRNfY8QsqPVXrYg=
-github.com/AutumnsGrove/go-imap/v2 v2.0.0-beta.8-ivy.2/go.mod h1:dhoFe2Q0PwLrMD7oZw8ODuaD0vLYPe5uj2wcOMnvh48=
+github.com/AutumnsGrove/go-imap/v2 v2.0.0-beta.8-ivy.3 h1:GLW0VdD8Wh20xzYB42vpLMdN+q0x25S69L5SAFtD8k8=
+github.com/AutumnsGrove/go-imap/v2 v2.0.0-beta.8-ivy.3/go.mod h1:dhoFe2Q0PwLrMD7oZw8ODuaD0vLYPe5uj2wcOMnvh48=
 github.com/BurntSushi/toml v1.4.1-0.20240526193622-a339e1f7089c h1:pxW6RcqyfI9/kWtOwnv/G+AzdKuy2ZrqINhenH4HyNs=
 github.com/BurntSushi/toml v1.4.1-0.20240526193622-a339e1f7089c/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/andybalholm/brotli v1.2.6 h1:ftYnfj6usCp+UGV5kSJ3+chpMQgU+gJf/AxsUQ52REI=

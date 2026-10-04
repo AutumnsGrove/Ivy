@@ -112,10 +112,9 @@ func TestMassDisableAlertFiresOnAUIDValidityReset(t *testing.T) {
 func TestMassDisableAlertSurvivesAPassThatDiesAfterTheSweep(t *testing.T) {
 	t.Parallel()
 	// Sequential: parallel dials exhaust a laptop's ephemeral ports and starve the
-	// rest of the package. Drop 10 is left out on purpose: it strands a fake-server
-	// goroutine in the go-imap fork (N26 in papercuts.md) and goleak fails the run;
-	// the window this test is about is the drops before it.
-	for drop := 1; drop <= 9; drop++ {
+	// rest of the package. The sweep runs past the last command of the pass, so
+	// the clean-finish case is covered too.
+	for drop := 1; drop <= 14; drop++ {
 		t.Run(fmt.Sprintf("drop-after-%d", drop), func(t *testing.T) {
 			ctx := context.Background()
 			w := newWorld(t)
