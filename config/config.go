@@ -19,8 +19,9 @@ import (
 
 // Defaults used when ivy.yaml does not say otherwise.
 const (
-	DefaultListen  = "127.0.0.1:8418"
-	DefaultDataDir = "./data"
+	DefaultListen   = "127.0.0.1:8418"
+	DefaultDataDir  = "./data"
+	DefaultBackupAt = "03:00"
 )
 
 // Config is the non-secret file configuration. Behavior settings live in the
@@ -34,6 +35,24 @@ type Config struct {
 	// papercuts.md): add the Tailscale name the phone uses.
 	AllowedHosts []string  `yaml:"allowed_hosts"`
 	Accounts     []Account `yaml:"accounts"`
+	Backup       Backup    `yaml:"backup"`
+}
+
+// Backup is where the daily state.db snapshot goes and when it runs. Targets
+// are folders; at least one should be off the potato in case the device dies
+// (ARCHITECTURE.md 9). An S3-style target is a later track.
+type Backup struct {
+	Targets []string `yaml:"targets"`
+	At      string   `yaml:"at"`
+}
+
+// BackupTargets returns the configured targets, or the default folder beside
+// the data directory when none were set, so backups work out of the box.
+func (c *Config) BackupTargets() []string {
+	if len(c.Backup.Targets) > 0 {
+		return c.Backup.Targets
+	}
+	return []string{filepath.Join(c.DataDir, "backups")}
 }
 
 // HostAllowList returns the lower-cased names the API answers to besides
@@ -73,6 +92,24 @@ func validAllowedHost(h string) error {
 	return nil
 }
 
+// validClock accepts a local "HH:MM" wall time, the only format the backup
+// scheduler understands.
+func validClock(at string) error {
+	parts := strings.Split(strings.TrimSpace(at), ":")
+	if len(parts) != 2 {
+		return errors.New("must be HH:MM")
+	}
+	hour, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return errors.New("must be HH:MM")
+	}
+	minute, err := strconv.Atoi(parts[1])
+	if err != nil || hour < 0 || hour > 23 || minute < 0 || minute > 59 {
+		return errors.New("must be HH:MM")
+	}
+	return nil
+}
+
 // Account is one configured mailbox. Password is never serialised.
 type Account struct {
 	ID         string `yaml:"id"`
@@ -100,7 +137,7 @@ type Account struct {
 // beside it is loaded without overriding the real environment. Environment
 // variables (IVY_LISTEN, IVY_DATA_DIR, IVY_<ID>_PASSWORD) take precedence.
 func Load(path string) (*Config, error) {
-	cfg := &Config{Listen: DefaultListen, DataDir: DefaultDataDir}
+	cfg := &Config{Listen: DefaultListen, DataDir: DefaultDataDir, Backup: Backup{At: DefaultBackupAt}}
 
 	if path != "" {
 		data, err := os.ReadFile(path) //nolint:gosec // G304: the operator chose this config path with --config
@@ -169,6 +206,14 @@ func (c *Config) validate() error {
 	for i, h := range c.AllowedHosts {
 		if err := validAllowedHost(h); err != nil {
 			return fmt.Errorf("allowed_hosts[%d] %q: %w", i, h, err)
+		}
+	}
+	if err := validClock(c.Backup.At); err != nil {
+		return fmt.Errorf("backup.at %q: %w", c.Backup.At, err)
+	}
+	for i, target := range c.Backup.Targets {
+		if strings.TrimSpace(target) == "" {
+			return fmt.Errorf("backup.targets[%d] is empty", i)
 		}
 	}
 

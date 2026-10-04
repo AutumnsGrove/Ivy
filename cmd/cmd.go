@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -19,9 +20,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/AutumnsGrove/Ivy/backup"
 	"github.com/AutumnsGrove/Ivy/config"
 	"github.com/AutumnsGrove/Ivy/events"
 	"github.com/AutumnsGrove/Ivy/gateway"
+	"github.com/AutumnsGrove/Ivy/internal/lockfile"
 	"github.com/AutumnsGrove/Ivy/internal/webui"
 	"github.com/AutumnsGrove/Ivy/store"
 	ivysync "github.com/AutumnsGrove/Ivy/sync"
@@ -39,6 +42,8 @@ func New(version string) *cobra.Command {
 	root.AddCommand(
 		initCmd(&configPath),
 		runCmd(&configPath, version),
+		backupCmd(&configPath),
+		restoreCmd(&configPath),
 		doctorCmd(&configPath, version),
 	)
 	return root
@@ -76,6 +81,19 @@ func runCmd(configPath *string, version string) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// One server per data directory. The lock dies with the process, so a
+			// crash never leaves a stale lock behind to refuse the next start.
+			if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
+				return fmt.Errorf("create data dir: %w", err)
+			}
+			lock, err := lockfile.Acquire(filepath.Join(cfg.DataDir, backup.LockName))
+			if err != nil {
+				if errors.Is(err, lockfile.ErrLocked) {
+					return fmt.Errorf("ivy is already running on %s", cfg.DataDir)
+				}
+				return err
+			}
+			defer func() { _ = lock.Release() }()
 			dbs, err := store.Open(cmd.Context(), cfg.DataDir)
 			if err != nil {
 				return err
@@ -131,6 +149,15 @@ func runCmd(configPath *string, version string) *cobra.Command {
 				}()
 			}
 
+			// The daily state.db snapshot is its own owned goroutine, started with
+			// the server and stopped by the same cancel path.
+			backupManager := backup.New(dbs, cfg.BackupTargets())
+			workers.Add(1)
+			go func() {
+				defer workers.Done()
+				backupLoop(workerCtx, backupManager, cfg.Backup.At)
+			}()
+
 			errCh := make(chan error, 1)
 			go func() {
 				fmt.Fprintf(cmd.OutOrStdout(), "ivy %s listening on %s\n", version, cfg.Listen)
@@ -175,8 +202,114 @@ func doctorCmd(configPath *string, version string) *cobra.Command {
 			fmt.Fprintf(out, "accounts: %d\n", len(cfg.Accounts))
 			fmt.Fprintf(out, "store:    ok\n")
 			reportHosts(out, cfg)
+			reportBackups(out, cfg)
 			return nil
 		},
+	}
+}
+
+// backupCmd writes one snapshot now, for a manual run or a test.
+func backupCmd(configPath *string) *cobra.Command {
+	return &cobra.Command{
+		Use:   "backup",
+		Short: "Write a state.db snapshot to every backup target",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := config.Load(*configPath)
+			if err != nil {
+				return err
+			}
+			dbs, err := store.Open(cmd.Context(), cfg.DataDir)
+			if err != nil {
+				return err
+			}
+			defer dbs.Close()
+			res, runErr := backup.New(dbs, cfg.BackupTargets()).Run(cmd.Context())
+			for _, s := range res.Snapshots {
+				fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", s.Path)
+			}
+			return runErr
+		},
+	}
+}
+
+// restoreCmd replaces state.db with a snapshot. It refuses while a server holds
+// the data-directory lock, which is why it has its own one-line command.
+func restoreCmd(configPath *string) *cobra.Command {
+	return &cobra.Command{
+		Use:   "restore <snapshot>",
+		Short: "Restore a state.db snapshot in place (server stopped)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load(*configPath)
+			if err != nil {
+				return err
+			}
+			if err := backup.Restore(cmd.Context(), cfg.DataDir, args[0]); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "restored %s into %s\n", args[0], cfg.DataDir)
+			return nil
+		},
+	}
+}
+
+// backupLoop runs one backup at the configured local time each day. It owns no
+// other goroutine and ends promptly when the server's context is cancelled.
+func backupLoop(ctx context.Context, manager *backup.Manager, at string) {
+	for {
+		next, err := backup.NextDaily(time.Now(), at)
+		if err != nil {
+			slog.WarnContext(ctx, "backup schedule", "error", err)
+			return
+		}
+		timer := time.NewTimer(time.Until(next))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+			res, err := manager.Run(ctx)
+			if err != nil {
+				slog.WarnContext(ctx, "daily backup failed", "error", err)
+				continue
+			}
+			slog.InfoContext(ctx, "daily backup written", "snapshots", len(res.Snapshots))
+		}
+	}
+}
+
+// reportBackups prints the backup targets and warns when every one shares the
+// data directory's disk: that snapshot does not survive the device dying.
+func reportBackups(out io.Writer, cfg *config.Config) {
+	targets := cfg.BackupTargets()
+	fmt.Fprintf(out, "backups:  %d target(s), daily at %s\n", len(targets), cfg.Backup.At)
+	allSame := len(targets) > 0
+	for _, target := range targets {
+		fmt.Fprintf(out, "  %s\n", target)
+		same, err := backup.SameDevice(cfg.DataDir, existingAncestor(target))
+		if err != nil || !same {
+			allSame = false
+		}
+	}
+	if allSame {
+		fmt.Fprintf(out, "warning: every backup target is on the same disk as the data directory;\n"+
+			"a failed device would lose the database and its backups together\n")
+	}
+}
+
+// existingAncestor walks up to the nearest path that exists, so a target that
+// has not been created yet can still be compared with the data directory.
+func existingAncestor(path string) string {
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+		parent := filepath.Dir(path)
+		if parent == path {
+			return path
+		}
+		path = parent
 	}
 }
 
