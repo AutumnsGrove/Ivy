@@ -169,3 +169,45 @@ func waitForCondition(t *testing.T, timeout time.Duration, what string, cond fun
 		}
 	}
 }
+
+// A server that answers the IDLE connection's login slowly must not hold the
+// worker past cancellation: the client's commands take no context, so only
+// closing the connection unblocks them.
+func TestWorkerStopsPromptlyWhenTheIdleConnectionStalls(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w := newWorld(t)
+	w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+	acct := accountFor(t, w, "acct-1", "me@grove.test", "secret")
+
+	armed := make(chan struct{}, 1)
+	worker := ivysync.NewWorker(ivysync.NewFetcher(dbs), acct,
+		ivysync.WithIdleTimeout(time.Minute),
+		ivysync.WithWorkerSyncFunc(func(_ ivysync.Result, err error) {
+			if err == nil {
+				// The reconcile is done; the next connection is the IDLE one.
+				w.Fault(mailworld.Latency{Delay: 5 * time.Second})
+				select {
+				case armed <- struct{}{}:
+				default:
+				}
+			}
+		}))
+	done := make(chan error, 1)
+	go func() { done <- worker.Run(ctx) }()
+
+	select {
+	case <-armed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the first reconcile never finished")
+	}
+	time.Sleep(200 * time.Millisecond) // let the worker reach the stalled login
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Error("the worker did not stop while its idle connection was stalled")
+	}
+}

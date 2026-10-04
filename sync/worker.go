@@ -147,6 +147,11 @@ func (w *Worker) idleOnInbox(ctx context.Context) error {
 		return err
 	}
 	defer func() { _ = c.Close() }()
+	// The client's commands take no context, so a server that goes quiet during
+	// login or SELECT would hold the worker past cancellation; closing the
+	// connection is what unblocks them (as in fetch).
+	stop := context.AfterFunc(ctx, func() { _ = c.Close() })
+	defer stop()
 	if err := c.Login(w.acct.Username, w.acct.Password).Wait(); err != nil {
 		return err
 	}

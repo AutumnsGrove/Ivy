@@ -687,3 +687,11 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   sync, rename away, sync, rename back, sync; failed before the fix with `the server holds 2 messages
   and the mirror shows 0 visible`). `canUseDelta` now refuses a folder with `gone_at` set, so a revived
   name gets a full read and its disabled rows are upserted back to life.
+
+- **#59** · `2c6fe0a` · `sync/worker.go` · **bug** · `idleOnInbox` dialled its own connection but,
+  unlike `fetch`, never closed it on cancellation, and the client's commands take no context, so a
+  server that went quiet during the IDLE connection's login, CAPABILITY or SELECT held the worker (and
+  `ivy run`'s shutdown) indefinitely, against STANDARDS 4a rule 2. Reproduced by
+  `TestWorkerStopsPromptlyWhenTheIdleConnectionStalls` (a 5 s `Latency` armed after the first
+  reconcile, then cancel; failed before the fix with `the worker did not stop while its idle
+  connection was stalled`). Fixed with the same `context.AfterFunc` close `fetch` uses.
