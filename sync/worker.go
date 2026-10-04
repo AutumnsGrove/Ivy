@@ -138,7 +138,7 @@ func (w *Worker) Run(ctx context.Context) error {
 // is polled on the idle timeout instead, so the worker still refreshes.
 func (w *Worker) idleOnInbox(ctx context.Context) error {
 	changed := make(chan struct{}, 1)
-	c, err := dialWith(ctx, w.acct, &imapclient.Options{UnilateralDataHandler: &imapclient.UnilateralDataHandler{
+	c, err := w.fetcher.dialWith(ctx, w.acct, &imapclient.Options{UnilateralDataHandler: &imapclient.UnilateralDataHandler{
 		Mailbox: func(*imapclient.UnilateralDataMailbox) { signal(changed) },
 		Expunge: func(uint32) { signal(changed) },
 		Fetch:   func(*imapclient.FetchMessageData) { signal(changed) },
@@ -152,25 +152,15 @@ func (w *Worker) idleOnInbox(ctx context.Context) error {
 	// connection is what unblocks them (as in fetch).
 	stop := context.AfterFunc(ctx, func() { _ = c.Close() })
 	defer stop()
-	if err := c.Login(w.acct.Username, w.acct.Password).Wait(); err != nil {
-		return err
-	}
-	caps, err := c.Capability().Wait()
+	cmd, err := w.startIdle(c)
 	if err != nil {
 		return err
 	}
-	if !caps.Has(imap.CapIdle) {
+	if cmd == nil {
 		if !w.sleep(ctx, w.idleTimeout) {
 			return ctx.Err()
 		}
 		return nil
-	}
-	if _, err := c.Select("INBOX", &imap.SelectOptions{ReadOnly: true}).Wait(); err != nil {
-		return err
-	}
-	cmd, err := c.Idle()
-	if err != nil {
-		return err
 	}
 	if w.onIdle != nil {
 		w.onIdle()
@@ -182,9 +172,34 @@ func (w *Worker) idleOnInbox(ctx context.Context) error {
 	case <-timer.C:
 	case <-ctx.Done():
 	}
+	// Only the wait for the server to acknowledge DONE is guarded: the IDLE
+	// itself is silent by design.
+	stopWatch := c.watch()
 	_ = cmd.Close()
 	_ = cmd.Wait()
+	stopWatch()
 	return ctx.Err()
+}
+
+// startIdle logs in, selects INBOX and starts the IDLE, all under the stall
+// guard. It returns a nil command for a server without IDLE, which the caller
+// polls instead.
+func (w *Worker) startIdle(c *session) (*imapclient.IdleCommand, error) {
+	defer c.watch()()
+	if err := c.Login(w.acct.Username, w.acct.Password).Wait(); err != nil {
+		return nil, err
+	}
+	caps, err := c.Capability().Wait()
+	if err != nil {
+		return nil, err
+	}
+	if !caps.Has(imap.CapIdle) {
+		return nil, nil
+	}
+	if _, err := c.Select("INBOX", &imap.SelectOptions{ReadOnly: true}).Wait(); err != nil {
+		return nil, err
+	}
+	return c.Idle()
 }
 
 // signal wakes the IDLE waiter without ever blocking the client's read loop,

@@ -200,6 +200,7 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Account photo upload (`maxAccountPhotoBytes`) | 5 MiB | rejected with 413; only a sniffed JPEG/PNG/GIF/WebP is kept, SVG is refused |
 | Sanitised HTML body (`render.MaxHTMLBytes`) | 8 MiB | body is not rendered; the plain-text view carries the message |
 | IMAP dial and TLS handshake | 15 s | error, retried by the caller |
+| IMAP silence while a command is in flight | 2 min without a byte (restarts on every byte; off between commands and during IDLE) | connection closed, the pass fails as `unreachable`, the worker backs off and retries |
 | Dev control-socket call | 30 s | error |
 | Open event streams (`events.MaxSubscribers`) | 16 | the next is refused with 503 `too_many_streams`; it works once one closes |
 | Hints queued per event stream (`events.QueueSize`) | 64 | the oldest is dropped and counted (`Subscription.Dropped`); the client refetches anyway |

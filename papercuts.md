@@ -713,12 +713,30 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   free. Recommendation: measure heap on a small profile and extrapolate (never the 100k profile, it
   overheated the laptop), then add a limits-table row; if it is too big, process folder by folder and
   keep only a Message-ID set (hashes) for the move-versus-removed decision.
-- **N19 (open, needs a design decision)** · `9f0f4ef`, `2c6fe0a` · `sync/sync.go`, `sync/worker.go` ·
-  the only thing that unblocks a stalled IMAP command is a cancelled `ctx`. A half-open connection (a
-  NAT or Tailscale path that dropped silently) with no cancellation blocks the worker forever, and
-  because the worker sleeps on a 5 minute IDLE timer it would never notice. Recommendation: wrap the
-  `net.Conn` in a read deadline that is refreshed on activity (long for IDLE, short for commands) and
-  add a stalled-peer test; the deadline values belong in the STANDARDS limits table.
+- **#62 (resolves N19)** · `9f0f4ef`, `2c6fe0a` · `sync/stall.go`, `sync/sync.go`, `sync/worker.go` ·
+  **risk** · nothing but a cancelled `ctx` ended a command to a server that accepted the connection
+  and then stopped answering. The premise of N19 was partly wrong: our go-imap fork already bounds a
+  response once its first byte arrives (30 s) and bounds writes (30 s), but deliberately waits for a
+  response to *begin* with no deadline (an IDLE is silent by design), and that gap is where a wedged
+  server hangs a command. `stallConn` closes it: a read deadline of 2 minutes of silence, restarting on
+  every byte, armed only while a command is in flight (around login/list/capability, each folder
+  snapshot, each reselect plus body batch, and the IDLE connection's setup and its DONE) and off
+  between commands and during IDLE, so local database work and a quiet IDLE are never counted. The
+  client sets and clears read deadlines on the same connection, so `SetReadDeadline` is intercepted
+  and the earlier of the two applies (a first attempt that ignored this was silently cleared after
+  every response and never fired). A stall ends the pass as `unreachable` (`errServerStalled`, since
+  the client formats read errors with `%v` and the type is lost) and the worker's backoff retries.
+  Reproduced by `TestFetchGivesUpOnAServerThatStopsAnswering` and
+  `TestWorkerRecoversFromAStalledIdleConnection` (both ran to the test's own 20 s / 10 s limit before).
+  `TestStallGuardLeavesASlowButAnsweringServerAlone` and
+  `TestStallGuardLeavesAQuietIdleConnectionAlone` prove it does not fire on healthy traffic; the second
+  fails if the guard is never disarmed (mutation-checked). Limits row added to STANDARDS 4a. The
+  value (2 min) is a judgement, not measured against Purelymail; `WithStallTimeout` changes it.
+- **N21 (open, nit)** · `b1ca426` · `sync/sync.go` · `Fetch` records the final `sync_state` with the
+  pass's own `ctx`, so a pass that ended because `ctx` was cancelled or timed out logs `cannot record
+  sync state: context canceled` and leaves the row at `syncing` until the next start overwrites it.
+  Harmless today (only shutdown cancels), but an operator-visible `syncing` after a deadline would
+  mislead. Recommendation: write the outcome with a short `context.WithoutCancel` timeout.
 - **#61 (resolves N20)** · `5a34ca8` · `sync/churn_test.go` · **standards** · the default 24 seeds
   execute 3 renames in 640 operations, which is why #58 survived the C2 gate (300 extra default-mix
   seeds were clean). `TestSyncConvergesUnderFolderChurn` runs the same oracle, seeds and variants on

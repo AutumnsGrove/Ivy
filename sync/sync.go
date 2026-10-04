@@ -79,8 +79,9 @@ type Fetcher struct {
 	dbs    *store.DBs
 	now    func() time.Time
 	batch  int
-	inline int64 // largest message fetched into memory
-	max    int64 // largest message downloaded at all
+	inline int64         // largest message fetched into memory
+	max    int64         // largest message downloaded at all
+	stall  time.Duration // silence from the server that ends a command
 }
 
 // Message size limits (STANDARDS.md 4a). A message up to InlineMessageBytes is
@@ -120,9 +121,19 @@ func WithBatchSize(n int) Option {
 	}
 }
 
+// WithStallTimeout sets how long a command may go without a byte from the
+// server before the connection is given up on.
+func WithStallTimeout(d time.Duration) Option {
+	return func(f *Fetcher) {
+		if d > 0 {
+			f.stall = d
+		}
+	}
+}
+
 // NewFetcher builds a Fetcher over the mirror.
 func NewFetcher(dbs *store.DBs, opts ...Option) *Fetcher {
-	f := &Fetcher{dbs: dbs, now: time.Now, batch: defaultBatchSize, inline: InlineMessageBytes, max: MaxMessageBytes}
+	f := &Fetcher{dbs: dbs, now: time.Now, batch: defaultBatchSize, inline: InlineMessageBytes, max: MaxMessageBytes, stall: defaultStallTimeout}
 	for _, opt := range opts {
 		opt(f)
 	}
@@ -155,7 +166,7 @@ func (f *Fetcher) fetch(ctx context.Context, acct Account) (Result, error) {
 	if err := f.EnsureAccount(ctx, acct); err != nil {
 		return Result{}, fmt.Errorf("sync account %s: %w", acct.ID, err)
 	}
-	c, err := dial(ctx, acct)
+	c, err := f.dial(ctx, acct)
 	if err != nil {
 		return Result{}, fmt.Errorf("sync account %s: dial: %w", acct.ID, err)
 	}
@@ -166,6 +177,9 @@ func (f *Fetcher) fetch(ctx context.Context, acct Account) (Result, error) {
 	defer stop()
 
 	res, ferr := f.fetchAll(ctx, c, acct)
+	if ferr != nil && c.stall.didStall() {
+		ferr = fmt.Errorf("%w: %w", errServerStalled, ferr)
+	}
 	// Re-thread even after a partial fetch: the messages already mirrored are
 	// usable, and the next run rebuilds the assignment from scratch anyway. A
 	// cancelled run skips it, since the connection is gone and nothing more can
@@ -218,7 +232,7 @@ func classifySyncError(err error) (store.SyncStatus, string, string) {
 		}
 	}
 	var opErr *net.OpError
-	if errors.As(err, &opErr) {
+	if errors.Is(err, errServerStalled) || errors.As(err, &opErr) {
 		return store.SyncUnreachable, "unreachable", detail
 	}
 	return store.SyncError, "sync_failed", detail
@@ -282,26 +296,10 @@ func (f *Fetcher) threadAccount(ctx context.Context, accountID string) error {
 // told apart from one that was removed (CHUNK3-BRIEF.md 1.5), then updates the
 // mirror folder by folder: flags and new messages for live folders, disabled
 // rows (never deleted) for what vanished.
-func (f *Fetcher) fetchAll(ctx context.Context, c *imapclient.Client, acct Account) (Result, error) {
-	if err := c.Login(acct.Username, acct.Password).Wait(); err != nil {
-		return Result{}, fmt.Errorf("sync account %s: login: %w", acct.ID, err)
-	}
-	mailboxes, err := c.List("", "*", nil).Collect()
+func (f *Fetcher) fetchAll(ctx context.Context, c *session, acct Account) (Result, error) {
+	mailboxes, useDelta, err := f.negotiate(ctx, c, acct)
 	if err != nil {
-		return Result{}, fmt.Errorf("sync account %s: list: %w", acct.ID, err)
-	}
-	caps, err := c.Capability().Wait()
-	if err != nil {
-		return Result{}, fmt.Errorf("sync account %s: capability: %w", acct.ID, err)
-	}
-	useDelta := caps.Has(imap.CapQResync)
-	if useDelta {
-		if _, err := c.Enable(imap.CapQResync).Wait(); err != nil {
-			// The server claimed QRESYNC but would not enable it. The full scan is
-			// always correct, so fall back rather than fail the account.
-			slog.WarnContext(ctx, "sync: server refused QRESYNC, using a full scan", "account", acct.ID, "error", err)
-			useDelta = false
-		}
+		return Result{}, err
 	}
 
 	var snaps []folderSnapshot
@@ -346,6 +344,33 @@ func (f *Fetcher) fetchAll(ctx context.Context, c *imapclient.Client, acct Accou
 		return res, err
 	}
 	return res, nil
+}
+
+// negotiate logs in, lists the mailboxes and decides whether the account can
+// use QRESYNC deltas.
+func (f *Fetcher) negotiate(ctx context.Context, c *session, acct Account) ([]*imap.ListData, bool, error) {
+	defer c.watch()()
+	if err := c.Login(acct.Username, acct.Password).Wait(); err != nil {
+		return nil, false, fmt.Errorf("sync account %s: login: %w", acct.ID, err)
+	}
+	mailboxes, err := c.List("", "*", nil).Collect()
+	if err != nil {
+		return nil, false, fmt.Errorf("sync account %s: list: %w", acct.ID, err)
+	}
+	caps, err := c.Capability().Wait()
+	if err != nil {
+		return nil, false, fmt.Errorf("sync account %s: capability: %w", acct.ID, err)
+	}
+	useDelta := caps.Has(imap.CapQResync)
+	if useDelta {
+		if _, err := c.Enable(imap.CapQResync).Wait(); err != nil {
+			// The server claimed QRESYNC but would not enable it. The full scan is
+			// always correct, so fall back rather than fail the account.
+			slog.WarnContext(ctx, "sync: server refused QRESYNC, using a full scan", "account", acct.ID, "error", err)
+			useDelta = false
+		}
+	}
+	return mailboxes, useDelta, nil
 }
 
 // folderSnapshot is what one SELECT plus a metadata FETCH read from a mailbox.
@@ -395,7 +420,8 @@ func (f *Fetcher) folderRow(ctx context.Context, accountID, name string) (store.
 // and should use QRESYNC it asks for the stored UIDVALIDITY and modseq, so the
 // server answers with only what changed (or, if the validity no longer matches,
 // the current validity and no VANISHED, which forces a full scan).
-func (f *Fetcher) snapshotFolder(ctx context.Context, c *imapclient.Client, acct Account, mb *imap.ListData, existing store.Folder, found, useDelta bool) (folderSnapshot, error) {
+func (f *Fetcher) snapshotFolder(ctx context.Context, c *session, acct Account, mb *imap.ListData, existing store.Folder, found, useDelta bool) (folderSnapshot, error) {
+	defer c.watch()()
 	snap := folderSnapshot{Name: mb.Mailbox, Attrs: mb.Attrs, Existing: existing, Found: found}
 	var (
 		data *imap.SelectData
@@ -443,7 +469,7 @@ func (f *Fetcher) snapshotFolder(ctx context.Context, c *imapclient.Client, acct
 // deleted: a row the server no longer holds in this folder is disabled, with
 // "moved" when its content still lives elsewhere on the server and
 // "server_removed" otherwise (rounds 37 and 38).
-func (f *Fetcher) reconcileFolder(ctx context.Context, c *imapclient.Client, acct Account, snap folderSnapshot, disabled *[]disabledRef) (stored, skipped int, err error) {
+func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account, snap folderSnapshot, disabled *[]disabledRef) (stored, skipped int, err error) {
 	folder := store.Folder{
 		ID:            folderRowID(acct.ID, snap.Name),
 		AccountID:     acct.ID,
@@ -556,7 +582,7 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *imapclient.Client, acc
 		}
 		// The snapshot pass left another mailbox selected; fetching bodies reads
 		// whatever is selected, so select this folder again first.
-		if _, err := c.Select(snap.Name, &imap.SelectOptions{ReadOnly: true}).Wait(); err != nil {
+		if err := reselect(c, snap.Name); err != nil {
 			return stored, skipped, fmt.Errorf("sync account %s: reselect %s: %w", acct.ID, snap.Name, err)
 		}
 		n, err := f.fetchBatch(ctx, c, acct, folder.ID, snap.UIDValidity, set)
@@ -572,6 +598,12 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *imapclient.Client, acc
 		return stored, skipped, err
 	}
 	return stored, skipped, nil
+}
+
+func reselect(c *session, name string) error {
+	defer c.watch()()
+	_, err := c.Select(name, &imap.SelectOptions{ReadOnly: true}).Wait()
+	return err
 }
 
 // markGoneFolders hides a mirror folder the server no longer lists and disables
@@ -727,7 +759,8 @@ func (f *Fetcher) RecordFolder(ctx context.Context, acct Account, name string, a
 // body by size tier (see InlineMessageBytes). Each message is upserted as soon as
 // it is complete, so a dropped connection keeps the progress it made rather than
 // losing the whole batch.
-func (f *Fetcher) fetchBatch(ctx context.Context, c *imapclient.Client, acct Account, folderID string, uidvalidity uint32, set imap.UIDSet) (int, error) {
+func (f *Fetcher) fetchBatch(ctx context.Context, c *session, acct Account, folderID string, uidvalidity uint32, set imap.UIDSet) (int, error) {
+	defer c.watch()()
 	metas, err := c.Fetch(set, &imap.FetchOptions{
 		UID:          true,
 		Flags:        true,
@@ -760,7 +793,7 @@ func (f *Fetcher) fetchBatch(ctx context.Context, c *imapclient.Client, acct Acc
 		}
 	}
 
-	n, err := f.fetchInline(ctx, c, acct, folderID, uidvalidity, inline, byUID)
+	n, err := f.fetchInline(ctx, c.Client, acct, folderID, uidvalidity, inline, byUID)
 	stored += n
 	if err != nil {
 		return stored, err
@@ -769,7 +802,7 @@ func (f *Fetcher) fetchBatch(ctx context.Context, c *imapclient.Client, acct Acc
 		if err := ctx.Err(); err != nil {
 			return stored, err
 		}
-		ok, err := f.fetchSpooled(ctx, c, acct, folderID, uidvalidity, meta)
+		ok, err := f.fetchSpooled(ctx, c.Client, acct, folderID, uidvalidity, meta)
 		if err != nil {
 			return stored, err
 		}
@@ -1153,34 +1186,37 @@ const dialTimeout = 15 * time.Second
 
 // dial opens the IMAP connection under ctx. It does not use imapclient.Dial*,
 // which take no context, so cancellation also reaches the connect and handshake.
-func dial(ctx context.Context, acct Account) (*imapclient.Client, error) {
-	return dialWith(ctx, acct, nil)
+func (f *Fetcher) dial(ctx context.Context, acct Account) (*session, error) {
+	return f.dialWith(ctx, acct, nil)
 }
 
 // dialWith is dial with extra imapclient options, so the IDLE connection can
-// install a unilateral-data handler and be woken by a server notification.
-func dialWith(ctx context.Context, acct Account, options *imapclient.Options) (*imapclient.Client, error) {
+// install a unilateral-data handler and be woken by a server notification. The
+// connection carries the stall guard; callers arm it around their commands.
+func (f *Fetcher) dialWith(ctx context.Context, acct Account, options *imapclient.Options) (*session, error) {
 	addr := net.JoinHostPort(acct.IMAPHost, strconv.Itoa(acct.IMAPPort))
 	d := net.Dialer{Timeout: dialTimeout}
 	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	if acct.Insecure {
-		return imapclient.New(conn, options), nil
+	var wire net.Conn = conn
+	if !acct.Insecure {
+		tlsConn := tls.Client(conn, &tls.Config{
+			ServerName: acct.IMAPHost,
+			MinVersion: tls.VersionTLS12,
+			NextProtos: []string{"imap"},
+		})
+		hsCtx, cancel := context.WithTimeout(ctx, dialTimeout)
+		defer cancel()
+		if err := tlsConn.HandshakeContext(hsCtx); err != nil {
+			_ = conn.Close()
+			return nil, err
+		}
+		wire = tlsConn
 	}
-	tlsConn := tls.Client(conn, &tls.Config{
-		ServerName: acct.IMAPHost,
-		MinVersion: tls.VersionTLS12,
-		NextProtos: []string{"imap"},
-	})
-	hsCtx, cancel := context.WithTimeout(ctx, dialTimeout)
-	defer cancel()
-	if err := tlsConn.HandshakeContext(hsCtx); err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	return imapclient.New(tlsConn, options), nil
+	guarded := &stallConn{Conn: wire, timeout: f.stall}
+	return &session{Client: imapclient.New(guarded, options), stall: guarded}, nil
 }
 
 // folderRowID is the stable mirror id for a mailbox, derived from its account
