@@ -1223,7 +1223,13 @@ func (f *Fetcher) dialWith(ctx context.Context, acct Account, options *imapclien
 		return nil, err
 	}
 	wire := net.Conn(conn)
-	if !acct.Insecure {
+	if acct.Insecure {
+		// Loopback dev and test servers only: close with a reset so thousands of
+		// short test connections do not each park a temporary port in TIME_WAIT.
+		if tc, ok := conn.(*net.TCPConn); ok {
+			_ = tc.SetLinger(0)
+		}
+	} else {
 		tlsConn := tls.Client(conn, &tls.Config{
 			ServerName: acct.IMAPHost,
 			MinVersion: tls.VersionTLS12,

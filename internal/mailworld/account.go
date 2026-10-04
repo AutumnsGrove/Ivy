@@ -3,6 +3,7 @@ package mailworld
 import (
 	"bytes"
 	"cmp"
+	"net"
 	"slices"
 	"strings"
 
@@ -148,10 +149,17 @@ func (a *Account) Status(mailbox string) (num, unseen uint32, err error) {
 }
 
 func (a *Account) withClient(fn func(*imapclient.Client) error) error {
-	c, err := imapclient.DialInsecure(a.world.IMAPAddr(), nil)
+	conn, err := net.Dial("tcp", a.world.IMAPAddr())
 	if err != nil {
 		return err
 	}
+	// Close with a reset: the harness opens one connection per operation, and
+	// thousands of them would otherwise each park a temporary port in TIME_WAIT
+	// and starve the next test run.
+	if tc, ok := conn.(*net.TCPConn); ok {
+		_ = tc.SetLinger(0)
+	}
+	c := imapclient.New(conn, nil)
 	defer c.Close()
 	if err := c.Login(a.address, a.password).Wait(); err != nil {
 		return err
