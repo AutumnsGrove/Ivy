@@ -705,14 +705,30 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   on every `open` after the first; the layout passes `invalidateAll`. The browser-level behaviour
   (iOS Safari really resuming the stream) is not verified here.
 
-- **N18 (open, needs a measurement on the potato)** · `9f0f4ef` · `sync/sync.go` · `fetchAll`
-  snapshots every folder's envelopes, flags and sizes into memory before writing anything (and
-  `LiveMessageIDs` holds every live Message-ID), so peak memory grows with the account, not with a
-  batch. A QRESYNC delta shrinks it after the first sync, but the first sync and every no-CONDSTORE
-  pass hold the whole account. STANDARDS 4a asks for bounded reads and the potato has about 800 MB
-  free. Recommendation: measure heap on a small profile and extrapolate (never the 100k profile, it
-  overheated the laptop), then add a limits-table row; if it is too big, process folder by folder and
-  keep only a Message-ID set (hashes) for the move-versus-removed decision.
+- **#63 (resolves N18)** · `9f0f4ef` · `sync/sync.go` · **risk** · `fetchAll` holds every folder's
+  snapshot until the whole account is reconciled, and the snapshot asked for envelope, internal date
+  and size as well as flags. Measured on the laptop (`BenchmarkSnapshotRetainedHeap`, 500 to 4000
+  messages, linear and stable): **775 B per message retained**, so a 100k mailbox is about 78 MB for
+  the listing alone before Go's GC headroom, against PERFORMANCE.md's 250 MB budget during backfill
+  and 100 MB idle. `reconcileFolder` reads only UID and flags from it (`fetchBatch` fetches its own
+  envelopes for new messages), so the snapshot now asks for exactly those: **190 B per message**
+  (about 19 MB at 100k), and about 40% faster to read. Reproduced by
+  `TestSnapshotHoldsLittlePerMessage` (783 B against a 300 B budget before the change, 192 after;
+  internal test, `sync/snapshot_mem_test.go`). Convergence is unchanged: the default suite plus 100
+  extra seeds on each of the default and churn mixes pass. **Not done, on purpose:** reconciling each
+  folder straight after its snapshot (the N18 recommendation). With the listing at 190 B the gain is
+  small, and it would let a connection drop between folders leave a moved message labelled
+  `server_removed` for good, because `reclassifyDisabled` runs only at the end of a successful pass.
+  `BenchmarkSyncFullScanHeap` is kept as an upper bound (it includes the in-process fake's garbage).
+  The potato figure is still an operator measurement; the laptop slope is what is recorded.
+- **N22 (open, pre-existing)** · `9f0f4ef` · `sync/sync.go` · a pass that fails after disabling rows
+  but before `reclassifyDisabled` (any error in a later folder's bodies) leaves those rows labelled
+  `server_removed` even when their content moved, and a later pass never relabels them because the
+  first disable wins. The window is the whole body phase, so it is the common failure case.
+  Recommendation: reclassify in a deferred step on every exit, and have a successful pass also relabel
+  earlier `server_removed` rows whose Message-ID is live (a set-based UPDATE, which also drops the
+  in-memory live-ID map). It changes what "moved" means for a message deleted and later re-received,
+  which is why it needs your decision.
 - **#62 (resolves N19)** · `9f0f4ef`, `2c6fe0a` · `sync/stall.go`, `sync/sync.go`, `sync/worker.go` ·
   **risk** · nothing but a cancelled `ctx` ended a command to a server that accepted the connection
   and then stopped answering. The premise of N19 was partly wrong: our go-imap fork already bounds a

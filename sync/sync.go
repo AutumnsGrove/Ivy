@@ -451,7 +451,11 @@ func (f *Fetcher) snapshotFolder(ctx context.Context, c *session, acct Account, 
 	if data.NumMessages == 0 {
 		return snap, nil
 	}
-	opts := &imap.FetchOptions{UID: true, Flags: true, Envelope: true, InternalDate: true, RFC822Size: true}
+	// Only presence and flags: reconcileFolder needs nothing else, and the
+	// envelope, date and size of a message that is new are fetched with its body
+	// in fetchBatch. Asking for them here held about four times the memory per
+	// message for every message of the folder, every pass.
+	opts := &imap.FetchOptions{UID: true, Flags: true}
 	if snap.Delta {
 		opts.ChangedSince = existing.HighestModSeq
 	}

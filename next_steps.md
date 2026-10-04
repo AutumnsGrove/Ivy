@@ -263,7 +263,10 @@ and the uidvalidity-aware fast seeder. `make check`, the mock Playwright suite (
 slice (8/8), `govulncheck` and the Go suite were run green; benchmarks are in `sync/bench_test.go`.
 **C2's fresh-session review is done** (2026-10-04, `papercuts.md` #58-#60: a revived folder skipped
 by the QRESYNC delta, an idle connection that ignored cancellation, no refetch when the events stream
-reopens; 300 extra convergence seeds on both variants were clean; open items N18-N20).
+reopens; 300 extra convergence seeds on both variants were clean). Its three open items are fixed
+too (#61-#63: a folder-churn convergence mix, a 2-minute stall guard on IMAP commands, and a snapshot
+that holds 190 B per message instead of 775); still open: N21 (sync_state write after a cancelled
+pass) and N22 (a move mislabelled `server_removed` when a pass dies mid-way, needs a decision).
 **Remaining for the operator:** the real-mailbox/`ivy doctor` live check and potato numbers.
 **Next gate: C3**, writing down the outbox op states before coding 3d;
 3b's backend (disable/restore/purge) can start after C2 is cleared, its screens wait on C0.
