@@ -2,6 +2,9 @@ package mailworld
 
 import (
 	"bytes"
+	"cmp"
+	"slices"
+	"strings"
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
@@ -181,4 +184,75 @@ func (a *Account) Mailboxes() ([]MailboxInfo, error) {
 		return nil
 	})
 	return out, err
+}
+
+// ServerMessage is one message as a client sees it, read independently of Ivy.
+type ServerMessage struct {
+	UID       uint32
+	Flags     []imap.Flag
+	MessageID string
+}
+
+// Messages returns every message in mailbox, oldest UID first. It is an
+// independent read through a fresh IMAP connection, so a test can check its own
+// model of the server against what a client would really learn.
+func (a *Account) Messages(mailbox string) ([]ServerMessage, error) {
+	var out []ServerMessage
+	err := a.withClient(func(c *imapclient.Client) error {
+		sel, err := c.Select(mailbox, &imap.SelectOptions{ReadOnly: true}).Wait()
+		if err != nil {
+			return err
+		}
+		if sel.NumMessages == 0 {
+			return nil
+		}
+		// Stop 0 is "*": every UID from 1 up.
+		all := imap.UIDSet{imap.UIDRange{Start: 1, Stop: 0}}
+		bufs, err := c.Fetch(all, &imap.FetchOptions{UID: true, Flags: true, Envelope: true}).Collect()
+		if err != nil {
+			return err
+		}
+		for _, b := range bufs {
+			m := ServerMessage{UID: uint32(b.UID), Flags: b.Flags}
+			if b.Envelope != nil {
+				m.MessageID = wrapMessageID(b.Envelope.MessageID)
+			}
+			out = append(out, m)
+		}
+		return nil
+	})
+	slices.SortFunc(out, func(x, y ServerMessage) int { return cmp.Compare(x.UID, y.UID) })
+	return out, err
+}
+
+// wrapMessageID restores the angle brackets ENVELOPE strips.
+func wrapMessageID(id string) string {
+	if id == "" || (strings.HasPrefix(id, "<") && strings.HasSuffix(id, ">")) {
+		return id
+	}
+	return "<" + id + ">"
+}
+
+// Unflag removes flags from a message in mailbox. Removing a flag that is not
+// set is not an error, as on a real server.
+func (a *Account) Unflag(mailbox string, uid uint32, flags ...imap.Flag) error {
+	return a.withClient(func(c *imapclient.Client) error {
+		if _, err := c.Select(mailbox, nil).Wait(); err != nil {
+			return err
+		}
+		return c.Store(imap.UIDSetNum(imap.UID(uid)), &imap.StoreFlags{
+			Op: imap.StoreFlagsDel, Silent: true, Flags: flags,
+		}, nil).Close()
+	})
+}
+
+// RenameMailbox renames a mailbox, keeping its messages, UIDs and UIDVALIDITY
+// (RFC 3501 leaves that to the server; the in-memory one keeps them).
+func (a *Account) RenameMailbox(oldName, newName string) error {
+	return a.user.Rename(oldName, newName, nil)
+}
+
+// DeleteMailbox deletes a mailbox and every message in it.
+func (a *Account) DeleteMailbox(name string) error {
+	return a.user.Delete(name)
 }
