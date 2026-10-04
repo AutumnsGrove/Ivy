@@ -406,6 +406,46 @@ YAML it writes. `ivy-dev up` exited at startup; the smoke slice caught it. Fixed
 default in `BuildConfig` and adding `TestWrittenConfigReloads`, which marshals and reloads the
 generated config.
 
+## 3d: outbox and the write path (done 2026-10-04, gate C4, commits `5611a5b`..`6b0135f`)
+
+**The outbox is the one writer to IMAP.** State migration 5 adds the `outbox` table (op id, account,
+`seq`, kind, `(content_key, source_folder_id)`, canonical `expect` JSON, the resolved
+`(uidvalidity, uid)`, state, attempts/backoff, a partial-unique idempotency key, timestamps).
+`store/outbox.go` is the state machine: `EnqueueOutbox` is idempotent while an op is live, refuses
+past the queue cap and collapses a flag and its exact inverse to two `cancelled` rows; `NextOutbox`
+is strict FIFO (a not-yet-due op blocks the ones behind it); transitions record the resolved identity
+(`SetOutboxInFlight`), return an op to the queue (`RequeueOutbox`), or make it terminal
+(`done`/`failed`/`cancelled`), and `PruneOutbox` drops terminal rows after seven days.
+
+`sync/outbox.go` is the worker: one goroutine per account, its own connection (never the IDLE one),
+strict FIFO, one op in flight, carrying the 2-minute stall guard. It dispatches `STORE`, `MOVE` and
+`UID EXPUNGE` (a move/delete/flag/spam/not-junk/expunge resolved server-side to a postcondition),
+resolves the UID by Message-ID at dispatch, requires `MOVE`/`UIDPLUS` rather than emulating, and
+classifies a `NO` by response code into a bounded retry (5 s→15 min, ±20 %) or a visible failure. A
+crash between the ack and the DB write is recovered by asking the server what happened: the stored
+UID when the UIDVALIDITY is unchanged, else a Message-ID search in both folders, and `ambiguous`
+rather than a guess. Sync defers to a row with a live op (invariant 4), refreshing the owned-key set
+per folder (round 47).
+
+Gate **C4** is the failure-injection test
+(`docs/handoffs/2026-10-04-C4-outbox-crash.md`): an unexported `afterAck` seam leaves the op
+`in_flight` exactly between the ack and the write, and a fresh worker recovers. 16 move seeds plus 8
+`mailworld.AckThenDrop` seeds assert exactly one move, no duplicate row, no lost flag. `mailworld`
+gained the `AckThenDrop` fault.
+
+**HTTP and UI.** `openapi.yaml` gained `POST/GET /outbox`, `POST /outbox/{id}/retry` and
+`DELETE /outbox/{id}`; `gateway/outbox.go` resolves the friendly action (archive/trash/spam/not-junk
+by folder role, flag/seen, generic move, expunge-only-in-trash) and returns the op with its mirror
+row id. `ivy run` starts one outbox worker per account and publishes `outbox.state`. The frontend
+sends every action through `api.enqueueAction`, confirms moves and deletes with a shared
+`ConfirmDialog`, keeps an optimistic overlay (`outbox.svelte.ts`) that hides a moved message until
+the op is terminal, and offers the inverse op as Undo. `make check`'s Go and web halves, the mock
+Playwright suite (251 passed) and the race suite are green.
+
+**Still open inside 3d (documented in `next_steps.md`):** a flag/junk control in the reader (the read
+API has no `flagged` field yet), the Empty-Trash UI (the API refuses expunge outside Trash; there is
+no trash screen), and a queue/history screen for `retry`/`dismiss`.
+
 ## Other history worth keeping
 
 - Frontend facts: SvelteKit **3** config lives in `vite.config.ts`; aliases are the `#lib/...`

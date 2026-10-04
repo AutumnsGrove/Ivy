@@ -5,14 +5,12 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-04 (3d outbox core is built and at gate C4, waiting for the fresh-session review).
-The full Go suite is `-race` green and the new `backup`, `blobstore`, `lockfile` and outbox code is
-tested against a fake clock. Chunks 0, 1 and 2a-2h are done except the visual baselines of 2g and
-2h (they need the CI harness regenerated). 3a and 3b's backend are done, and 3c (backups, including
-the disabled-blob store) is done; **the C0 canvas board is still the one thing blocking the 3b
-screens**, and the C3 outbox design is reviewed and released, so 3d's outbox core (table, worker,
-recovery, sync deferral, C4 crash test) is committed. The HTTP surface, the reader actions and the
-optimistic UI inside 3d are the next piece.
+last updated: 2026-10-04 (3d outbox and write path are done; C4 passed and the rest of the stage —
+HTTP surface, confirm modal, optimistic overlay, undo — is committed. Next is 3e).
+Chunks 0, 1 and 2a-2h are done except the visual baselines of 2g and 2h (they need the CI harness
+regenerated). 3a and 3b's backend are done, 3c (backups, including the disabled-blob store) is done,
+and 3d is done apart from a few UI entry points listed below; **the C0 canvas board is the one thing
+blocking the 3b screens**.
 
 ## How to run a chunk
 
@@ -39,7 +37,7 @@ optimistic UI inside 3d are the next piece.
 | 2a-2f Read: store, fetch, parse, render, thread, gateway | done |
 | 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
-| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; **3d outbox core done, at C4** (API/UI next) |
+| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; **3d done** (a few reader entry points remain); 3e next |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | not started |
 | 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | not started |
 
@@ -69,26 +67,28 @@ and `ivy doctor` warns when every target shares the data disk. Tests: `internal/
 `internal/lockfile`, `store/blob_test.go`, `sync/blob_test.go`, `backup/backup_test.go`,
 `config/backup_test.go`, `cmd/backup_test.go`.
 
-**3d's outbox core is done and at gate C4** (see `docs/handoffs/2026-10-04-C4-outbox-crash.md`):
-`state` migration 5 adds the `outbox` table and `store/outbox.go` its state machine; `sync/outbox.go`
-drains it FIFO on its own connection, resolves each message's UID at dispatch, records the resolved
-identity before any command, and recovers a crashed op by asking the server what happened rather
-than guessing; sync defers to a row with a live op (invariant 4); and the failure-injection test
-kills the worker between the ack and the DB write over 16 messages (plus 8 ack-then-drop seeds) and
-proves exactly-once. `mailworld` gained an `AckThenDrop` fault. **The checkpoint is waiting for the
-explicit go before the rest of 3d**: the HTTP enqueue/list/retry surface (and its `openapi.yaml`
-schemas), the reader actions (archive, delete, flag, spam/not-junk), the confirm modal for moves and
-deletes, the optimistic overlay and the undo toast, plus wiring an `OutboxWorker` into `ivy run`.
-The recovery logic under review does not change with that work.
+**3d is done** (gate C4 passed; see `docs/handoffs/2026-10-04-C4-outbox-crash.md` and the 3d entry
+in `docs/BUILD-LOG.md`). State migration 5 adds the `outbox` table and `store/outbox.go` its state
+machine; `sync/outbox.go` drains it FIFO on its own connection, resolves each message's UID at
+dispatch, records the resolved identity before any command, and recovers a crashed op by asking the
+server what happened rather than guessing; sync defers to a row with a live op (invariant 4,
+refreshed per folder). The failure-injection test kills the worker between the ack and the DB write
+over 16 messages (plus 8 ack-then-drop seeds) and proves exactly-once; `mailworld` gained an
+`AckThenDrop` fault. The HTTP surface (`POST/GET /outbox`, retry, dismiss), the confirm modal for
+moves/deletes, the optimistic overlay with rollback and the undo toast are all committed, and one
+outbox worker per account is wired into `ivy run`.
+
+**Left out of 3d deliberately (small UI entry points, not core):** a flag/junk control in the reader
+(the read API has no `flagged` field yet, so there is no state to toggle), the Empty-Trash UI (the
+API refuses expunge outside Trash; there is no trash screen), and a queue/history screen that uses
+the `retry`/`dismiss` endpoints. They ride with the reader/settings screens that need C0 or chunk 5.
 
 **Next, in order:**
 
-1. **C4 is waiting for the fresh-session review** (the handoff above has the green run, the exact
-   commands, and the two open questions). After the go: the 3d HTTP surface, reader actions and
-   optimistic UI, then the case list in `docs/handoffs/2026-10-04-C3-outbox.md`.
+1. **3e Tags both ways**: `$ivy-<slug>` keyword writer through the outbox and server read-back.
 2. **C0 canvas board** for the three 3b screens, whenever the operator is ready; the backend and API
    are already committed.
-3. **3e-3h** per the chunk plan below. 3h (the deploy track) is independent and can run at any point.
+3. **3f-3h** per the chunk plan below. 3h (the deploy track) is independent and can run at any point.
 
 **Deliberately deferred from 3c** (do not re-litigate):
 
@@ -267,8 +267,8 @@ when a daily slot was missed, and the go-imap fork is at `v2.0.0-beta.8-ivy.3` (
 
 **Remaining for the operator:** the real-mailbox live check of the daily backup and `ivy restore`,
 and the potato numbers for the snapshot time.
-**Next gate: C4 is reached and waiting for review** (the outbox crash-window test); after the go,
-the rest of 3d.
+**Next stage: 3e (tags both ways)**, which writes `$ivy-<slug>` keywords through the outbox built in
+3d.
 
 ## Operator actions still open
 

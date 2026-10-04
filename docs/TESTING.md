@@ -53,8 +53,17 @@ flags, threads). Everything else is detail.
   duplicate Message-IDs; huge messages; connection dropped mid-FETCH (fault-injecting `net.Conn`
   wrapper); server without CONDSTORE/QRESYNC (fallback path); IDLE timeout and reconnect;
   clock skew; very large mailbox backfill resumes after a crash with no duplicates and no gaps.
-- **Write-path tests:** IMAP-first ordering (a failed IMAP call never leaves a DB-only change);
-  outbox retries; optimistic UI rollback on server rejection.
+- **Write-path tests (outbox, built in 3d):** IMAP-first ordering (a failed IMAP call never leaves
+  a DB-only change); the state machine (`store/outbox_test.go`: idempotency over non-terminal rows
+  only, strict FIFO, the queue/attempt/age caps, the flag-inverse collapse, retention); dispatch and
+  recovery (`sync/outbox_test.go`, `sync/outbox_crash_test.go`: a move/flag/expunge applies exactly
+  once; the same-Message-ID copy in another folder is untouched; a UIDVALIDITY change acts on the
+  right message). The **crash-window test** kills the worker between the IMAP ack and the DB write
+  via the unexported `afterAck` seam, over 16 move seeds, plus 8 `mailworld.AckThenDrop` seeds;
+  each asserts the message moved exactly once, the source row is hidden `moved`, and no flag is
+  lost. Sync deferral is asserted directly (`TestSyncDefersToAPendingMove`/`Flag`). The HTTP surface
+  is covered in `gateway/outbox_test.go`; the optimistic overlay and its rollback in
+  `web/src/lib/outbox.svelte.test.ts`; the confirm-then-queue UI in `web/e2e/outbox.spec.ts`.
 
 ## 3. Parsing, rendering, security
 

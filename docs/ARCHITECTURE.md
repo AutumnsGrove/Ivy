@@ -213,9 +213,24 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
      folder in the same pass is a **move**: the old row gets `disabled_reason = 'moved'` (kept,
      hidden, not counted as "server removed"), the new row is live, tags follow the content key.
      Only a key found nowhere is disabled as removed.
-7. **Write path (settled):** action -> outbox row -> IMAP command (STORE/MOVE/EXPUNGE/APPEND) ->
-   on success update the DB; the UI updates optimistically and rolls back on rejection. Outbox
-   retries survive restarts and dropped connections.
+7. **Write path (outbox, built in 3d).** Every reader action is one row in the `outbox` table
+   in `state.db` (migration 5) naming a **postcondition**, not a command: `flags`, `move` or
+   `expunge`, keyed by `(content_key, source_folder_id)` (never the content key alone: N8). The op
+   row is committed before the API reports the action accepted; the outbox worker then runs the
+   IMAP command and only on its ack updates the mirror. The worker is one goroutine per account, on
+   its own connection (not the IDLE one), strict FIFO by `seq`, one op in flight. The UID is
+   resolved at dispatch (by Message-ID) and its `(uidvalidity, uid)` is committed in the same
+   statement that sets the op `in_flight`, before anything goes on the wire. States: `pending`
+   (committed, not sent), `in_flight` (may have been sent, ack unknown), and the terminal `done`,
+   `failed`, `cancelled`; sync defers to a row while its op is live. An idempotency key unique over
+   non-terminal rows makes a double tap one op without blocking a later flag/unflag/flag; a flag and
+   its exact inverse collapse to two cancelled rows. A crash between the ack and the DB write is
+   recovered by asking the server what happened (re-search by Message-ID, or the stored UID when the
+   UIDVALIDITY is unchanged), so a move applies exactly once (gate C4). Bounded: 8 attempts, 24 h,
+   500 queued ops, seven-day terminal retention, 5 s→15 min backoff. `move` needs `MOVE` and
+   `expunge` needs `UIDPLUS`; without them the op fails rather than emulating. A move/delete is
+   confirmed by the UI before enqueue; undo is the inverse op from the toast. The exact design and
+   its crash recovery are in `docs/handoffs/2026-10-04-C3-outbox.md`.
    **Disabled, not deleted (settled, round 24):** the mirror may be the only complete copy, so
    "the DB follows the server" means *behaves as if deleted*, never *erased*. A message that
    vanishes from the server (expunged elsewhere, a provider mistake, a UIDVALIDITY reset, or an

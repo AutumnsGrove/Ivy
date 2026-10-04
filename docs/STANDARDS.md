@@ -208,6 +208,14 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | One event-stream write (`eventWriteTimeout`) | 10 s | the stream ends and frees its slot |
 | Idle event stream | 20 s | a `: keepalive` comment is sent; a failed write ends the stream |
 | Account sync error detail (`store.MaxSyncErrorDetail`) | 1024 bytes | refused by `SetSyncState`; the caller shortens it |
+| Outbox attempts per op (`store.MaxOutboxAttempts`) | 8 | the op is `failed` (`retries_exhausted`), visible in the UI |
+| Outbox op age (`store.MaxOutboxAge`) | 24 h | the op is `failed` (`expired`) |
+| Non-terminal outbox ops per account (`store.MaxQueuedOps`) | 500 | the enqueue is refused (`outbox_full`) |
+| Terminal outbox rows kept (`store.OutboxTerminalRetention`) | 7 days | pruned; the outbox's only deletion, and only of terminal rows |
+| Outbox op error detail (`store.MaxOutboxErrorDetail`) | 500 bytes | truncated on the rune boundary |
+| Outbox retry backoff | 5 s doubling to 15 min, ±20% jitter (`outboxBackoffBase`/`Max`) | the op waits; a not-yet-due op blocks the ones behind it (strict FIFO) |
+| Outbox action request body (`maxOutboxBodyBytes`) | 8 KiB | rejected with 400 `bad_request` |
+| Outbox connection idle before it closes (`defaultOutboxIdleClose`) | 60 s | the connection closes; the next op dials |
 
 ## 5. Frontend standards
 

@@ -1,5 +1,9 @@
 # C4: the outbox crash window recovers exactly once (2026-10-04)
 
+> Updated after the operator's "go": the rest of 3d (the HTTP surface, the confirm modal, the
+> optimistic overlay, undo and the `ivy run` wiring) is committed. This note stays the C4 record;
+> the full stage is in `docs/BUILD-LOG.md` under 3d.
+
 Checkpoint C4 of `docs/CHUNK3-BRIEF.md` 5, for stage **3d (outbox + write path)**: the
 failure-injection test that kills the worker between the IMAP ack and the DB write passes, repeated
 over many messages, with no duplicate and no lost write. This note is written for a fresh reviewer
