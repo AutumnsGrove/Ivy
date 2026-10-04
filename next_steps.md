@@ -5,12 +5,12 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-04 (round 39: the 3a runner converges, waiting at C2; the full Go suite is
-`-race` green, including the convergence test on both the CONDSTORE and no-CONDSTORE variants).
-Chunks 0, 1 and 2a-2h are done except the visual baselines of
-2g and 2h (they need the CI harness regenerated). `go test -race ./...` is green, `go vet`,
-`staticcheck` and `gofumpt` are clean. The frontend checks and the real-binary smoke slice were not
-re-run this round.
+last updated: 2026-10-04 (round 40: 3a's Go scope is complete; sync_state, QRESYNC deltas and the
+IDLE worker all landed, and `ivy run` owns one worker per account). The full Go suite is `-race`
+green, `go vet`, `staticcheck` and `gofumpt` are clean. The frontend checks and the real-binary
+smoke slice were not re-run this round. The only 3a-era item left is the frontend `EventSource`
+client in `web/src/lib/api/` and its Playwright coverage. Chunks 0, 1 and 2a-2h are done except the
+visual baselines of 2g and 2h (they need the CI harness regenerated).
 
 ## How to run a chunk
 
@@ -37,7 +37,7 @@ re-run this round.
 | 2a-2f Read: store, fetch, parse, render, thread, gateway | done |
 | 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
-| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | 3a runner at C2; QRESYNC/IDLE still open |
+| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | 3a Go done; frontend events client open; next gate C3 (3d) |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | not started |
 | 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | not started |
 
@@ -249,14 +249,19 @@ fixed checkpoints C0-C5 and stop-triggers T1-T10, each leaving a committed file 
 inside 3a: whether 3a needs the backfill/steady-state split (decide at checkpoint C2; the model may
 propose it).
 
-**Waiting at C2** (2026-10-04): see `docs/handoffs/2026-10-04-C2-runner.md`. The 3a runner
-(`Fetcher.Fetch`) now reconciles the mirror to the server; `TestSyncConvergesToTheServer` passes on
-both variants, 24 seeds, 640 operations each, and a deliberate break reproduces the C1 red
-(38 ops shrunk to 3 in 14 replays). The schema that came with it: mirror migration 9
-(`folders.gone_at`, `messages.uidvalidity` in the identity and spool path, append-only), the
-`server_removed` reason, and the uidvalidity-aware fast seeder. **Not done yet, so 3a is not
-complete**: QRESYNC/CHANGEDSINCE and IDLE (both harness variants currently take the full-scan
-fallback), `sync_state` writes from the runner, and the frontend `EventSource` client.
+**3a runner landed** (2026-10-04): the C2 checkpoint is in
+`docs/handoffs/2026-10-04-C2-runner.md`, and the steady-state work that followed (sync_state,
+QRESYNC deltas, the IDLE worker and the `ivy run` wiring) is in
+`docs/handoffs/2026-10-04-3a-steady-state.md`. `Fetcher.Fetch` reconciles the mirror to the server;
+`TestSyncConvergesToTheServer` passes on both variants (24 seeds, 640 operations each, deltas on
+every sync after the first), QRESYNC falls back to a full scan without CONDSTORE, and a deliberate
+break reproduces the C1 red (38 ops shrunk to 3 in 14 replays). The runner writes `sync_state`; the
+worker idles on INBOX (two connections at most) with backoff and jitter; `ivy run` starts one worker
+per configured account. The schema that came with it: mirror migration 9 (`folders.gone_at`,
+`messages.uidvalidity` in the identity and spool path, append-only), the `server_removed` reason, and
+the uidvalidity-aware fast seeder. **The one remaining 3a-era item is the frontend `EventSource`
+client** (`web/src/lib/api/`) and its Playwright test; the Go hub and endpoint are done. **Next gate:
+C3**, writing down the outbox op states before coding 3d.
 
 ## Operator actions still open
 

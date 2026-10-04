@@ -960,3 +960,31 @@ variant (640 operations per variant; every operation kind exercised).
   harness's stale-flags self-test now uses a deliberately broken `staleFlagSync` instead of relying
   on the chunk 2b fetch being wrong. The C2 break-and-shrink demonstration (38 ops to 3) is in the
   handoff. The oracle, generator and property test are byte-for-byte untouched.
+
+## Round 40 — 3a steady state: sync_state, QRESYNC and IDLE (2026-10-04, agent)
+
+Implementation decisions made while finishing the 3a Go scope after C2; the handoff is
+`docs/handoffs/2026-10-04-3a-steady-state.md`.
+
+- **`sync_state` mapping.** The runner writes `syncing` on entry and `ok`/failure on exit. An IMAP
+  auth response code is `auth_failed`, a `*net.OpError` is `unreachable`, everything else is
+  `error`; the detail is truncated to the store's cap. A failure keeps the previous `last_ok_at`
+  (the store coalesces it) and recovery clears the error text.
+- **Move vs removal is decided after the account pass.** A QRESYNC delta cannot see the whole
+  live set, so rows disabled during the pass stay provisionally `server_removed` and a final
+  reclassification flips any whose Message-ID is still live elsewhere to `moved` (round 37). This
+  also simplified the full-scan path.
+- **A folder's modseq advances only after all its bodies are stored.** Advancing at the snapshot
+  made a resume after an interrupted delta skip the messages it never fetched; the test was watched
+  failing on the early-advance version.
+- **IDLE needs a `UnilateralDataHandler`.** The go-imap client only surfaces unilateral data through
+  the handler, so `dial` grew a `dialWith` form and the worker waits on Mailbox/Expunge/Fetch. The
+  idle timeout is the periodic fallback (and the test relies on it because the fake can register
+  its listener after acknowledging IDLE).
+- **`ivy run` owns the workers**, one per configured account, and publishes `sync.state` (and
+  `message.changed` when mail was stored) as SSE hints.
+- **A configured account gained `insecure` (default false).** It is needed because the real binary
+  now connects to the plaintext loopback dev fake; `devstack` sets it and still refuses non-loopback
+  hosts. Named for the unsafe thing, per STANDARDS.md 4a.7.
+- **Still open:** the frontend `EventSource` client and its Playwright coverage. The Go hub and
+  endpoint are done and tested; the browser side was left rather than half-built.
