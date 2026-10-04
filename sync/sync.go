@@ -1,11 +1,10 @@
 // Package sync is Ivy's read path: it fetches folders and messages from an IMAP
 // server into the mirror, keyed by (folder, uid) and the stable content key.
 //
-// Chunk 2b is deliberately a small one-shot read fetch. There is no IDLE, no
-// QRESYNC, no write path and no idle timetable: the steady-state engine in
-// chunk 3 generalizes this boundary rather than replacing it. Nothing here
-// deletes: a message that vanishes from the server is handled by chunk 3's
-// disabled-not-deleted sweep.
+// Fetcher.Fetch reconciles one account in a single pass (QRESYNC deltas where
+// the server has them, a full read otherwise) and Worker keeps it fresh with
+// IDLE on INBOX. There is no write path yet (chunk 3d). Nothing here deletes: a
+// message that vanishes from the server is disabled, with its row and bytes kept.
 package sync
 
 import (

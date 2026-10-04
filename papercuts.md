@@ -704,3 +704,23 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   `expected vi.fn() to be called 1 times, but got 0`). `connectEvents` takes an `onReconnect` called
   on every `open` after the first; the layout passes `invalidateAll`. The browser-level behaviour
   (iOS Safari really resuming the stream) is not verified here.
+
+- **N18 (open, needs a measurement on the potato)** · `9f0f4ef` · `sync/sync.go` · `fetchAll`
+  snapshots every folder's envelopes, flags and sizes into memory before writing anything (and
+  `LiveMessageIDs` holds every live Message-ID), so peak memory grows with the account, not with a
+  batch. A QRESYNC delta shrinks it after the first sync, but the first sync and every no-CONDSTORE
+  pass hold the whole account. STANDARDS 4a asks for bounded reads and the potato has about 800 MB
+  free. Recommendation: measure heap on a small profile and extrapolate (never the 100k profile, it
+  overheated the laptop), then add a limits-table row; if it is too big, process folder by folder and
+  keep only a Message-ID set (hashes) for the move-versus-removed decision.
+- **N19 (open, needs a design decision)** · `9f0f4ef`, `2c6fe0a` · `sync/sync.go`, `sync/worker.go` ·
+  the only thing that unblocks a stalled IMAP command is a cancelled `ctx`. A half-open connection (a
+  NAT or Tailscale path that dropped silently) with no cancellation blocks the worker forever, and
+  because the worker sleeps on a 5 minute IDLE timer it would never notice. Recommendation: wrap the
+  `net.Conn` in a read deadline that is refreshed on activity (long for IDLE, short for commands) and
+  add a stalled-peer test; the deadline values belong in the STANDARDS limits table.
+- **N20 (open, test coverage)** · `5a34ca8` · `sync/converge_model_test.go` · the default 24 seeds
+  execute 3 renames in 640 operations, which is why #58 survived the C2 gate. 300 extra seeds
+  (`IVY_SYNC_SEEDS=300 IVY_SYNC_SEED_BASE=1000`, about 110 s under `-race`) are clean on both
+  variants. Recommendation: add a rename-and-delete-weighted mix next to `defaultMix` rather than
+  raising the default count, and leave the oracle alone (gate T1).

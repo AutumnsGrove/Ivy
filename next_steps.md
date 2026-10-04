@@ -261,8 +261,11 @@ client refetches on a hint. The schema that came with it: mirror migration 9 (`f
 `messages.uidvalidity` in the identity and spool path, append-only), the `server_removed` reason,
 and the uidvalidity-aware fast seeder. `make check`, the mock Playwright suite (242), the smoke
 slice (8/8), `govulncheck` and the Go suite were run green; benchmarks are in `sync/bench_test.go`.
-**Remaining for the operator:** the real-mailbox/`ivy doctor` live check and potato numbers, and
-C2's fresh-session review. **Next gate: C3**, writing down the outbox op states before coding 3d;
+**C2's fresh-session review is done** (2026-10-04, `papercuts.md` #58-#60: a revived folder skipped
+by the QRESYNC delta, an idle connection that ignored cancellation, no refetch when the events stream
+reopens; 300 extra convergence seeds on both variants were clean; open items N18-N20).
+**Remaining for the operator:** the real-mailbox/`ivy doctor` live check and potato numbers.
+**Next gate: C3**, writing down the outbox op states before coding 3d;
 3b's backend (disable/restore/purge) can start after C2 is cleared, its screens wait on C0.
 
 ## Operator actions still open
