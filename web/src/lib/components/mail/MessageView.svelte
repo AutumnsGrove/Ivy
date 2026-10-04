@@ -1,8 +1,12 @@
 <script lang="ts">
 	import { formatMessageTime } from '#lib/time.js';
+	import { Flag } from '#lib/icons.js';
+	import { flagMessage } from '#lib/messageActions.js';
+	import { outbox } from '#lib/outbox.svelte.js';
 	import type { MailMessage } from '#lib/types.js';
 	import Avatar from '../ui/Avatar.svelte';
 	import Dot from '../ui/Dot.svelte';
+	import IconButton from '../ui/IconButton.svelte';
 	import Pill from '../ui/Pill.svelte';
 	import SmartChip from '../ui/SmartChip.svelte';
 	import AttachmentGroup from './AttachmentGroup.svelte';
@@ -11,7 +15,7 @@
 	type Props = {
 		message: Pick<
 			MailMessage,
-			'id' | 'subject' | 'from' | 'initials' | 'date' | 'toShort' | 'needs' | 'tag' | 'summary' | 'html' | 'paragraphs' | 'attachments'
+			'id' | 'subject' | 'from' | 'initials' | 'date' | 'toShort' | 'needs' | 'flagged' | 'tag' | 'summary' | 'html' | 'paragraphs' | 'attachments'
 		>;
 		/** The account colour for the sender avatar and dot. */
 		color: string;
@@ -20,6 +24,8 @@
 	};
 	let { message, color, wide = false }: Props = $props();
 	const bodySrc = $derived(`/api/v1/messages/${encodeURIComponent(message.id)}/body`);
+	// A live flag op is the optimistic truth; the loaded message is the fallback.
+	const flagged = $derived(outbox.flags(message.id)?.flagged ?? message.flagged ?? false);
 </script>
 
 <article class="msg" class:wide>
@@ -38,6 +44,13 @@
 			<div class="name">{message.from}</div>
 			<div class="to"><Dot {color} />to {message.toShort} · {formatMessageTime(message.date)}</div>
 		</div>
+		<IconButton
+			label={flagged ? 'Unflag' : 'Flag'}
+			tone={flagged ? 'accent' : 'plain'}
+			onclick={() => void flagMessage(message.id, !flagged)}
+		>
+			<Flag />
+		</IconButton>
 	</div>
 
 	{#if message.summary}

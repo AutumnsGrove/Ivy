@@ -675,6 +675,9 @@ components:
           type: string
         unread:
           type: boolean
+        flagged:
+          type: boolean
+          description: Whether the message carries the \\Flagged keyword
         needs:
           type: boolean
         tag:
@@ -703,6 +706,9 @@ components:
           type: string
         unread:
           type: boolean
+        flagged:
+          type: boolean
+          description: Whether the message carries the \\Flagged keyword
         needs:
           type: boolean
         tag:

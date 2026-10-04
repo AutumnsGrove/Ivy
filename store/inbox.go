@@ -23,6 +23,7 @@ type MessageSummary struct {
 	Snippet   string
 	Date      time.Time
 	Unread    bool
+	Flagged   bool
 	Needs     bool
 }
 
@@ -105,7 +106,7 @@ func (d *DBs) scanInboxCounts(ctx context.Context, accountID string, page *Inbox
 // benchmark item for the live endpoint in 2f, not a correctness problem.
 const inboxSelect = `
 	SELECT m.id, m.account_id, COALESCE(m.from_json, ''), COALESCE(m.subject, ''),
-	       COALESCE(m.snippet, ''), COALESCE(m.date, ''), m.seen,
+	       COALESCE(m.snippet, ''), COALESCE(m.date, ''), m.seen, m.flagged,
 	       CASE WHEN n.account_id IS NULL THEN 0 ELSE 1 END
 	FROM messages m
 	JOIN folders f ON f.id = m.folder_id
@@ -136,14 +137,16 @@ func scanInboxSummary(s scanner) (MessageSummary, error) {
 		fromJSON string
 		date     string
 		unread   bool
+		flagged  bool
 		needs    bool
 	)
 	err := s.Scan(&summary.ID, &summary.AccountID, &fromJSON, &summary.Subject,
-		&summary.Snippet, &date, &unread, &needs)
+		&summary.Snippet, &date, &unread, &flagged, &needs)
 	if err != nil {
 		return MessageSummary{}, err
 	}
 	summary.Unread = !unread
+	summary.Flagged = flagged
 	summary.Needs = needs
 	if err := decodeJSON(fromJSON, &summary.From); err != nil {
 		return MessageSummary{}, fmt.Errorf("from: %w", err)

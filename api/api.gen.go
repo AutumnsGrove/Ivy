@@ -518,7 +518,10 @@ type MailMessage struct {
 
 	// Date The message's instant, RFC 3339 in UTC (see MailSummary).
 	Date time.Time `json:"date"`
-	From string    `json:"from"`
+
+	// Flagged Whether the message carries the \\Flagged keyword
+	Flagged *bool  `json:"flagged,omitempty"`
+	From    string `json:"from"`
 
 	// Html Server-sanitised HTML body, safe to place in the reader's sandboxed frame. Empty for a message with no HTML part; use paragraphs then.
 	Html       *string  `json:"html,omitempty"`
@@ -540,15 +543,18 @@ type MailSummary struct {
 	AccountId string `json:"accountId"`
 
 	// Date The message's instant, RFC 3339 in UTC. The browser formats it in the viewer's own zone and locale; a message with no Date header carries the zero instant (0001-01-01T00:00:00Z) and shows no time.
-	Date     time.Time `json:"date"`
-	From     string    `json:"from"`
-	Id       string    `json:"id"`
-	Initials string    `json:"initials"`
-	Needs    bool      `json:"needs"`
-	Preview  string    `json:"preview"`
-	Subject  string    `json:"subject"`
-	Tag      *string   `json:"tag,omitempty"`
-	Unread   bool      `json:"unread"`
+	Date time.Time `json:"date"`
+
+	// Flagged Whether the message carries the \\Flagged keyword
+	Flagged  *bool   `json:"flagged,omitempty"`
+	From     string  `json:"from"`
+	Id       string  `json:"id"`
+	Initials string  `json:"initials"`
+	Needs    bool    `json:"needs"`
+	Preview  string  `json:"preview"`
+	Subject  string  `json:"subject"`
+	Tag      *string `json:"tag,omitempty"`
+	Unread   bool    `json:"unread"`
 }
 
 // OutboxAction defines model for OutboxAction.

@@ -138,6 +138,7 @@ func (s *Server) messageView(r *http.Request, m store.Message) (api.MailMessage,
 		Subject:     m.Subject,
 		Preview:     m.Snippet,
 		Unread:      !m.Seen,
+		Flagged:     boolPtr(m.Flagged),
 		Needs:       needs,
 		ToShort:     accountShort(acct.Address),
 		ToFull:      acct.Address,
@@ -163,9 +164,12 @@ func summaryView(m store.MessageSummary) api.MailSummary {
 		Subject:   m.Subject,
 		Preview:   m.Snippet,
 		Unread:    m.Unread,
+		Flagged:   boolPtr(m.Flagged),
 		Needs:     m.Needs,
 	}
 }
+
+func boolPtr(b bool) *bool { return &b }
 
 func (s *Server) accountViews(r *http.Request) ([]api.Account, error) {
 	accounts, err := s.dbs.ListAccounts(r.Context())

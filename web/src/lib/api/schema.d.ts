@@ -540,6 +540,8 @@ export interface components {
             subject: string;
             preview: string;
             unread: boolean;
+            /** @description Whether the message carries the \\Flagged keyword */
+            flagged?: boolean;
             needs: boolean;
             tag?: string;
         };
@@ -556,6 +558,8 @@ export interface components {
             subject: string;
             preview: string;
             unread: boolean;
+            /** @description Whether the message carries the \\Flagged keyword */
+            flagged?: boolean;
             needs: boolean;
             tag?: string;
             toShort: string;

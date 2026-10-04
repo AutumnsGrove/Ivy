@@ -362,6 +362,16 @@ var mirrorMigrations = []migration{
 			`ALTER TABLE messages ADD COLUMN disabled_blob TEXT`,
 		},
 	},
+	{
+		version: 11,
+		statements: []string{
+			// Denormalised from flags_json like `seen`, so the reader can show and
+			// toggle a star without a JSON scan over every message.
+			`ALTER TABLE messages ADD COLUMN flagged INTEGER NOT NULL DEFAULT 0`,
+			// Backfill already-mirrored mail; flags_json keeps the server's casing.
+			`UPDATE messages SET flagged = 1 WHERE flags_json LIKE '%Flagged%'`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.

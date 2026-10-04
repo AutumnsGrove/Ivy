@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -80,6 +81,8 @@ type Message struct {
 	// set when it is hidden and cleared when it reappears (ARCHITECTURE.md 9).
 	DisabledBlob string
 	Seen         bool
+	// Flagged is denormalised from Flags like Seen, for the reader's star.
+	Flagged bool
 	// DerivedVersion is the pipeline version that last wrote this row's derived
 	// data (body text, sanitised HTML, attachment rows). Only SetMessageDerived
 	// changes it; UpsertMessage leaves it alone.
@@ -154,8 +157,8 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 			refs, subject, from_json, to_json, cc_json, reply_to_json, delivered_to_json,
 			date, size, flags_json, internaldate, has_attachments, raw_blob, body_text,
 			body_html_sanitized, thread_id, snippet, auth_results, parse_errors,
-			disabled_at, disabled_reason, disabled_blob, seen, raw_path, body_status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			disabled_at, disabled_reason, disabled_blob, seen, flagged, raw_path, body_status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(folder_id, uidvalidity, uid) DO UPDATE SET
 			account_id=excluded.account_id, content_key=excluded.content_key,
 			message_id_hdr=excluded.message_id_hdr, in_reply_to=excluded.in_reply_to,
@@ -168,13 +171,13 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 			raw_path=COALESCE(excluded.raw_path, messages.raw_path),
 			auth_results=excluded.auth_results, disabled_at=excluded.disabled_at,
 			disabled_reason=excluded.disabled_reason, disabled_blob=excluded.disabled_blob,
-			seen=excluded.seen`,
+			seen=excluded.seen, flagged=excluded.flagged`,
 		m.ID, m.AccountID, m.FolderID, m.UID, m.UIDValidity, m.ContentKey, m.MessageID, m.InReplyTo,
 		m.References, m.Subject, from, to, cc, replyTo, deliveredTo,
 		nullableTime(m.Date), m.Size, flags, nullableTime(m.InternalDate),
 		m.HasAttachments, m.RawBlob, m.BodyText, m.BodyHTML, m.ThreadID, m.Snippet,
 		authResults, parseErrors, nullableTime(m.DisabledAt), m.DisabledReason,
-		m.DisabledBlob, slices.Contains(m.Flags, `\Seen`), nullableString(m.RawPath), bodyStatus,
+		m.DisabledBlob, slices.Contains(m.Flags, `\Seen`), hasFlag(m.Flags, `\Flagged`), nullableString(m.RawPath), bodyStatus,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert message %s: %w", m.ID, err)
@@ -509,8 +512,8 @@ func (d *DBs) SetMessageFlags(ctx context.Context, id string, flags []string) er
 		return err
 	}
 	res, err := d.Mirror.Write.ExecContext(ctx,
-		`UPDATE messages SET flags_json = ?, seen = ? WHERE id = ?`,
-		flagsJSON, slices.Contains(flags, `\Seen`), id)
+		`UPDATE messages SET flags_json = ?, seen = ?, flagged = ? WHERE id = ?`,
+		flagsJSON, slices.Contains(flags, `\Seen`), hasFlag(flags, `\Flagged`), id)
 	if err != nil {
 		return fmt.Errorf("set message %s flags: %w", id, err)
 	}
@@ -536,7 +539,7 @@ const messageSelect = `
 	       COALESCE(thread_id, ''), COALESCE(snippet, ''),
 	       COALESCE(auth_results, ''), COALESCE(parse_errors, ''),
 	       COALESCE(disabled_at, ''), COALESCE(disabled_reason, ''), COALESCE(disabled_blob, ''), seen,
-	       COALESCE(raw_path, ''), body_status, derived_version
+	       flagged, COALESCE(raw_path, ''), body_status, derived_version
 	FROM messages`
 
 func scanMessage(s scanner) (Message, error) {
@@ -557,7 +560,7 @@ func scanMessage(s scanner) (Message, error) {
 		&date, &size, &flagsJSON, &internalDate, &m.HasAttachments, &m.RawBlob,
 		&m.BodyText, &m.BodyHTML, &m.ThreadID, &m.Snippet,
 		&authResultsJSON, &parseErrorsJSON,
-		&disabledAt, &m.DisabledReason, &m.DisabledBlob, &m.Seen, &m.RawPath, &m.BodyStatus,
+		&disabledAt, &m.DisabledReason, &m.DisabledBlob, &m.Seen, &m.Flagged, &m.RawPath, &m.BodyStatus,
 		&m.DerivedVersion,
 	)
 	if err != nil {
@@ -662,6 +665,17 @@ func marshalFlags(flags []string) (any, error) {
 		return nil, fmt.Errorf("marshal flags: %w", err)
 	}
 	return string(b), nil
+}
+
+// hasFlag reports whether a flag list carries name, ignoring case: a server may
+// spell \Flagged or \flagged and both mean the same flag.
+func hasFlag(flags []string, name string) bool {
+	for _, f := range flags {
+		if strings.EqualFold(f, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // marshalAuthResults stores NULL for a message with no verdicts, so a scan

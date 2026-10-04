@@ -35,6 +35,7 @@ func TestMessageRoundTrip(t *testing.T) {
 		Date:           date,
 		Size:           1234,
 		Flags:          []string{`\Flagged`, `\Seen`}, // stored sorted
+		Flagged:        true,                          // denormalised from Flags on write
 		InternalDate:   date.Add(time.Minute),
 		HasAttachments: true,
 		RawBlob:        []byte("raw bytes"),

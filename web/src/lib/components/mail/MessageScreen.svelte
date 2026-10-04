@@ -2,16 +2,18 @@
 	import { goto } from '$app/navigation';
 	import { ArrowLeft, Archive, Ellipsis, Reply, Tag, Trash2 } from '#lib/icons.js';
 	import { withScenario, type Scenario } from '#lib/api/scenario.js';
-	import { archiveMessage, deleteMessage } from '#lib/messageActions.js';
+	import { archiveMessage, deleteMessage, markNotJunk, markSpam } from '#lib/messageActions.js';
 	import type { Account } from '#lib/types.js';
 	import Button from '../ui/Button.svelte';
 	import Glass from '../ui/Glass.svelte';
 	import IconButton from '../ui/IconButton.svelte';
+	import Sheet from '../ui/Sheet.svelte';
 	import MessageLoader from './MessageLoader.svelte';
 
 	type Props = { id: string; accounts: Account[]; scenario: Scenario | null };
 	let { id, accounts, scenario }: Props = $props();
 	const back = $derived(withScenario('/', scenario));
+	let more = $state(false);
 
 	async function archive() {
 		if (await archiveMessage(id)) await goto(back);
@@ -28,7 +30,7 @@
 		<IconButton label="Archive" onclick={() => void archive()}><Archive /></IconButton>
 		<IconButton label="Delete" onclick={() => void remove()}><Trash2 /></IconButton>
 		<IconButton label="Tag"><Tag /></IconButton>
-		<IconButton label="More"><Ellipsis /></IconButton>
+		<IconButton label="More" onclick={() => (more = true)}><Ellipsis /></IconButton>
 	</header>
 
 	<Glass variant="panel" radius="panel" as="section" class="reader" aria-label="Message">
@@ -39,6 +41,12 @@
 		<Button variant="primary" size="lg" href="/compose?reply={id}"><Reply />Reply</Button>
 		<Button size="lg" href="/compose?forward={id}">Forward</Button>
 	</Glass>
+
+	<Sheet bind:open={more} title="More actions">
+		<h2 class="sheet-title">More actions</h2>
+		<Button block onclick={async () => { more = false; await markSpam(id); }}>Mark as spam</Button>
+		<Button block onclick={async () => { more = false; await markNotJunk(id); }}>Not junk</Button>
+	</Sheet>
 </div>
 
 <style>
@@ -72,5 +80,9 @@
 	}
 	.screen :global(.reply > :first-child) {
 		flex-grow: 1;
+	}
+	.sheet-title {
+		margin: 0 0 var(--sp-12);
+		font-size: var(--fs-lg);
 	}
 </style>

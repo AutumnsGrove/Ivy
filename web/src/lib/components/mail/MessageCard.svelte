@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Flag } from '#lib/icons.js';
 	import Pill from '../ui/Pill.svelte';
 
 	type Props = {
@@ -9,6 +10,7 @@
 		subject: string;
 		preview: string;
 		unread?: boolean;
+		flagged?: boolean;
 		needs?: boolean;
 		tag?: string;
 		selected?: boolean;
@@ -23,6 +25,7 @@
 		subject,
 		preview,
 		unread = false,
+		flagged = false,
 		needs = false,
 		tag,
 		selected = false,
@@ -35,6 +38,7 @@
 	<span class="top">
 		<span class="dot" style:background={accountColor}></span>
 		<span class="from ell">{from}</span>
+		{#if flagged}<span class="flag" aria-label="Flagged"><Flag /></span>{/if}
 		<span class="time">{time}</span>
 		{#if unread}
 			<span class="unread" aria-hidden="true"></span>
@@ -107,6 +111,15 @@
 		flex: none;
 		font-size: var(--fs-meta);
 		color: var(--faint);
+	}
+	.flag {
+		display: inline-flex;
+		flex: none;
+		color: var(--accent);
+	}
+	.flag :global(svg) {
+		width: var(--sp-14);
+		height: var(--sp-14);
 	}
 	.unread {
 		width: var(--sp-8);

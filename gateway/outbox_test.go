@@ -222,3 +222,33 @@ func TestDismissOutbox(t *testing.T) {
 		t.Errorf("dismiss of a terminal op = %d, want 204", resp2.StatusCode)
 	}
 }
+
+// The reader draws its star from the denormalised flagged column, so the inbox
+// row must carry it (the flag toggle needs a state to show).
+func TestInboxCarriesTheFlaggedState(t *testing.T) {
+	t.Parallel()
+	srv, dbs := outboxServer(t)
+	mustMessage(t, dbs, store.Message{
+		ID: "m-flagged", AccountID: "acct-1", FolderID: "inbox-1", UID: 99,
+		ContentKey: "ck:flagged", Subject: "Starred", Snippet: "hi",
+		From: store.Address{Name: "Sender", Address: "sender@example.com"},
+		Date: testNow, Flags: []string{`\Flagged`},
+	})
+
+	var inbox api.Inbox
+	if code := getJSON(t, srv.URL+"/api/v1/inbox", &inbox); code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", code)
+	}
+	var found bool
+	for _, item := range inbox.Items {
+		if item.Id == "m-flagged" {
+			found = true
+			if item.Flagged == nil || !*item.Flagged {
+				t.Errorf("flagged = %v, want true", item.Flagged)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("the flagged message is not in the inbox")
+	}
+}

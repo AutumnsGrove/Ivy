@@ -1196,3 +1196,12 @@ before the rest of 3d (the HTTP surface, reader actions and optimistic UI) is bu
   `mailworld.AckThenDrop` cannot guarantee (the client may or may not have read the ack). It stays
   unexported, is set only by the white-box crash test and is nil in production, so it adds no public
   API surface. `AckThenDrop` stays as the server-side half of the race.
+
+## Round 48 — after 3d, next steps (2026-10-04, agent; one operator answer)
+
+3d (outbox + write path) is done and green (C4 crash test, HTTP surface, confirm modal, optimistic
+overlay, undo, `ivy run` wiring).
+
+- **Q: what next?** (operator) **Finish the 3d UI leftovers first**: a flag/junk control in the
+  reader (which needs a `flagged` field on the read API, since there is none yet), the Empty-Trash
+  UI, and a queue/history screen for the outbox `retry`/`dismiss` endpoints. 3e (tags) starts after.

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { colorFor } from '#lib/accounts.js';
 	import { formatMessageTime } from '#lib/time.js';
+	import { outbox } from '#lib/outbox.svelte.js';
 	import type { Account, MailSummary } from '#lib/types.js';
 	import MessageCard from './MessageCard.svelte';
 
@@ -26,6 +27,7 @@
 				subject={m.subject}
 				preview={m.preview}
 				unread={m.unread}
+				flagged={outbox.flags(m.id)?.flagged ?? m.flagged ?? false}
 				needs={m.needs}
 				tag={m.tag}
 				selected={m.id === selectedId}

@@ -37,3 +37,21 @@ test.describe('outbox actions', () => {
 		await expect(toast(page, 'Moved to Trash')).toBeVisible();
 	});
 });
+
+test('flagging needs no confirmation and shows at once', async ({ page }) => {
+	await page.goto('/m/m1');
+	await page.getByRole('button', { name: 'Flag' }).click();
+	await expect(toast(page, 'Flagged')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Unflag' })).toBeVisible();
+});
+
+test('the queue shows an action while it is waiting', async ({ page }) => {
+	await page.goto('/m/m1');
+	await page.getByRole('button', { name: 'Archive' }).click();
+	await page.getByRole('dialog', { name: 'Archive this message?' }).getByRole('button', { name: 'Archive' }).click();
+	await expect(toast(page, 'Archived')).toBeVisible();
+
+	await page.goto('/settings/outbox');
+	await expect(page.getByText('Waiting')).toBeVisible();
+	await expect(page.getByText('Move to another folder')).toBeVisible();
+});

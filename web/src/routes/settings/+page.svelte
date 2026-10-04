@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { accountAvatar } from '#lib/accounts.js';
-	import { Activity, Archive, ChevronRight, Download, Eye, Plus } from '#lib/icons.js';
+	import { Activity, Archive, ChevronRight, Download, Eye, Plus, RefreshCw } from '#lib/icons.js';
 	import Page from '#lib/components/shell/Page.svelte';
 	import Avatar from '#lib/components/ui/Avatar.svelte';
 	import Button from '#lib/components/ui/Button.svelte';
@@ -209,6 +209,10 @@
 		<ListRow href="/settings/health" chevron>
 			{#snippet leading()}<span class="ico"><Activity /></span>{/snippet}
 			Mirror health
+		</ListRow>
+		<ListRow href="/settings/outbox" chevron>
+			{#snippet leading()}<span class="ico"><RefreshCw /></span>{/snippet}
+			Actions waiting to send
 		</ListRow>
 		<ListRow chevron tall>
 			{#snippet leading()}<span class="ico"><Archive /></span>{/snippet}
