@@ -177,3 +177,39 @@ func TestPurgeMessageErasesRowAndAttachments(t *testing.T) {
 		t.Errorf("purge live err = %v, want ErrNotDisabled", err)
 	}
 }
+
+// A restore can land between PurgeMessage's check and its delete. A trigger that
+// un-hides the row as soon as its attachments are deleted stands in for that
+// restore: the one erasure Ivy has must still refuse a row that is visible by the
+// time it deletes, and must leave it (and its attachments) whole.
+func TestPurgeMessageRefusesARowRestoredBeforeTheDelete(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct-1")
+	seedFolder(t, dbs, "acct-1", "folder-1")
+	seedDisabledMessage(t, dbs, "acct-1", "folder-1", "m1", DisabledRemoved, 1, "")
+	if _, err := dbs.Mirror.Write.ExecContext(ctx,
+		`INSERT INTO attachments (id, message_id, filename) VALUES ('a1', 'm1', 'f.txt')`); err != nil {
+		t.Fatalf("seed attachment: %v", err)
+	}
+	if _, err := dbs.Mirror.Write.ExecContext(ctx, `
+		CREATE TRIGGER restore_mid_purge AFTER DELETE ON attachments
+		BEGIN UPDATE messages SET disabled_at = NULL, disabled_reason = NULL WHERE id = OLD.message_id; END`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+
+	if _, err := dbs.PurgeMessage(ctx, "m1"); !errors.Is(err, ErrNotDisabled) {
+		t.Errorf("PurgeMessage of a row restored mid-purge = %v, want ErrNotDisabled", err)
+	}
+	var rows, atts int
+	if err := dbs.Mirror.Read.QueryRowContext(ctx, `SELECT count(*) FROM messages WHERE id = 'm1'`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if err := dbs.Mirror.Read.QueryRowContext(ctx, `SELECT count(*) FROM attachments WHERE message_id = 'm1'`).Scan(&atts); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 1 || atts != 1 {
+		t.Errorf("after the refused purge: %d message rows and %d attachment rows, want 1 and 1", rows, atts)
+	}
+}

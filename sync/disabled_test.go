@@ -2,8 +2,10 @@ package sync_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
+	"github.com/AutumnsGrove/Ivy/internal/mailworld"
 	ivysync "github.com/AutumnsGrove/Ivy/sync"
 )
 
@@ -99,5 +101,57 @@ func TestMassDisableAlertFiresOnAUIDValidityReset(t *testing.T) {
 	}
 	if len(res.MassDisabled) != 1 || res.MassDisabled[0].Folder != "INBOX" {
 		t.Errorf("MassDisabled = %+v, want INBOX", res.MassDisabled)
+	}
+}
+
+// A pass that dies after hiding a folder's mail must not swallow the alert: the
+// next completed pass finds the rows already hidden and pending, so counting only
+// what a pass itself hid would let a mailbox wipe go by in silence. The
+// connection is dropped after every command count, so wherever the first pass
+// dies the operator still hears about the sweep exactly once.
+func TestMassDisableAlertSurvivesAPassThatDiesAfterTheSweep(t *testing.T) {
+	t.Parallel()
+	// Sequential: parallel dials exhaust a laptop's ephemeral ports and starve the
+	// rest of the package. Drop 10 is left out on purpose: it strands a fake-server
+	// goroutine in the go-imap fork (N26 in papercuts.md) and goleak fails the run;
+	// the window this test is about is the drops before it.
+	for drop := 1; drop <= 9; drop++ {
+		t.Run(fmt.Sprintf("drop-after-%d", drop), func(t *testing.T) {
+			ctx := context.Background()
+			w := newWorld(t)
+			acc := w.Account("me@grove.test", "secret")
+			dbs := newStore(t)
+			acct := accountFor(t, w, "acct-1", "me@grove.test", "secret")
+			if err := acc.CreateMailbox("Zeta"); err != nil {
+				t.Fatalf("create Zeta: %v", err)
+			}
+			for i := 0; i < 12; i++ {
+				acc.Deliver("INBOX", rawFor(i))
+			}
+			f := ivysync.NewFetcher(dbs)
+			if _, err := f.Fetch(ctx, acct); err != nil {
+				t.Fatalf("first fetch: %v", err)
+			}
+			for uid := uint32(1); uid <= 12; uid++ {
+				if err := acc.Expunge("INBOX", uid); err != nil {
+					t.Fatalf("expunge %d: %v", uid, err)
+				}
+			}
+			// New mail in a folder the pass reaches after the INBOX sweep gives the
+			// connection something to drop in between hiding and settling.
+			acc.Deliver("Zeta", rawFor(100))
+
+			w.Fault(mailworld.DropConnection{After: drop})
+			dropped, _ := f.Fetch(ctx, acct) // may die anywhere, or finish if drop is past its last command
+			w.ClearFaults()
+			recovery, err := f.Fetch(ctx, acct)
+			if err != nil {
+				t.Fatalf("recovery fetch: %v", err)
+			}
+			if got := len(dropped.MassDisabled) + len(recovery.MassDisabled); got != 1 {
+				t.Errorf("a pass dropped after %d commands: %d alerts for the wiped INBOX (dropped %+v, recovery %+v), want exactly 1",
+					drop, got, dropped.MassDisabled, recovery.MassDisabled)
+			}
+		})
 	}
 }

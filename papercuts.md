@@ -817,3 +817,57 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   by setting `DefaultBackupAt` in `BuildConfig`; `TestWrittenConfigReloads` marshals and reloads the
   generated config so the next new setting cannot do this silently. This is why the definition of
   done runs the real-binary smoke slice even for a backend-only change.
+
+## `8b5daa8..1c0c8b9` Review of 3b (hidden mail) and 3c (backups, blob store)
+
+- **#68** · `8cfcbb8` · `sync/sync.go`, `store/disabled.go` · **bug** · the mass-disable alert counted
+  only what the current pass hid, so a pass that died after sweeping a folder (connection drop while
+  fetching a later folder) left the rows pending, and the recovery pass hid nothing, settled them as
+  removed and alerted on nothing: a mailbox wipe went by in silence, the one case the alert exists
+  for. Reproduced with `TestMassDisableAlertSurvivesAPassThatDiesAfterTheSweep` (connection dropped
+  after every command count; drops 8 to 10 gave 0 alerts, want 1; the first draft of the test never
+  failed because the folders after INBOX had nothing to fetch, so there was no command to drop in
+  the window). `fetchAll` now reads the sweep from the rows (`PendingDisabledByFolder`: pending rows
+  per folder, held = live + pending) just before settling, and the in-pass tally is gone.
+- **#69** · `e8d8c6f` · `backup/backup.go` · **bug** · `mirrorTree` skipped any blob whose name
+  already existed at the target and wrote new ones straight to the final name, so a copy that died
+  half-way left a truncated file that every later run (and a restore, which uses the same walk)
+  treated as present: the only off-device copy of a server-deleted message stayed short for good.
+  `TestRunHealsATruncatedBlobInATarget` failed before the fix. It now compares sizes and copies
+  through a `.tmp-` name and a rename.
+- **#70** · `8b5daa8` · `store/disabled.go` · **bug** · `PurgeMessage` checked that the row was
+  hidden in one statement and deleted it in a later transaction, so a Restore landing between them
+  (two tabs, or a double tap) made the one erasure Ivy has delete a row that was visible by then.
+  `TestPurgeMessageRefusesARowRestoredBeforeTheDelete` (a trigger stands in for the restore) failed
+  before the fix: purge returned nil and both rows were gone. The delete is now guarded by
+  `disabled_at IS NOT NULL`, and a miss rolls the transaction back with `ErrNotDisabled`.
+- **#71** · `27492df` · `backup/backup.go` · **risk** · `Restore` deleted the old `state.db-wal` while
+  keeping the old database "moved aside", so after a crash the kept copy lost every row only the
+  log held, the operator's newest tags. `TestRestoreMovesTheOldWriteAheadLogAsideWithTheDatabase`
+  failed before the fix; the log now moves to `<aside>-wal`.
+- **#72** · `96d033c` · `sync/sync.go` · **nit** · the blob-copy warning logged the message id under
+  the key `account`.
+- **N25 (open, design)** · `8cfcbb8` · `sync/massdisable.go` · the alert counts moved rows as
+  hidden, so archiving more than 50 messages (or more than 20% of a 10+ message INBOX) raises a
+  `mass_disable` alert, and its one-click restore (`RestoreAccountDisabled`) then makes the moved
+  copies visible beside the live ones in the other folder. The qa-log wording ("a sweep that
+  disables") allows it. Recommendation: count only rows that settled as `server_removed`, and have
+  the account restore skip `moved`. It needs the operator's call because it changes round 42.
+- **N26 (open, library)** · `go-imap` fork `v2.0.0-beta.8-ivy.2` `imapserver/conn.go` · the fake
+  server's serve loop can block forever on `encMutex` after `DropConnection` cuts the connection
+  mid-response, stranding a goroutine and failing goleak at exit (the churn-alert test at drop 10 does
+  it every time). Test-only (only mailworld uses `imapserver`). Fix in the fork, then widen the sweep
+  in `TestMassDisableAlertSurvivesAPassThatDiesAfterTheSweep` back past drop 9.
+- **N27 (open, design)** · `e8d8c6f` · `cmd/cmd.go` · `backupLoop` waits for the next 03:00 and never
+  catches up: a potato that was off at 03:00 goes a day or more without a snapshot. Recommendation:
+  on start, run a backup when the newest snapshot is older than a day.
+- **N28 (open, docs)** · `22091dc` · `api/openapi.yaml`, `store/disabled.go` · the contract says a
+  pending row is "not restorable", but the single-message `RestoreMessage` restores any hidden row,
+  pending included (only the account bulk skips them). Harmless (the next pass hides it again if
+  the server lacks it), but one of the two should change; recommendation is to say "bulk restore
+  skips pending rows" in the contract.
+- **N29 (open, design)** · `354d14b` · `backup/backup.go` · `pending_blob_deletions` lives in
+  `state.db`, so restoring a snapshot taken before a purge forgets an erasure that an offline target
+  still owes, and the blob stays there. Recommendation: have `ivy restore` list the targets' blobs
+  that no mirror row references only after a rebuild (a later chunk), and say so in the restore
+  output until then.

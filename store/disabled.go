@@ -55,6 +55,48 @@ func (d *DBs) DisabledStats(ctx context.Context) (map[string]DisabledStat, error
 	return stats, nil
 }
 
+// FolderSweep is what one folder holds of rows a pass hid but has not classified
+// yet, with the rows still live beside them. Held is both together, the folder's
+// size before the sweep, which the mass-disable fraction is measured against.
+type FolderSweep struct {
+	Folder string
+	Hidden int
+	Held   int
+}
+
+// PendingDisabledByFolder reports, per folder, the pending rows of an account. It
+// reads the rows rather than a pass's own tally, so a sweep a dead pass began is
+// still seen by the pass that settles it.
+func (d *DBs) PendingDisabledByFolder(ctx context.Context, accountID string) ([]FolderSweep, error) {
+	rows, err := d.Mirror.Read.QueryContext(ctx, `
+		SELECT f.name,
+		       sum(CASE WHEN m.disabled_reason = ? THEN 1 ELSE 0 END),
+		       sum(CASE WHEN m.disabled_at IS NULL OR m.disabled_reason = ? THEN 1 ELSE 0 END)
+		FROM messages m JOIN folders f ON f.id = m.folder_id
+		WHERE m.account_id = ?
+		GROUP BY f.id
+		HAVING sum(CASE WHEN m.disabled_reason = ? THEN 1 ELSE 0 END) > 0
+		ORDER BY f.name`,
+		DisabledPending, DisabledPending, accountID, DisabledPending)
+	if err != nil {
+		return nil, fmt.Errorf("pending disabled by folder: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []FolderSweep
+	for rows.Next() {
+		var s FolderSweep
+		if err := rows.Scan(&s.Folder, &s.Hidden, &s.Held); err != nil {
+			return nil, fmt.Errorf("pending disabled by folder: %w", err)
+		}
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("pending disabled by folder: %w", err)
+	}
+	return out, nil
+}
+
 // RestoreMessage makes one hidden row visible again. The bytes, derived data and
 // tags are untouched; only the disabled flag is cleared, so restoring a live row
 // is a harmless no-op. An unknown id is ErrNotFound.
@@ -175,8 +217,17 @@ func (d *DBs) deleteMessageRows(ctx context.Context, id string) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM attachments WHERE message_id = ?`, id); err != nil {
 		return fmt.Errorf("purge message %s: delete attachments: %w", id, err)
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM messages WHERE id = ?`, id); err != nil {
+	// The hidden check made before this transaction can be stale: a restore may
+	// have landed since. Deleting only a still-hidden row, and rolling back
+	// otherwise, keeps the one erasure from ever reaching visible mail.
+	res, err := tx.ExecContext(ctx, `DELETE FROM messages WHERE id = ? AND disabled_at IS NOT NULL`, id)
+	if err != nil {
 		return fmt.Errorf("purge message %s: delete row: %w", id, err)
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return fmt.Errorf("purge message %s: %w", id, err)
+	} else if n == 0 {
+		return ErrNotDisabled
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("purge message %s: %w", id, err)

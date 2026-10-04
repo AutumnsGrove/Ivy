@@ -334,23 +334,30 @@ func (f *Fetcher) fetchAll(ctx context.Context, c *session, acct Account) (Resul
 
 	var res Result
 	seen := make(map[string]bool, len(snaps))
-	var churn []folderChurn
 	for _, snap := range snaps {
 		seen[snap.Name] = true
-		stored, skipped, fr, err := f.reconcileFolder(ctx, c, acct, snap)
+		stored, skipped, err := f.reconcileFolder(ctx, c, acct, snap)
 		if err != nil {
 			return res, err
 		}
 		res.Folders++
 		res.Stored += stored
 		res.Skipped += skipped
-		churn = append(churn, fr)
 	}
-	gone, err := f.markGoneFolders(ctx, acct.ID, seen)
+	if err := f.markGoneFolders(ctx, acct.ID, seen); err != nil {
+		return res, err
+	}
+	// The sweep is read from the rows themselves, before they settle: a pass that
+	// died after hiding a folder leaves them pending, and counting only what this
+	// pass hid would let that wipe go by without an alert.
+	sweeps, err := f.dbs.PendingDisabledByFolder(ctx, acct.ID)
 	if err != nil {
 		return res, err
 	}
-	churn = append(churn, gone...)
+	churn := make([]folderChurn, 0, len(sweeps))
+	for _, s := range sweeps {
+		churn = append(churn, folderChurn{name: s.Folder, held: s.Held, hidden: s.Hidden})
+	}
 	// Move vs removal is decided once the whole account is known: a disabled row
 	// whose Message-ID is still live elsewhere is a move (round 37). Settling every
 	// pending row, not only this pass's, is what makes a pass that died earlier
@@ -492,8 +499,7 @@ func (f *Fetcher) snapshotFolder(c *session, acct Account, mb *imap.ListData, ex
 // deleted: a row the server no longer holds in this folder is disabled, with
 // "moved" when its content still lives elsewhere on the server and
 // "server_removed" otherwise (rounds 37 and 38).
-func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account, snap folderSnapshot) (stored, skipped int, churn folderChurn, err error) {
-	churn.name = snap.Name
+func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account, snap folderSnapshot) (stored, skipped int, err error) {
 	folder := store.Folder{
 		ID:            folderRowID(acct.ID, snap.Name),
 		AccountID:     acct.ID,
@@ -517,24 +523,18 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 	// The folder row must exist before its messages (foreign keys), and writing
 	// it first also revives a name the server has brought back.
 	if err := f.dbs.UpsertFolder(ctx, folder); err != nil {
-		return 0, 0, churn, err
+		return 0, 0, err
 	}
 
 	refs, err := f.dbs.SyncMessageRefs(ctx, folder.ID)
 	if err != nil {
-		return 0, 0, churn, err
+		return 0, 0, err
 	}
-	// The live rows this folder held when the pass began, before anything is
-	// hidden: the denominator the mass-disable fraction is measured against.
-	churn.held = len(refs)
-
 	// A UIDVALIDITY change invalidates every UID the folder held. Disable what
 	// the old validity left behind and read the new validity as if it were new.
 	if !snap.Found || validityChanged {
-		n, err := f.disableRefs(ctx, refs)
-		churn.hidden += n
-		if err != nil {
-			return 0, 0, churn, err
+		if err := f.disableRefs(ctx, refs); err != nil {
+			return 0, 0, err
 		}
 		refs = nil
 	}
@@ -544,9 +544,8 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 		if ref.UIDValidity != snap.UIDValidity {
 			// A leftover from an earlier validity that was never disabled.
 			if err := f.disableRef(ctx, ref); err != nil {
-				return 0, 0, churn, err
+				return 0, 0, err
 			}
-			churn.hidden++
 			continue
 		}
 		mirrored[ref.UID] = ref
@@ -561,9 +560,8 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 	for uid, ref := range mirrored {
 		if snap.Delta && snap.Vanished.Contains(imap.UID(uid)) {
 			if err := f.disableRef(ctx, ref); err != nil {
-				return 0, 0, churn, err
+				return 0, 0, err
 			}
-			churn.hidden++
 			continue
 		}
 		meta, ok := present[uid]
@@ -574,9 +572,8 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 				continue
 			}
 			if err := f.disableRef(ctx, ref); err != nil {
-				return 0, 0, churn, err
+				return 0, 0, err
 			}
-			churn.hidden++
 			continue
 		}
 		skipped++
@@ -584,7 +581,7 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 			continue
 		}
 		if err := f.dbs.SetMessageFlags(ctx, ref.ID, flagStrings(meta.Flags)); err != nil {
-			return 0, 0, churn, fmt.Errorf("sync account %s: flags %s/%d: %w", acct.ID, snap.Name, uid, err)
+			return 0, 0, fmt.Errorf("sync account %s: flags %s/%d: %w", acct.ID, snap.Name, uid, err)
 		}
 	}
 	for uid := range present {
@@ -615,21 +612,21 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 		// The snapshot pass left another mailbox selected; fetching bodies reads
 		// whatever is selected, so select this folder again first.
 		if err := reselect(c, snap.Name); err != nil {
-			return stored, skipped, churn, fmt.Errorf("sync account %s: reselect %s: %w", acct.ID, snap.Name, err)
+			return stored, skipped, fmt.Errorf("sync account %s: reselect %s: %w", acct.ID, snap.Name, err)
 		}
 		n, err := f.fetchBatch(ctx, c, acct, folder.ID, snap.UIDValidity, set)
 		stored += n
 		if err != nil {
-			return stored, skipped, churn, err
+			return stored, skipped, err
 		}
 	}
 	// Every body this folder needed is stored, so the modseq may advance. A
 	// failure above returns before this and leaves the old modseq for the retry.
 	folder.HighestModSeq = snap.HighestModSeq
 	if err := f.dbs.UpsertFolder(ctx, folder); err != nil {
-		return stored, skipped, churn, err
+		return stored, skipped, err
 	}
-	return stored, skipped, churn, nil
+	return stored, skipped, nil
 }
 
 func reselect(c *session, name string) error {
@@ -641,43 +638,36 @@ func reselect(c *session, name string) error {
 // markGoneFolders hides a mirror folder the server no longer lists and disables
 // its live messages, exactly as a vanished UID is handled. Rows, raw bytes and
 // spool files stay (CHUNK3-BRIEF.md 1).
-func (f *Fetcher) markGoneFolders(ctx context.Context, accountID string, seen map[string]bool) ([]folderChurn, error) {
+func (f *Fetcher) markGoneFolders(ctx context.Context, accountID string, seen map[string]bool) error {
 	folders, err := f.dbs.AllFolders(ctx, accountID)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	var churn []folderChurn
 	for _, folder := range folders {
 		if seen[folder.Name] || !folder.GoneAt.IsZero() {
 			continue
 		}
 		refs, err := f.dbs.SyncMessageRefs(ctx, folder.ID)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		n, err := f.disableRefs(ctx, refs)
-		if err != nil {
-			return nil, err
+		if err := f.disableRefs(ctx, refs); err != nil {
+			return err
 		}
 		if err := f.dbs.SetFolderGone(ctx, folder.ID, f.now()); err != nil {
-			return nil, err
+			return err
 		}
-		churn = append(churn, folderChurn{name: folder.Name, held: len(refs), hidden: n})
 	}
-	return churn, nil
+	return nil
 }
 
-// disableRefs hides every ref and returns how many it hid, so a caller can feed
-// the count to the mass-disable alert without counting its own loop.
-func (f *Fetcher) disableRefs(ctx context.Context, refs []store.SyncMessageRef) (int, error) {
-	n := 0
+func (f *Fetcher) disableRefs(ctx context.Context, refs []store.SyncMessageRef) error {
 	for _, ref := range refs {
 		if err := f.disableRef(ctx, ref); err != nil {
-			return n, err
+			return err
 		}
-		n++
 	}
-	return n, nil
+	return nil
 }
 
 // disableRef hides a vanished row as pending: whether it moved or was removed is
@@ -691,7 +681,7 @@ func (f *Fetcher) disableRef(ctx context.Context, ref store.SyncMessageRef) erro
 		// The mirror still holds the bytes and the backup reconcile retries, so a
 		// blob copy failure does not fail the sweep, but it is never silent.
 		slog.WarnContext(ctx, "could not store a disabled message's blob",
-			"account", ref.ID, "error", err)
+			"message", ref.ID, "error", err)
 		hash = ""
 	}
 	if err := f.dbs.DisableMessage(ctx, ref.ID, store.DisabledPending, f.now(), hash); err != nil {
