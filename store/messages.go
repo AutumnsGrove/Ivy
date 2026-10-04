@@ -271,15 +271,36 @@ type SyncMessageRef struct {
 	ID          string
 	UID         uint32
 	UIDValidity uint32
+	ContentKey  string
 	MessageID   string
 	Flags       []string
+}
+
+// MessageRowRef returns the id and Message-ID of the mirror row for a message
+// identified by (content key, folder), hidden or not. The outbox names mail by
+// content key and needs the Message-ID to re-resolve a UID after a UIDVALIDITY
+// change. A live row is preferred over a hidden one, and the newest validity
+// first, so a rebuilt folder's row wins over the disabled one it replaced.
+func (d *DBs) MessageRowRef(ctx context.Context, accountID, contentKey, folderID string) (id, messageID string, err error) {
+	err = d.Mirror.Read.QueryRowContext(ctx, `
+		SELECT id, COALESCE(message_id_hdr, '') FROM messages
+		WHERE account_id = ? AND content_key = ? AND folder_id = ?
+		ORDER BY (disabled_at IS NOT NULL), uidvalidity DESC LIMIT 1`,
+		accountID, contentKey, folderID).Scan(&id, &messageID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", ErrNotFound
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("message row ref %s/%s: %w", contentKey, folderID, err)
+	}
+	return id, messageID, nil
 }
 
 // SyncMessageRefs returns every live (not disabled) row in a folder, without
 // reading a raw blob or a spool file.
 func (d *DBs) SyncMessageRefs(ctx context.Context, folderID string) ([]SyncMessageRef, error) {
 	rows, err := d.Mirror.Read.QueryContext(ctx,
-		`SELECT id, uid, uidvalidity, COALESCE(message_id_hdr, ''), COALESCE(flags_json, '') FROM messages
+		`SELECT id, uid, uidvalidity, content_key, COALESCE(message_id_hdr, ''), COALESCE(flags_json, '') FROM messages
 		 WHERE folder_id = ? AND disabled_at IS NULL`, folderID)
 	if err != nil {
 		return nil, fmt.Errorf("sync refs for %s: %w", folderID, err)
@@ -292,7 +313,7 @@ func (d *DBs) SyncMessageRefs(ctx context.Context, folderID string) ([]SyncMessa
 			uid, valid int64
 			flagsJSON  string
 		)
-		if err := rows.Scan(&r.ID, &uid, &valid, &r.MessageID, &flagsJSON); err != nil {
+		if err := rows.Scan(&r.ID, &uid, &valid, &r.ContentKey, &r.MessageID, &flagsJSON); err != nil {
 			return nil, fmt.Errorf("sync refs for %s: %w", folderID, err)
 		}
 		u, err := uidFromDB(uid)

@@ -333,10 +333,14 @@ func (f *Fetcher) fetchAll(ctx context.Context, c *session, acct Account) (Resul
 	}
 
 	var res Result
+	active, err := f.dbs.OutboxActiveKeys(ctx, acct.ID)
+	if err != nil {
+		return res, err
+	}
 	seen := make(map[string]bool, len(snaps))
 	for _, snap := range snaps {
 		seen[snap.Name] = true
-		stored, skipped, err := f.reconcileFolder(ctx, c, acct, snap)
+		stored, skipped, err := f.reconcileFolder(ctx, c, acct, snap, active)
 		if err != nil {
 			return res, err
 		}
@@ -344,7 +348,7 @@ func (f *Fetcher) fetchAll(ctx context.Context, c *session, acct Account) (Resul
 		res.Stored += stored
 		res.Skipped += skipped
 	}
-	if err := f.markGoneFolders(ctx, acct.ID, seen); err != nil {
+	if err := f.markGoneFolders(ctx, acct.ID, seen, active); err != nil {
 		return res, err
 	}
 	// The sweep is read from the rows themselves, before they settle: a pass that
@@ -499,7 +503,7 @@ func (f *Fetcher) snapshotFolder(c *session, acct Account, mb *imap.ListData, ex
 // deleted: a row the server no longer holds in this folder is disabled, with
 // "moved" when its content still lives elsewhere on the server and
 // "server_removed" otherwise (rounds 37 and 38).
-func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account, snap folderSnapshot) (stored, skipped int, err error) {
+func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account, snap folderSnapshot, active map[store.OutboxKey]bool) (stored, skipped int, err error) {
 	folder := store.Folder{
 		ID:            folderRowID(acct.ID, snap.Name),
 		AccountID:     acct.ID,
@@ -533,7 +537,7 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 	// A UIDVALIDITY change invalidates every UID the folder held. Disable what
 	// the old validity left behind and read the new validity as if it were new.
 	if !snap.Found || validityChanged {
-		if err := f.disableRefs(ctx, refs); err != nil {
+		if err := f.disableRefs(ctx, refs, active, folder.ID); err != nil {
 			return 0, 0, err
 		}
 		refs = nil
@@ -543,8 +547,10 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 	for _, ref := range refs {
 		if ref.UIDValidity != snap.UIDValidity {
 			// A leftover from an earlier validity that was never disabled.
-			if err := f.disableRef(ctx, ref); err != nil {
-				return 0, 0, err
+			if !deferred(active, folder.ID, ref) {
+				if err := f.disableRef(ctx, ref); err != nil {
+					return 0, 0, err
+				}
 			}
 			continue
 		}
@@ -559,8 +565,10 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 	var newUIDs []uint32
 	for uid, ref := range mirrored {
 		if snap.Delta && snap.Vanished.Contains(imap.UID(uid)) {
-			if err := f.disableRef(ctx, ref); err != nil {
-				return 0, 0, err
+			if !deferred(active, folder.ID, ref) {
+				if err := f.disableRef(ctx, ref); err != nil {
+					return 0, 0, err
+				}
 			}
 			continue
 		}
@@ -571,6 +579,10 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 				skipped++
 				continue
 			}
+			// The outbox owns a row with a live op; sync must not overwrite it.
+			if deferred(active, folder.ID, ref) {
+				continue
+			}
 			if err := f.disableRef(ctx, ref); err != nil {
 				return 0, 0, err
 			}
@@ -578,6 +590,9 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 		}
 		skipped++
 		if sameFlags(flagStrings(meta.Flags), ref.Flags) {
+			continue
+		}
+		if deferred(active, folder.ID, ref) {
 			continue
 		}
 		if err := f.dbs.SetMessageFlags(ctx, ref.ID, flagStrings(meta.Flags)); err != nil {
@@ -638,7 +653,7 @@ func reselect(c *session, name string) error {
 // markGoneFolders hides a mirror folder the server no longer lists and disables
 // its live messages, exactly as a vanished UID is handled. Rows, raw bytes and
 // spool files stay (CHUNK3-BRIEF.md 1).
-func (f *Fetcher) markGoneFolders(ctx context.Context, accountID string, seen map[string]bool) error {
+func (f *Fetcher) markGoneFolders(ctx context.Context, accountID string, seen map[string]bool, active map[store.OutboxKey]bool) error {
 	folders, err := f.dbs.AllFolders(ctx, accountID)
 	if err != nil {
 		return err
@@ -651,7 +666,7 @@ func (f *Fetcher) markGoneFolders(ctx context.Context, accountID string, seen ma
 		if err != nil {
 			return err
 		}
-		if err := f.disableRefs(ctx, refs); err != nil {
+		if err := f.disableRefs(ctx, refs, active, folder.ID); err != nil {
 			return err
 		}
 		if err := f.dbs.SetFolderGone(ctx, folder.ID, f.now()); err != nil {
@@ -661,8 +676,17 @@ func (f *Fetcher) markGoneFolders(ctx context.Context, accountID string, seen ma
 	return nil
 }
 
-func (f *Fetcher) disableRefs(ctx context.Context, refs []store.SyncMessageRef) error {
+// deferred reports whether a row's (content key, folder) has a live outbox op,
+// in which case sync must not overwrite that row (CHUNK3-BRIEF.md 1.4).
+func deferred(active map[store.OutboxKey]bool, folderID string, ref store.SyncMessageRef) bool {
+	return active[store.OutboxKey{ContentKey: ref.ContentKey, SourceFolderID: folderID}]
+}
+
+func (f *Fetcher) disableRefs(ctx context.Context, refs []store.SyncMessageRef, active map[store.OutboxKey]bool, folderID string) error {
 	for _, ref := range refs {
+		if deferred(active, folderID, ref) {
+			continue
+		}
 		if err := f.disableRef(ctx, ref); err != nil {
 			return err
 		}
@@ -676,6 +700,15 @@ func (f *Fetcher) disableRefs(ctx context.Context, refs []store.SyncMessageRef) 
 // bytes are copied into the blob store first, because a hidden message is the
 // one thing a mirror rebuild cannot bring back (ARCHITECTURE.md 9).
 func (f *Fetcher) disableRef(ctx context.Context, ref store.SyncMessageRef) error {
+	return f.disableRefReason(ctx, ref, store.DisabledPending)
+}
+
+// disableRefReason hides a vanished row with a known reason. The outbox knows a
+// move really moved (reason moved) and an expunge really removed (server_removed),
+// so it records the reason directly rather than leaving the row pending. The raw
+// bytes are copied into the blob store first, because a hidden message is the one
+// thing a mirror rebuild cannot bring back (ARCHITECTURE.md 9).
+func (f *Fetcher) disableRefReason(ctx context.Context, ref store.SyncMessageRef, reason string) error {
 	hash, err := f.storeDisabledBlob(ctx, ref.ID)
 	if err != nil {
 		// The mirror still holds the bytes and the backup reconcile retries, so a
@@ -684,7 +717,7 @@ func (f *Fetcher) disableRef(ctx context.Context, ref store.SyncMessageRef) erro
 			"message", ref.ID, "error", err)
 		hash = ""
 	}
-	if err := f.dbs.DisableMessage(ctx, ref.ID, store.DisabledPending, f.now(), hash); err != nil {
+	if err := f.dbs.DisableMessage(ctx, ref.ID, reason, f.now(), hash); err != nil {
 		return fmt.Errorf("disable message %s: %w", ref.ID, err)
 	}
 	return nil

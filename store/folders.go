@@ -80,6 +80,20 @@ func (d *DBs) GetFolderByName(ctx context.Context, accountID, name string) (Fold
 	return f, nil
 }
 
+// GetFolderByID returns one folder by its stable id, or ErrNotFound. The outbox
+// stores folder ids rather than names, so dispatch resolves the name here.
+func (d *DBs) GetFolderByID(ctx context.Context, id string) (Folder, error) {
+	row := d.Mirror.Read.QueryRowContext(ctx, folderSelect+` WHERE id=?`, id)
+	f, err := scanFolder(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Folder{}, ErrNotFound
+	}
+	if err != nil {
+		return Folder{}, fmt.Errorf("get folder %s: %w", id, err)
+	}
+	return f, nil
+}
+
 // ListFolders returns one account's live folders, ordered by name. A folder the
 // server has deleted or renamed away is gone and not listed.
 func (d *DBs) ListFolders(ctx context.Context, accountID string) ([]Folder, error) {

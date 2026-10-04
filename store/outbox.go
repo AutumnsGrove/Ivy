@@ -378,6 +378,16 @@ func (d *DBs) SetOutboxInFlight(ctx context.Context, id string, uidvalidity, uid
 		WHERE id = ?`, OutboxInFlight, uidvalidity, uid, formatTime(now), id)
 }
 
+// RequeueOutbox returns an in-flight op to pending after recovery decided the
+// command did not apply. It clears the resolved identity so dispatch resolves
+// the UID again, and does not count an attempt: the crash was not the op's fault.
+func (d *DBs) RequeueOutbox(ctx context.Context, id string, now time.Time) error {
+	return d.updateOutbox(ctx, `
+		UPDATE outbox SET state = ?, source_uidvalidity = 0, source_uid = 0,
+			next_attempt_at = NULL, updated_at = ?, completed_at = NULL
+		WHERE id = ?`, OutboxPending, formatTime(now), id)
+}
+
 // SetOutboxPending returns a transiently failed op to the queue. The attempt
 // count and the backoff are recorded, so a flapping server never spins.
 func (d *DBs) SetOutboxPending(ctx context.Context, id string, attempts int, next time.Time, code, detail string, now time.Time) error {
