@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/AutumnsGrove/Ivy/backup"
 	"github.com/AutumnsGrove/Ivy/internal/lockfile"
@@ -177,5 +178,46 @@ func TestRunHoldsTheDataDirLock(t *testing.T) {
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatalf("run returned: %v", err)
+	}
+}
+
+// Started after the scheduled time was missed, the loop backs up at once rather
+// than waiting for tomorrow's slot.
+func TestBackupLoopCatchesUpAMissedBackupOnStart(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	dbs, err := store.Open(ctx, t.TempDir())
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer dbs.Close()
+	target := filepath.Join(t.TempDir(), "backups")
+	manager := backup.New(dbs, []string{target})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		backupLoop(ctx, manager, "03:00")
+	}()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		snaps, err := manager.List(target)
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		if len(snaps) > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("no snapshot was written on start although none existed")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("backupLoop did not stop when its context was cancelled")
 	}
 }

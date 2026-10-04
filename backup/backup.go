@@ -210,6 +210,27 @@ func (m *Manager) List(target string) ([]Snapshot, error) {
 	return snaps, nil
 }
 
+// Interval is how long a target may go without a snapshot before a start-up run
+// is due: the schedule is daily, so a longer gap means a slot was missed.
+const Interval = 24 * time.Hour
+
+// Due reports whether a backup should run now rather than at the next scheduled
+// time: some target has no snapshot, or its newest is a day old. A device that
+// was off at the scheduled time catches up when it starts, and one target being
+// current does not cover for another that is not.
+func (m *Manager) Due(now time.Time) (bool, error) {
+	for _, target := range m.targets {
+		snaps, err := m.List(target)
+		if err != nil {
+			return false, err
+		}
+		if len(snaps) == 0 || now.Sub(snaps[0].Time) >= Interval {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // pruneTarget removes snapshots past the keep window, never taking the floor of
 // newest ones. Only a target whose new snapshot verified reaches this.
 func (m *Manager) pruneTarget(target string, now time.Time) (int, error) {

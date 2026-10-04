@@ -254,9 +254,18 @@ func restoreCmd(configPath *string) *cobra.Command {
 	}
 }
 
-// backupLoop runs one backup at the configured local time each day. It owns no
-// other goroutine and ends promptly when the server's context is cancelled.
+// backupLoop runs one backup at the configured local time each day, and one at
+// once on start when a slot was missed (the device was off at that time). It
+// owns no other goroutine and ends promptly when the server's context is
+// cancelled.
 func backupLoop(ctx context.Context, manager *backup.Manager, at string) {
+	due, err := manager.Due(time.Now())
+	if err != nil {
+		slog.WarnContext(ctx, "backup catch-up check", "error", err)
+	}
+	if due {
+		runBackup(ctx, manager)
+	}
 	for {
 		next, err := backup.NextDaily(time.Now(), at)
 		if err != nil {
@@ -269,14 +278,20 @@ func backupLoop(ctx context.Context, manager *backup.Manager, at string) {
 			timer.Stop()
 			return
 		case <-timer.C:
-			res, err := manager.Run(ctx)
-			if err != nil {
-				slog.WarnContext(ctx, "daily backup failed", "error", err)
-				continue
-			}
-			slog.InfoContext(ctx, "daily backup written", "snapshots", len(res.Snapshots))
+			runBackup(ctx, manager)
 		}
 	}
+}
+
+// runBackup takes one snapshot and reports the outcome. A failure is logged and
+// retried at the next slot, never fatal to the server.
+func runBackup(ctx context.Context, manager *backup.Manager) {
+	res, err := manager.Run(ctx)
+	if err != nil {
+		slog.WarnContext(ctx, "daily backup failed", "error", err)
+		return
+	}
+	slog.InfoContext(ctx, "daily backup written", "snapshots", len(res.Snapshots))
 }
 
 // reportBackups prints the backup targets and warns when every one shares the

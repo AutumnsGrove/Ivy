@@ -784,3 +784,35 @@ func TestRestoreMovesTheOldWriteAheadLogAsideWithTheDatabase(t *testing.T) {
 		t.Error("the old log still sits beside the restored database")
 	}
 }
+
+// A potato that was off at the scheduled time must not go days unprotected: on
+// start the loop asks whether any target has gone a day without a snapshot.
+func TestDueWhenATargetHasGoneADayWithoutASnapshot(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openStore(t, t.TempDir())
+	defer dbs.Close()
+	fresh := filepath.Join(t.TempDir(), "fresh")
+	other := filepath.Join(t.TempDir(), "other")
+	now := baseTime
+	m := New(dbs, []string{fresh}, WithClock(clock(t, &now)))
+
+	if due, err := m.Due(now); err != nil || !due {
+		t.Fatalf("Due with no snapshot = %v, %v; want true", due, err)
+	}
+	if _, err := m.Run(ctx); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if due, err := m.Due(now.Add(23 * time.Hour)); err != nil || due {
+		t.Errorf("Due 23h after a snapshot = %v, %v; want false", due, err)
+	}
+	if due, err := m.Due(now.Add(25 * time.Hour)); err != nil || !due {
+		t.Errorf("Due 25h after a snapshot = %v, %v; want true", due, err)
+	}
+
+	// One target that is current does not cover for another that is not.
+	both := New(dbs, []string{fresh, other}, WithClock(clock(t, &now)))
+	if due, err := both.Due(now); err != nil || !due {
+		t.Errorf("Due with one target never backed up = %v, %v; want true", due, err)
+	}
+}
