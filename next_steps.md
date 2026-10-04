@@ -5,12 +5,12 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-04 (round 44: N24 fixed). The full Go suite is `-race` green and the
-new `backup`, `blobstore` and `lockfile` packages are tested against a fake clock. Chunks 0, 1 and
-2a-2h are done except the visual baselines of 2g and 2h (they need the CI harness regenerated).
+last updated: 2026-10-04 (C3 written, waiting for review). The full Go suite is `-race` green and
+the new `backup`, `blobstore` and `lockfile` packages are tested against a fake clock. Chunks 0, 1
+and 2a-2h are done except the visual baselines of 2g and 2h (they need the CI harness regenerated).
 3a and 3b's backend are done, and 3c (backups, including the disabled-blob store) is done; **the C0
-canvas board is the one thing blocking the 3b screens, and C3 (outbox op states) is the next gate
-before 3d**.
+canvas board is the one thing blocking the 3b screens, and C3 (outbox op states) is written and
+waiting for review before 3d**.
 
 ## How to run a chunk
 
@@ -69,8 +69,10 @@ and `ivy doctor` warns when every target shares the data disk. Tests: `internal/
 
 **Next, in order:**
 
-1. **C3**, then **3d Outbox + write path**. C3 is the half page of op states, durable points and the
-   crash-after-ack story, written before any outbox code.
+1. **Waiting at C3** (see `docs/handoffs/2026-10-04-C3-outbox.md`): the outbox op states, durable
+   points, idempotency key and crash-after-ack story are written down. **3d does not start until this
+   is reviewed and given an explicit go.** After that go: **3d Outbox + write path**, then gate C4
+   (the crash-window failure-injection test).
 2. **C0 canvas board** for the three 3b screens, whenever the operator is ready; the backend and API
    are already committed.
 3. **3e-3h** per the chunk plan below. 3h (the deploy track) is independent and can run at any point.
