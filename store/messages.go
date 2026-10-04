@@ -1,12 +1,16 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
+	"os"
+	"path/filepath"
 	"slices"
 	"time"
 )
@@ -72,7 +76,10 @@ type Message struct {
 	ParseErrors    []string
 	DisabledAt     time.Time
 	DisabledReason string
-	Seen           bool
+	// DisabledBlob is the content hash of this message's bytes in the blob store,
+	// set when it is hidden and cleared when it reappears (ARCHITECTURE.md 9).
+	DisabledBlob string
+	Seen         bool
 	// DerivedVersion is the pipeline version that last wrote this row's derived
 	// data (body text, sanitised HTML, attachment rows). Only SetMessageDerived
 	// changes it; UpsertMessage leaves it alone.
@@ -147,8 +154,8 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 			refs, subject, from_json, to_json, cc_json, reply_to_json, delivered_to_json,
 			date, size, flags_json, internaldate, has_attachments, raw_blob, body_text,
 			body_html_sanitized, thread_id, snippet, auth_results, parse_errors,
-			disabled_at, disabled_reason, seen, raw_path, body_status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			disabled_at, disabled_reason, disabled_blob, seen, raw_path, body_status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(folder_id, uidvalidity, uid) DO UPDATE SET
 			account_id=excluded.account_id, content_key=excluded.content_key,
 			message_id_hdr=excluded.message_id_hdr, in_reply_to=excluded.in_reply_to,
@@ -160,13 +167,14 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 			raw_blob=CASE WHEN length(excluded.raw_blob) > 0 THEN excluded.raw_blob ELSE messages.raw_blob END,
 			raw_path=COALESCE(excluded.raw_path, messages.raw_path),
 			auth_results=excluded.auth_results, disabled_at=excluded.disabled_at,
-			disabled_reason=excluded.disabled_reason, seen=excluded.seen`,
+			disabled_reason=excluded.disabled_reason, disabled_blob=excluded.disabled_blob,
+			seen=excluded.seen`,
 		m.ID, m.AccountID, m.FolderID, m.UID, m.UIDValidity, m.ContentKey, m.MessageID, m.InReplyTo,
 		m.References, m.Subject, from, to, cc, replyTo, deliveredTo,
 		nullableTime(m.Date), m.Size, flags, nullableTime(m.InternalDate),
 		m.HasAttachments, m.RawBlob, m.BodyText, m.BodyHTML, m.ThreadID, m.Snippet,
 		authResults, parseErrors, nullableTime(m.DisabledAt), m.DisabledReason,
-		slices.Contains(m.Flags, `\Seen`), nullableString(m.RawPath), bodyStatus,
+		m.DisabledBlob, slices.Contains(m.Flags, `\Seen`), nullableString(m.RawPath), bodyStatus,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert message %s: %w", m.ID, err)
@@ -306,13 +314,16 @@ func (d *DBs) SyncMessageRefs(ctx context.Context, folderID string) ([]SyncMessa
 
 // DisableMessage hides a message the server no longer holds in its folder. The
 // row, its raw bytes and its spool file stay: nothing is ever erased. The first
-// disable wins, so a later pass cannot rewrite the reason that explained it.
-func (d *DBs) DisableMessage(ctx context.Context, id, reason string, at time.Time) error {
+// disable wins, so a later pass cannot rewrite the reason that explained it;
+// blobHash is the content hash of the message's backup copy, recorded so the
+// backup can reconcile it (an empty hash is filled later, never cleared).
+func (d *DBs) DisableMessage(ctx context.Context, id, reason string, at time.Time, blobHash string) error {
 	res, err := d.Mirror.Write.ExecContext(ctx, `
 		UPDATE messages SET
 			disabled_reason = CASE WHEN disabled_at IS NULL THEN ? ELSE disabled_reason END,
-			disabled_at = COALESCE(disabled_at, ?)
-		WHERE id = ?`, reason, nullableTime(at), id)
+			disabled_at = COALESCE(disabled_at, ?),
+			disabled_blob = CASE WHEN COALESCE(disabled_blob, '') = '' THEN NULLIF(?, '') ELSE disabled_blob END
+		WHERE id = ?`, reason, nullableTime(at), blobHash, id)
 	if err != nil {
 		return fmt.Errorf("disable message %s: %w", id, err)
 	}
@@ -324,6 +335,76 @@ func (d *DBs) DisableMessage(ctx context.Context, id, reason string, at time.Tim
 		return ErrNotFound
 	}
 	return nil
+}
+
+// SetDisabledBlob records the blob store hash for a hidden row, used by the
+// backup's reconcile to heal a row whose bytes were not stored when it was
+// disabled. It does not check that the row is hidden: the caller already knows.
+func (d *DBs) SetDisabledBlob(ctx context.Context, id, blobHash string) error {
+	res, err := d.Mirror.Write.ExecContext(ctx,
+		`UPDATE messages SET disabled_blob = ? WHERE id = ?`, blobHash, id)
+	if err != nil {
+		return fmt.Errorf("set disabled blob %s: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("set disabled blob %s: %w", id, err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// EachDisabledRaw yields every hidden row's raw bytes in turn, one at a time, so
+// the backup can copy each into the blob store without an account's disabled
+// mail ever being held in memory together. Inline blobs come from the row; a
+// larger message's file is opened for the callback. A row with no bytes
+// (BodyTooLarge, never downloaded) is skipped, and a cancelled context stops at
+// the next row.
+func (d *DBs) EachDisabledRaw(ctx context.Context, fn func(id, blobHash string, raw io.Reader) error) error {
+	rows, err := d.Mirror.Read.QueryContext(ctx, `
+		SELECT id, COALESCE(disabled_blob, ''), raw_blob, COALESCE(raw_path, '')
+		FROM messages
+		WHERE disabled_at IS NOT NULL AND (length(raw_blob) > 0 OR raw_path IS NOT NULL)`)
+	if err != nil {
+		return fmt.Errorf("each disabled raw: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		var (
+			id, blobHash string
+			blob         []byte
+			rawPath      string
+		)
+		if err := rows.Scan(&id, &blobHash, &blob, &rawPath); err != nil {
+			return fmt.Errorf("each disabled raw: %w", err)
+		}
+		if err := d.withRaw(rawPath, blob, func(raw io.Reader) error {
+			return fn(id, blobHash, raw)
+		}); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+// withRaw presents a row's bytes, whether they live in the row or in a spool
+// file, and closes the file afterwards.
+func (d *DBs) withRaw(rawPath string, blob []byte, fn func(io.Reader) error) error {
+	if rawPath != "" {
+		f, err := os.Open(filepath.Join(d.Dir, filepath.FromSlash(rawPath)))
+		if err != nil {
+			return fmt.Errorf("open spool %s: %w", rawPath, err)
+		}
+		defer func() { _ = f.Close() }()
+		return fn(f)
+	}
+	return fn(bytes.NewReader(blob))
 }
 
 // Why a message is disabled. A message that vanished from a folder but still
@@ -395,7 +476,7 @@ const messageSelect = `
 	       COALESCE(body_text, ''), COALESCE(body_html_sanitized, ''),
 	       COALESCE(thread_id, ''), COALESCE(snippet, ''),
 	       COALESCE(auth_results, ''), COALESCE(parse_errors, ''),
-	       COALESCE(disabled_at, ''), COALESCE(disabled_reason, ''), seen,
+	       COALESCE(disabled_at, ''), COALESCE(disabled_reason, ''), COALESCE(disabled_blob, ''), seen,
 	       COALESCE(raw_path, ''), body_status, derived_version
 	FROM messages`
 
@@ -417,7 +498,7 @@ func scanMessage(s scanner) (Message, error) {
 		&date, &size, &flagsJSON, &internalDate, &m.HasAttachments, &m.RawBlob,
 		&m.BodyText, &m.BodyHTML, &m.ThreadID, &m.Snippet,
 		&authResultsJSON, &parseErrorsJSON,
-		&disabledAt, &m.DisabledReason, &m.Seen, &m.RawPath, &m.BodyStatus,
+		&disabledAt, &m.DisabledReason, &m.DisabledBlob, &m.Seen, &m.RawPath, &m.BodyStatus,
 		&m.DerivedVersion,
 	)
 	if err != nil {

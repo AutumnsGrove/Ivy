@@ -684,7 +684,7 @@ func (f *Fetcher) disableRefs(ctx context.Context, refs []store.SyncMessageRef) 
 // only known once the whole account has been read, and the label lives in the
 // row so a pass that dies first leaves it for the next one to settle.
 func (f *Fetcher) disableRef(ctx context.Context, ref store.SyncMessageRef) error {
-	if err := f.dbs.DisableMessage(ctx, ref.ID, store.DisabledPending, f.now()); err != nil {
+	if err := f.dbs.DisableMessage(ctx, ref.ID, store.DisabledPending, f.now(), ""); err != nil {
 		return fmt.Errorf("disable message %s: %w", ref.ID, err)
 	}
 	return nil

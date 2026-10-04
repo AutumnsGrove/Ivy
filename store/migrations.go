@@ -352,6 +352,16 @@ var mirrorMigrations = []migration{
 			`CREATE INDEX idx_messages_derived_version ON messages(account_id, derived_version)`,
 		},
 	},
+	{
+		version: 10,
+		statements: []string{
+			// The content hash of a hidden message's backup blob (blobstore). It is
+			// the one message the server no longer holds, so the bytes are copied
+			// outside the databases at disable time and the backup mirrors the store
+			// (ARCHITECTURE.md 9). A live row leaves this NULL.
+			`ALTER TABLE messages ADD COLUMN disabled_blob TEXT`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.
