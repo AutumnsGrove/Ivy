@@ -28,6 +28,10 @@ func (s *Server) handleRestoreMessage(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, store.ErrNotFound):
 		s.notFound(w, r, "message")
 		return
+	case errors.Is(err, store.ErrPendingClassification):
+		writeError(w, http.StatusConflict, "pending_classification",
+			"This message is still being sorted out; try again after the next sync")
+		return
 	case err != nil:
 		s.serverError(w, r, err)
 		return
@@ -37,7 +41,8 @@ func (s *Server) handleRestoreMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleRestoreAccountHidden is the one-click answer to a mass-disable alert:
-// every settled hidden row of the account becomes visible again.
+// the account's mail the server dropped becomes visible again. Moved and
+// still-unclassified rows stay hidden.
 func (s *Server) handleRestoreAccountHidden(w http.ResponseWriter, r *http.Request) {
 	n, err := s.dbs.RestoreAccountDisabled(r.Context(), r.PathValue("id"))
 	if err != nil {

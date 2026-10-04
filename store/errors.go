@@ -19,3 +19,9 @@ var ErrNotDisabled = errors.New("message is not disabled")
 // ErrNoRaw reports a message whose body was never downloaded (BodyTooLarge), so
 // there are no bytes to copy or serve. It is not an error the UI shows.
 var ErrNoRaw = errors.New("message has no raw bytes")
+
+// ErrPendingClassification reports a restore asked for a message a pass hid but
+// has not classified yet. The next completed pass decides whether it moved or was
+// removed, so it is neither restorable nor purgeable-by-assumption until then.
+// Handlers map it to a 409.
+var ErrPendingClassification = errors.New("message is pending classification")

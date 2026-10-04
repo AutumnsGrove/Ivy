@@ -83,13 +83,13 @@ func TestRestoreAccountHiddenEndpoint(t *testing.T) {
 	if code := doJSON(t, http.MethodPost, srv.URL+"/api/v1/mirror/accounts/acct-1/restore", nil, &out, nil); code != http.StatusOK {
 		t.Fatalf("restore status = %d, want 200", code)
 	}
-	if out.Restored != 2 {
-		t.Errorf("restored = %d, want 2 (pending is not restorable)", out.Restored)
+	if out.Restored != 1 {
+		t.Errorf("restored = %d, want 1 (pending is unclassified, moved mail is live elsewhere)", out.Restored)
 	}
 	var health api.HealthOverview
 	getJSON(t, srv.URL+"/api/v1/mirror/health", &health)
-	if h := health.Accounts[0].Hidden; h == nil || h.Total != 1 || h.Pending != 1 {
-		t.Errorf("hidden after restore = %+v, want only the pending row", h)
+	if h := health.Accounts[0].Hidden; h == nil || h.Total != 2 || h.Pending != 1 || h.Moved != 1 {
+		t.Errorf("hidden after restore = %+v, want the pending and the moved row", h)
 	}
 }
 
@@ -232,5 +232,28 @@ func TestRestoreMessagePublishesAHint(t *testing.T) {
 	}
 	if got := r.mustFrame(); !strings.HasPrefix(got, "event: message.changed") {
 		t.Errorf("frame = %q, want a message.changed hint", got)
+	}
+}
+
+// A pending row is not restorable by hand either: the API answers 409 and the
+// row stays hidden until a completed pass settles it.
+func TestRestoreMessageEndpointRefusesAPendingRow(t *testing.T) {
+	t.Parallel()
+	srv, dbs := newSeededServer(t)
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox})
+	mustMessage(t, dbs, disabledInboxMessage("m1", "acct-1", "inbox-1", store.DisabledPending))
+
+	var body api.Error
+	if code := doJSON(t, http.MethodPost, srv.URL+"/api/v1/mirror/messages/m1/restore", nil, &body, nil); code != http.StatusConflict {
+		t.Fatalf("restore of a pending row status = %d, want 409", code)
+	}
+	if body.Code != "pending_classification" {
+		t.Errorf("error code = %q, want pending_classification", body.Code)
+	}
+	var health api.HealthOverview
+	getJSON(t, srv.URL+"/api/v1/mirror/health", &health)
+	if h := health.Accounts[0].Hidden; h == nil || h.Pending != 1 {
+		t.Errorf("hidden after the refused restore = %+v, want the pending row still hidden", h)
 	}
 }

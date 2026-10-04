@@ -114,10 +114,12 @@ func TestRestoreAccountSkipsPendingRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RestoreAccountDisabled: %v", err)
 	}
-	if n != 3 {
-		t.Errorf("restored %d rows, want 3 (pending is not restorable)", n)
+	if n != 2 {
+		t.Errorf("restored %d rows, want 2 (pending is unclassified and moved mail is still live elsewhere)", n)
 	}
-	for id, wantHidden := range map[string]bool{"m-removed": false, "m-moved": false, "m-pending": true, "m-no-reason": false} {
+	// A moved message has a live copy in another folder, so un-hiding it would
+	// show the same mail twice; only mail the server dropped comes back.
+	for id, wantHidden := range map[string]bool{"m-removed": false, "m-moved": true, "m-pending": true, "m-no-reason": false} {
 		var disabledAt string
 		if err := dbs.Mirror.Read.QueryRowContext(ctx,
 			`SELECT COALESCE(disabled_at, '') FROM messages WHERE id = ?`, id).Scan(&disabledAt); err != nil {
@@ -211,5 +213,65 @@ func TestPurgeMessageRefusesARowRestoredBeforeTheDelete(t *testing.T) {
 	}
 	if rows != 1 || atts != 1 {
 		t.Errorf("after the refused purge: %d message rows and %d attachment rows, want 1 and 1", rows, atts)
+	}
+}
+
+// A sweep is what the server dropped. A pending row whose Message-ID is live in
+// another row is going to settle as a move, so it is not part of any folder's
+// sweep; one with no Message-ID can never be proven moved and counts.
+func TestPendingDisabledByFolderLeavesOutRowsThatWillSettleAsMoved(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct-1")
+	seedFolder(t, dbs, "acct-1", "folder-1")
+	seedFolder(t, dbs, "acct-1", "folder-2")
+	add := func(id, folder string, uid uint32, msgID, reason string) {
+		t.Helper()
+		m := Message{ID: id, AccountID: "acct-1", FolderID: folder, UID: uid, ContentKey: id, MessageID: msgID}
+		if reason != "" {
+			m.DisabledAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			m.DisabledReason = reason
+		}
+		if err := dbs.UpsertMessage(ctx, m); err != nil {
+			t.Fatalf("seed %s: %v", id, err)
+		}
+	}
+	add("gone", "folder-1", 1, "<gone@x>", DisabledPending)
+	add("moved", "folder-1", 2, "<moved@x>", DisabledPending)
+	add("moved-copy", "folder-2", 1, "<moved@x>", "") // live elsewhere
+	add("anon", "folder-1", 3, "", DisabledPending)
+	add("live", "folder-1", 4, "<live@x>", "")
+
+	got, err := dbs.PendingDisabledByFolder(ctx, "acct-1")
+	if err != nil {
+		t.Fatalf("PendingDisabledByFolder: %v", err)
+	}
+	if len(got) != 1 || got[0].Hidden != 2 || got[0].Held != 4 {
+		t.Errorf("sweeps = %+v, want one folder with hidden 2 (gone, anon) of held 4 (live, gone, moved, anon)", got)
+	}
+}
+
+// A pending row has no verdict yet: the next completed pass decides whether it
+// moved or was removed. Restoring it by hand would race that verdict, so single
+// restore refuses it the way the account restore skips it, and leaves it hidden.
+func TestRestoreMessageRefusesAPendingRow(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct-1")
+	seedFolder(t, dbs, "acct-1", "folder-1")
+	seedDisabledMessage(t, dbs, "acct-1", "folder-1", "m1", DisabledPending, 1, "")
+
+	if err := dbs.RestoreMessage(ctx, "m1"); !errors.Is(err, ErrPendingClassification) {
+		t.Fatalf("RestoreMessage of a pending row = %v, want ErrPendingClassification", err)
+	}
+	var hidden int
+	if err := dbs.Mirror.Read.QueryRowContext(ctx,
+		`SELECT disabled_at IS NOT NULL FROM messages WHERE id = 'm1'`).Scan(&hidden); err != nil {
+		t.Fatalf("read m1: %v", err)
+	}
+	if hidden != 1 {
+		t.Error("the refused restore made the pending row visible")
 	}
 }

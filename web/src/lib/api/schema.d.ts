@@ -340,8 +340,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Make every settled hidden message of an account visible again
-         * @description The one-click answer to a mass-disable alert. Rows a pass has not classified yet are left for the next completed pass to settle.
+         * Make an account's removed mail visible again
+         * @description The one-click answer to a mass-disable alert. It restores mail the server dropped. Rows that moved to another folder stay hidden (their mail is live there, so restoring them would show it twice), and rows a pass has not classified yet are left for the next completed pass to settle.
          */
         post: operations["restoreAccountHidden"];
         delete?: never;
@@ -1105,6 +1105,15 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
+            /** @description The message is pending classification (code pending_classification): a pass hid it but has not yet decided whether it moved or was removed. It stays hidden until the next completed pass settles it. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     restoreAccountHidden: {

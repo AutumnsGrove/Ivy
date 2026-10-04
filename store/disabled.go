@@ -55,9 +55,17 @@ func (d *DBs) DisabledStats(ctx context.Context) (map[string]DisabledStat, error
 	return stats, nil
 }
 
-// FolderSweep is what one folder holds of rows a pass hid but has not classified
-// yet, with the rows still live beside them. Held is both together, the folder's
-// size before the sweep, which the mass-disable fraction is measured against.
+// provablyMovedSQL is true for a pending row whose Message-ID is live in another
+// row of the account, which is exactly what SettlePendingDisabled settles as a
+// move. It reads the row as m.
+const provablyMovedSQL = `(COALESCE(m.message_id_hdr, '') <> '' AND EXISTS (
+	SELECT 1 FROM messages l
+	WHERE l.account_id = m.account_id AND l.disabled_at IS NULL AND l.message_id_hdr = m.message_id_hdr))`
+
+// FolderSweep is what the server dropped from one folder: the rows a pass hid
+// that will not settle as a move, because mail that only changed folder is an
+// edit, not a loss. Held is the folder's size before the sweep (live and pending
+// rows together), which the mass-disable fraction is measured against.
 type FolderSweep struct {
 	Folder string
 	Hidden int
@@ -70,12 +78,12 @@ type FolderSweep struct {
 func (d *DBs) PendingDisabledByFolder(ctx context.Context, accountID string) ([]FolderSweep, error) {
 	rows, err := d.Mirror.Read.QueryContext(ctx, `
 		SELECT f.name,
-		       sum(CASE WHEN m.disabled_reason = ? THEN 1 ELSE 0 END),
+		       sum(CASE WHEN m.disabled_reason = ? AND NOT `+provablyMovedSQL+` THEN 1 ELSE 0 END),
 		       sum(CASE WHEN m.disabled_at IS NULL OR m.disabled_reason = ? THEN 1 ELSE 0 END)
 		FROM messages m JOIN folders f ON f.id = m.folder_id
 		WHERE m.account_id = ?
 		GROUP BY f.id
-		HAVING sum(CASE WHEN m.disabled_reason = ? THEN 1 ELSE 0 END) > 0
+		HAVING sum(CASE WHEN m.disabled_reason = ? AND NOT `+provablyMovedSQL+` THEN 1 ELSE 0 END) > 0
 		ORDER BY f.name`,
 		DisabledPending, DisabledPending, accountID, DisabledPending)
 	if err != nil {
@@ -99,11 +107,13 @@ func (d *DBs) PendingDisabledByFolder(ctx context.Context, accountID string) ([]
 
 // RestoreMessage makes one hidden row visible again. The bytes, derived data and
 // tags are untouched; only the disabled flag is cleared, so restoring a live row
-// is a harmless no-op. An unknown id is ErrNotFound.
+// is a harmless no-op. An unknown id is ErrNotFound; a row a pass has hidden but
+// not yet classified is ErrPendingClassification and stays hidden.
 func (d *DBs) RestoreMessage(ctx context.Context, id string) error {
 	n, err := d.Mirror.Write.ExecContext(ctx,
 		`UPDATE messages SET disabled_at = NULL, disabled_reason = NULL
-		 WHERE id = ? AND disabled_at IS NOT NULL`, id)
+		 WHERE id = ? AND disabled_at IS NOT NULL AND COALESCE(disabled_reason, '') <> ?`,
+		id, DisabledPending)
 	if err != nil {
 		return fmt.Errorf("restore message %s: %w", id, err)
 	}
@@ -112,28 +122,35 @@ func (d *DBs) RestoreMessage(ctx context.Context, id string) error {
 		return fmt.Errorf("restore message %s: %w", id, err)
 	}
 	if affected == 0 {
-		// The update matched no hidden row: distinguish an already-visible row from
-		// a missing one so the caller can answer 404 honestly.
-		var exists int
-		if err := d.Mirror.Read.QueryRowContext(ctx,
-			`SELECT count(*) FROM messages WHERE id = ?`, id).Scan(&exists); err != nil {
+		// The update matched no restorable row: tell a missing row (404) and a
+		// pending one (409) from one that is already visible.
+		var pending int
+		err := d.Mirror.Read.QueryRowContext(ctx,
+			`SELECT disabled_at IS NOT NULL AND disabled_reason = ? FROM messages WHERE id = ?`,
+			DisabledPending, id).Scan(&pending)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
 			return fmt.Errorf("restore message %s: %w", id, err)
 		}
-		if exists == 0 {
-			return ErrNotFound
+		if pending != 0 {
+			return ErrPendingClassification
 		}
 	}
 	return nil
 }
 
-// RestoreAccountDisabled makes every settled hidden row of an account visible and
-// returns how many it restored. Pending rows are left alone: a pass has not yet
-// decided whether they moved or were removed (N22).
+// RestoreAccountDisabled makes the mail the server dropped visible again and
+// returns how many rows it restored. Pending rows are left alone, because a pass
+// has not yet decided whether they moved or were removed (N22); moved rows are
+// left alone because their mail is live in another folder, so restoring them
+// would show it twice.
 func (d *DBs) RestoreAccountDisabled(ctx context.Context, accountID string) (int, error) {
 	res, err := d.Mirror.Write.ExecContext(ctx,
 		`UPDATE messages SET disabled_at = NULL, disabled_reason = NULL
-		 WHERE account_id = ? AND disabled_at IS NOT NULL AND COALESCE(disabled_reason, '') <> ?`,
-		accountID, DisabledPending)
+		 WHERE account_id = ? AND disabled_at IS NOT NULL AND COALESCE(NULLIF(disabled_reason, ''), ?) = ?`,
+		accountID, DisabledRemoved, DisabledRemoved)
 	if err != nil {
 		return 0, fmt.Errorf("restore hidden mail of %s: %w", accountID, err)
 	}

@@ -154,3 +154,40 @@ func TestMassDisableAlertSurvivesAPassThatDiesAfterTheSweep(t *testing.T) {
 		})
 	}
 }
+
+// Archiving is an edit, not a loss: the mail is still on the server, in another
+// folder. Moving every message out of a folder hides all of its rows, but a
+// mass-disable alert (and its one-click restore) is for mail the server dropped.
+func TestMassDisableAlertStaysQuietWhenTheMailWasOnlyMoved(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+	acct := accountFor(t, w, "acct-1", "me@grove.test", "secret")
+	if err := acc.CreateMailbox("Archive"); err != nil {
+		t.Fatalf("create Archive: %v", err)
+	}
+	for i := 0; i < 12; i++ {
+		acc.Deliver("INBOX", rawFor(i))
+	}
+	f := ivysync.NewFetcher(dbs)
+	if _, err := f.Fetch(ctx, acct); err != nil {
+		t.Fatalf("first fetch: %v", err)
+	}
+	for uid := uint32(1); uid <= 12; uid++ {
+		if err := acc.Move("INBOX", uid, "Archive"); err != nil {
+			t.Fatalf("move %d: %v", uid, err)
+		}
+	}
+	res, err := f.Fetch(ctx, acct)
+	if err != nil {
+		t.Fatalf("second fetch: %v", err)
+	}
+	if len(res.MassDisabled) != 0 {
+		t.Errorf("moving 12 of 12 messages to Archive raised %+v, want no alert", res.MassDisabled)
+	}
+	if n := hiddenRows(t, dbs, "acct-1"); n != 12 {
+		t.Errorf("hidden rows = %d, want the 12 moved ones kept hidden", n)
+	}
+}

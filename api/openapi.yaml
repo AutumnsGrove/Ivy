@@ -322,13 +322,24 @@ paths:
           description: Restored, or already visible
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          description: >
+            The message is pending classification (code pending_classification):
+            a pass hid it but has not yet decided whether it moved or was
+            removed. It stays hidden until the next completed pass settles it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /mirror/accounts/{id}/restore:
     post:
       operationId: restoreAccountHidden
-      summary: Make every settled hidden message of an account visible again
+      summary: Make an account's removed mail visible again
       description: >
-        The one-click answer to a mass-disable alert. Rows a pass has not
-        classified yet are left for the next completed pass to settle.
+        The one-click answer to a mass-disable alert. It restores mail the server
+        dropped. Rows that moved to another folder stay hidden (their mail is
+        live there, so restoring them would show it twice), and rows a pass has
+        not classified yet are left for the next completed pass to settle.
       parameters:
         - name: id
           in: path
