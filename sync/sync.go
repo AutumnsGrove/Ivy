@@ -291,9 +291,21 @@ func (f *Fetcher) fetchAll(ctx context.Context, c *imapclient.Client, acct Accou
 	if err != nil {
 		return Result{}, fmt.Errorf("sync account %s: list: %w", acct.ID, err)
 	}
+	caps, err := c.Capability().Wait()
+	if err != nil {
+		return Result{}, fmt.Errorf("sync account %s: capability: %w", acct.ID, err)
+	}
+	useDelta := caps.Has(imap.CapQResync)
+	if useDelta {
+		if _, err := c.Enable(imap.CapQResync).Wait(); err != nil {
+			// The server claimed QRESYNC but would not enable it. The full scan is
+			// always correct, so fall back rather than fail the account.
+			slog.WarnContext(ctx, "sync: server refused QRESYNC, using a full scan", "account", acct.ID, "error", err)
+			useDelta = false
+		}
+	}
 
 	var snaps []folderSnapshot
-	liveMsgIDs := map[string]bool{}
 	for _, mb := range mailboxes {
 		if !selectable(mb) {
 			continue
@@ -301,21 +313,23 @@ func (f *Fetcher) fetchAll(ctx context.Context, c *imapclient.Client, acct Accou
 		if err := ctx.Err(); err != nil {
 			return Result{}, fmt.Errorf("sync account %s: %w", acct.ID, err)
 		}
-		snap, err := f.snapshotFolder(ctx, c, acct, mb)
+		existing, found, err := f.folderRow(ctx, acct.ID, mb.Mailbox)
 		if err != nil {
 			return Result{}, err
 		}
-		for _, meta := range snap.Messages {
-			liveMsgIDs[messageIDOf(meta)] = true
+		snap, err := f.snapshotFolder(ctx, c, acct, mb, existing, found, useDelta)
+		if err != nil {
+			return Result{}, err
 		}
 		snaps = append(snaps, snap)
 	}
 
 	var res Result
+	var disabled []disabledRef
 	seen := make(map[string]bool, len(snaps))
 	for _, snap := range snaps {
 		seen[snap.Name] = true
-		stored, skipped, err := f.reconcileFolder(ctx, c, acct, snap, liveMsgIDs)
+		stored, skipped, err := f.reconcileFolder(ctx, c, acct, snap, &disabled)
 		if err != nil {
 			return res, err
 		}
@@ -323,7 +337,13 @@ func (f *Fetcher) fetchAll(ctx context.Context, c *imapclient.Client, acct Accou
 		res.Stored += stored
 		res.Skipped += skipped
 	}
-	if err := f.markGoneFolders(ctx, acct.ID, seen, liveMsgIDs); err != nil {
+	if err := f.markGoneFolders(ctx, acct.ID, seen, &disabled); err != nil {
+		return res, err
+	}
+	// Move vs removal is decided once the whole account is known: a row disabled
+	// here whose Message-ID is still live elsewhere is a move (round 37). Doing it
+	// after the pass is what lets the QRESYNC delta skip a full-account scan.
+	if err := f.reclassifyDisabled(ctx, acct.ID, disabled); err != nil {
 		return res, err
 	}
 	return res, nil
@@ -331,7 +351,10 @@ func (f *Fetcher) fetchAll(ctx context.Context, c *imapclient.Client, acct Accou
 
 // folderSnapshot is what one SELECT plus a metadata FETCH read from a mailbox.
 // The body is not read here: a message already mirrored keeps its bytes, and a
-// new one is fetched by size tier in fetchBatch.
+// new one is fetched by size tier in fetchBatch. When Delta is set, Messages
+// holds only the messages that changed or arrived since the stored modseq and
+// Vanished holds the UIDs expunged since it, so an unchanged mirrored row must
+// be left alone rather than disabled for being absent.
 type folderSnapshot struct {
 	Name          string
 	Attrs         []imap.MailboxAttr
@@ -339,26 +362,73 @@ type folderSnapshot struct {
 	UIDNext       uint32
 	HighestModSeq uint64
 	Messages      []*imapclient.FetchMessageBuffer
+	Vanished      imap.UIDSet
+	Delta         bool
+	Existing      store.Folder
+	Found         bool
+}
+
+// canUseDelta reports whether a folder has a stored UIDVALIDITY and modseq to
+// resume from. Whether the server supports QRESYNC is decided once per account.
+func canUseDelta(existing store.Folder, found bool) bool {
+	return found && existing.UIDValidity != 0 && existing.HighestModSeq > 0
+}
+
+// folderRow looks up a mailbox's mirror row. found is false for a folder the
+// account has never seen, which cannot use a delta.
+func (f *Fetcher) folderRow(ctx context.Context, accountID, name string) (store.Folder, bool, error) {
+	existing, err := f.dbs.GetFolderByName(ctx, accountID, name)
+	switch {
+	case err == nil:
+		return existing, true, nil
+	case errors.Is(err, store.ErrNotFound):
+		return store.Folder{}, false, nil
+	default:
+		return store.Folder{}, false, fmt.Errorf("sync account %s: look up folder %s: %w", accountID, name, err)
+	}
 }
 
 // snapshotFolder selects a mailbox read-only and reads every message's
-// envelope, flags, size and internal date, but no bodies.
-func (f *Fetcher) snapshotFolder(ctx context.Context, c *imapclient.Client, acct Account, mb *imap.ListData) (folderSnapshot, error) {
-	data, err := c.Select(mb.Mailbox, &imap.SelectOptions{ReadOnly: true}).Wait()
-	if err != nil {
-		return folderSnapshot{}, fmt.Errorf("sync account %s: select %s: %w", acct.ID, mb.Mailbox, err)
+// envelope, flags, size and internal date, but no bodies. When the account can
+// and should use QRESYNC it asks for the stored UIDVALIDITY and modseq, so the
+// server answers with only what changed (or, if the validity no longer matches,
+// the current validity and no VANISHED, which forces a full scan).
+func (f *Fetcher) snapshotFolder(ctx context.Context, c *imapclient.Client, acct Account, mb *imap.ListData, existing store.Folder, found, useDelta bool) (folderSnapshot, error) {
+	snap := folderSnapshot{Name: mb.Mailbox, Attrs: mb.Attrs, Existing: existing, Found: found}
+	var (
+		data *imap.SelectData
+		err  error
+	)
+	if useDelta && canUseDelta(existing, found) {
+		data, err = c.Select(mb.Mailbox, &imap.SelectOptions{
+			ReadOnly: true,
+			QResync:  &imap.QResyncOptions{UIDValidity: existing.UIDValidity, ModSeq: existing.HighestModSeq},
+		}).Wait()
+		if err != nil {
+			return folderSnapshot{}, fmt.Errorf("sync account %s: qresync select %s: %w", acct.ID, mb.Mailbox, err)
+		}
+		if data.UIDValidity == existing.UIDValidity {
+			snap.Delta = true
+			snap.Vanished = data.Vanished
+		}
+	} else {
+		data, err = c.Select(mb.Mailbox, &imap.SelectOptions{ReadOnly: true}).Wait()
+		if err != nil {
+			return folderSnapshot{}, fmt.Errorf("sync account %s: select %s: %w", acct.ID, mb.Mailbox, err)
+		}
 	}
-	snap := folderSnapshot{
-		Name: mb.Mailbox, Attrs: mb.Attrs, UIDValidity: data.UIDValidity,
-		UIDNext: uint32(data.UIDNext), HighestModSeq: data.HighestModSeq,
-	}
+	snap.UIDValidity = data.UIDValidity
+	snap.UIDNext = uint32(data.UIDNext)
+	snap.HighestModSeq = data.HighestModSeq
 	if data.NumMessages == 0 {
 		return snap, nil
 	}
+	opts := &imap.FetchOptions{UID: true, Flags: true, Envelope: true, InternalDate: true, RFC822Size: true}
+	if snap.Delta {
+		opts.ChangedSince = existing.HighestModSeq
+	}
 	all := imap.UIDSet{imap.UIDRange{Start: 1, Stop: 0}}
-	metas, err := c.Fetch(all, &imap.FetchOptions{
-		UID: true, Flags: true, Envelope: true, InternalDate: true, RFC822Size: true,
-	}).Collect()
+	metas, err := c.Fetch(all, opts).Collect()
 	if err != nil {
 		return folderSnapshot{}, fmt.Errorf("sync account %s: list messages in %s: %w", acct.ID, mb.Mailbox, err)
 	}
@@ -371,23 +441,26 @@ func (f *Fetcher) snapshotFolder(ctx context.Context, c *imapclient.Client, acct
 // deleted: a row the server no longer holds in this folder is disabled, with
 // "moved" when its content still lives elsewhere on the server and
 // "server_removed" otherwise (rounds 37 and 38).
-func (f *Fetcher) reconcileFolder(ctx context.Context, c *imapclient.Client, acct Account, snap folderSnapshot, liveMsgIDs map[string]bool) (stored, skipped int, err error) {
+func (f *Fetcher) reconcileFolder(ctx context.Context, c *imapclient.Client, acct Account, snap folderSnapshot, disabled *[]disabledRef) (stored, skipped int, err error) {
 	folder := store.Folder{
 		ID:            folderRowID(acct.ID, snap.Name),
 		AccountID:     acct.ID,
 		Name:          snap.Name,
 		Role:          RoleFor(snap.Name, snap.Attrs),
 		UIDValidity:   snap.UIDValidity,
-		HighestModSeq: snap.HighestModSeq,
+		HighestModSeq: 0,
 		LastSyncAt:    f.now(),
 	}
-	existing, err := f.dbs.GetFolderByName(ctx, acct.ID, snap.Name)
-	if err != nil && !errors.Is(err, store.ErrNotFound) {
-		return 0, 0, fmt.Errorf("sync account %s: look up folder %s: %w", acct.ID, snap.Name, err)
+	if snap.Found {
+		folder.ID = snap.Existing.ID
 	}
-	firstSight := errors.Is(err, store.ErrNotFound)
-	if !firstSight {
-		folder.ID = existing.ID
+	validityChanged := snap.Found && snap.Existing.UIDValidity != snap.UIDValidity
+	// A partial run must not advance the stored modseq past the bodies it never
+	// fetched: a later delta would then skip them. Keep the old modseq (or 0 for
+	// a folder whose validity just changed) until every body in this folder is
+	// stored, below.
+	if snap.Found && !validityChanged {
+		folder.HighestModSeq = snap.Existing.HighestModSeq
 	}
 	// The folder row must exist before its messages (foreign keys), and writing
 	// it first also revives a name the server has brought back.
@@ -402,9 +475,8 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *imapclient.Client, acc
 
 	// A UIDVALIDITY change invalidates every UID the folder held. Disable what
 	// the old validity left behind and read the new validity as if it were new.
-	validityChanged := !firstSight && existing.UIDValidity != snap.UIDValidity
-	if firstSight || validityChanged {
-		if err := f.disableRefs(ctx, refs, liveMsgIDs); err != nil {
+	if !snap.Found || validityChanged {
+		if err := f.disableRefs(ctx, refs, disabled); err != nil {
 			return 0, 0, err
 		}
 		refs = nil
@@ -414,7 +486,7 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *imapclient.Client, acc
 	for _, ref := range refs {
 		if ref.UIDValidity != snap.UIDValidity {
 			// A leftover from an earlier validity that was never disabled.
-			if err := f.disableRef(ctx, ref, liveMsgIDs); err != nil {
+			if err := f.disableRef(ctx, ref, disabled); err != nil {
 				return 0, 0, err
 			}
 			continue
@@ -429,9 +501,20 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *imapclient.Client, acc
 
 	var newUIDs []uint32
 	for uid, ref := range mirrored {
+		if snap.Delta && snap.Vanished.Contains(imap.UID(uid)) {
+			if err := f.disableRef(ctx, ref, disabled); err != nil {
+				return 0, 0, err
+			}
+			continue
+		}
 		meta, ok := present[uid]
 		if !ok {
-			if err := f.disableRef(ctx, ref, liveMsgIDs); err != nil {
+			if snap.Delta {
+				// A delta sent nothing for an unchanged message: it is still live.
+				skipped++
+				continue
+			}
+			if err := f.disableRef(ctx, ref, disabled); err != nil {
 				return 0, 0, err
 			}
 			continue
@@ -480,13 +563,19 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *imapclient.Client, acc
 			return stored, skipped, err
 		}
 	}
+	// Every body this folder needed is stored, so the modseq may advance. A
+	// failure above returns before this and leaves the old modseq for the retry.
+	folder.HighestModSeq = snap.HighestModSeq
+	if err := f.dbs.UpsertFolder(ctx, folder); err != nil {
+		return stored, skipped, err
+	}
 	return stored, skipped, nil
 }
 
 // markGoneFolders hides a mirror folder the server no longer lists and disables
 // its live messages, exactly as a vanished UID is handled. Rows, raw bytes and
 // spool files stay (CHUNK3-BRIEF.md 1).
-func (f *Fetcher) markGoneFolders(ctx context.Context, accountID string, seen map[string]bool, liveMsgIDs map[string]bool) error {
+func (f *Fetcher) markGoneFolders(ctx context.Context, accountID string, seen map[string]bool, disabled *[]disabledRef) error {
 	folders, err := f.dbs.AllFolders(ctx, accountID)
 	if err != nil {
 		return err
@@ -499,10 +588,39 @@ func (f *Fetcher) markGoneFolders(ctx context.Context, accountID string, seen ma
 		if err != nil {
 			return err
 		}
-		if err := f.disableRefs(ctx, refs, liveMsgIDs); err != nil {
+		if err := f.disableRefs(ctx, refs, disabled); err != nil {
 			return err
 		}
 		if err := f.dbs.SetFolderGone(ctx, folder.ID, f.now()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// disabledRef is a row this pass disabled before the whole account was known.
+type disabledRef struct {
+	id        string
+	messageID string
+}
+
+// reclassifyDisabled turns this pass's provisional server_removed rows into
+// moves where the Message-ID is still live elsewhere in the account. It runs
+// after every folder so a move is seen whichever folder was processed first
+// (round 37), which is what lets the QRESYNC delta skip a full-account scan.
+func (f *Fetcher) reclassifyDisabled(ctx context.Context, accountID string, disabled []disabledRef) error {
+	if len(disabled) == 0 {
+		return nil
+	}
+	live, err := f.dbs.LiveMessageIDs(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	for _, d := range disabled {
+		if !live[d.messageID] {
+			continue
+		}
+		if err := f.dbs.SetMessageDisabledReason(ctx, d.id, disabledReasonMoved); err != nil {
 			return err
 		}
 	}
@@ -516,31 +634,23 @@ const (
 	disabledReasonServerRemoved = "server_removed"
 )
 
-func (f *Fetcher) disableRefs(ctx context.Context, refs []store.SyncMessageRef, liveMsgIDs map[string]bool) error {
+func (f *Fetcher) disableRefs(ctx context.Context, refs []store.SyncMessageRef, disabled *[]disabledRef) error {
 	for _, ref := range refs {
-		if err := f.disableRef(ctx, ref, liveMsgIDs); err != nil {
+		if err := f.disableRef(ctx, ref, disabled); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (f *Fetcher) disableRef(ctx context.Context, ref store.SyncMessageRef, liveMsgIDs map[string]bool) error {
-	reason := disabledReasonServerRemoved
-	if liveMsgIDs[ref.MessageID] {
-		reason = disabledReasonMoved
-	}
-	if err := f.dbs.DisableMessage(ctx, ref.ID, reason, f.now()); err != nil {
+// disableRef hides a vanished row for now; reclassifyDisabled may relabel it a
+// move once the whole account has been read.
+func (f *Fetcher) disableRef(ctx context.Context, ref store.SyncMessageRef, disabled *[]disabledRef) error {
+	if err := f.dbs.DisableMessage(ctx, ref.ID, disabledReasonServerRemoved, f.now()); err != nil {
 		return fmt.Errorf("disable message %s: %w", ref.ID, err)
 	}
+	*disabled = append(*disabled, disabledRef{id: ref.ID, messageID: ref.MessageID})
 	return nil
-}
-
-func messageIDOf(meta *imapclient.FetchMessageBuffer) string {
-	if meta == nil || meta.Envelope == nil {
-		return ""
-	}
-	return wrapMessageID(meta.Envelope.MessageID)
 }
 
 // canonicalFlags lower-cases and sorts a flag list, so two listings of the same

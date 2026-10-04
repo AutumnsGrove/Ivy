@@ -44,3 +44,25 @@ func TestClassifySyncErrorBoundsTheDetail(t *testing.T) {
 		t.Errorf("detail is %d bytes, over the %d cap", len(detail), store.MaxSyncErrorDetail)
 	}
 }
+
+func TestCanUseDelta(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		existing store.Folder
+		found    bool
+		want     bool
+	}{
+		{"never seen", store.Folder{UIDValidity: 7, HighestModSeq: 3}, false, false},
+		{"no modseq", store.Folder{UIDValidity: 7}, true, false},
+		{"no validity", store.Folder{HighestModSeq: 3}, true, false},
+		{"resumable", store.Folder{UIDValidity: 7, HighestModSeq: 3}, true, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := canUseDelta(tc.existing, tc.found); got != tc.want {
+				t.Errorf("canUseDelta = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

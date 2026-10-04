@@ -196,11 +196,11 @@ func TestFetchNewestFirstAndResumes(t *testing.T) {
 	fetcher := ivysync.NewFetcher(dbs, ivysync.WithBatchSize(1))
 
 	// The runner reads every message's metadata first (for move detection), then
-	// re-selects the folder and fetches bodies newest first. LOGIN, LIST, SELECT
-	// and the metadata FETCH, then the newest message's SELECT, metadata FETCH and
-	// body FETCH; the drop lands on the next message's SELECT, so the newest one
-	// is already a resumable checkpoint.
-	w.Fault(mailworld.DropConnection{After: 8})
+	// re-selects the folder and fetches bodies newest first. LOGIN, LIST,
+	// CAPABILITY, ENABLE QRESYNC, SELECT and the metadata FETCH, then the newest
+	// message's SELECT, metadata FETCH and body FETCH; the drop lands on the next
+	// message's SELECT, so the newest one is already a resumable checkpoint.
+	w.Fault(mailworld.DropConnection{After: 10})
 	if _, err := fetcher.Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret")); err == nil {
 		t.Fatal("first Fetch succeeded despite the armed drop, want a partial failure")
 	}
