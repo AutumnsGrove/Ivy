@@ -21,7 +21,7 @@ import (
 // row was written and the ephemeral ports each mailworld listened on. Every
 // other column must match.
 var volatile = map[string]bool{
-	"last_sync_at": true, "created_at": true, "updated_at": true,
+	"last_sync_at": true, "created_at": true, "updated_at": true, "last_ok_at": true,
 	"imap_port": true, "smtp_port": true,
 }
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
@@ -36,10 +37,11 @@ func populateFast(ctx context.Context, dbs *store.DBs, stack *Stack, opts Option
 
 	fetcher := ivysync.NewFetcher(dbs)
 	w := &fastWriter{
-		ctx:      ctx,
-		fetcher:  fetcher,
-		accounts: make(map[string]ivysync.Account),
-		folders:  make(map[string]store.Folder),
+		ctx:             ctx,
+		fetcher:         fetcher,
+		accounts:        make(map[string]ivysync.Account),
+		folders:         make(map[string]store.Folder),
+		storedByAccount: make(map[string]int),
 	}
 	for _, a := range stack.Config.Accounts {
 		acct := syncAccount(a)
@@ -78,6 +80,16 @@ func populateFast(ctx context.Context, dbs *store.DBs, stack *Stack, opts Option
 		if err := fetcher.Settle(ctx, acct.ID); err != nil {
 			return Summary{}, fmt.Errorf("devstack: populate %s: %w", acct.ID, err)
 		}
+		// A real sync records sync_state, so the seeder does too, or the two modes
+		// would not agree. The instant is volatile and masked by the agreement test.
+		stored := w.storedByAccount[acct.ID]
+		if err := dbs.SetSyncState(ctx, store.SyncState{
+			AccountID: acct.ID, Status: store.SyncOK,
+			LastOKAt: time.Now(), UpdatedAt: time.Now(),
+			BackfillDone: stored, BackfillTotal: stored,
+		}); err != nil {
+			return Summary{}, fmt.Errorf("devstack: record sync state for %s: %w", acct.ID, err)
+		}
 	}
 	return Summary{Accounts: len(w.accounts), Messages: w.stored}, nil
 }
@@ -86,12 +98,13 @@ func populateFast(ctx context.Context, dbs *store.DBs, stack *Stack, opts Option
 // way to return an error, so the first failure is kept and later deliveries are
 // skipped.
 type fastWriter struct {
-	ctx      context.Context
-	fetcher  *ivysync.Fetcher
-	accounts map[string]ivysync.Account // by address; only configured accounts
-	folders  map[string]store.Folder    // by account id + mailbox
-	stored   int
-	err      error
+	ctx             context.Context
+	fetcher         *ivysync.Fetcher
+	accounts        map[string]ivysync.Account // by address; only configured accounts
+	folders         map[string]store.Folder    // by account id + mailbox
+	stored          int
+	storedByAccount map[string]int
+	err             error
 }
 
 func (w *fastWriter) add(d mailworld.Delivery) {
@@ -124,6 +137,7 @@ func (w *fastWriter) add(d mailworld.Delivery) {
 		return
 	}
 	w.stored++
+	w.storedByAccount[acct.ID]++
 }
 
 // metaFromRaw builds what the first FETCH of a sync returns for the message. The

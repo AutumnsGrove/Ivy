@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -10,6 +11,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/AutumnsGrove/Ivy/config"
+	"github.com/AutumnsGrove/Ivy/internal/mailworld"
+	"github.com/AutumnsGrove/Ivy/store"
 )
 
 func writeConfig(t *testing.T, dir, body string) string {
@@ -117,6 +122,77 @@ func TestRunShutsDownPromptlyWithAnEventStreamOpen(t *testing.T) {
 		}
 	case <-time.After(4 * time.Second): // under Shutdown's own 5 s timeout
 		t.Fatal("run did not shut down while a stream was open")
+	}
+}
+
+// `ivy run` owns a sync worker per configured account, so the deployed binary
+// keeps the mirror fresh on its own (no separate sync process).
+func TestRunSyncsAConfiguredAccount(t *testing.T) {
+	addr := freeAddr(t)
+	dir := t.TempDir()
+	w, err := mailworld.New()
+	if err != nil {
+		t.Fatalf("mailworld: %v", err)
+	}
+	defer func() { _ = w.Close() }()
+	acc := w.Account("me@grove.test", "secret")
+	acc.Deliver("INBOX", mailworld.Msg().From("a@example.com").Subject("hello").Build())
+	host, portStr, err := net.SplitHostPort(w.IMAPAddr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(config.PasswordEnv("acct-1"), "secret")
+	configPath := writeConfig(t, dir, fmt.Sprintf(`listen: %s
+data_dir: %s
+accounts:
+  - id: acct-1
+    address: me@grove.test
+    imap_host: %s
+    imap_port: %s
+    smtp_host: %s
+    smtp_port: 1
+    username: me@grove.test
+    insecure: true
+`, addr, dir, host, portStr, host))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	root := New("test")
+	root.SetArgs([]string{"--config", configPath, "run"})
+	root.SetOut(os.Stderr)
+	root.SetErr(os.Stderr)
+	done := make(chan error, 1)
+	go func() { done <- root.ExecuteContext(ctx) }()
+	waitForHealth(t, "http://"+addr+"/api/v1/health")
+
+	dbs, err := store.Open(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() { _ = dbs.Close() }()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if f, err := dbs.GetFolderByName(context.Background(), "acct-1", "INBOX"); err == nil {
+			if uids, err := dbs.MessageUIDs(context.Background(), f.ID); err == nil && len(uids) == 1 {
+				break
+			}
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if f, err := dbs.GetFolderByName(context.Background(), "acct-1", "INBOX"); err != nil {
+		t.Fatal("the run command never synced the configured account")
+	} else if uids, _ := dbs.MessageUIDs(context.Background(), f.ID); len(uids) != 1 {
+		t.Fatalf("INBOX holds %v, want the delivered message", uids)
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("run returned %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("run did not shut down")
 	}
 }
 

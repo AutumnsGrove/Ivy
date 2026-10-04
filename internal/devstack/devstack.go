@@ -235,6 +235,9 @@ func BuildConfig(imapAddr, smtpAddr string, accounts []mailworld.SeedAccount, op
 			// On for both providers: the fake exists to serve these features offline.
 			LLMEnabled: true,
 			Password:   sa.Password,
+			// The fake speaks plaintext on loopback only; ValidateConfig below refuses
+			// any other host.
+			Insecure: true,
 		})
 	}
 	if err := ValidateConfig(cfg, opts.Expose); err != nil {

@@ -87,6 +87,11 @@ type Account struct {
 	// verdicts Ivy may believe (RFC 8601; N9 in papercuts.md). Empty is the safe
 	// default: no header is trusted. Only set ids a configured provider adds.
 	TrustedAuthservIDs []string `yaml:"trusted_authserv_ids"`
+	// Insecure sends the IMAP login in plaintext. It exists only for the loopback
+	// dev fake; the zero value is implicit TLS, so a forgotten field can never put
+	// a real password on the wire unencrypted. Named for the unsafe thing
+	// (STANDARDS.md 4a.7).
+	Insecure bool `yaml:"insecure"`
 
 	Password string `yaml:"-"`
 }

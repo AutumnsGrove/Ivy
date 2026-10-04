@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -22,6 +24,7 @@ import (
 	"github.com/AutumnsGrove/Ivy/gateway"
 	"github.com/AutumnsGrove/Ivy/internal/webui"
 	"github.com/AutumnsGrove/Ivy/store"
+	ivysync "github.com/AutumnsGrove/Ivy/sync"
 )
 
 // New builds the root command tree for the given build version.
@@ -95,6 +98,31 @@ func runCmd(configPath *string, version string) *cobra.Command {
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
+			// One owned worker per account: reconcile, then IDLE on INBOX. The defer
+			// order matters: workerStop cancels first, then workers.Wait lets every
+			// goroutine finish before RunE returns.
+			workerCtx, workerStop := context.WithCancel(ctx)
+			var workers sync.WaitGroup
+			defer workers.Wait()
+			defer workerStop()
+			for _, a := range cfg.Accounts {
+				acct := syncAccountFor(a)
+				worker := ivysync.NewWorker(ivysync.NewFetcher(dbs), acct,
+					ivysync.WithWorkerSyncFunc(func(res ivysync.Result, err error) {
+						hub.Publish(events.Event{Type: events.SyncState, AccountID: acct.ID})
+						if err == nil && res.Stored > 0 {
+							hub.Publish(events.Event{Type: events.MessageChanged, AccountID: acct.ID})
+						}
+					}))
+				workers.Add(1)
+				go func() {
+					defer workers.Done()
+					if err := worker.Run(workerCtx); err != nil && !errors.Is(err, context.Canceled) {
+						slog.WarnContext(workerCtx, "sync worker stopped", "account", acct.ID, "error", err)
+					}
+				}()
+			}
+
 			errCh := make(chan error, 1)
 			go func() {
 				fmt.Fprintf(cmd.OutOrStdout(), "ivy %s listening on %s\n", version, cfg.Listen)
@@ -141,6 +169,20 @@ func doctorCmd(configPath *string, version string) *cobra.Command {
 			reportHosts(out, cfg)
 			return nil
 		},
+	}
+}
+
+// syncAccountFor is the connection descriptor a sync worker uses for a
+// configured account. Real accounts use implicit TLS; only the loopback dev
+// fake sets Insecure (config.Account).
+func syncAccountFor(a config.Account) ivysync.Account {
+	return ivysync.Account{
+		ID: a.ID, Address: a.Address,
+		IMAPHost: a.IMAPHost, IMAPPort: a.IMAPPort,
+		SMTPHost: a.SMTPHost, SMTPPort: a.SMTPPort,
+		Username: a.Username, Password: a.Password,
+		Insecure:           a.Insecure,
+		TrustedAuthservIDs: a.TrustedAuthservIDs,
 	}
 }
 
