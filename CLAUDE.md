@@ -11,20 +11,19 @@ search, tags and careful LLM features. Single operator, used mostly from Safari 
 iPad over Tailscale (sometimes Firefox), deployed on a Le Potato SBC (aarch64, ~800 MB RAM free).
 Sibling of Polaris in philosophy, fully independent code. No auth for now; it must feel frictionless.
 
-## Phase
+## Working agreements
 
-**Frontend first (operator decision, 2026-10-02, qa-log round 28).** The plan is approved and the
-SvelteKit app in `web/` is being built against mock data behind `web/src/lib/api/client.ts`. The Go
-module, mailworld and the spikes in `docs/SPIKES.md` come next; nothing in the Go backend starts
-before the spikes that gate it (S1-S3). Record every Q&A answer in `docs/qa-log.md` and fold settled
-decisions into the docs. **Work goes directly on main** (operator's explicit instruction for this
-phase, overriding the old "never on main" rule), committed in small stages.
+This file holds rules, not status. What is done, what is next and the backlog live in
+`next_steps.md`; keep them there. Record every Q&A answer in `docs/qa-log.md` and fold settled
+decisions into the docs. **Work goes directly on main** (operator's explicit instruction, overriding
+the old "never on main" rule), committed in small stages.
 
 Frontend facts worth knowing: SvelteKit **3** (config lives in `vite.config.ts`; aliases are the
 `#lib/...` imports map, not `$lib`); `pnpm test` (Vitest, includes a token guard that fails on raw
 px/colour literals outside `tokens.css`), `pnpm check`, `pnpm exec playwright test` (WebKit phone +
 Chromium desktop; `e2e/screens.spec.ts` visits every route in `e2e/routes.ts`). `?scenario=` forces
-designed edge states while the backend is mocked; `/gallery` links every screen.
+designed edge states on screens the mock still backs; `/gallery` links every screen. Which API
+endpoints are real and which are still mocked is in `next_steps.md`.
 
 ## Doc map
 
