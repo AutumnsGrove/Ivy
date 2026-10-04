@@ -211,6 +211,25 @@ var mirrorMigrations = []migration{
 			`ALTER TABLE messages ADD COLUMN derive_failed_version INTEGER NOT NULL DEFAULT 0`,
 		},
 	},
+	{
+		version: 8,
+		statements: []string{
+			// Where each account's sync stands (ARCHITECTURE.md 9b). It describes the
+			// connection to the server, so it is rebuildable and lives in the mirror,
+			// not in the backed-up state. A missing row means "never synced", which
+			// is not the same as healthy.
+			`CREATE TABLE sync_state (
+				account_id        TEXT PRIMARY KEY REFERENCES accounts(id),
+				status            TEXT NOT NULL,
+				last_ok_at        TEXT,
+				last_error_code   TEXT NOT NULL DEFAULT '',
+				last_error_detail TEXT NOT NULL DEFAULT '',
+				backfill_done     INTEGER NOT NULL DEFAULT 0,
+				backfill_total    INTEGER NOT NULL DEFAULT 0,
+				updated_at        TEXT
+			)`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.
