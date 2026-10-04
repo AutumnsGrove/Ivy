@@ -355,10 +355,26 @@ a bounded detail. The frontend `EventSource` client in `web/src/lib/api/events.t
 into an `invalidateAll` on the open screen (Vitest + a Playwright refetch test). A configured
 account can say `insecure: true` for the loopback dev fake (default off, non-loopback refused).
 
-Not done or deferred: `COMPRESS=DEFLATE` toward IMAP (`PERFORMANCE.md` 1); the mass-disable alert
-and Restore/Purge endpoints (3b); benchmarks live in `sync/bench_test.go`
+Not done or deferred: `COMPRESS=DEFLATE` toward IMAP (`PERFORMANCE.md` 1); the Restore/Purge and
+mass-disable **screens** (3b backend landed separately); benchmarks live in `sync/bench_test.go`
 (`BenchmarkSyncBackfill` 200 ms / `BenchmarkSyncDelta` 33 ms on the M2, small profile). The
 real-mailbox live check and the potato numbers remain for the operator.
+
+## 3b: disabled-not-deleted backend (done 2026-10-04)
+
+3a already hid vanished mail without erasing it; 3b made that promise usable and observable. The
+store gained `DisabledStats` (per-account hidden count with a moved/removed/pending breakdown),
+`RestoreMessage`, `RestoreAccountDisabled` (pending rows left for the next completed pass, N22) and
+`PurgeMessage` (row, attachment rows and the returned spool path; a live row is refused with
+`ErrNotDisabled`). Mirror health carries the `hidden` breakdown, and three local-only endpoints
+(`POST /mirror/messages/{id}/restore`, `POST /mirror/accounts/{id}/restore`,
+`DELETE /mirror/messages/{id}`) expose restore and the one erasure, publishing a `message.changed`
+hint on success. A completed pass reports folders that tripped either mass-disable threshold
+(>50, or >20% of a folder that held >=10) in `Result.MassDisabled`, and `ivy run` raises a
+`health.alert` (`mass_disable`) per folder without stopping sync. `Fetcher.Fetch` now settles a
+cancelled pass's `sync_state` on a detached context (N21). Scenario tests cover the fake server
+emptying a mailbox (rows, blobs and spool files survive), a UIDVALIDITY rebuild and a restored
+message keeping its tags. Screens wait on gate C0.
 
 ## Other history worth keeping
 

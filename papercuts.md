@@ -759,11 +759,13 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   `TestStallGuardLeavesAQuietIdleConnectionAlone` prove it does not fire on healthy traffic; the second
   fails if the guard is never disarmed (mutation-checked). Limits row added to STANDARDS 4a. The
   value (2 min) is a judgement, not measured against Purelymail; `WithStallTimeout` changes it.
-- **N21 (open, nit)** · `b1ca426` · `sync/sync.go` · `Fetch` records the final `sync_state` with the
-  pass's own `ctx`, so a pass that ended because `ctx` was cancelled or timed out logs `cannot record
-  sync state: context canceled` and leaves the row at `syncing` until the next start overwrites it.
-  Harmless today (only shutdown cancels), but an operator-visible `syncing` after a deadline would
-  mislead. Recommendation: write the outcome with a short `context.WithoutCancel` timeout.
+- **N21 (resolved in 3b)** · `b1ca426` · `sync/sync.go` · **nit** · `Fetch` recorded the final
+  `sync_state` with the pass's own `ctx`, so a pass that ended because `ctx` was cancelled or timed
+  out logged `cannot record sync state: context canceled` and left the row at `syncing` until the
+  next start overwrote it. Fixed with the recommendation: the outcome is written on a
+  `context.WithoutCancel` context with a 5 s bound (`syncStateWriteTimeout`), so a cancelled or
+  timed-out pass settles its own row and an operator-visible `syncing` after a deadline cannot
+  mislead.
 - **#61 (resolves N20)** · `5a34ca8` · `sync/churn_test.go` · **standards** · the default 24 seeds
   execute 3 renames in 640 operations, which is why #58 survived the C2 gate (300 extra default-mix
   seeds were clean). `TestSyncConvergesUnderFolderChurn` runs the same oracle, seeds and variants on

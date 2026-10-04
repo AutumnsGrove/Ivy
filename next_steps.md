@@ -5,12 +5,13 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-04 (round 41: 3a is done). The full Go suite is `-race` green, `make check`
-(drift, fmt, vet, staticcheck, Go tests, `pnpm check`, 209 Vitest) is green, `govulncheck` is clean,
-the mock Playwright suite is 242 passed / 10 skipped and the real-binary smoke slice is 8/8.
-Chunks 0, 1 and 2a-2h are done except the visual baselines of 2g and 2h (they need the CI harness
-regenerated). The next gate is C3 before 3b/3d; 3b's backend can start once C2 has Claude's
-fresh-session review and you clear it.
+last updated: 2026-10-04 (round 42: 3b's backend is done). The full Go suite is `-race` green,
+`make check` (drift, fmt, vet, staticcheck, Go tests, `pnpm check`, 209 Vitest) is green,
+`govulncheck` is clean, the mock Playwright suite is 242 passed / 10 skipped and the real-binary
+smoke slice is 8/8. Chunks 0, 1 and 2a-2h are done except the visual baselines of 2g and 2h (they
+need the CI harness regenerated). 3a and 3b's backend are done; **the C0 canvas board for the
+Restore/Purge and mass-disable screens is the one thing blocking those, and C3 (outbox op states)
+is the next gate before 3d**; 3c (backups) can start now.
 
 ## How to run a chunk
 
@@ -37,7 +38,7 @@ fresh-session review and you clear it.
 | 2a-2f Read: store, fetch, parse, render, thread, gateway | done |
 | 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
-| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | 3a done; 3b backend next after C2 review (screens wait on C0) |
+| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c next |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | not started |
 | 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | not started |
 
@@ -55,75 +56,29 @@ or image-publish workflow yet.
 
 ## ▶ Now
 
-**1. Finish the review fallout (decided in rounds 32/32b; each test first).** In this order:
+**3b's backend is done** (round 42). The detail is in `docs/BUILD-LOG.md`; the decisions are in
+qa-log round 42. In short: `store` gained `DisabledStats`, `RestoreMessage`,
+`RestoreAccountDisabled` and `PurgeMessage` (a live row is refused); Mirror health carries the
+per-account `hidden` breakdown; `POST /mirror/messages/{id}/restore`,
+`POST /mirror/accounts/{id}/restore` and `DELETE /mirror/messages/{id}` are live; a completed pass
+that trips either mass-disable threshold raises `health.alert` `mass_disable`; N21 is closed. The
+Restore/Purge and mass-disable **screens are not designed**: the operator asked for a canvas board,
+which is gate **C0**.
 
-1. ~~Move account name/icon/photo to `state.db`~~ **done**: `account_profiles` (state migration 2),
-   a once-only copy from the old mirror columns on `Open`, the mirror columns now unused.
-2. ~~N11: `allowed_hosts`~~ **done** (#49): checked on every API request; loopback plus the listen
-   host are always allowed. `ivy init` writes no config, so it prints guidance instead of prompting.
-3. ~~N10/N14: `derived_version`~~ **done** (#50, #51): `SetMessageDerived` writes the derived data and
-   the version in one transaction; `Fetcher.Rederive` heals rows behind `sync.DerivedVersion` (200
-   per run, newest first). **Bump `DerivedVersion` whenever `mime`, `render` or the part walk
-   changes output**; a fingerprint test fails if you forget. The remote-image allow-list work
-   (backlog) reuses this to re-render.
-4. ~~N12: sticky oldest-wins thread ids~~ **done** (#52, #53): the stored id is sticky and
-   account-scoped, so features may key on `thread_id`. This also fixed a sync failure when one email
-   reached two accounts.
-5. ~~N15: RFC 3339 timestamps~~ **done** (#54): `date` replaces `time` on `MailSummary`,
-   `MailMessage` and `SearchHit`; `web/src/lib/time.ts` formats it for the viewer. The account sync
-   note followed (#57, N17): `syncedAt` is an instant and `syncLine` words it in the browser.
+**Next, in order:**
 
-**Round 32b is fully implemented, and its follow-ups N13, N16 and N17 are closed** (#55 to #57).
-**2. 2g is done** (round 33: settings controls, browser photo downscale, spend and calls; the
-detail is in `docs/BUILD-LOG.md`). Only the visual baselines remain, once the harness is
-regenerated in CI. Seams the backend must honour later: the settings mock (`api/settings.ts`) and
-the ledger mock (`mock.makeLedger`, `lib/spend.ts` `summarise`/`pageCalls`) are the contracts for
-the chunk 3-5 Go endpoints; the mock ledger marks half the accounts smart-off, so the call log is
-heavy with "held back" rows (mock realism only).
+1. **3c Backups** (depends on nothing, lands before the outbox exists). Daily `state.db`
+   `VACUUM INTO` + zstd + verify; prune after 15 days with the floor of 10; targets; one-line
+   restore; `ivy doctor` warnings.
+2. **C3**, then **3d Outbox + write path**. C3 is the half page of op states, durable points and the
+   crash-after-ack story, written before any outbox code.
+3. **C0 canvas board** for the three 3b screens, whenever the operator is ready; the backend and API
+   are already committed.
+4. **3e-3h** per the chunk plan below. 3h (the deploy track) is independent and can run at any point.
 
-**3. 2h is done** (qa-log rounds 34 and 35; the detail is in `docs/BUILD-LOG.md`). Only the visual
-baselines remain, with the 2g ones. What it delivered:
-- ~~`full` runs a one-shot sync at startup~~ **done**: `devstack.Populate` runs `sync.Fetcher` per
-  account before either `up` path serves (the watched child only opens the databases).
-- ~~`fast` mirror seeder~~ **done**: `Populate` replays the seeder into a throwaway mailworld
-  through `mailworld.WithObserver` and writes each delivery with the sync's own `StoreRaw`,
-  `RecordFolder` and `Settle`. `TestFastAndFullAgreeForDemo` compares every mirror and state table
-  (masking write times and ephemeral ports) and the spool files. It found two real differences:
-  the corpus is bare LF while a fetch returns CRLF (fixed in the seeder), and a server may list
-  flags in any order (the store now keeps them as a sorted set).
-- ~~`state.db` seed~~ **done**: account names and icons, five tags and their members (placed by
-  subject), written after the mirror in both modes, **once per `state.db`** (a `dev.state_seeded`
-  setting), so a restart never overwrites what the operator changed. New `store` calls:
-  `UpsertTag`, `TagMessage`, `SetSetting`, `GetSetting`. No settings are seeded: nothing reads them.
-- ~~`fast` is not fast~~ **settled (qa-log round 35): a built-database cache.** Measured 2026-10-04
-  (laptop): seeding costs the same as syncing (`demo` 246 ms full vs 272 ms fast; `large` 100k about
-  3m20s), because both pay parse plus two SQLite transactions per message. So an empty data dir is
-  now restored by file copy from `.dev/cache/<key>` (profile, seed, accounts, both schema versions,
-  `DerivedVersion`); only a clean build is cached, and a bad cache falls back to a visible rebuild.
-  **Restore: `demo` 9 ms, `large` 3.5 s** (2.8 GB; the cache doubles the disk use, delete
-  `.dev/cache` to reclaim it). `reset` keeps the cache; the first build per profile is still slow.
-- **Default port is now 8418** (`config.DefaultListen`; `ivy-dev` uses the same constant). 8787 is
-  wrangler's and always taken on the operator's machine. `IVY_SMOKE_PORT` moves the smoke port. The
-  smoke test now asserts the seeded mailbox (it still expected the empty one from before `up`
-  synced). Vite's 5173 and the preview 4173 are unchanged.
-- ~~Named-state Playwright~~ **done**: the states are one file, `internal/devstack/states.json`,
-  read by Go and by `web/e2e/named-states.spec.ts` (a Go test checks every named scenario exists in
-  `scenario.ts`; the spec checks its screens visit exactly the scenarios the file declares; both
-  guards were seen failing on a deliberate typo). One explicit gap: **`send-transient-4xx` has no
-  designed screen** (needs a canvas board). Because nothing syncs after startup, a mailworld fault
-  changes no screen of the real app until chunk 3's continuous sync and chunk 5's gate exist, so the
-  specs use the mock `?scenario=`; add a real-stack twin of each when its consumer lands.
-- Left over from 2h: the `window_fetch_in_load` warning now prints on every mock-suite page (it is the
-  Frontend backlog item below); `DEV.md` 8 still has unticked items I did not verify this round
-  (`make dev` from a clean checkout with the default `--llm live`, the rails, hot reload).
-
-**4. Chunk 3 is split into eight stages (round 36; the plan is in "The chunk plan" below).** 3a
-(sync core) is next: 2h is done and every spike has run (S1 to S10, S9 moot; `docs/SPIKES.md`,
-write-ups in `docs/spikes/`, qa-log round 30), so nothing gates it. Known partial spikes, none of
-which block 3a: S1 send-as scope and Resend DMARC (taken on the operator's report), S5 iPad over
-HTTPS only (no iPhone, plain HTTP or `image/heic`), S6 OOXML not run, S4 and S10 on synthetic data.
-3h (the deploy track: `Dockerfile`, GHCR publish, `ivy update`) is pulled forward and runs in
-parallel because it touches no mail code.
+Known partial spikes that still do not block: S1 send-as scope and Resend DMARC (taken on the
+operator's report), S5 iPad over HTTPS only (no iPhone, plain HTTP or `image/heic`), S6 OOXML not
+run, S4 and S10 on synthetic data.
 
 ## Backlog
 
@@ -151,8 +106,8 @@ Found by the round 32 audit; each needs a home before its milestone starts.
 - **Remote-image allow-list UI**: the render policy takes `AllowRemoteImages` but nothing sets it;
   needs a per-sender setting in `state.db`, a "show remote content" control in the reader (the
   renderer already counts `RemoteBlocked`) and a re-render, which ties to `derived_version`.
-- **Disabled-message restore UI and the mass-disable alert** (`ARCHITECTURE.md` 4): backend in
-  chunk 3, screens to be designed.
+- **Disabled-message restore UI and the mass-disable alert** (`ARCHITECTURE.md` 4): the backend and
+  API landed in 3b (round 42); the screens are not designed and wait on the **C0** canvas board.
 - **Security/abuse and contact-form mail types** (first-class, `PLAN.md` 3): chunk 5.
 
 ### Frontend
@@ -265,13 +220,20 @@ slice (8/8), `govulncheck` and the Go suite were run green; benchmarks are in `s
 by the QRESYNC delta, an idle connection that ignored cancellation, no refetch when the events stream
 reopens; 300 extra convergence seeds on both variants were clean). Its three open items are fixed
 too (#61-#63: a folder-churn convergence mix, a 2-minute stall guard on IMAP commands, and a snapshot
-that holds 190 B per message instead of 775); still open: N21 (sync_state write after a cancelled
-pass). N22 is fixed too (#64): a disabled row is `pending_classification` until a completed pass
-settles it to `moved` or `server_removed`, so 3b must treat a pending row as not yet restorable and
-not yet counted by the mass-disable alert.
+that holds 190 B per message instead of 775). N22 is fixed too (#64): a disabled row is
+`pending_classification` until a completed pass settles it to `moved` or `server_removed`.
+
+**3b's backend is done** (round 42: `DisabledStats`, `RestoreMessage`, `RestoreAccountDisabled`,
+`PurgeMessage`; Mirror health's `hidden` breakdown; restore/purge endpoints; the mass-disable alert as
+`health.alert` `mass_disable`; N21 closed). Tests: `store/disabled_test.go`,
+`sync/massdisable_test.go`, `sync/disabled_test.go`, `sync/hidden_test.go`, `gateway/mirror_test.go`.
+The Restore/Purge and mass-disable **screens are not designed** and wait on gate **C0** (the operator
+asked for a canvas board); the API is written and committed first, per the brief. The API contract is
+in `api/openapi.yaml`.
+
 **Remaining for the operator:** the real-mailbox/`ivy doctor` live check and potato numbers.
-**Next gate: C3**, writing down the outbox op states before coding 3d;
-3b's backend (disable/restore/purge) can start after C2 is cleared, its screens wait on C0.
+**Next stage: 3c** (backups, runs before 3d); **next gate: C3**, writing down the outbox op states
+before coding 3d.
 
 ## Operator actions still open
 

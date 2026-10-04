@@ -95,7 +95,7 @@ func (s *Server) removeSpool(rawPath string) error {
 		strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("spool path %q is outside the spool directory", rawPath)
 	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) { //nolint:gosec // G703: the containment check above keeps the path inside the spool directory
 		return fmt.Errorf("remove spool file %q: %w", rawPath, err)
 	}
 	return nil

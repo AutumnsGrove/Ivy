@@ -1011,3 +1011,34 @@ were run.
   PERFORMANCE.md's small-data rule.
 - **3a ends here.** The next gate is C3 (the outbox op states before 3d). 3b's backend can start
   after C2 is cleared; its Restore/Purge and mass-disable screens wait on the C0 canvas board.
+
+## Round 42 — 3b disabled-not-deleted backend (2026-10-04, agent; two operator answers)
+
+3b's Go and API scope, with C2 cleared by the round-41 review and its three return items fixed
+(`papercuts.md` #58-#64). The screens are not built: they wait on the C0 canvas board.
+
+- **Q: how broad is Restore?** (operator) **Single plus account bulk.** One message is
+  `POST /api/v1/mirror/messages/{id}/restore`; the whole account is
+  `POST /api/v1/mirror/accounts/{id}/restore`, which is the one-click answer to a mass-disable alert
+  and returns `{restored: n}`. Both are local mirror changes and never touch IMAP. A restored message
+  the server still does not hold is simply hidden again by the next completed pass, which is the
+  point: disabling is reversible.
+- **Q: how broad is Purge-forever?** (operator) **Single only.**
+  `DELETE /api/v1/mirror/messages/{id}` erases the row, its attachment rows and its spool file. There
+  is no bulk purge, so a 50-message mistake stays 50 deliberate taps. The store refuses a live row
+  (`ErrNotDisabled` -> 409), so the reader's ordinary delete can never be wired to the only erasure
+  Ivy has, and the handler deletes the row before unlinking the file, so a crash leaves an orphan the
+  spool sweep collects rather than a row pointing at a missing file.
+- **Mass-disable alert.** A completed pass that hides more than `sync.MassDisableCount` (50), or more
+  than `sync.MassDisableFraction` (20%) of a folder that held at least `sync.MassDisableFloor` (10),
+  puts the folder in `Result.MassDisabled`; `ivy run` publishes one `health.alert` with code
+  `mass_disable` per folder. Only a completed pass alerts, so a `pending_classification` row is never
+  counted before it settles (N22).
+- **Mirror health** now carries the per-account `hidden` count with its `moved`/`removed`/`pending`
+  breakdown, absent when nothing is hidden.
+- **N21 closed.** `Fetcher.Fetch` records the final `sync_state` on a `context.WithoutCancel`
+  context with a 5 s bound, so a cancelled or timed-out pass settles its own row instead of leaving
+  `syncing` until the next start.
+- **Not done, on purpose:** the Restore/Purge and mass-disable screens (gate C0); the property test
+  that no sync sequence deletes a row already exists (`checkNothingErased` in the convergence
+  harness), so 3b only added the scenario and endpoint tests.
