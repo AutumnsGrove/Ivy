@@ -25,13 +25,19 @@ func Populate(ctx context.Context, stack *Stack, opts Options) (Summary, error) 
 		return Summary{}, fmt.Errorf("devstack: open store: %w", err)
 	}
 	defer dbs.Close()
+	var sum Summary
 	switch opts.Mode {
 	case ModeFull:
-		return populateFull(ctx, dbs, stack.Config.Accounts)
+		sum, err = populateFull(ctx, dbs, stack.Config.Accounts)
 	case ModeFast:
-		return populateFast(ctx, dbs, stack, opts)
+		sum, err = populateFast(ctx, dbs, stack, opts)
+	default:
+		err = fmt.Errorf("devstack: unknown mode %q", opts.Mode)
 	}
-	return Summary{}, fmt.Errorf("devstack: unknown mode %q", opts.Mode)
+	if err != nil {
+		return sum, err
+	}
+	return sum, seedState(ctx, dbs, stack.Config.Accounts)
 }
 
 // syncAccount is the connection descriptor sync uses for a configured dev
