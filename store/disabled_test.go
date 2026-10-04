@@ -102,15 +102,22 @@ func TestRestoreAccountSkipsPendingRows(t *testing.T) {
 	seedDisabledMessage(t, dbs, "acct-1", "folder-1", "m-removed", DisabledRemoved, 1, "")
 	seedDisabledMessage(t, dbs, "acct-1", "folder-1", "m-moved", DisabledMoved, 2, "")
 	seedDisabledMessage(t, dbs, "acct-1", "folder-1", "m-pending", DisabledPending, 3, "")
+	// A hidden row with no reason still has to be restorable; only the pending
+	// label is special.
+	if _, err := dbs.Mirror.Write.ExecContext(ctx,
+		`INSERT INTO messages (id, account_id, folder_id, uid, content_key, disabled_at)
+		 VALUES ('m-no-reason', 'acct-1', 'folder-1', 4, 'ck-no-reason', '2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatalf("insert row without a reason: %v", err)
+	}
 
 	n, err := dbs.RestoreAccountDisabled(ctx, "acct-1")
 	if err != nil {
 		t.Fatalf("RestoreAccountDisabled: %v", err)
 	}
-	if n != 2 {
-		t.Errorf("restored %d rows, want 2 (pending is not restorable)", n)
+	if n != 3 {
+		t.Errorf("restored %d rows, want 3 (pending is not restorable)", n)
 	}
-	for id, wantHidden := range map[string]bool{"m-removed": false, "m-moved": false, "m-pending": true} {
+	for id, wantHidden := range map[string]bool{"m-removed": false, "m-moved": false, "m-pending": true, "m-no-reason": false} {
 		var disabledAt string
 		if err := dbs.Mirror.Read.QueryRowContext(ctx,
 			`SELECT COALESCE(disabled_at, '') FROM messages WHERE id = ?`, id).Scan(&disabledAt); err != nil {

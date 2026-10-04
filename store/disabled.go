@@ -90,7 +90,7 @@ func (d *DBs) RestoreMessage(ctx context.Context, id string) error {
 func (d *DBs) RestoreAccountDisabled(ctx context.Context, accountID string) (int, error) {
 	res, err := d.Mirror.Write.ExecContext(ctx,
 		`UPDATE messages SET disabled_at = NULL, disabled_reason = NULL
-		 WHERE account_id = ? AND disabled_at IS NOT NULL AND disabled_reason <> ?`,
+		 WHERE account_id = ? AND disabled_at IS NOT NULL AND COALESCE(disabled_reason, '') <> ?`,
 		accountID, DisabledPending)
 	if err != nil {
 		return 0, fmt.Errorf("restore hidden mail of %s: %w", accountID, err)
