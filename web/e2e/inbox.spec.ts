@@ -46,6 +46,8 @@ test.describe('reading a message', () => {
 	test('archiving gives feedback with an undo', async ({ page }) => {
 		await page.goto('/m/m1');
 		await page.getByRole('button', { name: 'Archive' }).click();
+		// A move is confirmed first (CLAUDE.md rule 6); the undo toast follows it.
+		await page.getByRole('dialog', { name: 'Archive this message?' }).getByRole('button', { name: 'Archive' }).click();
 		await expect(toast(page, 'Archived').getByRole('button', { name: 'Undo' })).toBeVisible();
 	});
 

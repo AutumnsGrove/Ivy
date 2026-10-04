@@ -11,7 +11,18 @@ export type ErrorCode =
 	| 'forbidden'
 	| 'too_large'
 	| 'internal_error'
-	| 'method_not_allowed';
+	| 'method_not_allowed'
+	| 'outbox_full'
+	| 'no_archive_folder'
+	| 'no_trash_folder'
+	| 'no_junk_folder'
+	| 'no_inbox_folder'
+	| 'bad_destination'
+	| 'same_folder'
+	| 'not_trash'
+	| 'not_failed'
+	| 'not_terminal'
+	| 'unknown_action';
 
 /** Every API failure the UI can branch on; never a bare Error. */
 export class ApiError extends Error {

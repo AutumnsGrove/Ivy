@@ -3,6 +3,7 @@
 	import { withScenario, type Scenario } from '#lib/api/scenario.js';
 	import { Search } from '#lib/icons.js';
 	import { LIMITS, panes } from '#lib/panes.svelte.js';
+	import { outbox } from '#lib/outbox.svelte.js';
 	import ResizeHandle from '../ui/ResizeHandle.svelte';
 	import type { Account, Inbox } from '#lib/types.js';
 	import Banner from '../ui/Banner.svelte';
@@ -23,7 +24,9 @@
 	let { accounts, inbox, tags, accountId, scenario, selectedId }: Props = $props();
 
 	// With nothing chosen yet the first message is open, like a mail client should feel on arrival.
-	const openId = $derived(selectedId ?? inbox.items[0]?.id);
+	// A message with a live move op is hidden until the server confirms (chunk 3d).
+	const visible = $derived(inbox.items.filter((m) => !outbox.hidden(m.id)));
+	const openId = $derived(selectedId ?? visible[0]?.id);
 	const failing = $derived(accounts.find((a) => a.sync === 'auth-failed'));
 	const subtitle = $derived(`${inbox.needCount} need you · ${inbox.unreadCount} unread`);
 
@@ -68,9 +71,9 @@
 			</Banner>
 		{/if}
 		<div class="scroll">
-			{#if inbox.items.length}
+			{#if visible.length}
 				<MessageList
-					items={inbox.items}
+					items={visible}
 					{accounts}
 					selectedId={openId}
 					onselect={(m) => goto(withScenario(`/m/${m.id}`, scenario), { reset: false })}

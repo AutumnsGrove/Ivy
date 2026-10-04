@@ -1,0 +1,59 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { OutboxItem } from './types.js';
+
+const mocks = vi.hoisted(() => ({ enqueueAction: vi.fn(), listOutbox: vi.fn() }));
+vi.mock('./api/client', () => ({ api: { enqueueAction: mocks.enqueueAction, listOutbox: mocks.listOutbox } }));
+
+const { outbox } = await import('./outbox.svelte.js');
+
+function op(partial: Partial<OutboxItem>): OutboxItem {
+	return {
+		id: 'op-1',
+		accountId: 'a1',
+		messageId: 'm1',
+		kind: 'move',
+		state: 'pending',
+		attempts: 0,
+		createdAt: '2026-10-04T00:00:00Z',
+		updatedAt: '2026-10-04T00:00:00Z',
+		...partial
+	};
+}
+
+beforeEach(() => {
+	outbox.clear();
+	mocks.enqueueAction.mockReset();
+	mocks.listOutbox.mockReset();
+});
+
+describe('outbox overlay', () => {
+	it('hides a message while its move op is live, and shows it once done', async () => {
+		mocks.enqueueAction.mockResolvedValue(op({ kind: 'move', state: 'pending' }));
+		await outbox.enqueue({ messageId: 'm1', action: 'archive' });
+		expect(outbox.hidden('m1')).toBe(true);
+
+		outbox.remember(op({ kind: 'move', state: 'done' }));
+		expect(outbox.hidden('m1')).toBe(false);
+	});
+
+	it('keeps a message visible for a flag op and reports the new value', async () => {
+		mocks.enqueueAction.mockResolvedValue(op({ kind: 'flags', state: 'pending', flagsAdd: ['\\seen'] }));
+		await outbox.enqueue({ messageId: 'm1', action: 'seen' });
+		expect(outbox.hidden('m1')).toBe(false);
+		expect(outbox.flags('m1')).toEqual({ seen: true });
+		expect(outbox.flags('other')).toBeNull();
+	});
+
+	it('canonicalises the clear direction too', async () => {
+		outbox.remember(op({ kind: 'flags', state: 'pending', flagsClear: ['\\flagged'] }));
+		expect(outbox.flags('m1')).toEqual({ flagged: false });
+	});
+
+	it('replaces the overlay from the server active list on refresh', async () => {
+		outbox.remember(op({ id: 'stale', kind: 'move', state: 'pending' }));
+		mocks.listOutbox.mockResolvedValue({ active: [op({ id: 'fresh', kind: 'flags', state: 'in_flight', flagsAdd: ['\\flagged'] })], recent: [] });
+		await outbox.refresh('a1');
+		expect(outbox.hidden('m1')).toBe(false);
+		expect(outbox.flags('m1')).toEqual({ flagged: true });
+	});
+});

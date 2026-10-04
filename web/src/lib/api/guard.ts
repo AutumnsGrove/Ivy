@@ -11,7 +11,18 @@ const STATUS = {
 	forbidden: 403,
 	too_large: 413,
 	internal_error: 500,
-	method_not_allowed: 405
+	method_not_allowed: 405,
+	outbox_full: 409,
+	no_archive_folder: 409,
+	no_trash_folder: 409,
+	no_junk_folder: 409,
+	no_inbox_folder: 409,
+	bad_destination: 409,
+	same_folder: 409,
+	not_trash: 409,
+	not_failed: 409,
+	not_terminal: 409,
+	unknown_action: 409
 } as const satisfies Record<ApiError['code'], number>;
 
 /**

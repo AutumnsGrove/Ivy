@@ -5,6 +5,7 @@
 	import { PenLine, Search } from '#lib/icons.js';
 	import type { Account, Inbox } from '#lib/types.js';
 	import { ui } from '#lib/ui.svelte.js';
+	import { outbox } from '#lib/outbox.svelte.js';
 	import Drawer from '../shell/Drawer.svelte';
 	import Page from '../shell/Page.svelte';
 	import Banner from '../ui/Banner.svelte';
@@ -29,6 +30,9 @@
 	const failing = $derived(accounts.find((a) => a.sync === 'auth-failed'));
 	const badge = $derived(current ? accountAvatar(current) : { initials: '', color: 'var(--accent)' });
 	const subtitle = $derived(`${inbox.needCount} need you · ${inbox.unreadCount} unread`);
+	// A message with a live move op is hidden until the server confirms, so an
+	// archive or delete disappears at once and returns if the op fails.
+	const visible = $derived(inbox.items.filter((m) => !outbox.hidden(m.id)));
 </script>
 
 <Page>
@@ -43,7 +47,7 @@
 		<IconButton label="Search" tone="glass" href="/search"><Search /></IconButton>
 	</div>
 
-	{#if inbox.items.length}
+	{#if visible.length}
 		<LargeHeader title="Inbox" {subtitle} />
 	{/if}
 
@@ -58,9 +62,9 @@
 			</Banner>
 		{/if}
 
-		{#if inbox.items.length}
+		{#if visible.length}
 			<MessageList
-				items={inbox.items}
+				items={visible}
 				{accounts}
 				hrefFor={(m) => withScenario(`/m/${m.id}`, scenario)}
 			/>

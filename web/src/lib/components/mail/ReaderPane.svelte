@@ -10,12 +10,19 @@
 
 	type Props = { id: string; accounts: Account[]; scenario: Scenario | null };
 	let { id, accounts, scenario }: Props = $props();
+
+	async function archive() {
+		await archiveMessage(id);
+	}
+	async function remove() {
+		await deleteMessage(id);
+	}
 </script>
 
 <Glass variant="panel" radius="panel" as="section" class="pane" aria-label="Message">
 	<div class="tools">
-		<IconButton label="Archive" onclick={() => archiveMessage('/')}><Archive /></IconButton>
-		<IconButton label="Delete" onclick={() => deleteMessage('/')}><Trash2 /></IconButton>
+		<IconButton label="Archive" onclick={() => void archive()}><Archive /></IconButton>
+		<IconButton label="Delete" onclick={() => void remove()}><Trash2 /></IconButton>
 		<IconButton label="Tag"><Tag /></IconButton>
 		<span class="grow"></span>
 		<IconButton label="More"><Ellipsis /></IconButton>

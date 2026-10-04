@@ -15,6 +15,9 @@ import type {
 	Inbox,
 	MailMessage,
 	MailSummary,
+	OutboxAction,
+	OutboxItem,
+	OutboxList,
 	Person,
 	ReadingFeed,
 	Rule,
@@ -63,6 +66,25 @@ export const api = {
 		request<MailSummary>(`/messages/${encodeURIComponent(id)}/summary`),
 
 	getHealth: (): Promise<HealthOverview> => request<HealthOverview>('/mirror/health'),
+
+	// --- outbox: the one write path (chunk 3d) ------------------------------
+	/** The reader's friendly action, resolved to a postcondition server-side. */
+	enqueueAction: (action: OutboxAction): Promise<OutboxItem> =>
+		request<OutboxItem>('/outbox', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(action)
+		}),
+
+	/** Live ops (the overlay) and recent terminal ones (history and retry). */
+	listOutbox: (accountId?: string): Promise<OutboxList> =>
+		request<OutboxList>(apiPath('/outbox', { account_id: accountId })),
+
+	retryOutbox: (id: string): Promise<OutboxItem> =>
+		request<OutboxItem>(`/outbox/${encodeURIComponent(id)}/retry`, { method: 'POST' }),
+
+	dismissOutbox: (id: string): Promise<void> =>
+		request<void>(`/outbox/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
 	/** Rename an account or choose its icon; omitted fields keep their value. */
 	updateAccountProfile: (id: string, profile: { displayName?: string; icon?: string }): Promise<Account> =>

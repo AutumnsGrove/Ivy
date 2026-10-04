@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { ArrowLeft, Archive, Ellipsis, Reply, Tag, Trash2 } from '#lib/icons.js';
 	import { withScenario, type Scenario } from '#lib/api/scenario.js';
 	import { archiveMessage, deleteMessage } from '#lib/messageActions.js';
@@ -11,14 +12,21 @@
 	type Props = { id: string; accounts: Account[]; scenario: Scenario | null };
 	let { id, accounts, scenario }: Props = $props();
 	const back = $derived(withScenario('/', scenario));
+
+	async function archive() {
+		if (await archiveMessage(id)) await goto(back);
+	}
+	async function remove() {
+		if (await deleteMessage(id)) await goto(back);
+	}
 </script>
 
 <div class="screen">
 	<header class="bar">
 		<IconButton label="Back" href={back}><ArrowLeft /></IconButton>
 		<span class="grow"></span>
-		<IconButton label="Archive" onclick={() => archiveMessage(back)}><Archive /></IconButton>
-		<IconButton label="Delete" onclick={() => deleteMessage(back)}><Trash2 /></IconButton>
+		<IconButton label="Archive" onclick={() => void archive()}><Archive /></IconButton>
+		<IconButton label="Delete" onclick={() => void remove()}><Trash2 /></IconButton>
 		<IconButton label="Tag"><Tag /></IconButton>
 		<IconButton label="More"><Ellipsis /></IconButton>
 	</header>

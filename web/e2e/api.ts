@@ -1,6 +1,6 @@
 import { test as base } from '@playwright/test';
 import * as mock from '../src/lib/api/mock';
-import type { Account, Attachment, MailMessage, MailSummary } from '../src/lib/types';
+import type { Account, Attachment, MailMessage, MailSummary, OutboxItem } from '../src/lib/types';
 
 // The reader client does real fetches, so the mock E2E suite serves the
 // contract from the same fixtures at the network boundary instead of inside
@@ -25,6 +25,7 @@ export const MAX_PHOTO_BYTES = 5 << 20;
 export type AccountState = {
 	accounts: Account[];
 	photos: Map<string, { type: string; bytes: Buffer }>;
+	outbox: OutboxItem[];
 };
 
 /** The known image formats the server accepts; SVG is deliberately absent. */
@@ -100,6 +101,36 @@ function updateProfile(state: AccountState, id: string, body: { displayName?: st
 	return { body: account };
 }
 
+const MOVE_DEST: Record<string, string> = {
+	archive: 'archive-1',
+	trash: 'trash-1',
+	spam: 'junk-1',
+	not_junk: 'inbox-1'
+};
+
+/** The op the real gateway would build for a reader action, as the mock's reply. */
+function mockOutboxItem(state: AccountState, action: { messageId: string; action: string; destinationFolderId?: string }): OutboxItem {
+	const accountId = mock.inbox.find((m) => m.id === action.messageId)?.accountId ?? 'a1';
+	const now = new Date().toISOString();
+	const base = {
+		id: `op-${state.outbox.length + 1}`,
+		accountId,
+		messageId: action.messageId,
+		state: 'pending' as const,
+		attempts: 0,
+		sourceFolderId: 'inbox-1',
+		createdAt: now,
+		updatedAt: now
+	};
+	if (action.action === 'expunge') return { ...base, kind: 'expunge' };
+	if (action.action in MOVE_DEST || action.action === 'move') {
+		return { ...base, kind: 'move', destinationFolderId: action.destinationFolderId ?? MOVE_DEST[action.action] ?? 'archive-1' };
+	}
+	const add = action.action === 'flag' ? ['\\flagged'] : action.action === 'seen' ? ['\\seen'] : undefined;
+	const clear = action.action === 'unflag' ? ['\\flagged'] : action.action === 'unseen' ? ['\\seen'] : undefined;
+	return { ...base, kind: 'flags', flagsAdd: add, flagsClear: clear };
+}
+
 function storage(path: string, method: string, params: URLSearchParams, scenario: string | null, state: AccountState, raw: Buffer | null): Reply | null {
 	if (path === '/accounts') {
 		return { body: scenario === 'sync-error' ? state.accounts.map(mock.failingHello) : state.accounts };
@@ -154,6 +185,36 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 		}
 	}
 
+	const outboxMatch = /^\/outbox\/([^/]+)(\/retry)?$/.exec(path);
+	if (outboxMatch) {
+		const [, id, kind] = outboxMatch;
+		const item = state.outbox.find((o) => o.id === id);
+		if (!item) return notFound('No such action');
+		if (kind === '/retry' && method === 'POST') {
+			item.state = 'pending';
+			return { body: item };
+		}
+		if (method === 'DELETE') {
+			state.outbox = state.outbox.filter((o) => o.id !== id);
+			return { status: 204, body: null };
+		}
+		return null;
+	}
+
+	if (path === '/outbox') {
+		if (method === 'GET') return { body: { active: state.outbox.filter((o) => o.state === 'pending' || o.state === 'in_flight'), recent: [] } };
+		if (method === 'POST' && raw) {
+			try {
+				const item = mockOutboxItem(state, JSON.parse(raw.toString('utf8')));
+				state.outbox = [...state.outbox, item];
+				return { status: 202, body: item };
+			} catch {
+				return badRequest('That action is not valid');
+			}
+		}
+		return null;
+	}
+
 	const match = /^\/messages\/([^/]+)(\/summary|\/body)?$/.exec(path);
 	if (match) {
 		const [, id, kind] = match;
@@ -168,7 +229,7 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 
 /** The fixture's account state, exposed so a spec can assert what it changed. */
 export const state: { current: AccountState } = {
-	current: { accounts: structuredClone(mock.accounts), photos: new Map() }
+	current: { accounts: structuredClone(mock.accounts), photos: new Map(), outbox: [] }
 };
 
 export const test = base.extend({
@@ -176,7 +237,7 @@ export const test = base.extend({
 	// customization endpoints from mutable fixtures, including the designed
 	// ?scenario= edge states.
 	page: async ({ page }, use) => {
-		state.current = { accounts: structuredClone(mock.accounts), photos: new Map() };
+		state.current = { accounts: structuredClone(mock.accounts), photos: new Map(), outbox: [] };
 		await page.route('**/api/v1/**', async (route) => {
 			const request = route.request();
 			const scenario = new URL(page.url()).searchParams.get('scenario');
