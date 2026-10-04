@@ -898,7 +898,7 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   with the snapshot. The debt is one synced marker file per hash under `data/pending-blob-deletions/`
   (hash validated as 64 hex before it becomes a name), and state migration 4 drops the table. Erasures
   recorded in the table before this change are not carried over (the feature was a day old).
-- **#78** · `fb4e5da`..`7d99f92` test suite · **standards** · one run of the sync suite parked ~9,000
+- **#78** · the sync test harness (`sync/`, `internal/mailworld`) · **standards** · one run of the sync suite parked ~9,000
   temporary ports in TIME_WAIT, so the next run on macOS failed with `can't assign requested address`.
   `TestTestConnectionsToTheFakeDoNotLeaveTimeWaitSockets` counted 40 lingering sockets after 80
   connections before the fix; loopback test dials (`Fetcher.dial` for insecure accounts and the
