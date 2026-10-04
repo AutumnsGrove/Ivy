@@ -187,6 +187,12 @@ export const test = base.extend({
 			}
 			const url = new URL(request.url());
 			const path = url.pathname.replace(/^\/api\/v1/, '');
+			if (path === '/events') {
+				// A valid but empty stream, so the app's EventSource connects without a
+				// console error. The events spec overrides this route to send a hint.
+				await route.fulfill({ status: 200, contentType: 'text/event-stream', body: 'retry: 30000\n\n' });
+				return;
+			}
 			const reply = storage(path, request.method(), url.searchParams, scenario, state.current, request.postDataBuffer());
 			await route.fulfill({
 				status: reply?.status ?? 200,
