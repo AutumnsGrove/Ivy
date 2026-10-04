@@ -1082,3 +1082,9 @@ Decisions taken inside that scope (settled policy: once a day, 15 days, floor of
 - **Purge does not delete the blob.** The store is append-only and de-duplicated, and one blob can
   back several rows, so `PurgeMessage` keeps the file; this is recorded as an open question in
   `papercuts.md` rather than guessed away.
+
+One bug in the stage was found by the real-binary smoke slice, not the unit tests: the new strict
+`backup.at` check broke the dev stack, because `devstack.BuildConfig` built a `Config` without the
+field and the spawned `ivy` reloads the YAML it wrote (`papercuts.md` #67). Fixed in `BuildConfig`,
+with `TestWrittenConfigReloads` pinning the round trip. Recorded because it is the reason the
+backend stage still runs `make smoke`.

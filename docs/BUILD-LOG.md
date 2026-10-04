@@ -392,6 +392,12 @@ replaces `state.db` in place and merges the blobs stored beside the snapshot. A 
 `ivy doctor` warns when every target shares the data directory's device. Purge keeps the blob: the
 store is append-only and one blob may back several rows (open question in `papercuts.md`).
 
+One self-found bug in the stage (`papercuts.md` #67): the new strict `backup.at` check broke the
+dev stack, because `devstack.BuildConfig` built a `Config` without the field and the CLI reloads the
+YAML it writes. `ivy-dev up` exited at startup; the smoke slice caught it. Fixed by setting the
+default in `BuildConfig` and adding `TestWrittenConfigReloads`, which marshals and reloads the
+generated config.
+
 ## Other history worth keeping
 
 - Frontend facts: SvelteKit **3** config lives in `vite.config.ts`; aliases are the `#lib/...`

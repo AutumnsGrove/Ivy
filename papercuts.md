@@ -806,3 +806,10 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   reads mail bytes on the write path. The blob copy failure path warns and leaves the hash empty,
   and the next `backup.Run` reconciles it (`TestRunReconcilesDisabledBlobs`), so it is never silent
   and never permanent.
+- **#67** · `e8d8c6f` · `internal/devstack/devstack.go`, `config/config.go` · **bug (caught by CI
+  smoke)** · strict `backup.at` validation (a new setting) broke the dev stack: `BuildConfig` built a
+  `Config` without the field, `WriteConfig` marshalled `at: ""`, and the spawned `ivy` failed at
+  startup on `backup.at "": must be HH:MM` (`make smoke` timed out waiting for the WebServer). Fixed
+  by setting `DefaultBackupAt` in `BuildConfig`; `TestWrittenConfigReloads` marshals and reloads the
+  generated config so the next new setting cannot do this silently. This is why the definition of
+  done runs the real-binary smoke slice even for a backend-only change.

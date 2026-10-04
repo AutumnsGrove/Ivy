@@ -222,6 +222,7 @@ func BuildConfig(imapAddr, smtpAddr string, accounts []mailworld.SeedAccount, op
 	cfg := &config.Config{
 		Listen:  opts.Listen,
 		DataDir: DataDir(opts.Root),
+		Backup:  config.Backup{At: config.DefaultBackupAt},
 	}
 	for _, sa := range selected {
 		cfg.Accounts = append(cfg.Accounts, config.Account{

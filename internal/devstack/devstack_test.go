@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/AutumnsGrove/Ivy/config"
 	"github.com/AutumnsGrove/Ivy/internal/devstack"
 	"github.com/AutumnsGrove/Ivy/internal/mailworld"
 )
@@ -177,6 +178,30 @@ func TestBuildConfigIsLoopbackOnly(t *testing.T) {
 	}
 	if cfg.DataDir != devstack.DataDir(opts.Root) {
 		t.Errorf("data dir = %q, want %q", cfg.DataDir, devstack.DataDir(opts.Root))
+	}
+}
+
+// The generated ivy.yaml must survive the round trip the dev CLI performs
+// (marshal through WriteConfig, read back through config.Load), or the spawned
+// server fails at startup on a strict validation check.
+func TestWrittenConfigReloads(t *testing.T) {
+	t.Parallel()
+	w, res := seededAccounts(t)
+	opts := buildOpts(t, 3, false)
+	cfg, err := devstack.BuildConfig(w.IMAPAddr(), w.SMTPAddr(), res.Accounts, opts)
+	if err != nil {
+		t.Fatalf("BuildConfig: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "ivy.yaml")
+	if err := devstack.WriteConfig(path, cfg); err != nil {
+		t.Fatalf("WriteConfig: %v", err)
+	}
+	loaded, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("the generated config does not reload: %v", err)
+	}
+	if loaded.Backup.At != config.DefaultBackupAt {
+		t.Errorf("reloaded backup.at = %q, want %q", loaded.Backup.At, config.DefaultBackupAt)
 	}
 }
 
