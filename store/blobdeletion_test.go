@@ -6,6 +6,14 @@ import (
 	"time"
 )
 
+// Content hashes are 64 hex characters, as the blob store returns them: a hash
+// becomes a file name, so a malformed one is refused.
+const (
+	hashA     = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	hashB     = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	hashOther = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+)
+
 // A purged blob is recorded before its row is removed, so a crash between the
 // two cannot leave bytes in an offline target with nothing left to retry them.
 func TestPendingBlobDeletionRoundTrips(t *testing.T) {
@@ -13,13 +21,13 @@ func TestPendingBlobDeletionRoundTrips(t *testing.T) {
 	ctx := context.Background()
 	dbs := openTemp(t)
 
-	if err := dbs.RecordPendingBlobDeletion(ctx, "hash-a"); err != nil {
+	if err := dbs.RecordPendingBlobDeletion(ctx, hashA); err != nil {
 		t.Fatalf("RecordPendingBlobDeletion: %v", err)
 	}
-	if err := dbs.RecordPendingBlobDeletion(ctx, "hash-a"); err != nil {
+	if err := dbs.RecordPendingBlobDeletion(ctx, hashA); err != nil {
 		t.Fatalf("second RecordPendingBlobDeletion: %v", err)
 	}
-	if err := dbs.RecordPendingBlobDeletion(ctx, "hash-b"); err != nil {
+	if err := dbs.RecordPendingBlobDeletion(ctx, hashB); err != nil {
 		t.Fatalf("RecordPendingBlobDeletion b: %v", err)
 	}
 	// An empty hash is not a blob and must not create a row.
@@ -35,14 +43,14 @@ func TestPendingBlobDeletionRoundTrips(t *testing.T) {
 		t.Fatalf("pending = %v, want two deduped hashes", got)
 	}
 
-	if err := dbs.ClearPendingBlobDeletion(ctx, "hash-a"); err != nil {
+	if err := dbs.ClearPendingBlobDeletion(ctx, hashA); err != nil {
 		t.Fatalf("ClearPendingBlobDeletion: %v", err)
 	}
 	got, err = dbs.PendingBlobDeletions(ctx)
 	if err != nil {
 		t.Fatalf("PendingBlobDeletions after clear: %v", err)
 	}
-	if len(got) != 1 || got[0] != "hash-b" {
+	if len(got) != 1 || got[0] != hashB {
 		t.Errorf("pending after clear = %v, want [hash-b]", got)
 	}
 	// Clearing an unknown hash is a no-op, not an error.
@@ -61,7 +69,7 @@ func TestPendingBlobDeletionSurvivesReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if err := dbs.RecordPendingBlobDeletion(ctx, "hash-a"); err != nil {
+	if err := dbs.RecordPendingBlobDeletion(ctx, hashA); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
 	if err := dbs.Close(); err != nil {
@@ -77,7 +85,7 @@ func TestPendingBlobDeletionSurvivesReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PendingBlobDeletions: %v", err)
 	}
-	if len(got) != 1 || got[0] != "hash-a" {
+	if len(got) != 1 || got[0] != hashA {
 		t.Errorf("pending after reopen = %v, want [hash-a]", got)
 	}
 }
@@ -90,17 +98,17 @@ func TestBlobReferenced(t *testing.T) {
 	dbs := openTemp(t)
 	seedAccount(t, dbs, "acct-1")
 	seedFolder(t, dbs, "acct-1", "folder-1")
-	seedDisabledBlob(t, dbs, "m1", "folder-1", 1, "hash-a")
-	seedDisabledBlob(t, dbs, "m2", "folder-1", 2, "hash-a")
+	seedDisabledBlob(t, dbs, "m1", "folder-1", 1, hashA)
+	seedDisabledBlob(t, dbs, "m2", "folder-1", 2, hashA)
 
-	ref, err := dbs.BlobReferenced(ctx, "hash-a")
+	ref, err := dbs.BlobReferenced(ctx, hashA)
 	if err != nil {
 		t.Fatalf("BlobReferenced: %v", err)
 	}
 	if !ref {
 		t.Error("BlobReferenced(hash-a) = false with two rows pointing at it")
 	}
-	ref, err = dbs.BlobReferenced(ctx, "hash-other")
+	ref, err = dbs.BlobReferenced(ctx, hashOther)
 	if err != nil {
 		t.Fatalf("BlobReferenced: %v", err)
 	}
@@ -125,20 +133,20 @@ func TestPurgeRecordsAnUnreferencedBlob(t *testing.T) {
 	dbs := openTemp(t)
 	seedAccount(t, dbs, "acct-1")
 	seedFolder(t, dbs, "acct-1", "folder-1")
-	seedDisabledBlob(t, dbs, "m1", "folder-1", 1, "hash-a")
+	seedDisabledBlob(t, dbs, "m1", "folder-1", 1, hashA)
 
 	got, err := dbs.PurgeMessage(ctx, "m1")
 	if err != nil {
 		t.Fatalf("PurgeMessage: %v", err)
 	}
-	if got.BlobHash != "hash-a" || !got.BlobUnreferenced {
+	if got.BlobHash != hashA || !got.BlobUnreferenced {
 		t.Errorf("purged = %+v, want hash-a unreferenced", got)
 	}
 	pending, err := dbs.PendingBlobDeletions(ctx)
 	if err != nil {
 		t.Fatalf("PendingBlobDeletions: %v", err)
 	}
-	if len(pending) != 1 || pending[0] != "hash-a" {
+	if len(pending) != 1 || pending[0] != hashA {
 		t.Errorf("pending = %v, want [hash-a]", pending)
 	}
 }
@@ -151,8 +159,8 @@ func TestPurgeKeepsASharedBlob(t *testing.T) {
 	dbs := openTemp(t)
 	seedAccount(t, dbs, "acct-1")
 	seedFolder(t, dbs, "acct-1", "folder-1")
-	seedDisabledBlob(t, dbs, "m1", "folder-1", 1, "hash-a")
-	seedDisabledBlob(t, dbs, "m2", "folder-1", 2, "hash-a")
+	seedDisabledBlob(t, dbs, "m1", "folder-1", 1, hashA)
+	seedDisabledBlob(t, dbs, "m2", "folder-1", 2, hashA)
 
 	first, err := dbs.PurgeMessage(ctx, "m1")
 	if err != nil {

@@ -418,6 +418,15 @@ var stateMigrations = []migration{
 			)`,
 		},
 	},
+	{
+		version: 4,
+		statements: []string{
+			// The debt moved to marker files in the data dir (blobdeletion.go): a
+			// table here is rolled back by restoring an older snapshot, which forgets
+			// an erasure an offline backup target is still owed (N29).
+			`DROP TABLE pending_blob_deletions`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state

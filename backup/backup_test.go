@@ -816,3 +816,42 @@ func TestDueWhenATargetHasGoneADayWithoutASnapshot(t *testing.T) {
 		t.Errorf("Due with one target never backed up = %v, %v; want true", due, err)
 	}
 }
+
+// A purge owes an offline backup target an erasure. That debt must not live only
+// in state.db, because restoring an older snapshot would roll it back and the
+// purged message would sit in the target for good. Record a debt after the
+// snapshot, restore the snapshot, and the debt must still be there.
+func TestRestoreOfAnOlderSnapshotKeepsAnOwedBlobErasure(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := t.TempDir()
+	dbs := openStore(t, dir)
+	target := filepath.Join(t.TempDir(), "backups")
+	now := baseTime
+	m := New(dbs, []string{target}, WithClock(clock(t, &now)))
+	res, err := m.Run(ctx)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	hash, _, err := dbs.Blobs.Put(ctx, strings.NewReader("purged after the snapshot"))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if err := dbs.RecordPendingBlobDeletion(ctx, hash); err != nil {
+		t.Fatalf("RecordPendingBlobDeletion: %v", err)
+	}
+	if err := dbs.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if err := Restore(ctx, dir, res.Snapshots[0].Path); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+
+	restored := openStore(t, dir)
+	defer restored.Close()
+	pending, err := restored.PendingBlobDeletions(ctx)
+	if err != nil || len(pending) != 1 || pending[0] != hash {
+		t.Errorf("pending erasures after restoring an older snapshot = %v (%v), want [%s]", pending, err, hash)
+	}
+}
