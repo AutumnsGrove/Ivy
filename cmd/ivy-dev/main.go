@@ -19,6 +19,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/AutumnsGrove/Ivy/config"
 	"github.com/AutumnsGrove/Ivy/gateway"
 	"github.com/AutumnsGrove/Ivy/internal/devstack"
 	"github.com/AutumnsGrove/Ivy/internal/mailworld"
@@ -62,7 +63,7 @@ func newRootCommand() *cobra.Command {
 
 func upCmd(root *string) *cobra.Command {
 	opts := devstack.DefaultOptions()
-	opts.Listen = "127.0.0.1:8787"
+	opts.Listen = config.DefaultListen
 	var noWeb bool
 	var watch bool
 	cmd := &cobra.Command{
@@ -288,7 +289,7 @@ func seedCmd(root *string) *cobra.Command {
 			opts.Root = *root
 			opts.Profile = profile
 			opts.Seed = seed
-			opts.Listen = "127.0.0.1:8787"
+			opts.Listen = config.DefaultListen
 			stack, err := devstack.Prepare(opts)
 			if err != nil {
 				return err

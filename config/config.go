@@ -19,7 +19,7 @@ import (
 
 // Defaults used when ivy.yaml does not say otherwise.
 const (
-	DefaultListen  = "127.0.0.1:8787"
+	DefaultListen  = "127.0.0.1:8418"
 	DefaultDataDir = "./data"
 )
 

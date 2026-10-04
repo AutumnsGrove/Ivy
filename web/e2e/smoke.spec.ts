@@ -33,7 +33,7 @@ test('serves the precompressed frontend with the right caching headers', async (
 	expect(bundle.headers()['cache-control']).toContain('immutable');
 });
 
-test('renders the inbox shell from the real read API', async ({ page }) => {
+test('renders the seeded mailbox from the real read API', async ({ page, request }) => {
 	const problems: string[] = [];
 	page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 	page.on('console', (m) => {
@@ -42,10 +42,13 @@ test('renders the inbox shell from the real read API', async ({ page }) => {
 
 	await page.goto('/');
 	await page.waitForLoadState('networkidle');
-	// The dev stack has no wired sync yet (chunk 3), so the mirror is empty and
-	// the honest state is the caught-up screen. The inbox assertions grow once
-	// sync or the fast seeder fills the mirror.
-	await expect(page.getByRole('heading', { name: 'All caught up' })).toBeVisible();
+	// ivy-dev syncs the minimal profile before it serves, so the inbox has mail;
+	// the screen must show what the API returns, not the caught-up state.
+	const inbox = await (await request.get('/api/v1/inbox')).json();
+	expect(inbox.items.length).toBeGreaterThan(0);
+	await expect(page.getByRole('heading', { name: 'Inbox', level: 1 })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'All caught up' })).toHaveCount(0);
+	await expect(page.getByRole('list').first().getByRole('listitem').first()).toBeVisible();
 	expect(problems).toEqual([]);
 });
 

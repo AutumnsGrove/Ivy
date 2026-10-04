@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -250,5 +251,18 @@ func TestInvalidAllowedHostsRejected(t *testing.T) {
 		if err := cfg.validate(); err == nil {
 			t.Errorf("allowed_hosts entry %q accepted, want an error", bad)
 		}
+	}
+}
+
+// 8787 is wrangler's (and so workerd's) default; on the operator's machine it is
+// always taken, so Ivy defaulting to it made every first run fail to bind.
+func TestDefaultListenAvoidsWranglersPort(t *testing.T) {
+	t.Parallel()
+	_, port, err := net.SplitHostPort(DefaultListen)
+	if err != nil {
+		t.Fatalf("DefaultListen %q: %v", DefaultListen, err)
+	}
+	if port == "8787" {
+		t.Errorf("DefaultListen %q uses wrangler's port", DefaultListen)
 	}
 }

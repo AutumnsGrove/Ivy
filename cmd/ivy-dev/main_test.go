@@ -21,6 +21,7 @@ import (
 	"github.com/emersion/go-smtp"
 	"go.uber.org/goleak"
 
+	"github.com/AutumnsGrove/Ivy/config"
 	"github.com/AutumnsGrove/Ivy/internal/devstack"
 	"github.com/AutumnsGrove/Ivy/internal/mailworld"
 )
@@ -426,4 +427,16 @@ func TestStartWebStopsTheWholeProcessTree(t *testing.T) {
 	}
 	_ = syscall.Kill(pid, syscall.SIGKILL)
 	t.Fatalf("pnpm's child %d survived cancellation", pid)
+}
+
+// Dev and production share one default, so the port that is chosen to be free
+// of other local tools is chosen once.
+func TestUpDefaultsToTheConfigListenAddress(t *testing.T) {
+	up, _, err := newRootCommand().Find([]string{"up"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := up.Flags().Lookup("listen").DefValue; got != config.DefaultListen {
+		t.Errorf("up --listen defaults to %q, want config.DefaultListen %q", got, config.DefaultListen)
+	}
 }

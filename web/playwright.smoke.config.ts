@@ -7,7 +7,8 @@ import { dirname, resolve } from 'node:path';
 // playwright.config.ts (Vite + mocks), this proves the production artefact
 // boots and renders on both viewports. Run `make web-assets` first: the binary
 // embeds internal/webui/build/, which a fresh checkout does not contain.
-const PORT = 8787;
+// Keep in step with config.DefaultListen. IVY_SMOKE_PORT moves it if something else holds it.
+const PORT = Number(process.env.IVY_SMOKE_PORT ?? 8418);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 export default defineConfig({
