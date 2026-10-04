@@ -844,3 +844,14 @@ nowhere, that neither `up` path ever ran the sync (so `make dev` served empty da
   opens the databases `ivy-dev` filled). `fast` writes the same rows without IMAP by feeding each
   seeded delivery through the same store code the sync uses, so the `full == fast` test compares
   two runs of one code path rather than two implementations.
+
+## Round 35 — `fast` was not fast: the snapshot cache (2026-10-04, operator)
+
+The `fast` seeder and the `full == fast` test are done, and measuring them showed the seeding is not
+what the `DEV.md` speed claims need: `demo` took 246 ms full vs 272 ms fast, and `large` (100k) took
+3m17s full while fast did not finish in 280 s. Both pay for parsing plus two SQLite transactions per
+message. Decision (the recommended option): **cache the built database files** under `.dev/cache/`,
+keyed by profile, seed, accounts, both schema versions and `DerivedVersion`, and restore them by file
+copy, as `DEV.md` 3 already says. The cache is only written from a data directory that started empty
+(so it never holds the operator's edits) and only restored into one, a bad cache falls back to a
+build, and the agreement test keeps guarding the build itself.
