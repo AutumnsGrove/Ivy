@@ -773,3 +773,16 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   always runs. With the fix, the default run and 200 further seeds (base 5000) pass on both variants.
   The oracle file is untouched (gate T1). Known nit: the failure's "reproduce:" line names
   `TestSyncConvergesToTheServer`; set `IVY_SYNC_SEED` and run the churn test instead.
+
+- **#65** · `9f0f4ef..2d39e8d` · `.golangci.yml`, `sync/`, `store/`, `events/`, `internal/devstack/` ·
+  **standards** · `make check` runs only staticcheck, but CI's `go` job runs the pinned golangci-lint
+  (v2.12.1, the set STANDARDS 1 documents), so the 3a work would have gone green locally and red in
+  CI: 13 findings (two contextcheck, four errcheck, two exhaustive, five revive; two were in the stall
+  guard written in this review). Found by running the documented linter set once, as the review
+  skill asks. Fixed at the source: a cancelled-context-safe `WithoutCancel` for the migration's
+  foreign-key restore, settled `Close` errors, an unused `ctx` dropped from `snapshotFolder`, a
+  shadowed builtin renamed, the exported constants documented, an `if` in place of a switch over
+  `imap.ResponseCode`, and the convergence harness's `numOpKinds` sentinel excluded in the config
+  (the oracle file itself stays untouched). One `//nolint:contextcheck` with its reason, for the
+  fake mail server, which takes no context. Recommendation (open, your call): add `golangci-lint
+  run` to `make check`, or the gap reopens with the next stage.
