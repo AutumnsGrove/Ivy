@@ -682,12 +682,41 @@ func (f *Fetcher) disableRefs(ctx context.Context, refs []store.SyncMessageRef) 
 
 // disableRef hides a vanished row as pending: whether it moved or was removed is
 // only known once the whole account has been read, and the label lives in the
-// row so a pass that dies first leaves it for the next one to settle.
+// row so a pass that dies first leaves it for the next one to settle. The raw
+// bytes are copied into the blob store first, because a hidden message is the
+// one thing a mirror rebuild cannot bring back (ARCHITECTURE.md 9).
 func (f *Fetcher) disableRef(ctx context.Context, ref store.SyncMessageRef) error {
-	if err := f.dbs.DisableMessage(ctx, ref.ID, store.DisabledPending, f.now(), ""); err != nil {
+	hash, err := f.storeDisabledBlob(ctx, ref.ID)
+	if err != nil {
+		// The mirror still holds the bytes and the backup reconcile retries, so a
+		// blob copy failure does not fail the sweep, but it is never silent.
+		slog.WarnContext(ctx, "could not store a disabled message's blob",
+			"account", ref.ID, "error", err)
+		hash = ""
+	}
+	if err := f.dbs.DisableMessage(ctx, ref.ID, store.DisabledPending, f.now(), hash); err != nil {
 		return fmt.Errorf("disable message %s: %w", ref.ID, err)
 	}
 	return nil
+}
+
+// storeDisabledBlob copies a message's raw bytes into the blob store and returns
+// its content hash. A message that was never downloaded has none, which is not
+// an error. The store dedupes by hash, so a repeated message costs one file.
+func (f *Fetcher) storeDisabledBlob(ctx context.Context, id string) (string, error) {
+	raw, err := f.dbs.MessageRawReader(ctx, id)
+	if errors.Is(err, store.ErrNoRaw) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = raw.Close() }()
+	hash, _, err := f.dbs.Blobs.Put(ctx, raw)
+	if err != nil {
+		return "", err
+	}
+	return hash, nil
 }
 
 // canonicalFlags lower-cases and sorts a flag list, so two listings of the same

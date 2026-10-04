@@ -153,6 +153,28 @@ func TestEachDisabledRawStopsOnCancelledContext(t *testing.T) {
 	}
 }
 
+// A message never downloaded has no bytes to copy, and an unknown id is a client
+// error, not a silent empty blob.
+func TestMessageRawReaderReportsMissingBytes(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct-1")
+	seedFolder(t, dbs, "acct-1", "folder-1")
+	if err := dbs.UpsertMessage(ctx, Message{
+		ID: "m1", AccountID: "acct-1", FolderID: "folder-1", UID: 1, ContentKey: "m1",
+		BodyStatus: BodyTooLarge,
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := dbs.MessageRawReader(ctx, "m1"); !errors.Is(err, ErrNoRaw) {
+		t.Errorf("MessageRawReader(no bytes) = %v, want ErrNoRaw", err)
+	}
+	if _, err := dbs.MessageRawReader(ctx, "missing"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("MessageRawReader(unknown) = %v, want ErrNotFound", err)
+	}
+}
+
 func seedLiveMessage(t *testing.T, dbs *DBs, id, accountID, folderID string, uid uint32) {
 	t.Helper()
 	if err := dbs.UpsertMessage(context.Background(), Message{

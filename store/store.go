@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 
 	_ "modernc.org/sqlite" // the pure-Go driver, registered as "sqlite"
+
+	"github.com/AutumnsGrove/Ivy/internal/blobstore"
 )
 
 // readConns bounds the read pool: enough for concurrent API reads and a sync
@@ -56,6 +58,10 @@ func (d *DB) Ping(ctx context.Context) error {
 type DBs struct {
 	Mirror *DB
 	State  *DB
+	// Blobs is the content-addressed store of disabled messages' raw bytes,
+	// outside both databases so a mirror rebuild cannot lose them
+	// (ARCHITECTURE.md 9).
+	Blobs *blobstore.Store
 	// Dir is the data directory holding both files, so other packages can place
 	// their own files (the message spool) beside them.
 	Dir string
@@ -77,6 +83,12 @@ func Open(ctx context.Context, dir string) (*DBs, error) {
 		return nil, fmt.Errorf("state: %w", err)
 	}
 	dbs := &DBs{Mirror: mirror, State: state, Dir: dir}
+	blobs, err := blobstore.Open(filepath.Join(dir, "blobs"))
+	if err != nil {
+		_ = dbs.Close()
+		return nil, fmt.Errorf("blob store: %w", err)
+	}
+	dbs.Blobs = blobs
 	if err := dbs.moveLegacyProfiles(ctx); err != nil {
 		_ = dbs.Close()
 		return nil, err

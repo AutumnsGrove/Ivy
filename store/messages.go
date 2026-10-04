@@ -407,6 +407,36 @@ func (d *DBs) withRaw(rawPath string, blob []byte, fn func(io.Reader) error) err
 	return fn(bytes.NewReader(blob))
 }
 
+// MessageRawReader opens one message's original bytes regardless of hidden
+// state, so the disable path can copy them into the blob store before the row
+// loses its live status. A message never downloaded has none (ErrNoRaw); an
+// unknown id is ErrNotFound.
+func (d *DBs) MessageRawReader(ctx context.Context, id string) (io.ReadCloser, error) {
+	var (
+		blob    []byte
+		rawPath string
+	)
+	err := d.Mirror.Read.QueryRowContext(ctx,
+		`SELECT raw_blob, COALESCE(raw_path, '') FROM messages WHERE id = ?`, id).Scan(&blob, &rawPath)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read raw %s: %w", id, err)
+	}
+	if rawPath != "" {
+		f, err := os.Open(filepath.Join(d.Dir, filepath.FromSlash(rawPath)))
+		if err != nil {
+			return nil, fmt.Errorf("open spool %s: %w", rawPath, err)
+		}
+		return f, nil
+	}
+	if len(blob) == 0 {
+		return nil, ErrNoRaw
+	}
+	return io.NopCloser(bytes.NewReader(blob)), nil
+}
+
 // Why a message is disabled. A message that vanished from a folder but still
 // exists elsewhere on the server moved; one that is nowhere was removed. Sync
 // cannot tell which until it has read the whole account, so it disables with

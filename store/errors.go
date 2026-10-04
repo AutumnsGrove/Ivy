@@ -15,3 +15,7 @@ var ErrBadCursor = errors.New("bad cursor")
 // is the one erasure Ivy has, and only mail the server already dropped may reach
 // it, so a live row is refused rather than destroyed (ARCHITECTURE.md 4).
 var ErrNotDisabled = errors.New("message is not disabled")
+
+// ErrNoRaw reports a message whose body was never downloaded (BodyTooLarge), so
+// there are no bytes to copy or serve. It is not an error the UI shows.
+var ErrNoRaw = errors.New("message has no raw bytes")
