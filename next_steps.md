@@ -6,7 +6,7 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 it in the same stage as the work**, so the next session can resume after a context clear.
 
 last updated: 2026-10-04 (round 42: 3b's backend is done). The full Go suite is `-race` green,
-`make check` (drift, fmt, vet, staticcheck, Go tests, `pnpm check`, 209 Vitest) is green,
+`make check` (drift, fmt, vet, staticcheck, Go tests, `pnpm check`, 210 Vitest) is green,
 `govulncheck` is clean, the mock Playwright suite is 242 passed / 10 skipped and the real-binary
 smoke slice is 8/8. Chunks 0, 1 and 2a-2h are done except the visual baselines of 2g and 2h (they
 need the CI harness regenerated). 3a and 3b's backend are done; **the C0 canvas board for the
