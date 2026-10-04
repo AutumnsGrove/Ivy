@@ -333,13 +333,17 @@ func (f *Fetcher) fetchAll(ctx context.Context, c *session, acct Account) (Resul
 	}
 
 	var res Result
-	active, err := f.dbs.OutboxActiveKeys(ctx, acct.ID)
-	if err != nil {
-		return res, err
-	}
 	seen := make(map[string]bool, len(snaps))
 	for _, snap := range snaps {
 		seen[snap.Name] = true
+		// Refresh the outbox-owned keys per folder, not once per pass, so a row
+		// enqueued while earlier folders were reconciled is still deferred. Two
+		// databases cannot share a transaction; this only narrows the window, and
+		// the outbox's post-ack overwrite remains the closed loop.
+		active, err := f.dbs.OutboxActiveKeys(ctx, acct.ID)
+		if err != nil {
+			return res, err
+		}
 		stored, skipped, err := f.reconcileFolder(ctx, c, acct, snap, active)
 		if err != nil {
 			return res, err
@@ -347,6 +351,10 @@ func (f *Fetcher) fetchAll(ctx context.Context, c *session, acct Account) (Resul
 		res.Folders++
 		res.Stored += stored
 		res.Skipped += skipped
+	}
+	active, err := f.dbs.OutboxActiveKeys(ctx, acct.ID)
+	if err != nil {
+		return res, err
 	}
 	if err := f.markGoneFolders(ctx, acct.ID, seen, active); err != nil {
 		return res, err

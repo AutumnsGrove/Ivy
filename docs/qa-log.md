@@ -1178,3 +1178,21 @@ section 4, the round 37 rules and the sync code. Six defects were found and corr
   - retry is bounded (8 attempts, 24 h, 500 queued ops) and IMAP `NO` is classified by response code;
   - the outbox owns its own connection rather than sharing the sync worker's IDLE connection;
   - `move` needs `MOVE` and `expunge` needs `UIDPLUS`, otherwise the op fails instead of emulating them.
+
+## Round 47 — the C4 review's two open questions (2026-10-04, agent; two operator answers)
+
+The C4 handoff (`docs/handoffs/2026-10-04-C4-outbox-crash.md`) left two questions. Both are settled
+before the rest of 3d (the HTTP surface, reader actions and optimistic UI) is built.
+
+- **Q: how wide is the sync-vs-outbox deferral window?** `fetchAll` read `OutboxActiveKeys` once at
+  the top of the pass, so a row enqueued mid-pass was not yet deferred. (operator) **Re-check per
+  folder.** `reconcileFolder` gets a fresh `OutboxActiveKeys` at the start of each folder, and
+  `markGoneFolders` refreshes once before its sweep. It is one extra read query per folder per pass
+  on a local database, and it narrows invariant 4's window to a single folder's work without a
+  query per row. Two databases still cannot share a transaction, so the outbox's post-ack overwrite
+  remains the closed loop; this only makes the gap smaller.
+- **Q: where should the C4 crash seam live?** (operator) **Keep the unexported seam.** The
+  `OutboxWorker.afterAck` hook dies exactly between the IMAP ack and the DB write, which
+  `mailworld.AckThenDrop` cannot guarantee (the client may or may not have read the ack). It stays
+  unexported, is set only by the white-box crash test and is nil in production, so it adds no public
+  API surface. `AckThenDrop` stays as the server-side half of the race.

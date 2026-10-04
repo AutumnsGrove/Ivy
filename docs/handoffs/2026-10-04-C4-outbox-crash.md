@@ -151,10 +151,12 @@ The two things worth a hard look are the ones the C3 review flagged as the hard 
    transaction, so this window is closed only by the outbox overwriting the row after its own ack;
    say if that is not good enough and it needs a second check per folder.
 
-Open questions I did not answer on my own (T4):
+Open questions I did not answer on my own (T4) — **both now answered (qa-log round 47)**:
 
-- Should `RunOnce`/`Run` be exported to `cmd`, or should `cmd` build the worker through a small
-  constructor? Today `NewOutboxWorker` is exported and `cmd` wiring is absent.
-- The `afterAck` seam is unexported and used only by a white-box test. If the reviewer prefers no
-  test seam in production code, the alternative is a mailworld fault that drops exactly after the
-  response; `AckThenDrop` cannot guarantee the client read the ack, which is why the seam exists.
+- **Deferral window (answered: re-check per folder).** `fetchAll` now refreshes `OutboxActiveKeys`
+  at the start of each folder and once before the gone-folder sweep, instead of once per pass. One
+  extra read query per folder on a local database; two databases still cannot share a transaction,
+  so the outbox's post-ack overwrite remains the closed loop.
+- **Crash seam (answered: keep the unexported seam).** `OutboxWorker.afterAck` stays unexported,
+  set only by the white-box crash test and nil in production. `AckThenDrop` stays as the
+  server-side half of the race.
