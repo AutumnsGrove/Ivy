@@ -130,10 +130,25 @@ func NewFetcher(dbs *store.DBs, opts ...Option) *Fetcher {
 	return f
 }
 
-// Fetch connects to one account and mirrors every selectable mailbox, newest
-// message first. A message the mirror already holds is skipped, so a resumed
-// run never re-downloads and never duplicates.
+// Fetch reconciles one account and records the outcome in `sync_state`, so
+// Mirror health can tell "never synced", a live backfill and each failure state
+// apart (ARCHITECTURE.md 9b). The state write itself is best effort: a database
+// error is logged, never allowed to mask the sync's own result.
 func (f *Fetcher) Fetch(ctx context.Context, acct Account) (Result, error) {
+	if err := f.EnsureAccount(ctx, acct); err != nil {
+		return Result{}, fmt.Errorf("sync account %s: %w", acct.ID, err)
+	}
+	f.recordSyncState(ctx, acct.ID, store.SyncState{Status: store.SyncSyncing, UpdatedAt: f.now()})
+
+	res, err := f.fetch(ctx, acct)
+	f.recordSyncState(ctx, acct.ID, f.syncOutcome(acct.ID, res, err))
+	return res, err
+}
+
+// fetch connects to one account and mirrors every selectable mailbox. A
+// message the mirror already holds is skipped, so a resumed run never
+// re-downloads and never duplicates.
+func (f *Fetcher) fetch(ctx context.Context, acct Account) (Result, error) {
 	// Housekeeping first, so leftovers from a crashed run never outlive the next.
 	if _, err := SweepSpool(ctx, f.dbs, f.now()); err != nil {
 		return Result{}, fmt.Errorf("sync account %s: %w", acct.ID, err)
@@ -166,6 +181,57 @@ func (f *Fetcher) Fetch(ctx context.Context, acct Account) (Result, error) {
 		return res, fmt.Errorf("sync account %s: %w", acct.ID, ctx.Err())
 	}
 	return res, ferr
+}
+
+// syncOutcome is the sync_state row a finished run leaves behind. Backfill
+// progress counts every message the run now holds; a completed run is done ==
+// total. A failure keeps the previous last_ok_at (the store coalesces it) and
+// carries a stable code.
+func (f *Fetcher) syncOutcome(accountID string, res Result, err error) store.SyncState {
+	have := res.Stored + res.Skipped
+	s := store.SyncState{AccountID: accountID, UpdatedAt: f.now(), BackfillDone: have, BackfillTotal: have}
+	if err == nil {
+		s.Status = store.SyncOK
+		s.LastOKAt = f.now()
+		return s
+	}
+	s.Status, s.LastErrorCode, s.LastErrorDetail = classifySyncError(err)
+	return s
+}
+
+func (f *Fetcher) recordSyncState(ctx context.Context, accountID string, s store.SyncState) {
+	s.AccountID = accountID
+	if err := f.dbs.SetSyncState(ctx, s); err != nil {
+		slog.WarnContext(ctx, "sync: cannot record sync state", "account", accountID, "error", err)
+	}
+}
+
+// classifySyncError maps a failed run to the API's SyncState and a stable code.
+// An auth verdict wins over reachability, and a network error is "unreachable"
+// rather than a generic failure so the banner can say the host is down.
+func classifySyncError(err error) (store.SyncStatus, string, string) {
+	detail := truncateSyncDetail(err.Error())
+	var imapErr *imap.Error
+	if errors.As(err, &imapErr) {
+		switch imapErr.Code {
+		case imap.ResponseCodeAuthenticationFailed, imap.ResponseCodeAuthorizationFailed:
+			return store.SyncAuthFailed, "auth_failed", detail
+		}
+	}
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return store.SyncUnreachable, "unreachable", detail
+	}
+	return store.SyncError, "sync_failed", detail
+}
+
+// truncateSyncDetail keeps the stored error under the limit SetSyncState
+// enforces, cutting on a rune boundary so the text stays valid UTF-8.
+func truncateSyncDetail(s string) string {
+	if len(s) <= store.MaxSyncErrorDetail {
+		return s
+	}
+	return strings.ToValidUTF8(s[:store.MaxSyncErrorDetail], "")
 }
 
 // Settle runs the passes that follow any batch of stored messages: heal derived
