@@ -101,7 +101,14 @@ fast`, the `full == fast` agreement test and named-state Playwright (`DEV.md` 4,
   `DerivedVersion`); only a clean build is cached, and a bad cache falls back to a visible rebuild.
   **Restore: `demo` 9 ms, `large` 3.5 s** (2.8 GB; the cache doubles the disk use, delete
   `.dev/cache` to reclaim it). `reset` keeps the cache; the first build per profile is still slow.
-- Named-state Playwright: each `DEV.md` 4 state, run against `ivy-dev up --mode fast`.
+- **Default port is now 8418** (`config.DefaultListen`; `ivy-dev` uses the same constant). 8787 is
+  wrangler's and always taken on the operator's machine. `IVY_SMOKE_PORT` moves the smoke port. The
+  smoke test now asserts the seeded mailbox (it still expected the empty one from before `up`
+  synced). Vite's 5173 and the preview 4173 are unchanged.
+- Named-state Playwright: each `DEV.md` 4 state, run against `ivy-dev up --mode fast`. Caveat found
+  while scoping it: nothing syncs after startup, so a mailworld fault (`sync-auth-failed`,
+  `offline`, ...) changes no screen of the real app until chunk 3's continuous sync and chunk 5's
+  gate exist; today those screens are only reachable through the mock `?scenario=` states.
 
 **4. Chunk 3 is split into eight stages (round 36; the plan is in "The chunk plan" below).** 3a
 (sync core) is next once 2h and the gating spikes (`docs/SPIKES.md`) are confirmed; 3h (the deploy
