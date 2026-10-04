@@ -95,6 +95,16 @@ func TestMirrorUpgradeFromEveryPriorVersion(t *testing.T) {
 					t.Fatalf("seed v%d: %v", version, err)
 				}
 			}
+			// From v2 on, attachments reference the message by id. The v9 rebuild
+			// drops and renames messages, so an actual child row proves
+			// defer_foreign_keys carries the parent across without losing the link.
+			if version >= 2 {
+				if _, err := db.ExecContext(context.Background(),
+					`INSERT INTO attachments (id, message_id, filename, mime, size)
+					 VALUES ('att-1', 'msg-1', 'x.txt', 'text/plain', 1)`); err != nil {
+					t.Fatalf("seed v%d attachment: %v", version, err)
+				}
+			}
 			if err := db.Close(); err != nil {
 				t.Fatalf("close v%d: %v", version, err)
 			}

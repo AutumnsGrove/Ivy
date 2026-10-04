@@ -17,11 +17,34 @@ type migration struct {
 // migrate applies every migration newer than the database's user_version, each
 // in its own transaction. Migrations are idempotent by construction: a database
 // already at the current version runs nothing.
+//
+// A migration that rebuilds a table another table references (v9 replaces
+// messages, which attachments points at) cannot run with foreign keys enforced,
+// and the pragma cannot change inside a transaction. So the write connection's
+// foreign keys are turned off for the whole pending run and restored afterwards,
+// then foreign_key_check proves no migration left a dangling reference.
 func migrate(ctx context.Context, db *sql.DB, migrations []migration) error {
 	var current int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&current); err != nil {
 		return fmt.Errorf("read user_version: %w", err)
 	}
+	pending := false
+	for _, m := range migrations {
+		if m.version > current {
+			pending = true
+			break
+		}
+	}
+	if !pending {
+		return nil
+	}
+	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
+		return fmt.Errorf("disable foreign keys for migrations: %w", err)
+	}
+	defer func() {
+		// Best effort: a failed run is followed by the caller closing the connection.
+		_, _ = db.ExecContext(context.Background(), "PRAGMA foreign_keys = ON")
+	}()
 
 	for _, m := range migrations {
 		if m.version <= current {
@@ -47,6 +70,29 @@ func migrate(ctx context.Context, db *sql.DB, migrations []migration) error {
 			return fmt.Errorf("commit migration %d: %w", m.version, err)
 		}
 		current = m.version
+	}
+
+	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
+		return fmt.Errorf("re-enable foreign keys after migrations: %w", err)
+	}
+	rows, err := db.QueryContext(ctx, "PRAGMA foreign_key_check")
+	if err != nil {
+		return fmt.Errorf("foreign_key_check after migrations: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	if rows.Next() {
+		vals := make([]any, 4)
+		ptrs := make([]any, 4)
+		for i := range vals {
+			ptrs[i] = &vals[i]
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			return fmt.Errorf("foreign_key_check after migrations: %w", err)
+		}
+		return fmt.Errorf("foreign_key_check after migrations: %v violates a reference", vals[0])
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("foreign_key_check after migrations: %w", err)
 	}
 	return nil
 }
@@ -228,6 +274,82 @@ var mirrorMigrations = []migration{
 				backfill_total    INTEGER NOT NULL DEFAULT 0,
 				updated_at        TEXT
 			)`,
+		},
+	},
+	{
+		version: 9,
+		statements: []string{
+			// A folder row is never deleted: a mailbox the server no longer lists
+			// is marked gone and hidden from every list, but its messages keep
+			// their rows and spool files (CHUNK3-BRIEF.md 1).
+			`ALTER TABLE folders ADD COLUMN gone_at TEXT`,
+
+			// Message identity now includes the folder's UIDVALIDITY. A server that
+			// rebuilds a mailbox may hand a new message the UID of an old, disabled
+			// one; without this the new row would collide with the old on
+			// (folder_id, uid), on the row id and on the spool path. SQLite cannot
+			// drop the old UNIQUE(folder_id, uid) in place, so the table is rebuilt.
+			// migrate disables foreign keys around pending migrations, so dropping
+			// the table attachments references is safe; every id is copied and
+			// foreign_key_check verifies the result before the connection is reused.
+			`CREATE TABLE messages_new (
+				id                    TEXT PRIMARY KEY,
+				account_id            TEXT NOT NULL REFERENCES accounts(id),
+				folder_id             TEXT NOT NULL REFERENCES folders(id),
+				uid                   INTEGER NOT NULL,
+				uidvalidity           INTEGER NOT NULL DEFAULT 0,
+				content_key           TEXT NOT NULL,
+				message_id_hdr        TEXT,
+				in_reply_to           TEXT,
+				refs                  TEXT,
+				subject               TEXT,
+				from_json             TEXT,
+				to_json               TEXT,
+				cc_json               TEXT,
+				reply_to_json         TEXT,
+				delivered_to_json     TEXT,
+				date                  TEXT,
+				size                  INTEGER NOT NULL DEFAULT 0,
+				flags_json            TEXT,
+				internaldate          TEXT,
+				has_attachments       INTEGER NOT NULL DEFAULT 0,
+				raw_blob              BLOB,
+				body_text             TEXT,
+				body_html_sanitized   TEXT,
+				thread_id             TEXT,
+				snippet               TEXT,
+				auth_results          TEXT,
+				parse_errors          TEXT,
+				disabled_at           TEXT,
+				disabled_reason       TEXT,
+				seen                  INTEGER NOT NULL DEFAULT 0,
+				raw_path              TEXT,
+				body_status           TEXT NOT NULL DEFAULT 'ok',
+				derived_version       INTEGER NOT NULL DEFAULT 0,
+				derive_failed_version INTEGER NOT NULL DEFAULT 0,
+				UNIQUE(folder_id, uidvalidity, uid)
+			)`,
+			`INSERT INTO messages_new (
+				id, account_id, folder_id, uid, uidvalidity, content_key, message_id_hdr,
+				in_reply_to, refs, subject, from_json, to_json, cc_json, reply_to_json,
+				delivered_to_json, date, size, flags_json, internaldate, has_attachments,
+				raw_blob, body_text, body_html_sanitized, thread_id, snippet, auth_results,
+				parse_errors, disabled_at, disabled_reason, seen, raw_path, body_status,
+				derived_version, derive_failed_version)
+			 SELECT m.id, m.account_id, m.folder_id, m.uid, COALESCE(f.uidvalidity, 0),
+				m.content_key, m.message_id_hdr, m.in_reply_to, m.refs, m.subject, m.from_json,
+				m.to_json, m.cc_json, m.reply_to_json, m.delivered_to_json, m.date, m.size,
+				m.flags_json, m.internaldate, m.has_attachments, m.raw_blob, m.body_text,
+				m.body_html_sanitized, m.thread_id, m.snippet, m.auth_results, m.parse_errors,
+				m.disabled_at, m.disabled_reason, m.seen, m.raw_path, m.body_status,
+				m.derived_version, m.derive_failed_version
+			 FROM messages m LEFT JOIN folders f ON f.id = m.folder_id`,
+			`DROP TABLE messages`,
+			`ALTER TABLE messages_new RENAME TO messages`,
+			`CREATE INDEX idx_messages_account_content ON messages(account_id, content_key)`,
+			`CREATE INDEX idx_messages_thread ON messages(thread_id)`,
+			`CREATE INDEX idx_messages_inbox ON messages(folder_id, date DESC, id DESC)`,
+			`CREATE INDEX idx_messages_derived_version ON messages(account_id, derived_version)`,
 		},
 	},
 }

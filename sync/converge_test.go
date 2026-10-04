@@ -243,11 +243,50 @@ func TestHarnessAcceptsAHistoryTheOneShotFetchGetsRight(t *testing.T) {
 	}
 }
 
-// The one-shot fetch never refreshes flags, so a flag set after the first sync
-// must be reported, and the shrinker must cut a padded script down to the cause.
+// staleFlagSync is a deliberately broken system under test, kept so the harness
+// self-test still has teeth now that the real runner refreshes flags: it mirrors
+// new messages but restores the flags of every message it already held, exactly
+// as the chunk 2b one-shot fetch did. The C2 demonstration uses it.
+func staleFlagSync(ctx context.Context, dbs *store.DBs, f *ivysync.Fetcher, acct ivysync.Account) error {
+	type flagState struct {
+		flags string
+		seen  bool
+	}
+	before := map[string]flagState{}
+	rows, err := dbs.Mirror.Read.QueryContext(ctx, `SELECT id, COALESCE(flags_json, ''), seen FROM messages`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var id string
+		var st flagState
+		if err := rows.Scan(&id, &st.flags, &st.seen); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		before[id] = st
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if err := oneShotFetch(ctx, dbs, f, acct); err != nil {
+		return err
+	}
+	for id, st := range before {
+		if _, err := dbs.Mirror.Write.ExecContext(ctx,
+			`UPDATE messages SET flags_json = ?, seen = ? WHERE id = ?`, st.flags, st.seen, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// The runner refreshes flags, so a sync that leaves them stale must still be
+// reported, and the shrinker must cut a padded script down to the cause.
 func TestHarnessCatchesStaleFlagsAndShrinksToTheCause(t *testing.T) {
 	t.Parallel()
 	cfg := defaultConfig(true)
+	cfg.sut = staleFlagSync
 	script := []op{
 		{kind: opAppend, n: 0},
 		{kind: opAppend, n: 1, a: 3},

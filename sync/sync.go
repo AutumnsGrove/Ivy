@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -211,7 +212,11 @@ func (f *Fetcher) threadAccount(ctx context.Context, accountID string) error {
 	return nil
 }
 
-// fetchAll logs in on an open connection and mirrors every selectable mailbox.
+// fetchAll reconciles every selectable mailbox on an open connection. It reads
+// the server's whole account once so a message that moved between folders can be
+// told apart from one that was removed (CHUNK3-BRIEF.md 1.5), then updates the
+// mirror folder by folder: flags and new messages for live folders, disabled
+// rows (never deleted) for what vanished.
 func (f *Fetcher) fetchAll(ctx context.Context, c *imapclient.Client, acct Account) (Result, error) {
 	if err := c.Login(acct.Username, acct.Password).Wait(); err != nil {
 		return Result{}, fmt.Errorf("sync account %s: login: %w", acct.ID, err)
@@ -221,23 +226,270 @@ func (f *Fetcher) fetchAll(ctx context.Context, c *imapclient.Client, acct Accou
 		return Result{}, fmt.Errorf("sync account %s: list: %w", acct.ID, err)
 	}
 
-	var res Result
+	var snaps []folderSnapshot
+	liveMsgIDs := map[string]bool{}
 	for _, mb := range mailboxes {
 		if !selectable(mb) {
 			continue
 		}
 		if err := ctx.Err(); err != nil {
-			return res, fmt.Errorf("sync account %s: %w", acct.ID, err)
+			return Result{}, fmt.Errorf("sync account %s: %w", acct.ID, err)
 		}
-		stored, skipped, err := f.fetchFolder(ctx, c, acct, mb)
+		snap, err := f.snapshotFolder(ctx, c, acct, mb)
 		if err != nil {
-			return res, fmt.Errorf("sync account %s: %w", acct.ID, err)
+			return Result{}, err
+		}
+		for _, meta := range snap.Messages {
+			liveMsgIDs[messageIDOf(meta)] = true
+		}
+		snaps = append(snaps, snap)
+	}
+
+	var res Result
+	seen := make(map[string]bool, len(snaps))
+	for _, snap := range snaps {
+		seen[snap.Name] = true
+		stored, skipped, err := f.reconcileFolder(ctx, c, acct, snap, liveMsgIDs)
+		if err != nil {
+			return res, err
 		}
 		res.Folders++
 		res.Stored += stored
 		res.Skipped += skipped
 	}
+	if err := f.markGoneFolders(ctx, acct.ID, seen, liveMsgIDs); err != nil {
+		return res, err
+	}
 	return res, nil
+}
+
+// folderSnapshot is what one SELECT plus a metadata FETCH read from a mailbox.
+// The body is not read here: a message already mirrored keeps its bytes, and a
+// new one is fetched by size tier in fetchBatch.
+type folderSnapshot struct {
+	Name          string
+	Attrs         []imap.MailboxAttr
+	UIDValidity   uint32
+	UIDNext       uint32
+	HighestModSeq uint64
+	Messages      []*imapclient.FetchMessageBuffer
+}
+
+// snapshotFolder selects a mailbox read-only and reads every message's
+// envelope, flags, size and internal date, but no bodies.
+func (f *Fetcher) snapshotFolder(ctx context.Context, c *imapclient.Client, acct Account, mb *imap.ListData) (folderSnapshot, error) {
+	data, err := c.Select(mb.Mailbox, &imap.SelectOptions{ReadOnly: true}).Wait()
+	if err != nil {
+		return folderSnapshot{}, fmt.Errorf("sync account %s: select %s: %w", acct.ID, mb.Mailbox, err)
+	}
+	snap := folderSnapshot{
+		Name: mb.Mailbox, Attrs: mb.Attrs, UIDValidity: data.UIDValidity,
+		UIDNext: uint32(data.UIDNext), HighestModSeq: data.HighestModSeq,
+	}
+	if data.NumMessages == 0 {
+		return snap, nil
+	}
+	all := imap.UIDSet{imap.UIDRange{Start: 1, Stop: 0}}
+	metas, err := c.Fetch(all, &imap.FetchOptions{
+		UID: true, Flags: true, Envelope: true, InternalDate: true, RFC822Size: true,
+	}).Collect()
+	if err != nil {
+		return folderSnapshot{}, fmt.Errorf("sync account %s: list messages in %s: %w", acct.ID, mb.Mailbox, err)
+	}
+	snap.Messages = metas
+	return snap, nil
+}
+
+// reconcileFolder brings one server folder's rows up to date and returns how
+// many bodies it stored and how many messages it already held. Nothing is
+// deleted: a row the server no longer holds in this folder is disabled, with
+// "moved" when its content still lives elsewhere on the server and
+// "server_removed" otherwise (rounds 37 and 38).
+func (f *Fetcher) reconcileFolder(ctx context.Context, c *imapclient.Client, acct Account, snap folderSnapshot, liveMsgIDs map[string]bool) (stored, skipped int, err error) {
+	folder := store.Folder{
+		ID:            folderRowID(acct.ID, snap.Name),
+		AccountID:     acct.ID,
+		Name:          snap.Name,
+		Role:          RoleFor(snap.Name, snap.Attrs),
+		UIDValidity:   snap.UIDValidity,
+		HighestModSeq: snap.HighestModSeq,
+		LastSyncAt:    f.now(),
+	}
+	existing, err := f.dbs.GetFolderByName(ctx, acct.ID, snap.Name)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return 0, 0, fmt.Errorf("sync account %s: look up folder %s: %w", acct.ID, snap.Name, err)
+	}
+	firstSight := errors.Is(err, store.ErrNotFound)
+	if !firstSight {
+		folder.ID = existing.ID
+	}
+	// The folder row must exist before its messages (foreign keys), and writing
+	// it first also revives a name the server has brought back.
+	if err := f.dbs.UpsertFolder(ctx, folder); err != nil {
+		return 0, 0, err
+	}
+
+	refs, err := f.dbs.SyncMessageRefs(ctx, folder.ID)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// A UIDVALIDITY change invalidates every UID the folder held. Disable what
+	// the old validity left behind and read the new validity as if it were new.
+	validityChanged := !firstSight && existing.UIDValidity != snap.UIDValidity
+	if firstSight || validityChanged {
+		if err := f.disableRefs(ctx, refs, liveMsgIDs); err != nil {
+			return 0, 0, err
+		}
+		refs = nil
+	}
+
+	mirrored := make(map[uint32]store.SyncMessageRef, len(refs))
+	for _, ref := range refs {
+		if ref.UIDValidity != snap.UIDValidity {
+			// A leftover from an earlier validity that was never disabled.
+			if err := f.disableRef(ctx, ref, liveMsgIDs); err != nil {
+				return 0, 0, err
+			}
+			continue
+		}
+		mirrored[ref.UID] = ref
+	}
+
+	present := make(map[uint32]*imapclient.FetchMessageBuffer, len(snap.Messages))
+	for _, meta := range snap.Messages {
+		present[uint32(meta.UID)] = meta
+	}
+
+	var newUIDs []uint32
+	for uid, ref := range mirrored {
+		meta, ok := present[uid]
+		if !ok {
+			if err := f.disableRef(ctx, ref, liveMsgIDs); err != nil {
+				return 0, 0, err
+			}
+			continue
+		}
+		skipped++
+		if sameFlags(flagStrings(meta.Flags), ref.Flags) {
+			continue
+		}
+		if err := f.dbs.SetMessageFlags(ctx, ref.ID, flagStrings(meta.Flags)); err != nil {
+			return 0, 0, fmt.Errorf("sync account %s: flags %s/%d: %w", acct.ID, snap.Name, uid, err)
+		}
+	}
+	for uid := range present {
+		if _, ok := mirrored[uid]; !ok {
+			newUIDs = append(newUIDs, uid)
+		}
+	}
+
+	// Bodies are fetched newest first, in bounded batches, so a dropped
+	// connection leaves a resumable newest-prefix checkpoint (CHUNK3-BRIEF.md 4)
+	// and the next run skips what it already holds.
+	slices.SortFunc(newUIDs, func(a, b uint32) int {
+		switch {
+		case a > b:
+			return -1
+		case a < b:
+			return 1
+		default:
+			return 0
+		}
+	})
+	for start := 0; start < len(newUIDs); start += f.batch {
+		end := min(start+f.batch, len(newUIDs))
+		set := imap.UIDSet{}
+		for _, uid := range newUIDs[start:end] {
+			set.AddNum(imap.UID(uid))
+		}
+		// The snapshot pass left another mailbox selected; fetching bodies reads
+		// whatever is selected, so select this folder again first.
+		if _, err := c.Select(snap.Name, &imap.SelectOptions{ReadOnly: true}).Wait(); err != nil {
+			return stored, skipped, fmt.Errorf("sync account %s: reselect %s: %w", acct.ID, snap.Name, err)
+		}
+		n, err := f.fetchBatch(ctx, c, acct, folder.ID, snap.UIDValidity, set)
+		stored += n
+		if err != nil {
+			return stored, skipped, err
+		}
+	}
+	return stored, skipped, nil
+}
+
+// markGoneFolders hides a mirror folder the server no longer lists and disables
+// its live messages, exactly as a vanished UID is handled. Rows, raw bytes and
+// spool files stay (CHUNK3-BRIEF.md 1).
+func (f *Fetcher) markGoneFolders(ctx context.Context, accountID string, seen map[string]bool, liveMsgIDs map[string]bool) error {
+	folders, err := f.dbs.AllFolders(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	for _, folder := range folders {
+		if seen[folder.Name] || !folder.GoneAt.IsZero() {
+			continue
+		}
+		refs, err := f.dbs.SyncMessageRefs(ctx, folder.ID)
+		if err != nil {
+			return err
+		}
+		if err := f.disableRefs(ctx, refs, liveMsgIDs); err != nil {
+			return err
+		}
+		if err := f.dbs.SetFolderGone(ctx, folder.ID, f.now()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Disabled reasons: a message that vanished from a folder but still exists
+// elsewhere on the server moved; one that is nowhere was removed.
+const (
+	disabledReasonMoved         = "moved"
+	disabledReasonServerRemoved = "server_removed"
+)
+
+func (f *Fetcher) disableRefs(ctx context.Context, refs []store.SyncMessageRef, liveMsgIDs map[string]bool) error {
+	for _, ref := range refs {
+		if err := f.disableRef(ctx, ref, liveMsgIDs); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (f *Fetcher) disableRef(ctx context.Context, ref store.SyncMessageRef, liveMsgIDs map[string]bool) error {
+	reason := disabledReasonServerRemoved
+	if liveMsgIDs[ref.MessageID] {
+		reason = disabledReasonMoved
+	}
+	if err := f.dbs.DisableMessage(ctx, ref.ID, reason, f.now()); err != nil {
+		return fmt.Errorf("disable message %s: %w", ref.ID, err)
+	}
+	return nil
+}
+
+func messageIDOf(meta *imapclient.FetchMessageBuffer) string {
+	if meta == nil || meta.Envelope == nil {
+		return ""
+	}
+	return wrapMessageID(meta.Envelope.MessageID)
+}
+
+// canonicalFlags lower-cases and sorts a flag list, so two listings of the same
+// flags compare equal whatever order or case the server used.
+func canonicalFlags(flags []string) []string {
+	out := make([]string, len(flags))
+	for i, f := range flags {
+		out[i] = strings.ToLower(f)
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+func sameFlags(a, b []string) bool {
+	return slices.Equal(canonicalFlags(a), canonicalFlags(b))
 }
 
 // EnsureAccount creates the mirror account row the first time sync runs. An
@@ -292,78 +544,12 @@ func (f *Fetcher) RecordFolder(ctx context.Context, acct Account, name string, a
 	return folder, nil
 }
 
-// fetchFolder selects one mailbox, records it, and fetches the messages the
-// mirror does not already hold, newest UID first. It returns how many messages
-// it stored and how many it skipped because the mirror already had them.
-func (f *Fetcher) fetchFolder(ctx context.Context, c *imapclient.Client, acct Account, mb *imap.ListData) (int, int, error) {
-	// Read-only (EXAMINE): this path never writes to the server, and chunk 3's
-	// writes will select read-write on their own.
-	data, err := c.Select(mb.Mailbox, &imap.SelectOptions{ReadOnly: true}).Wait()
-	if err != nil {
-		return 0, 0, fmt.Errorf("select %s: %w", mb.Mailbox, err)
-	}
-	folder := f.newFolder(acct, mb.Mailbox, mb.Attrs, data.UIDValidity, data.HighestModSeq)
-	// Reuse the row id an earlier sync assigned and, when UIDVALIDITY still
-	// matches, treat the stored UIDs as the checkpoint. A UIDVALIDITY change
-	// invalidates UIDs, so the whole folder is re-read; chunk 3 owns the
-	// disable-and-rebuild handling for the rows the new validity no longer
-	// covers.
-	have := map[uint32]bool{}
-	existing, err := f.dbs.GetFolderByName(ctx, acct.ID, mb.Mailbox)
-	switch {
-	case err == nil:
-		folder.ID = existing.ID
-		if existing.UIDValidity == data.UIDValidity {
-			uids, err := f.dbs.MessageUIDs(ctx, existing.ID)
-			if err != nil {
-				return 0, 0, err
-			}
-			for _, uid := range uids {
-				have[uid] = true
-			}
-		}
-	case !errors.Is(err, store.ErrNotFound):
-		return 0, 0, fmt.Errorf("look up folder %s: %w", mb.Mailbox, err)
-	}
-	if err := f.dbs.UpsertFolder(ctx, folder); err != nil {
-		return 0, 0, err
-	}
-
-	highest := uint32(data.UIDNext)
-	if highest > 0 {
-		highest--
-	}
-	stored := 0
-	for _, r := range uidBatches(highest, f.batch) {
-		if err := ctx.Err(); err != nil {
-			return stored, len(have), err
-		}
-		set := imap.UIDSet{}
-		missing := 0
-		for u := r.lo; u <= r.hi; u++ {
-			if !have[u] {
-				set.AddNum(imap.UID(u))
-				missing++
-			}
-		}
-		if missing == 0 {
-			continue
-		}
-		n, err := f.fetchBatch(ctx, c, acct, folder.ID, set)
-		stored += n
-		if err != nil {
-			return stored, len(have), err
-		}
-	}
-	return stored, len(have), nil
-}
-
 // fetchBatch mirrors one UID set. It first asks for every message's envelope,
 // flags and size, which is small whatever the messages weigh, then fetches each
 // body by size tier (see InlineMessageBytes). Each message is upserted as soon as
 // it is complete, so a dropped connection keeps the progress it made rather than
 // losing the whole batch.
-func (f *Fetcher) fetchBatch(ctx context.Context, c *imapclient.Client, acct Account, folderID string, set imap.UIDSet) (int, error) {
+func (f *Fetcher) fetchBatch(ctx context.Context, c *imapclient.Client, acct Account, folderID string, uidvalidity uint32, set imap.UIDSet) (int, error) {
 	metas, err := c.Fetch(set, &imap.FetchOptions{
 		UID:          true,
 		Flags:        true,
@@ -383,7 +569,7 @@ func (f *Fetcher) fetchBatch(ctx context.Context, c *imapclient.Client, acct Acc
 		byUID[meta.UID] = meta
 		switch {
 		case meta.RFC822Size > f.max:
-			if err := f.dbs.UpsertMessage(ctx, f.envelopeOnly(acct, folderID, meta)); err != nil {
+			if err := f.dbs.UpsertMessage(ctx, f.envelopeOnly(acct, folderID, uidvalidity, meta)); err != nil {
 				return stored, err
 			}
 			stored++
@@ -396,7 +582,7 @@ func (f *Fetcher) fetchBatch(ctx context.Context, c *imapclient.Client, acct Acc
 		}
 	}
 
-	n, err := f.fetchInline(ctx, c, acct, folderID, inline, byUID)
+	n, err := f.fetchInline(ctx, c, acct, folderID, uidvalidity, inline, byUID)
 	stored += n
 	if err != nil {
 		return stored, err
@@ -405,7 +591,7 @@ func (f *Fetcher) fetchBatch(ctx context.Context, c *imapclient.Client, acct Acc
 		if err := ctx.Err(); err != nil {
 			return stored, err
 		}
-		ok, err := f.fetchSpooled(ctx, c, acct, folderID, meta)
+		ok, err := f.fetchSpooled(ctx, c, acct, folderID, uidvalidity, meta)
 		if err != nil {
 			return stored, err
 		}
@@ -418,7 +604,7 @@ func (f *Fetcher) fetchBatch(ctx context.Context, c *imapclient.Client, acct Acc
 
 // fetchInline fetches the bodies of small messages in one command, collecting
 // each into memory, and stores the raw bytes in the row.
-func (f *Fetcher) fetchInline(ctx context.Context, c *imapclient.Client, acct Account, folderID string, set imap.UIDSet, byUID map[imap.UID]*imapclient.FetchMessageBuffer) (int, error) {
+func (f *Fetcher) fetchInline(ctx context.Context, c *imapclient.Client, acct Account, folderID string, uidvalidity uint32, set imap.UIDSet, byUID map[imap.UID]*imapclient.FetchMessageBuffer) (int, error) {
 	if len(set) == 0 {
 		return 0, nil
 	}
@@ -439,7 +625,7 @@ func (f *Fetcher) fetchInline(ctx context.Context, c *imapclient.Client, acct Ac
 		if !ok {
 			continue // the server sent a message we did not ask about
 		}
-		if err := f.storeInline(ctx, acct, folderID, meta, buf.FindBodySection(section)); err != nil {
+		if err := f.storeInline(ctx, acct, folderID, uidvalidity, meta, buf.FindBodySection(section)); err != nil {
 			_ = cmd.Close()
 			return stored, err
 		}
@@ -453,8 +639,8 @@ func (f *Fetcher) fetchInline(ctx context.Context, c *imapclient.Client, acct Ac
 
 // storeInline writes a message whose raw bytes are already in memory (up to
 // InlineMessageBytes) into its row.
-func (f *Fetcher) storeInline(ctx context.Context, acct Account, folderID string, meta *imapclient.FetchMessageBuffer, raw []byte) error {
-	m := f.baseMessage(acct, folderID, meta)
+func (f *Fetcher) storeInline(ctx context.Context, acct Account, folderID string, uidvalidity uint32, meta *imapclient.FetchMessageBuffer, raw []byte) error {
+	m := f.baseMessage(acct, folderID, uidvalidity, meta)
 	m.RawBlob = raw
 	m.ContentKey = store.ContentKey(m.MessageID, headerBlock(raw))
 	// An in-memory message goes through the same bounded walk as a spooled one,
@@ -474,27 +660,30 @@ func (f *Fetcher) storeInline(ctx context.Context, acct Account, folderID string
 // the same three size tiers as a fetch. The fast dev seeder uses it in place of
 // IMAP; sharing storeInline, storeSpooled and envelopeOnly with the fetch is
 // what lets a test say the two modes agree.
-func (f *Fetcher) StoreRaw(ctx context.Context, acct Account, folderID string, meta *imapclient.FetchMessageBuffer, raw []byte) error {
+func (f *Fetcher) StoreRaw(ctx context.Context, acct Account, folderID string, uidvalidity uint32, meta *imapclient.FetchMessageBuffer, raw []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	// The tiers are chosen on the size FETCH reported, as fetchBatch does.
 	switch {
 	case meta.RFC822Size > f.max:
-		return f.dbs.UpsertMessage(ctx, f.envelopeOnly(acct, folderID, meta))
+		return f.dbs.UpsertMessage(ctx, f.envelopeOnly(acct, folderID, uidvalidity, meta))
 	case meta.RFC822Size > 0 && meta.RFC822Size <= f.inline:
-		return f.storeInline(ctx, acct, folderID, meta, raw)
+		return f.storeInline(ctx, acct, folderID, uidvalidity, meta, raw)
 	}
-	rel := spoolRel(folderID, uint32(meta.UID))
+	rel := spoolRel(folderID, uidvalidity, uint32(meta.UID))
 	if _, err := writeSpool(filepath.Join(f.dbs.Dir, filepath.FromSlash(rel)), bytes.NewReader(raw), f.max); err != nil {
 		return err
 	}
-	return f.storeSpooled(ctx, acct, folderID, meta, rel)
+	return f.storeSpooled(ctx, acct, folderID, uidvalidity, meta, rel)
 }
 
-// spoolRel is where a message's spool file lives, relative to the data dir.
-func spoolRel(folderID string, uid uint32) string {
-	return path.Join("spool", folderID, strconv.FormatUint(uint64(uid), 10)+".eml")
+// spoolRel is where a message's spool file lives, relative to the data dir. The
+// UIDVALIDITY is part of the path so a rebuilt folder's new message at an old
+// UID cannot overwrite the disabled message's file.
+func spoolRel(folderID string, uidvalidity uint32, uid uint32) string {
+	return path.Join("spool", folderID, strconv.FormatUint(uint64(uidvalidity), 10),
+		strconv.FormatUint(uint64(uid), 10)+".eml")
 }
 
 // fetchSpooled streams one message's body to a file under the data directory
@@ -502,11 +691,11 @@ func spoolRel(folderID string, uid uint32) string {
 // whole in memory. It reports whether a row was stored; a message that expunged
 // itself between the two commands, or that delivered more than the limit, is not
 // an error for the run.
-func (f *Fetcher) fetchSpooled(ctx context.Context, c *imapclient.Client, acct Account, folderID string, meta *imapclient.FetchMessageBuffer) (bool, error) {
+func (f *Fetcher) fetchSpooled(ctx context.Context, c *imapclient.Client, acct Account, folderID string, uidvalidity uint32, meta *imapclient.FetchMessageBuffer) (bool, error) {
 	section := &imap.FetchItemBodySection{Peek: true}
 	cmd := c.Fetch(imap.UIDSetNum(meta.UID), &imap.FetchOptions{UID: true, BodySection: []*imap.FetchItemBodySection{section}})
 
-	rel := spoolRel(folderID, uint32(meta.UID))
+	rel := spoolRel(folderID, uidvalidity, uint32(meta.UID))
 	var spoolErr error
 	got := false
 	for msg := cmd.Next(); msg != nil; msg = cmd.Next() {
@@ -529,22 +718,22 @@ func (f *Fetcher) fetchSpooled(ctx context.Context, c *imapclient.Client, acct A
 	case errors.Is(spoolErr, errSpoolTooLarge):
 		// The server announced a size within the limit and sent more. Treat it as
 		// over the limit rather than trust either number.
-		return true, f.dbs.UpsertMessage(ctx, f.envelopeOnly(acct, folderID, meta))
+		return true, f.dbs.UpsertMessage(ctx, f.envelopeOnly(acct, folderID, uidvalidity, meta))
 	case spoolErr != nil:
 		return false, spoolErr
 	case !got:
 		return false, nil
 	}
 
-	if err := f.storeSpooled(ctx, acct, folderID, meta, rel); err != nil {
+	if err := f.storeSpooled(ctx, acct, folderID, uidvalidity, meta, rel); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
 // storeSpooled parses a message already written to the spool and stores its row.
-func (f *Fetcher) storeSpooled(ctx context.Context, acct Account, folderID string, meta *imapclient.FetchMessageBuffer, rel string) error {
-	m := f.baseMessage(acct, folderID, meta)
+func (f *Fetcher) storeSpooled(ctx context.Context, acct Account, folderID string, uidvalidity uint32, meta *imapclient.FetchMessageBuffer, rel string) error {
+	m := f.baseMessage(acct, folderID, uidvalidity, meta)
 	m.RawPath = rel
 	parsed, header, err := parseSpooled(filepath.Join(f.dbs.Dir, filepath.FromSlash(rel)), acct.TrustedAuthservIDs)
 	if err != nil {
@@ -696,8 +885,8 @@ func parseSpooled(file string, trustedAuthservIDs []string) (mailmime.Parsed, []
 // envelopeOnly builds the row for a message that is not downloaded: the
 // envelope fields the first FETCH returned, an explicit status, and a content
 // key made from the envelope since there is no header block to hash.
-func (f *Fetcher) envelopeOnly(acct Account, folderID string, meta *imapclient.FetchMessageBuffer) store.Message {
-	m := f.baseMessage(acct, folderID, meta)
+func (f *Fetcher) envelopeOnly(acct Account, folderID string, uidvalidity uint32, meta *imapclient.FetchMessageBuffer) store.Message {
+	m := f.baseMessage(acct, folderID, uidvalidity, meta)
 	m.BodyStatus = store.BodyTooLarge
 	// No UID in the fallback: the key must survive a move to another folder.
 	m.ContentKey = store.ContentKey(m.MessageID, fmt.Appendf(nil, "%d|%s|%s|%s",
@@ -709,13 +898,14 @@ func (f *Fetcher) envelopeOnly(acct Account, folderID string, meta *imapclient.F
 // date) into a mirror row. Every tier starts here; the body fields are filled in
 // afterwards by applyParsed, or left empty for a message that is not downloaded.
 // Sanitising the HTML is render/'s job (chunk 2d), so body_html is left for it.
-func (f *Fetcher) baseMessage(acct Account, folderID string, buf *imapclient.FetchMessageBuffer) store.Message {
+func (f *Fetcher) baseMessage(acct Account, folderID string, uidvalidity uint32, buf *imapclient.FetchMessageBuffer) store.Message {
 	uid := uint32(buf.UID)
 	m := store.Message{
-		ID:           messageRowID(folderID, uid),
+		ID:           messageRowID(folderID, uidvalidity, uid),
 		AccountID:    acct.ID,
 		FolderID:     folderID,
 		UID:          uid,
+		UIDValidity:  uidvalidity,
 		Size:         buf.RFC822Size,
 		InternalDate: buf.InternalDate,
 		Flags:        flagStrings(buf.Flags),
@@ -816,11 +1006,13 @@ func folderRowID(accountID, name string) string {
 	return hex.EncodeToString(sum[:16])
 }
 
-// messageRowID is the stable id for a message in a folder. UpsertMessage keys
-// on (folder, uid) and keeps the original id, so this is only the value used on
-// first insert.
-func messageRowID(folderID string, uid uint32) string {
-	sum := sha256.Sum256([]byte(folderID + "\x00" + strconv.FormatUint(uint64(uid), 10)))
+// messageRowID is the stable id for a message in a folder. It includes the
+// folder's UIDVALIDITY so a folder rebuild that reuses UID numbers gives the new
+// row a distinct id from the disabled old one. UpsertMessage keys on
+// (folder, uidvalidity, uid) and keeps the original id, so this is only the value
+// used on first insert.
+func messageRowID(folderID string, uidvalidity uint32, uid uint32) string {
+	sum := sha256.Sum256([]byte(folderID + "\x00" + strconv.FormatUint(uint64(uidvalidity), 10) + "\x00" + strconv.FormatUint(uint64(uid), 10)))
 	return hex.EncodeToString(sum[:16])
 }
 

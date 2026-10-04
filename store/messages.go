@@ -34,10 +34,14 @@ type AuthResults struct {
 // RawBlob is the original RFC 822 bytes, stored so everything derived can be
 // rebuilt.
 type Message struct {
-	ID             string
-	AccountID      string
-	FolderID       string
-	UID            uint32
+	ID        string
+	AccountID string
+	FolderID  string
+	UID       uint32
+	// UIDValidity is the folder's UIDVALIDITY when this row was stored. It is
+	// part of the message identity, so a folder rebuild that reuses UID numbers
+	// cannot collide with the disabled rows of the old validity.
+	UIDValidity    uint32
 	ContentKey     string
 	MessageID      string
 	InReplyTo      string
@@ -139,13 +143,13 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 
 	_, err = d.Mirror.Write.ExecContext(ctx, `
 		INSERT INTO messages (
-			id, account_id, folder_id, uid, content_key, message_id_hdr, in_reply_to,
+			id, account_id, folder_id, uid, uidvalidity, content_key, message_id_hdr, in_reply_to,
 			refs, subject, from_json, to_json, cc_json, reply_to_json, delivered_to_json,
 			date, size, flags_json, internaldate, has_attachments, raw_blob, body_text,
 			body_html_sanitized, thread_id, snippet, auth_results, parse_errors,
 			disabled_at, disabled_reason, seen, raw_path, body_status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(folder_id, uid) DO UPDATE SET
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(folder_id, uidvalidity, uid) DO UPDATE SET
 			account_id=excluded.account_id, content_key=excluded.content_key,
 			message_id_hdr=excluded.message_id_hdr, in_reply_to=excluded.in_reply_to,
 			refs=excluded.refs, subject=excluded.subject, from_json=excluded.from_json,
@@ -157,7 +161,7 @@ func (d *DBs) UpsertMessage(ctx context.Context, m Message) error {
 			raw_path=COALESCE(excluded.raw_path, messages.raw_path),
 			auth_results=excluded.auth_results, disabled_at=excluded.disabled_at,
 			disabled_reason=excluded.disabled_reason, seen=excluded.seen`,
-		m.ID, m.AccountID, m.FolderID, m.UID, m.ContentKey, m.MessageID, m.InReplyTo,
+		m.ID, m.AccountID, m.FolderID, m.UID, m.UIDValidity, m.ContentKey, m.MessageID, m.InReplyTo,
 		m.References, m.Subject, from, to, cc, replyTo, deliveredTo,
 		nullableTime(m.Date), m.Size, flags, nullableTime(m.InternalDate),
 		m.HasAttachments, m.RawBlob, m.BodyText, m.BodyHTML, m.ThreadID, m.Snippet,
@@ -253,9 +257,102 @@ func (d *DBs) MessageUIDs(ctx context.Context, folderID string) ([]uint32, error
 	return uids, nil
 }
 
+// SyncMessageRef is the small projection of a live message that reconciliation
+// needs: it holds no body, so a run over a large folder stays bounded in memory.
+type SyncMessageRef struct {
+	ID          string
+	UID         uint32
+	UIDValidity uint32
+	MessageID   string
+	Flags       []string
+}
+
+// SyncMessageRefs returns every live (not disabled) row in a folder, without
+// reading a raw blob or a spool file.
+func (d *DBs) SyncMessageRefs(ctx context.Context, folderID string) ([]SyncMessageRef, error) {
+	rows, err := d.Mirror.Read.QueryContext(ctx,
+		`SELECT id, uid, uidvalidity, COALESCE(message_id_hdr, ''), COALESCE(flags_json, '') FROM messages
+		 WHERE folder_id = ? AND disabled_at IS NULL`, folderID)
+	if err != nil {
+		return nil, fmt.Errorf("sync refs for %s: %w", folderID, err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []SyncMessageRef
+	for rows.Next() {
+		var (
+			r          SyncMessageRef
+			uid, valid int64
+			flagsJSON  string
+		)
+		if err := rows.Scan(&r.ID, &uid, &valid, &r.MessageID, &flagsJSON); err != nil {
+			return nil, fmt.Errorf("sync refs for %s: %w", folderID, err)
+		}
+		u, err := uidFromDB(uid)
+		if err != nil {
+			return nil, fmt.Errorf("sync refs for %s: %w", folderID, err)
+		}
+		r.UID = u
+		r.UIDValidity = uint32(valid) //nolint:gosec // G115: written from a uint32
+		if err := decodeJSON(flagsJSON, &r.Flags); err != nil {
+			return nil, fmt.Errorf("sync refs for %s: flags: %w", folderID, err)
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sync refs for %s: %w", folderID, err)
+	}
+	return out, nil
+}
+
+// DisableMessage hides a message the server no longer holds in its folder. The
+// row, its raw bytes and its spool file stay: nothing is ever erased. The first
+// disable wins, so a later pass cannot rewrite the reason that explained it.
+func (d *DBs) DisableMessage(ctx context.Context, id, reason string, at time.Time) error {
+	res, err := d.Mirror.Write.ExecContext(ctx, `
+		UPDATE messages SET
+			disabled_reason = CASE WHEN disabled_at IS NULL THEN ? ELSE disabled_reason END,
+			disabled_at = COALESCE(disabled_at, ?)
+		WHERE id = ?`, reason, nullableTime(at), id)
+	if err != nil {
+		return fmt.Errorf("disable message %s: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("disable message %s: %w", id, err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetMessageFlags updates the sync-owned flag columns of a live message. It is
+// deliberately narrow: a reconciliation pass that only refreshes flags must not
+// touch the content key, the raw bytes or any derived data.
+func (d *DBs) SetMessageFlags(ctx context.Context, id string, flags []string) error {
+	flagsJSON, err := marshalFlags(flags)
+	if err != nil {
+		return err
+	}
+	res, err := d.Mirror.Write.ExecContext(ctx,
+		`UPDATE messages SET flags_json = ?, seen = ? WHERE id = ?`,
+		flagsJSON, slices.Contains(flags, `\Seen`), id)
+	if err != nil {
+		return fmt.Errorf("set message %s flags: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("set message %s flags: %w", id, err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // messageSelect coalesces nullable columns so scanning never needs sql.Null*.
 const messageSelect = `
-	SELECT id, account_id, folder_id, uid, content_key,
+	SELECT id, account_id, folder_id, uid, uidvalidity, content_key,
 	       COALESCE(message_id_hdr, ''), COALESCE(in_reply_to, ''), COALESCE(refs, ''),
 	       COALESCE(subject, ''), COALESCE(from_json, ''), COALESCE(to_json, ''),
 	       COALESCE(cc_json, ''), COALESCE(reply_to_json, ''), COALESCE(delivered_to_json, ''),
@@ -280,7 +377,7 @@ func scanMessage(s scanner) (Message, error) {
 		disabledAt                       string
 	)
 	err := s.Scan(
-		&m.ID, &m.AccountID, &m.FolderID, &uid, &m.ContentKey, &m.MessageID,
+		&m.ID, &m.AccountID, &m.FolderID, &uid, &m.UIDValidity, &m.ContentKey, &m.MessageID,
 		&m.InReplyTo, &m.References, &m.Subject, &fromJSON, &toJSON, &ccJSON,
 		&replyToJSON, &deliveredToJSON,
 		&date, &size, &flagsJSON, &internalDate, &m.HasAttachments, &m.RawBlob,

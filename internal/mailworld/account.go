@@ -113,6 +113,22 @@ func (a *Account) HighestModSeq(mailbox string) (uint64, error) {
 	return modSeq, err
 }
 
+// UIDValidity returns the UIDVALIDITY a SELECT reports for a mailbox. The seed
+// observer carries it to the fast dev writer, so a seeded message gets the same
+// identity a real sync would give it (UIDVALIDITY is part of the row id).
+func (a *Account) UIDValidity(name string) (uint32, error) {
+	var v uint32
+	err := a.withClient(func(c *imapclient.Client) error {
+		data, err := c.Select(name, &imap.SelectOptions{ReadOnly: true}).Wait()
+		if err != nil {
+			return err
+		}
+		v = data.UIDValidity
+		return nil
+	})
+	return v, err
+}
+
 // Status returns the message and unseen counts for a mailbox.
 func (a *Account) Status(mailbox string) (num, unseen uint32, err error) {
 	err = a.withClient(func(c *imapclient.Client) error {

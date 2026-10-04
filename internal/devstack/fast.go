@@ -102,10 +102,12 @@ func (w *fastWriter) add(d mailworld.Delivery) {
 	key := acct.ID + "\x00" + d.Mailbox
 	folder, ok := w.folders[key]
 	if !ok {
-		// Folder rows must exist before their messages (foreign keys). The real
-		// UIDVALIDITY is only known once seeding ends, so this is overwritten then.
+		// Folder rows must exist before their messages (foreign keys). The
+		// delivery carries the mailbox's UIDVALIDITY, so the row and the message
+		// identity are right from the first write; the final pass only fills in
+		// the attributes and MODSEQ a SELECT would have returned.
 		var err error
-		folder, err = w.fetcher.RecordFolder(w.ctx, acct, d.Mailbox, nil, 0, 0)
+		folder, err = w.fetcher.RecordFolder(w.ctx, acct, d.Mailbox, nil, d.UIDValidity, 0)
 		if err != nil {
 			w.err = err
 			return
@@ -117,7 +119,7 @@ func (w *fastWriter) add(d mailworld.Delivery) {
 		w.err = fmt.Errorf("devstack: read %s UID %d: %w", d.Mailbox, d.UID, err)
 		return
 	}
-	if err := w.fetcher.StoreRaw(w.ctx, acct, folder.ID, meta, d.Raw); err != nil {
+	if err := w.fetcher.StoreRaw(w.ctx, acct, folder.ID, d.UIDValidity, meta, d.Raw); err != nil {
 		w.err = fmt.Errorf("devstack: store %s UID %d: %w", d.Mailbox, d.UID, err)
 		return
 	}

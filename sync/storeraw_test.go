@@ -55,7 +55,7 @@ func TestStoreRawFollowsTheSizeTiers(t *testing.T) {
 
 	small, mid, big := rawWithBody("s", 100), rawWithBody("m", 2<<10), rawWithBody("b", 6<<10)
 	for uid, raw := range map[uint32][]byte{1: small, 2: mid, 3: big} {
-		if err := f.StoreRaw(ctx, acct, folder.ID, metaFor(uid, raw), raw); err != nil {
+		if err := f.StoreRaw(ctx, acct, folder.ID, 7, metaFor(uid, raw), raw); err != nil {
 			t.Fatalf("StoreRaw uid %d: %v", uid, err)
 		}
 	}
@@ -92,7 +92,7 @@ func TestStoreRawTwiceKeepsOneRow(t *testing.T) {
 	}
 	raw := rawWithBody("s", 50)
 	for range 2 {
-		if err := f.StoreRaw(ctx, acct, folder.ID, metaFor(1, raw), raw); err != nil {
+		if err := f.StoreRaw(ctx, acct, folder.ID, 1, metaFor(1, raw), raw); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -110,7 +110,7 @@ func TestStoreRawStopsWhenCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	raw := rawWithBody("s", 50)
-	if err := f.StoreRaw(ctx, acct, "folder", metaFor(1, raw), raw); err == nil {
+	if err := f.StoreRaw(ctx, acct, "folder", 1, metaFor(1, raw), raw); err == nil {
 		t.Fatal("StoreRaw ignored a cancelled context")
 	}
 }

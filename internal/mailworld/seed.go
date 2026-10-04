@@ -63,12 +63,13 @@ type seedConfig struct {
 // Delivery is one seeded message as the server stored it, reported to a
 // WithObserver callback. Raw is only valid during the callback.
 type Delivery struct {
-	Account string
-	Mailbox string
-	UID     uint32
-	Raw     []byte
-	Flags   []imap.Flag
-	At      time.Time
+	Account     string
+	Mailbox     string
+	UID         uint32
+	UIDValidity uint32
+	Raw         []byte
+	Flags       []imap.Flag
+	At          time.Time
 }
 
 // WithObserver streams each delivery to fn as it is made, so the fast dev
@@ -100,7 +101,8 @@ func Seed(w *World, p Profile, opts ...SeedOption) (SeedResult, error) {
 		rnd:  rand.New(rand.NewSource(cfg.seed)), //nolint:gosec // G404: seeded on purpose so a profile is byte-reproducible
 		hash: sha256.New(),
 
-		observe: cfg.observe,
+		observe:  cfg.observe,
+		validity: make(map[string]uint32),
 	}
 	if err := p.generate(s); err != nil {
 		return SeedResult{}, fmt.Errorf("seed %s: %w", p.Name, err)
@@ -259,6 +261,10 @@ type seeder struct {
 	accounts  []SeedAccount
 	delivered int
 	observe   func(Delivery)
+
+	// validity caches each mailbox's UIDVALIDITY, read once through a real
+	// connection so a delivery can carry the identity a sync would compute.
+	validity map[string]uint32
 }
 
 func (s *seeder) account(address string) *Account {
@@ -281,7 +287,10 @@ func (s *seeder) deliver(acc *Account, mailbox string, raw []byte, flags []imap.
 	}
 	s.delivered++
 	if s.observe != nil {
-		s.observe(Delivery{Account: acc.Address(), Mailbox: mailbox, UID: uint32(data.UID), Raw: raw, Flags: flags, At: at})
+		s.observe(Delivery{
+			Account: acc.Address(), Mailbox: mailbox, UID: uint32(data.UID),
+			UIDValidity: s.uidValidity(acc, mailbox), Raw: raw, Flags: flags, At: at,
+		})
 	}
 	writeSeedField(s.hash, acc.Address())
 	writeSeedField(s.hash, mailbox)
@@ -289,6 +298,21 @@ func (s *seeder) deliver(acc *Account, mailbox string, raw []byte, flags []imap.
 	for _, f := range flags {
 		writeSeedField(s.hash, string(f))
 	}
+}
+
+// uidValidity reads a mailbox's UIDVALIDITY once and caches it, so the observer
+// callback does not pay for a SELECT per delivery.
+func (s *seeder) uidValidity(acc *Account, mailbox string) uint32 {
+	key := acc.Address() + "\x00" + mailbox
+	if v, ok := s.validity[key]; ok {
+		return v
+	}
+	v, err := acc.UIDValidity(mailbox)
+	if err != nil {
+		panic("mailworld: read UIDVALIDITY of " + mailbox + ": " + err.Error())
+	}
+	s.validity[key] = v
+	return v
 }
 
 // crlf gives raw the line endings the server hands back on FETCH. The corpus

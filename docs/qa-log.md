@@ -924,3 +924,39 @@ shapes a schema or a contract, so they were settled before any code. All took th
   review skill. Rather than Claude writing the 3a/3d test harness first, the brief carries
   **escalation gates**: fixed checkpoints where the model must stop for review, and objective
   triggers on which it must stop and say "this needs Claude".
+
+## Round 39 — the 3a runner and its schema (2026-10-04, agent; C2 checkpoint)
+
+Made while building the 3a runner (gate C2; the handoff is `docs/handoffs/2026-10-04-C2-runner.md`).
+The convergence test passes with the 24 default seeds on both the CONDSTORE and the no-CONDSTORE
+variant (640 operations per variant; every operation kind exercised).
+
+- **Message identity now includes UIDVALIDITY.** Migration 9 adds `messages.uidvalidity` and
+  `UNIQUE(folder_id, uidvalidity, uid)`, the row id is `hash(folderID, uidvalidity, uid)` and the
+  spool path is `spool/<folderID>/<uidvalidity>/<uid>.eml`. A server that rebuilds a mailbox and
+  reuses an old UID can no longer collide with the disabled row, its id or its file. The table is
+  rebuilt (SQLite cannot drop the old unique in place); `migrate` turns foreign keys off around a
+  pending run, restores them and runs `PRAGMA foreign_key_check`, because `attachments` references
+  the table being replaced. Nothing is deleted. This is the "keeping new rows and spool files from
+  colliding with old disabled ones" schema work the C1 handoff asked for.
+- **A rename is per-message moved, not in-place renaming.** The runner creates the live folder row
+  for the new name, fetches its messages as new rows, marks the old name's folder row gone and
+  disables the old messages with `disabled_reason = 'moved'` (the round 37 rule; the content key is
+  still on the server). A deleted folder is marked gone the same way but its messages get
+  `server_removed` when nothing on the server still holds them. `gone_at` is revived (cleared) if
+  the same name comes back, so one row per name is still enough.
+- **`server_removed` is the implemented removal reason** (round 38), and the runner never deletes a
+  row: only `DisableMessage` hides it.
+- **The fast dev seeder keeps the same identity.** `mailworld.Delivery` carries `UIDValidity`, read
+  once per mailbox by the seed observer and passed through `StoreRaw`, so `fast` and `full` still
+  agree column-for-column (`TestFastAndFullAgreeForDemo`, now exercising the runner in `full` mode).
+- **The one-shot reconciliation is deliberately not yet QRESYNC/IDLE.** Both harness variants take
+  the full-account-rescan fallback for now; the snapshot/reconcile split is shaped so a CHANGEDSINCE
+  delta and a `VANISHED` set can replace the snapshot later. `sync_state` is also not written by the
+  runner yet. These are open 3a items, listed in the C2 handoff.
+- **Two existing tests moved for the new implementation, neither weakening the oracle.**
+  `TestFetchNewestFirstAndResumes`'s `DropConnection` moves from 6 to 8 commands because the runner
+  adds a metadata pre-pass (the resumability and newest-first assertions are unchanged); and the
+  harness's stale-flags self-test now uses a deliberately broken `staleFlagSync` instead of relying
+  on the chunk 2b fetch being wrong. The C2 break-and-shrink demonstration (38 ops to 3) is in the
+  handoff. The oracle, generator and property test are byte-for-byte untouched.
