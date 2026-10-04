@@ -391,8 +391,9 @@ replaces `state.db` in place and merges the blobs stored beside the snapshot. A 
 (`ivy.lock`, `internal/lockfile`) is held by `ivy run` so restore can refuse while a server is up;
 `ivy doctor` warns when every target shares the data directory's device.
 
-**N24 (fixed the same day):** purge now erases everywhere. `PurgeMessage` records the blob hash in
-`state.db` (`pending_blob_deletions`, state migration 3) when no other hidden row shares the bytes,
+**N24 (fixed the same day; the retry record later moved out of `state.db` into marker files under
+`data/pending-blob-deletions/`, round 45):** purge now erases everywhere. `PurgeMessage` records the
+blob hash (first as `pending_blob_deletions`, state migration 3) when no other hidden row shares the bytes,
 and `backup.PurgeBlob` erases the local blob and the copy in every target, clearing the record only
 when the erasure is complete. A target that is offline keeps the record and the daily backup retries
 it, so the erasure survives restarts and a restore. A blob another row still references is never

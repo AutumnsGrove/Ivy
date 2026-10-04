@@ -246,7 +246,11 @@ in `api/openapi.yaml`.
 the sync disable-path copy, `ivy backup`/`restore`, the daily scheduler, the `doctor` warning, all in
 `docs/BUILD-LOG.md`). The decisions are in qa-log round 43; **N24 is fixed** (round 44): purge now
 erases the blob locally and from every backup target when no row shares it, with a durable
-`pending_blob_deletions` retry for an offline target.
+retry for an offline target (marker files in `data/pending-blob-deletions/`, so a restore of an older
+snapshot cannot forget one; round 45). The review of 3b and 3c (`papercuts.md` #68-#72) fixed five
+defects and closed N25-N29: moves no longer count toward the mass-disable alert, a backup runs on start
+when a daily slot was missed, and the go-imap fork is at `v2.0.0-beta.8-ivy.3` (clone at
+`~/Documents/Projects/go-imap`).
 
 **Remaining for the operator:** the real-mailbox live check of the daily backup and `ivy restore`,
 and the potato numbers for the snapshot time.

@@ -847,27 +847,59 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   failed before the fix; the log now moves to `<aside>-wal`.
 - **#72** · `96d033c` · `sync/sync.go` · **nit** · the blob-copy warning logged the message id under
   the key `account`.
-- **N25 (open, design)** · `8cfcbb8` · `sync/massdisable.go` · the alert counts moved rows as
+- **N25 (resolved, operator chose the recommendation)** · `8cfcbb8` · `sync/massdisable.go` · the alert counts moved rows as
   hidden, so archiving more than 50 messages (or more than 20% of a 10+ message INBOX) raises a
   `mass_disable` alert, and its one-click restore (`RestoreAccountDisabled`) then makes the moved
   copies visible beside the live ones in the other folder. The qa-log wording ("a sweep that
   disables") allows it. Recommendation: count only rows that settled as `server_removed`, and have
   the account restore skip `moved`. It needs the operator's call because it changes round 42.
-- **N26 (open, library)** · `go-imap` fork `v2.0.0-beta.8-ivy.2` `imapserver/conn.go` · the fake
+- **N26 (resolved: fixed in the fork, `v2.0.0-beta.8-ivy.3`)** · `go-imap` fork `v2.0.0-beta.8-ivy.2` `imapserver/conn.go` · the fake
   server's serve loop can block forever on `encMutex` after `DropConnection` cuts the connection
   mid-response, stranding a goroutine and failing goleak at exit (the churn-alert test at drop 10 does
   it every time). Test-only (only mailworld uses `imapserver`). Fix in the fork, then widen the sweep
   in `TestMassDisableAlertSurvivesAPassThatDiesAfterTheSweep` back past drop 9.
-- **N27 (open, design)** · `e8d8c6f` · `cmd/cmd.go` · `backupLoop` waits for the next 03:00 and never
+- **N27 (resolved)** · `e8d8c6f` · `cmd/cmd.go` · `backupLoop` waits for the next 03:00 and never
   catches up: a potato that was off at 03:00 goes a day or more without a snapshot. Recommendation:
   on start, run a backup when the newest snapshot is older than a day.
-- **N28 (open, docs)** · `22091dc` · `api/openapi.yaml`, `store/disabled.go` · the contract says a
+- **N28 (resolved, operator: refuse it)** · `22091dc` · `api/openapi.yaml`, `store/disabled.go` · the contract says a
   pending row is "not restorable", but the single-message `RestoreMessage` restores any hidden row,
   pending included (only the account bulk skips them). Harmless (the next pass hides it again if
   the server lacks it), but one of the two should change; recommendation is to say "bulk restore
   skips pending rows" in the contract.
-- **N29 (open, design)** · `354d14b` · `backup/backup.go` · `pending_blob_deletions` lives in
+- **N29 (resolved, operator: keep them outside state.db)** · `354d14b` · `backup/backup.go` · `pending_blob_deletions` lives in
   `state.db`, so restoring a snapshot taken before a purge forgets an erasure that an offline target
   still owes, and the blob stays there. Recommendation: have `ivy restore` list the targets' blobs
   that no mirror row references only after a rebuild (a later chunk), and say so in the restore
   output until then.
+
+## Resolution of N25-N29 and the port churn (2026-10-04)
+
+- **#73 (resolves N25)** · `8cfcbb8` · `store/disabled.go`, `sync/sync.go` · **bug** · archiving 12 of 12
+  INBOX messages raised `mass_disable`, and its one-click restore then showed each moved message beside
+  its live copy. `TestMassDisableAlertStaysQuietWhenTheMailWasOnlyMoved` and
+  `TestPendingDisabledByFolderLeavesOutRowsThatWillSettleAsMoved` failed first. The sweep now counts
+  only pending rows that will settle as removed (`provablyMovedSQL`), and `RestoreAccountDisabled`
+  restores only `server_removed` rows. Two existing tests that encoded the old restore-everything
+  behaviour were changed with it.
+- **#74 (resolves N26)** · fork `imapmemserver/message.go` · **bug** · `fetch` returned on a failed body
+  write without `w.Close()`, so the connection's encoder lock was never released and the serve loop
+  blocked on the tagged response. The fork's `TestFetchWriteErrorReleasesTheEncoderLock` failed first
+  (its first draft closed from the client side and never failed: the leak needs the server's own end
+  to close, and a body bigger than the write buffer). Pushed as `v2.0.0-beta.8-ivy.3`; the churn-alert
+  sweep is back to drops 1-14.
+- **#75 (resolves N27)** · `e8d8c6f` · `backup/backup.go`, `cmd/cmd.go` · **risk** · a device that was off at
+  03:00 waited a day for the next slot. `TestBackupLoopCatchesUpAMissedBackupOnStart` failed first
+  (no snapshot was written on start); `Manager.Due` and a catch-up in `backupLoop` fix it.
+- **#76 (resolves N28)** · `22091dc` · `store/disabled.go`, `gateway/mirror.go` · **standards** · single
+  restore restored a pending row although the contract said it was not restorable. It now returns
+  `ErrPendingClassification` (409 `pending_classification`); the generated contract was regenerated.
+- **#77 (resolves N29)** · `354d14b` · `store/blobdeletion.go`, `store/migrations.go` · **risk** ·
+  `TestRestoreOfAnOlderSnapshotKeepsAnOwedBlobErasure` failed first: the pending-erasure table rolled back
+  with the snapshot. The debt is one synced marker file per hash under `data/pending-blob-deletions/`
+  (hash validated as 64 hex before it becomes a name), and state migration 4 drops the table. Erasures
+  recorded in the table before this change are not carried over (the feature was a day old).
+- **#78** · `fb4e5da`..`7d99f92` test suite · **standards** · one run of the sync suite parked ~9,000
+  temporary ports in TIME_WAIT, so the next run on macOS failed with `can't assign requested address`.
+  `TestTestConnectionsToTheFakeDoNotLeaveTimeWaitSockets` counted 40 lingering sockets after 80
+  connections before the fix; loopback test dials (`Fetcher.dial` for insecure accounts and the
+  mailworld client) now set `SO_LINGER` 0, and a whole run leaves ~144.

@@ -1120,3 +1120,32 @@ Design notes, so the next reader does not have to reconstruct them:
   durable.
 - **Purge is still single-message only** (`qa-log.md` round 42), so this cannot erase a mailbox by
   accident; each erase is a deliberate tap.
+
+## Round 45 — the 3b/3c review's open items (2026-10-04, agent; four operator answers)
+
+The review of 3b and 3c (`papercuts.md` #68-#72) left five open items (N25-N29). All five are closed,
+and the test suite no longer leaves the OS short of ports.
+
+- **Q: how should the sync tests stop exhausting macOS ports?** (operator) **Close test connections
+  with a reset.** The shortage was the client side (every closed connection parks a temporary port in
+  TIME_WAIT for ~30 s, and one run parked ~9,000 of ~16,000), not which ports the fakes listen on, so
+  a fixed 30k-40k range would not have helped (it is smaller than the default pool) and cannot clash
+  with Polaris either way, since the fakes take OS-picked ports. Loopback test dials now set
+  `SO_LINGER` to 0: ~144 sockets linger after a full run instead of 9,340.
+- **Q: N25, do moves count toward the mass-disable alert?** (operator) **No, and account restore skips
+  them.** The alert counts rows that will settle as `server_removed` (a pending row whose Message-ID is
+  live elsewhere is a move); `RestoreAccountDisabled` restores only `server_removed` (and no-reason)
+  rows, so it can no longer show a moved message twice. This refines round 42.
+- **Q: N29, what happens to a purge's pending erasures on a restore of an older snapshot?**
+  (operator) **Keep them outside state.db.** They are now one marker file per blob hash in
+  `data/pending-blob-deletions/` (synced before the row is deleted; no locking needed, so the server
+  and `ivy backup` can both touch it). State migration 4 drops the old table; erasures recorded in the
+  table before this change are not carried over. This supersedes round 44's "recorded in `state.db`".
+- **Q: N28, single restore of a pending row?** (operator) **Refuse it.** `RestoreMessage` returns
+  `ErrPendingClassification`, the API answers 409 `pending_classification`, matching the contract.
+- **N26 (the leaked fake-server goroutine)** was a bug in the go-imap fork: `imapmemserver`'s fetch
+  returned on a failed body write without closing the response, so the connection's encoder lock was
+  never released. (operator) **Pushed to the fork:** `v2.0.0-beta.8-ivy.3`; the clone now lives at
+  `~/Documents/Projects/go-imap` (branch `ivy-beta8-condstore`) for later changes.
+- **N27 (missed backup slot).** On start the loop runs a backup at once when any target has no
+  snapshot or its newest is a day old (`backup.Manager.Due`), then keeps the daily schedule.
