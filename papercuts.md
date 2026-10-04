@@ -719,8 +719,12 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   because the worker sleeps on a 5 minute IDLE timer it would never notice. Recommendation: wrap the
   `net.Conn` in a read deadline that is refreshed on activity (long for IDLE, short for commands) and
   add a stalled-peer test; the deadline values belong in the STANDARDS limits table.
-- **N20 (open, test coverage)** · `5a34ca8` · `sync/converge_model_test.go` · the default 24 seeds
-  execute 3 renames in 640 operations, which is why #58 survived the C2 gate. 300 extra seeds
-  (`IVY_SYNC_SEEDS=300 IVY_SYNC_SEED_BASE=1000`, about 110 s under `-race`) are clean on both
-  variants. Recommendation: add a rename-and-delete-weighted mix next to `defaultMix` rather than
-  raising the default count, and leave the oracle alone (gate T1).
+- **#61 (resolves N20)** · `5a34ca8` · `sync/churn_test.go` · **standards** · the default 24 seeds
+  execute 3 renames in 640 operations, which is why #58 survived the C2 gate (300 extra default-mix
+  seeds were clean). `TestSyncConvergesUnderFolderChurn` runs the same oracle, seeds and variants on
+  `churnMix` (create, rename, delete and rebuild folders weighted up: 44 renames per 24 sequences, 14
+  times the default). With the #58 fix reverted, a 200-seed sweep failed at seed 153 and shrank to
+  exactly create, rename away, rename back, sync, so that seed is pinned in `churnRegressionSeeds` and
+  always runs. With the fix, the default run and 200 further seeds (base 5000) pass on both variants.
+  The oracle file is untouched (gate T1). Known nit: the failure's "reproduce:" line names
+  `TestSyncConvergesToTheServer`; set `IVY_SYNC_SEED` and run the churn test instead.
