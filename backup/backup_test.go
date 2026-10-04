@@ -710,3 +710,77 @@ func seedDisabledRow(t *testing.T, dbs *store.DBs, accountID, folderID, id strin
 		t.Fatalf("seed disabled row: %v", err)
 	}
 }
+
+// A blob copy that died half-way (power loss, a full disk) leaves a short file
+// under the blob's final name. Blobs are content-addressed, so "the name exists"
+// is not "the bytes are there": the next run must replace it, or the only copy of
+// a server-deleted message stays truncated in the backup for good.
+func TestRunHealsATruncatedBlobInATarget(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openStore(t, t.TempDir())
+	defer dbs.Close()
+	target := filepath.Join(t.TempDir(), "backups")
+	now := baseTime
+	m := New(dbs, []string{target}, WithClock(clock(t, &now)))
+
+	const body = "the only copy of a deleted message"
+	hash, _, err := dbs.Blobs.Put(ctx, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	blobPath := targetBlobPath(target, hash)
+	if err := os.MkdirAll(filepath.Dir(blobPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(blobPath, []byte(body[:10]), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := m.Run(ctx); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got, err := os.ReadFile(blobPath)
+	if err != nil || string(got) != body {
+		t.Errorf("target blob = %q (%v), want the full %q", got, err, body)
+	}
+}
+
+// After a crash the old state.db can have committed rows only in its write-ahead
+// log. Restore moves the file aside as the way back, so the log has to go with it:
+// a log left behind (or deleted) turns the "kept" copy into one that has silently
+// lost the operator's newest tags.
+func TestRestoreMovesTheOldWriteAheadLogAsideWithTheDatabase(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := t.TempDir()
+	dbs := openStore(t, dir)
+	target := filepath.Join(t.TempDir(), "backups")
+	now := baseTime
+	m := New(dbs, []string{target}, WithClock(clock(t, &now)))
+	res, err := m.Run(ctx)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if err := dbs.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	wal := []byte("committed but not checkpointed")
+	if err := os.WriteFile(filepath.Join(dir, "state.db-wal"), wal, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Restore(ctx, dir, res.Snapshots[0].Path); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	asides, err := filepath.Glob(filepath.Join(dir, "state.db.replaced-*-wal"))
+	if err != nil || len(asides) != 1 {
+		t.Fatalf("aside write-ahead logs = %v (%v), want one beside the replaced database", asides, err)
+	}
+	if got, err := os.ReadFile(asides[0]); err != nil || !bytes.Equal(got, wal) {
+		t.Errorf("aside log = %q (%v), want the old log kept", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "state.db-wal")); err == nil {
+		t.Error("the old log still sits beside the restored database")
+	}
+}

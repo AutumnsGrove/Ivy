@@ -339,9 +339,14 @@ func Restore(ctx context.Context, dataDir, snapshotPath string) error {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("backup: move current state aside: %w", err)
 	}
-	// The old write-ahead log belongs to the replaced file; keeping it would
-	// corrupt the restored one.
-	_ = os.Remove(stateDB + "-wal")
+	// The old write-ahead log belongs to the replaced file: left in place it would
+	// corrupt the restored one, and dropped it would cost the kept copy any rows
+	// only the log holds, so it moves aside with the database. The shared-memory
+	// file only describes a live connection.
+	if err := os.Rename(stateDB+"-wal", aside+"-wal"); err != nil && !errors.Is(err, os.ErrNotExist) {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("backup: move current write-ahead log aside: %w", err)
+	}
 	_ = os.Remove(stateDB + "-shm")
 	if err := os.Rename(tmp, stateDB); err != nil {
 		_ = os.Remove(tmp)
@@ -599,18 +604,35 @@ func mirrorTree(ctx context.Context, src, dst string) error {
 			return nil // an in-flight store write, not a blob
 		}
 		target := filepath.Join(dst, rel)
-		if _, err := os.Stat(target); err == nil {
+		// A name is not proof of the bytes: a copy that died half-way (an older run,
+		// a full disk) leaves a short file under the final name, and the only copy
+		// of a deleted message must not stay truncated. Same size is the cheap
+		// check; the copy below goes through a temp name so it cannot recur.
+		srcInfo, err := d.Info()
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil // purged since the walk listed it
+		}
+		if err != nil {
+			return err
+		}
+		if info, err := os.Stat(target); err == nil && info.Size() == srcInfo.Size() {
 			return nil
 		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 			return err
 		}
-		if err := copyFile(path, target); err != nil {
+		tmp := filepath.Join(filepath.Dir(target), ".tmp-"+filepath.Base(target))
+		if err := copyFile(path, tmp); err != nil {
+			_ = os.Remove(tmp)
 			// A source that vanished between the walk and the copy is a concurrent
 			// purge; the target simply does not get that blob.
 			if errors.Is(err, fs.ErrNotExist) {
 				return nil
 			}
+			return err
+		}
+		if err := os.Rename(tmp, target); err != nil {
+			_ = os.Remove(tmp)
 			return err
 		}
 		return nil
