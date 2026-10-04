@@ -427,6 +427,41 @@ var stateMigrations = []migration{
 			`DROP TABLE pending_blob_deletions`,
 		},
 	},
+	{
+		version: 5,
+		statements: []string{
+			// The outbox is the one write path to IMAP (CHUNK3-BRIEF.md 1). It is
+			// locally owned, unrecoverable state, so it lives in the backed-up
+			// database and refers to mail by content key and the folder's stable id,
+			// never by a mirror row id or UID. An op names a postcondition; the UID
+			// is resolved at dispatch (docs/handoffs/2026-10-04-C3-outbox.md).
+			`CREATE TABLE outbox (
+				id                 TEXT PRIMARY KEY,
+				account_id         TEXT NOT NULL,
+				seq                INTEGER NOT NULL,
+				kind               TEXT NOT NULL,
+				content_key        TEXT NOT NULL,
+				source_folder_id   TEXT NOT NULL,
+				expect             TEXT NOT NULL,
+				source_uidvalidity INTEGER NOT NULL DEFAULT 0,
+				source_uid         INTEGER NOT NULL DEFAULT 0,
+				state              TEXT NOT NULL,
+				attempts           INTEGER NOT NULL DEFAULT 0,
+				next_attempt_at    TEXT,
+				last_error_code    TEXT NOT NULL DEFAULT '',
+				last_error_detail  TEXT NOT NULL DEFAULT '',
+				idempotency_key    TEXT NOT NULL,
+				created_at         TEXT NOT NULL,
+				updated_at         TEXT NOT NULL,
+				completed_at       TEXT
+			)`,
+			// A repeat of a live action is the same action; a terminal row must not
+			// block a later one (flag, unflag, flag), so the key is unique only over
+			// non-terminal ops.
+			`CREATE UNIQUE INDEX idx_outbox_idempotency ON outbox(idempotency_key) WHERE state IN ('pending','in_flight')`,
+			`CREATE INDEX idx_outbox_account_state_seq ON outbox(account_id, state, seq)`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state
