@@ -3,23 +3,56 @@ package devstack
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/AutumnsGrove/Ivy/config"
 	"github.com/AutumnsGrove/Ivy/store"
 	ivysync "github.com/AutumnsGrove/Ivy/sync"
 )
 
-// Summary reports what Populate wrote.
+// Summary reports what Populate wrote. Restored is true when the databases came
+// from the cache instead of being built; Discarded says why a cache that existed
+// was thrown away, so a fallback to a slow build is never silent.
 type Summary struct {
-	Accounts int
-	Messages int
+	Accounts  int
+	Messages  int
+	Restored  bool
+	Discarded string
 }
 
 // Populate fills the dev databases from the prepared mailworld, so both `up`
 // paths serve a mailbox the moment they start. The supervised Ivy is a separate
 // process that only opens what is already under the data directory, which is
 // why the harness does this and not Ivy.
+//
+// An empty data directory is first restored from the cache of an earlier build
+// of the same profile and seed; a build into an empty directory is cached for
+// next time. A directory that already holds data is topped up and left uncached.
 func Populate(ctx context.Context, stack *Stack, opts Options) (Summary, error) {
+	dir := filepath.Join(CacheDir(opts.Root), cacheKey(stack, opts))
+	fresh := !hasData(stack.Config.DataDir)
+	var discarded string
+	if fresh {
+		sum, ok, why := restoreCache(ctx, dir, stack)
+		if ok {
+			return sum, nil
+		}
+		discarded = why
+	}
+	sum, err := build(ctx, stack, opts)
+	sum.Discarded = discarded
+	if err != nil {
+		return sum, err
+	}
+	if fresh {
+		return sum, saveCache(dir, stack.Config.DataDir)
+	}
+	return sum, nil
+}
+
+// build runs the chosen mode into the data directory and seeds the operator
+// state, closing the databases before it returns so a copy of them is complete.
+func build(ctx context.Context, stack *Stack, opts Options) (Summary, error) {
 	dbs, err := store.Open(ctx, stack.Config.DataDir)
 	if err != nil {
 		return Summary{}, fmt.Errorf("devstack: open store: %w", err)

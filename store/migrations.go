@@ -254,3 +254,10 @@ var stateMigrations = []migration{
 		},
 	},
 }
+
+// SchemaVersions reports the newest migration of the mirror and of the state
+// database, so a cache of built databases can tell when a schema change has
+// made it stale.
+func SchemaVersions() (mirror, state int) {
+	return mirrorMigrations[len(mirrorMigrations)-1].version, stateMigrations[len(stateMigrations)-1].version
+}

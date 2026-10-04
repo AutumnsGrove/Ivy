@@ -226,8 +226,15 @@ func populate(ctx context.Context, out io.Writer, stack *devstack.Stack, opts de
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "populated %d messages across %d accounts (%s mode, %s)\n",
-		sum.Messages, sum.Accounts, opts.Mode, time.Since(start).Round(time.Millisecond))
+	if sum.Discarded != "" {
+		fmt.Fprintln(out, sum.Discarded+"; building instead")
+	}
+	how := string(opts.Mode) + " mode"
+	if sum.Restored {
+		how = "restored from cache"
+	}
+	fmt.Fprintf(out, "populated %d messages across %d accounts (%s, %s)\n",
+		sum.Messages, sum.Accounts, how, time.Since(start).Round(time.Millisecond))
 	return nil
 }
 
