@@ -225,11 +225,9 @@ func (f *Fetcher) recordSyncState(ctx context.Context, accountID string, s store
 func classifySyncError(err error) (store.SyncStatus, string, string) {
 	detail := truncateSyncDetail(err.Error())
 	var imapErr *imap.Error
-	if errors.As(err, &imapErr) {
-		switch imapErr.Code {
-		case imap.ResponseCodeAuthenticationFailed, imap.ResponseCodeAuthorizationFailed:
-			return store.SyncAuthFailed, "auth_failed", detail
-		}
+	if errors.As(err, &imapErr) &&
+		(imapErr.Code == imap.ResponseCodeAuthenticationFailed || imapErr.Code == imap.ResponseCodeAuthorizationFailed) {
+		return store.SyncAuthFailed, "auth_failed", detail
 	}
 	var opErr *net.OpError
 	if errors.Is(err, errServerStalled) || errors.As(err, &opErr) {
@@ -314,7 +312,7 @@ func (f *Fetcher) fetchAll(ctx context.Context, c *session, acct Account) (Resul
 		if err != nil {
 			return Result{}, err
 		}
-		snap, err := f.snapshotFolder(ctx, c, acct, mb, existing, found, useDelta)
+		snap, err := f.snapshotFolder(c, acct, mb, existing, found, useDelta)
 		if err != nil {
 			return Result{}, err
 		}
@@ -421,7 +419,7 @@ func (f *Fetcher) folderRow(ctx context.Context, accountID, name string) (store.
 // and should use QRESYNC it asks for the stored UIDVALIDITY and modseq, so the
 // server answers with only what changed (or, if the validity no longer matches,
 // the current validity and no VANISHED, which forces a full scan).
-func (f *Fetcher) snapshotFolder(ctx context.Context, c *session, acct Account, mb *imap.ListData, existing store.Folder, found, useDelta bool) (folderSnapshot, error) {
+func (f *Fetcher) snapshotFolder(c *session, acct Account, mb *imap.ListData, existing store.Folder, found, useDelta bool) (folderSnapshot, error) {
 	defer c.watch()()
 	snap := folderSnapshot{Name: mb.Mailbox, Attrs: mb.Attrs, Existing: existing, Found: found}
 	var (
@@ -1169,7 +1167,7 @@ func (f *Fetcher) dialWith(ctx context.Context, acct Account, options *imapclien
 	if err != nil {
 		return nil, err
 	}
-	var wire net.Conn = conn
+	wire := net.Conn(conn)
 	if !acct.Insecure {
 		tlsConn := tls.Client(conn, &tls.Config{
 			ServerName: acct.IMAPHost,

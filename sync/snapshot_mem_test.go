@@ -67,7 +67,7 @@ func TestSnapshotHoldsLittlePerMessage(t *testing.T) {
 	runtime.GC()
 	var before runtime.MemStats
 	runtime.ReadMemStats(&before)
-	snap, err := f.snapshotFolder(ctx, c, acct, inbox, store.Folder{}, false, false)
+	snap, err := f.snapshotFolder(c, acct, inbox, store.Folder{}, false, false)
 	if err != nil {
 		t.Fatalf("snapshotFolder: %v", err)
 	}

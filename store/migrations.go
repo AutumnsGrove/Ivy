@@ -43,7 +43,7 @@ func migrate(ctx context.Context, db *sql.DB, migrations []migration) error {
 	}
 	defer func() {
 		// Best effort: a failed run is followed by the caller closing the connection.
-		_, _ = db.ExecContext(context.Background(), "PRAGMA foreign_keys = ON")
+		_, _ = db.ExecContext(context.WithoutCancel(ctx), "PRAGMA foreign_keys = ON")
 	}()
 
 	for _, m := range migrations {

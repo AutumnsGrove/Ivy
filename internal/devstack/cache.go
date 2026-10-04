@@ -133,7 +133,7 @@ func copyFile(src, dst string) (err error) {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()                                       // read side: a close error cannot lose data
 	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) //nolint:gosec // G304: as above
 	if err != nil {
 		return err

@@ -29,11 +29,12 @@ func populateFast(ctx context.Context, dbs *store.DBs, stack *Stack, opts Option
 	if err != nil {
 		return Summary{}, err
 	}
-	world, err := mailworld.New()
+	// The fake servers take no context; deferring Close is what stops them.
+	world, err := mailworld.New() //nolint:contextcheck // not cancellable, closed below
 	if err != nil {
 		return Summary{}, fmt.Errorf("devstack: start seed world: %w", err)
 	}
-	defer world.Close()
+	defer func() { _ = world.Close() }()
 
 	fetcher := ivysync.NewFetcher(dbs)
 	w := &fastWriter{

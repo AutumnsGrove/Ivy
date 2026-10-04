@@ -41,13 +41,13 @@ func WithIdleTimeout(d time.Duration) WorkerOption {
 }
 
 // WithBackoff sets the retry delay bounds after a failed connection.
-func WithBackoff(base, max time.Duration) WorkerOption {
+func WithBackoff(base, ceiling time.Duration) WorkerOption {
 	return func(w *Worker) {
 		if base > 0 {
 			w.backoffBase = base
 		}
-		if max > 0 && max >= base {
-			w.backoffMax = max
+		if ceiling > 0 && ceiling >= base {
+			w.backoffMax = ceiling
 		}
 	}
 }

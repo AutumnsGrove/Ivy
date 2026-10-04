@@ -13,6 +13,7 @@ import (
 // (error) for a failure that is neither auth nor reachability.
 type SyncStatus string
 
+// The states a sync_state row can be in, in the contract's spelling.
 const (
 	SyncOK          SyncStatus = "ok"
 	SyncSyncing     SyncStatus = "syncing"

@@ -56,7 +56,7 @@ func (c *stallConn) didStall() bool {
 
 func (c *stallConn) Read(p []byte) (int, error) {
 	c.mu.Lock()
-	c.applyLocked()
+	_ = c.applyLocked()
 	c.mu.Unlock()
 	n, err := c.Conn.Read(p)
 	if err != nil && isTimeout(err) {
@@ -71,7 +71,7 @@ func (c *stallConn) Read(p []byte) (int, error) {
 	if n > 0 {
 		c.mu.Lock()
 		c.activity = time.Now()
-		c.applyLocked()
+		_ = c.applyLocked()
 		c.mu.Unlock()
 	}
 	return n, err

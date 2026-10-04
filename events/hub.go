@@ -14,6 +14,8 @@ import (
 // Type names what kind of change a hint is about.
 type Type string
 
+// The hint types a stream carries (ARCHITECTURE.md 4); the wire names are the
+// contract's `Event.type` values.
 const (
 	MessageChanged Type = "message.changed"
 	FolderChanged  Type = "folder.changed"
