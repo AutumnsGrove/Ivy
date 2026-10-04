@@ -33,7 +33,7 @@ ivy-dev seed --profile ... # (re)generate seed data only
 | Mode | What happens | Use it for |
 |---|---|---|
 | `full` (default) | Mailworld is seeded; Ivy **syncs from it over real IMAP** | Anything touching sync, write path, send, banners, SSE: the real pipeline |
-| `fast` | The seeder writes the SQLite DB directly, using the **real store/migration code** (never raw SQL), skipping sync | Pure UI work: starts in about a second even for large profiles |
+| `fast` | The seeder writes the SQLite DB directly, through the **sync's own store path** (`StoreRaw`, `RecordFolder`, `Settle`; never raw SQL), skipping IMAP | Same rows as `full`, no network. It is not quicker to build (parsing and writes dominate both); the speed comes from the build cache below |
 
 Both modes produce the same visible mailbox; a test asserts the `full` result equals the `fast`
 result for the `demo` profile, so `fast` can never silently drift.
@@ -51,8 +51,13 @@ reviewed and tested.
 | `demo` | About 300-500 messages across 3 addresses: threads of every shape (long, forked, subject-changed), newsletters with `List-Unsubscribe`, receipts and invoices (with and without JSON-LD), contact-form mail with Reply-To, security/abuse reports, personal correspondence, calendar invites, Junk with spam scores, attachments of every type, inline images, remote-image and tracking-pixel bait, nasty HTML and XSS samples, non-UTF-8 charsets, RTL and emoji, very long threads and huge bodies. Also seeded: tags, rules, snoozes, a populated stats ledger (a month of LLM calls and costs) and Jev decisions, so every screen has real content. |
 | `large` | 100k+ synthetic messages (realistic size distribution) for performance and scroll work |
 
-Fast resets: each profile's built state is cached as a snapshot (`.dev/snapshots/`, keyed by profile,
-seed and schema version), so `ivy-dev reset` restores in seconds and a schema change rebuilds it.
+Fast resets: each profile's built databases are cached in `.dev/cache/<key>` (the key covers profile,
+seed, accounts, both schema versions and `DerivedVersion`), and an empty data directory is restored by
+file copy, so `ivy-dev reset` then `up` is quick: measured `demo` 9 ms, `large` (100k, 2.8 GB) 3.5 s.
+Only a clean build is cached, never a directory the operator has used; a schema or parser change
+changes the key and rebuilds; an unreadable cache is discarded with a message and rebuilt. The cache
+doubles the disk use (delete `.dev/cache` to reclaim it). `.dev/snapshots/` still holds the named launch
+recipes (`ivy-dev snapshot`). The first build of a profile is slow (`large` about 3 minutes).
 
 ## 4. Named states (drive the edge-case screens)
 
@@ -63,6 +68,14 @@ seed and schema version), so `ivy-dev reset` restores in seconds and a schema ch
 attachment), `send-too-large`, `send-transient-4xx`, `llm-cap-reached`, `llm-provider-down`,
 `offline` (server stopped), `mirror-healthy`. Each is a mailworld fault plus a clock/state tweak,
 defined once and reused by E2E and visual-baseline tests.
+
+The list lives in `internal/devstack/states.json` (name, description, and the frontend `?scenario=`
+screens each one corresponds to). Go embeds it for `ivy-dev state`, and `web/e2e/named-states.spec.ts`
+reads the same file, so a state added there fails the spec until its screen is described. A state
+with no designed screen is listed as an explicit gap (today `send-transient-4xx`). **Until sync and
+the LLM gate run continuously (chunks 3 and 5), a mailworld fault changes no screen of the real app**,
+so the specs reach each state through the mock `?scenario=` instead; each grows a real-stack twin when
+its consumer exists.
 
 ## 5. LLM in dev: live OpenRouter is the default (round 23)
 
@@ -125,7 +138,10 @@ is exercised constantly and cannot rot.
 - [ ] `make dev` goes from clean checkout to a working seeded inbox in the browser with no network,
       credentials or manual steps.
 - [ ] Profiles are deterministic (same seed, same data; asserted by hash) and contain no real data.
-- [ ] `full` and `fast` agree for `demo`; `reset` restores in under 5 s.
-- [ ] Every named state works and has a Playwright test and visual baseline.
+- [x] `full` and `fast` agree for `demo` (`TestFastAndFullAgreeForDemo`, every table); `reset` then
+      `up` restores in under 5 s (2026-10-04: `demo` 9 ms, `large` 3.5 s from the cache).
+- [ ] Every named state works and has a Playwright test and visual baseline. (Tests: done, through
+      the mock scenarios, `named-states.spec.ts`; one explicit gap, `send-transient-4xx`. Baselines:
+      open, they need the CI harness regenerated. Real-stack twins arrive with chunks 3 and 5.)
 - [ ] The rails in section 6 are tested.
 - [ ] Hot reload works for Go (restart) and Svelte/CSS (HMR) edits.

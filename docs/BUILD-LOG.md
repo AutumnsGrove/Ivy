@@ -304,6 +304,35 @@ The seams fixed up front so the chunks stayed independently committable:
   gate makes it a setting.
 - Not done: the visual baselines (they need the CI harness regenerated).
 
+## 2h: the dev stack fills itself (2026-10-04, rounds 34 and 35, commits `deceb58`..`8fad2a8`)
+
+- **`full` is a real sync.** `ivy-dev up` ran no sync at all, so `make dev` served empty databases.
+  `devstack.Populate` now runs `sync.Fetcher` once per account before either `up` path serves (the
+  supervised child only opens the databases). The real-binary smoke test still expected the empty
+  mailbox and was failing; it now checks the seeded one.
+- **`fast` shares the sync's store path.** `sync` exports `StoreRaw`, `RecordFolder`, `EnsureAccount`
+  and `Settle`, extracted from the fetch (same size tiers, same threading), and `mailworld` gained
+  `WithObserver` and `Account.Mailboxes`. Fast replays the deterministic seeder into a throwaway world
+  and writes each delivery through them. `TestFastAndFullAgreeForDemo` compares every mirror and state
+  table and the spool files. It found two real differences, now fixed: the corpus has bare LF line
+  endings while a fetch returns CRLF (the seeder reports the server's bytes), and a server may list
+  flags in any order (the store keeps flags as a sorted set).
+- **`state.db` seed**, in both modes and once per database (a `dev.state_seeded` setting, so a restart
+  never overwrites the operator's edits): account names and icons, five tags and members placed by
+  subject. New `store` calls `UpsertTag`, `TagMessage`, `SetSetting`, `GetSetting`. Rules, snoozes,
+  the ledger and Jev rows wait for the chunks that create their tables.
+- **`fast` is not faster to build** (`demo` 246 ms full vs 272 ms fast; `large` 100k about 3m20s),
+  since parsing and two SQLite transactions per message dominate both. The speed comes from a build
+  cache in `.dev/cache/<key>` restored by file copy: `demo` 9 ms, `large` 3.5 s (2.8 GB).
+- **Named states** are one file, `internal/devstack/states.json`, read by Go and by
+  `web/e2e/named-states.spec.ts` (44 passing checks across phone and desktop, one explicit gap:
+  `send-transient-4xx` has no designed screen). A mailworld fault changes no screen of the real app
+  until sync and the gate run continuously, so the specs use the mock `?scenario=`.
+- **Port 8418** replaces 8787 as the default listen address (wrangler holds 8787 on the operator's
+  machine); `IVY_SMOKE_PORT` overrides the smoke port.
+- Not done: the visual baselines; real-stack twins of the state specs (chunks 3 and 5); the
+  `window_fetch_in_load` warning the mock suite now prints on every page.
+
 ## Other history worth keeping
 
 - Frontend facts: SvelteKit **3** config lives in `vite.config.ts`; aliases are the `#lib/...`

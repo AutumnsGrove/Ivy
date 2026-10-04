@@ -5,10 +5,11 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-04 (round 36; the round 33 baseline below). Chunks 0, 1 and 2a-2g are done
-except the 2g visual baselines (they need the CI harness regenerated). Baseline at this date:
-svelte-check and Vitest (205) green, Playwright 196 passed / 8 viewport-conditional skips
-(`make check` not re-run since the Go side was untouched).
+last updated: 2026-10-04 (round 36). Chunks 0, 1 and 2a-2h are done except the visual baselines of
+2g and 2h (they need the CI harness regenerated). Baseline at this date: svelte-check (0 errors) and
+Vitest (205) green, Playwright 240 passed / 10 viewport-conditional or gap skips, `go test -race`
+green on the packages 2h touched and the real-binary smoke slice passing (8/8). `make check` as a
+whole and `govulncheck` were not re-run.
 
 ## How to run a chunk
 
@@ -34,7 +35,7 @@ svelte-check and Vitest (205) green, Playwright 196 passed / 8 viewport-conditio
 | 1 Harness (mailworld, ivy-dev, compression, CI, smoke) | done |
 | 2a-2f Read: store, fetch, parse, render, thread, gateway | done |
 | 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
-| 2h `state.db` fast seeder + named-state Playwright | not started |
+| 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
 | 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | not started |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | not started |
 | 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | not started |
@@ -79,11 +80,10 @@ the ledger mock (`mock.makeLedger`, `lib/spend.ts` `summarise`/`pageCalls`) are 
 the chunk 3-5 Go endpoints; the mock ledger marks half the accounts smart-off, so the call log is
 heavy with "held back" rows (mock realism only).
 
-**3. 2h** (in progress; decisions in qa-log round 34). The `state.db` fast seeder, `ivy-dev --mode
-fast`, the `full == fast` agreement test and named-state Playwright (`DEV.md` 4, 8). Stages:
+**3. 2h is done** (qa-log rounds 34 and 35; the detail is in `docs/BUILD-LOG.md`). Only the visual
+baselines remain, with the 2g ones. What it delivered:
 - ~~`full` runs a one-shot sync at startup~~ **done**: `devstack.Populate` runs `sync.Fetcher` per
-  account before either `up` path serves (the watched child only opens the databases). `--mode fast`
-  is rejected by `Populate` until the next stage.
+  account before either `up` path serves (the watched child only opens the databases).
 - ~~`fast` mirror seeder~~ **done**: `Populate` replays the seeder into a throwaway mailworld
   through `mailworld.WithObserver` and writes each delivery with the sync's own `StoreRaw`,
   `RecordFolder` and `Settle`. `TestFastAndFullAgreeForDemo` compares every mirror and state table
@@ -105,10 +105,16 @@ fast`, the `full == fast` agreement test and named-state Playwright (`DEV.md` 4,
   wrangler's and always taken on the operator's machine. `IVY_SMOKE_PORT` moves the smoke port. The
   smoke test now asserts the seeded mailbox (it still expected the empty one from before `up`
   synced). Vite's 5173 and the preview 4173 are unchanged.
-- Named-state Playwright: each `DEV.md` 4 state, run against `ivy-dev up --mode fast`. Caveat found
-  while scoping it: nothing syncs after startup, so a mailworld fault (`sync-auth-failed`,
-  `offline`, ...) changes no screen of the real app until chunk 3's continuous sync and chunk 5's
-  gate exist; today those screens are only reachable through the mock `?scenario=` states.
+- ~~Named-state Playwright~~ **done**: the states are one file, `internal/devstack/states.json`,
+  read by Go and by `web/e2e/named-states.spec.ts` (a Go test checks every named scenario exists in
+  `scenario.ts`; the spec checks its screens visit exactly the scenarios the file declares; both
+  guards were seen failing on a deliberate typo). One explicit gap: **`send-transient-4xx` has no
+  designed screen** (needs a canvas board). Because nothing syncs after startup, a mailworld fault
+  changes no screen of the real app until chunk 3's continuous sync and chunk 5's gate exist, so the
+  specs use the mock `?scenario=`; add a real-stack twin of each when its consumer lands.
+- Left over from 2h: the `window_fetch_in_load` warning now prints on every mock-suite page (it is the
+  Frontend backlog item below); `DEV.md` 8 still has unticked items I did not verify this round
+  (`make dev` from a clean checkout with the default `--llm live`, the rails, hot reload).
 
 **4. Chunk 3 is split into eight stages (round 36; the plan is in "The chunk plan" below).** 3a
 (sync core) is next once 2h and the gating spikes (`docs/SPIKES.md`) are confirmed; 3h (the deploy
@@ -178,8 +184,7 @@ Found by the round 32 audit; each needs a home before its milestone starts.
 
 ### Harness, CI and docs
 
-- `fast` mode and the `full == fast` agreement test (2h); `--llm live|fake` and the
-  OpenRouter-only-external-host rail (chunk 5); named-state Playwright and sharding.
+- `--llm live|fake` and the OpenRouter-only-external-host rail (chunk 5); Playwright sharding.
 - CI: `bench` (advisory `benchstat`), `nightly.yml` (Firefox E2E, time-boxed fuzzing, fresh
   `govulncheck`/`pnpm audit`, link rot), the manual `live` and `evals` workflows (need protected
   Environments), `docker-publish.yml` plus the `Dockerfile`, the AGPL header check (gated by
