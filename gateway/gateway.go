@@ -74,6 +74,9 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/messages/{id}/inline/{cid}", s.handleInline)
 	api.HandleFunc("GET /api/v1/messages/{id}/attachments/{part}", s.handleAttachment)
 	api.HandleFunc("GET /api/v1/mirror/health", s.handleMirrorHealth)
+	api.HandleFunc("POST /api/v1/mirror/messages/{id}/restore", s.handleRestoreMessage)
+	api.HandleFunc("POST /api/v1/mirror/accounts/{id}/restore", s.handleRestoreAccountHidden)
+	api.HandleFunc("DELETE /api/v1/mirror/messages/{id}", s.handlePurgeMessage)
 	if s.events != nil {
 		api.HandleFunc("GET /api/v1/events", s.handleEvents)
 	}

@@ -310,6 +310,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mirror/messages/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make one hidden message visible again
+         * @description A local mirror change, never an IMAP write. It only clears the disabled flag; a message the server still does not hold is hidden again by the next completed pass.
+         */
+        post: operations["restoreMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mirror/accounts/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make every settled hidden message of an account visible again
+         * @description The one-click answer to a mass-disable alert. Rows a pass has not classified yet are left for the next completed pass to settle.
+         */
+        post: operations["restoreAccountHidden"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mirror/messages/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Permanently erase one hidden message
+         * @description The only erasure Ivy has. It deletes the row and its attachments and unlinks the spool file. A live message is refused, so the reader's ordinary delete can never reach it.
+         */
+        delete: operations["purgeMessage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events": {
         parameters: {
             query?: never;
@@ -389,6 +449,7 @@ export interface components {
              */
             syncedAt?: string;
             progress?: number;
+            hidden?: components["schemas"]["HiddenMail"];
         };
         /** @description A partial rename; omitted fields keep their current value */
         AccountProfile: {
@@ -571,6 +632,19 @@ export interface components {
             searchIndex: string;
             meaningSearch: string;
             storage: string;
+        };
+        /** @description Mail the mirror keeps but does not show (ARCHITECTURE.md 4) */
+        HiddenMail: {
+            total: number;
+            /** @description Hidden because the message moved to another folder, so it is still on the server */
+            moved: number;
+            /** @description Hidden because the server no longer holds the message */
+            removed: number;
+            /** @description Hidden by a pass that has not classified it yet. Not restorable and not counted by the mass-disable alert until a completed pass settles it. */
+            pending: number;
+        };
+        RestoreResult: {
+            restored: number;
         };
     };
     responses: {
@@ -1008,6 +1082,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthOverview"];
+                };
+            };
+        };
+    };
+    restoreMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored, or already visible */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    restoreAccountHidden: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many rows were restored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreResult"];
+                };
+            };
+        };
+    };
+    purgeMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Erased */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description The message is not hidden */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };

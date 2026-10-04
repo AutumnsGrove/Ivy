@@ -176,14 +176,18 @@ func (s *Server) accountViews(r *http.Request) ([]api.Account, error) {
 	if err != nil {
 		return nil, err
 	}
+	hidden, err := s.dbs.DisabledStats(r.Context())
+	if err != nil {
+		return nil, err
+	}
 	out := make([]api.Account, 0, len(accounts))
 	for _, a := range accounts {
-		out = append(out, accountView(a, stats[a.ID]))
+		out = append(out, accountView(a, stats[a.ID], hidden[a.ID]))
 	}
 	return out, nil
 }
 
-func accountView(a store.Account, st store.AccountStat) api.Account {
+func accountView(a store.Account, st store.AccountStat, hidden store.DisabledStat) api.Account {
 	state, note, progress := syncState(st)
 	v := api.Account{
 		Id:       a.ID,
@@ -206,6 +210,11 @@ func accountView(a store.Account, st store.AccountStat) api.Account {
 	if !st.LastSync.IsZero() {
 		synced := st.LastSync.UTC()
 		v.SyncedAt = &synced
+	}
+	if hidden.Hidden > 0 {
+		v.Hidden = &api.HiddenMail{
+			Total: hidden.Hidden, Moved: hidden.Moved, Removed: hidden.Removed, Pending: hidden.Pending,
+		}
 	}
 	return v
 }

@@ -233,6 +233,9 @@ func (e TagColor) Valid() bool {
 type Account struct {
 	Address string `json:"address"`
 
+	// Hidden Mail the mirror keeps but does not show (ARCHITECTURE.md 4)
+	Hidden *HiddenMail `json:"hidden,omitempty"`
+
 	// Icon A chosen emoji or glyph, empty when it has none
 	Icon    string `json:"icon"`
 	Id      string `json:"id"`
@@ -375,6 +378,19 @@ type HealthOverview struct {
 	Storage       string    `json:"storage"`
 }
 
+// HiddenMail Mail the mirror keeps but does not show (ARCHITECTURE.md 4)
+type HiddenMail struct {
+	// Moved Hidden because the message moved to another folder, so it is still on the server
+	Moved int `json:"moved"`
+
+	// Pending Hidden by a pass that has not classified it yet. Not restorable and not counted by the mass-disable alert until a completed pass settles it.
+	Pending int `json:"pending"`
+
+	// Removed Hidden because the server no longer holds the message
+	Removed int `json:"removed"`
+	Total   int `json:"total"`
+}
+
 // Inbox defines model for Inbox.
 type Inbox struct {
 	Items          []MailSummary `json:"items"`
@@ -471,6 +487,11 @@ type PlacedTag struct {
 type ReadingFeed struct {
 	Digest string  `json:"digest"`
 	Issues []Issue `json:"issues"`
+}
+
+// RestoreResult defines model for RestoreResult.
+type RestoreResult struct {
+	Restored int `json:"restored"`
 }
 
 // Rule defines model for Rule.

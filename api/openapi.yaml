@@ -307,6 +307,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthOverview"
+  /mirror/messages/{id}/restore:
+    post:
+      operationId: restoreMessage
+      summary: Make one hidden message visible again
+      description: >
+        A local mirror change, never an IMAP write. It only clears the disabled
+        flag; a message the server still does not hold is hidden again by the
+        next completed pass.
+      parameters:
+        - $ref: "#/components/parameters/MessageID"
+      responses:
+        "204":
+          description: Restored, or already visible
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /mirror/accounts/{id}/restore:
+    post:
+      operationId: restoreAccountHidden
+      summary: Make every settled hidden message of an account visible again
+      description: >
+        The one-click answer to a mass-disable alert. Rows a pass has not
+        classified yet are left for the next completed pass to settle.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: How many rows were restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestoreResult"
+  /mirror/messages/{id}:
+    delete:
+      operationId: purgeMessage
+      summary: Permanently erase one hidden message
+      description: >
+        The only erasure Ivy has. It deletes the row and its attachments and
+        unlinks the spool file. A live message is refused, so the reader's
+        ordinary delete can never reach it.
+      parameters:
+        - $ref: "#/components/parameters/MessageID"
+      responses:
+        "204":
+          description: Erased
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The message is not hidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /events:
     get:
       operationId: streamEvents
@@ -450,6 +506,8 @@ components:
           type: number
           minimum: 0
           maximum: 1
+        hidden:
+          $ref: "#/components/schemas/HiddenMail"
     AccountProfile:
       type: object
       description: A partial rename; omitted fields keep their current value
@@ -830,3 +888,27 @@ components:
           type: string
         storage:
           type: string
+    HiddenMail:
+      type: object
+      description: Mail the mirror keeps but does not show (ARCHITECTURE.md 4)
+      required: [total, moved, removed, pending]
+      properties:
+        total:
+          type: integer
+        moved:
+          type: integer
+          description: Hidden because the message moved to another folder, so it is still on the server
+        removed:
+          type: integer
+          description: Hidden because the server no longer holds the message
+        pending:
+          type: integer
+          description: >
+            Hidden by a pass that has not classified it yet. Not restorable and
+            not counted by the mass-disable alert until a completed pass settles it.
+    RestoreResult:
+      type: object
+      required: [restored]
+      properties:
+        restored:
+          type: integer
