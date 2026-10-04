@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/AutumnsGrove/Ivy/api"
+	"github.com/AutumnsGrove/Ivy/events"
 	"github.com/AutumnsGrove/Ivy/store"
 )
 
@@ -31,6 +32,7 @@ func (s *Server) handleRestoreMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+	s.hintMessageChanged("")
 }
 
 // handleRestoreAccountHidden is the one-click answer to a mass-disable alert:
@@ -41,6 +43,7 @@ func (s *Server) handleRestoreAccountHidden(w http.ResponseWriter, r *http.Reque
 		s.serverError(w, r, err)
 		return
 	}
+	s.hintMessageChanged(r.PathValue("id"))
 	writeJSON(w, http.StatusOK, api.RestoreResult{Restored: n})
 }
 
@@ -66,6 +69,17 @@ func (s *Server) handlePurgeMessage(w http.ResponseWriter, r *http.Request) {
 		slog.WarnContext(r.Context(), "gateway: cannot unlink the purged spool file", "error", err)
 	}
 	w.WriteHeader(http.StatusNoContent)
+	s.hintMessageChanged("")
+}
+
+// hintMessageChanged tells open browsers to refetch. Restore and purge change
+// what a screen shows, so they publish the same hint sync does. A server without
+// a hub (a test, or a build that never wired events) is a no-op.
+func (s *Server) hintMessageChanged(accountID string) {
+	if s.events == nil {
+		return
+	}
+	s.events.Publish(events.Event{Type: events.MessageChanged, AccountID: accountID})
 }
 
 // removeSpool unlinks one spool file, refusing any path that escapes the spool

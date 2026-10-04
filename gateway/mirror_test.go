@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/AutumnsGrove/Ivy/api"
@@ -134,5 +135,25 @@ func TestPurgeMessageEndpoint(t *testing.T) {
 	}
 	if body.Code != "not_disabled" {
 		t.Errorf("live purge code = %q, want not_disabled", body.Code)
+	}
+}
+
+// Restore changes what every open screen shows, so it must publish the same
+// refetch hint a sync does.
+func TestRestoreMessagePublishesAHint(t *testing.T) {
+	t.Parallel()
+	srv, _ := newEventsServer(t, func(s *Server) {
+		mustAccount(t, s.dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+		mustFolder(t, s.dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox})
+		mustMessage(t, s.dbs, disabledInboxMessage("m1", "acct-1", "inbox-1", store.DisabledRemoved))
+	})
+	r := openStream(t, srv.URL+"/api/v1/events", nil)
+	r.mustFrame() // the retry hint the stream opens with
+
+	if code := doJSON(t, http.MethodPost, srv.URL+"/api/v1/mirror/messages/m1/restore", nil, nil, nil); code != http.StatusNoContent {
+		t.Fatalf("restore status = %d, want 204", code)
+	}
+	if got := r.mustFrame(); !strings.HasPrefix(got, "event: message.changed") {
+		t.Errorf("frame = %q, want a message.changed hint", got)
 	}
 }
