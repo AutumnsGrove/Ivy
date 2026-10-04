@@ -413,6 +413,18 @@ func TestOracleChecksHaveTeeth(t *testing.T) {
 			t.Errorf("got %+v", f)
 		}
 	})
+	t.Run("a removal with any other reason than server_removed", func(t *testing.T) {
+		t.Parallel()
+		r := good()
+		r.disabled, r.reason = true, "removed"
+		if f := h().checkDisabledReasons(nil, []row{r}); f == nil || f.kind != "wrong disabled reason" {
+			t.Errorf("got %+v", f)
+		}
+		r.reason = "server_removed"
+		if f := h().checkDisabledReasons(nil, []row{r}); f != nil {
+			t.Errorf("server_removed is the removal reason, got %+v", f)
+		}
+	})
 	t.Run("an old disabled row is not judged again", func(t *testing.T) {
 		t.Parallel()
 		x := h()

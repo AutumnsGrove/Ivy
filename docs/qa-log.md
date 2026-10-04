@@ -885,8 +885,15 @@ Decisions made while building, for the operator to veto: the SSE hub lives in it
 package (so sync can publish without importing the HTTP layer; `STANDARDS.md` and `ARCHITECTURE.md`
 updated, and the stale "event ids and `Last-Event-ID`" line corrected to round 37); `sync_state` lives
 in `mirror.db` (it describes the connection, so it is rebuildable); the convergence oracle reads the
-server, never the model. The three open questions (folder rows of deleted folders, the removal
-reason string, mapping `error` to the API) are in `docs/handoffs/2026-10-04-C1-convergence-test.md`.
+server, never the model. The three open questions were put to the operator the same day; all took the recommended option:
+
+- **Folder rows of deleted or renamed-away folders:** keep the row and mark it gone (a `gone_at`
+  column in an append-only migration), hidden from folder lists. Nothing is erased.
+- **Removal reason:** a message the server removed (found nowhere) is disabled with
+  `disabled_reason = 'server_removed'`; `'moved'` stays for the round 37 move rule. The mass-disable
+  alert counts only `server_removed`. The convergence oracle now requires exactly this string.
+- **`error` sync status:** added to the API contract as a fifth `SyncState` value, with its own
+  banner copy to design, rather than mapped onto `unreachable` or `syncing`.
 
 ## Round 37 — the open design questions before chunk 3 (2026-10-04, operator)
 

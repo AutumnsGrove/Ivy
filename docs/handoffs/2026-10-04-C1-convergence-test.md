@@ -98,6 +98,12 @@ single-pass entry point replaces that one function; nothing else changes.
    gateway must map it when `/accounts` starts reading `sync_state` (suggest `unreachable` is wrong
    for it; add an `error` value to the contract instead).
 
+## Answers (operator, 2026-10-04; also in qa-log round 38)
+
+1. Folder row of a deleted or renamed-away folder: **keep and mark gone** (`gone_at`, new migration).
+2. Removal reason: **`server_removed`**. The oracle (check 4) now requires exactly that string.
+3. `error` status: **add it to the API contract** as a fifth `SyncState` value.
+
 ## Also delivered in this session (3a groundwork, all green, see the commits)
 
 `sync_state` table and `store.SetSyncState`/`GetSyncState`; the `events` hub and `/api/v1/events`

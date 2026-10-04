@@ -908,8 +908,8 @@ func (h *run) checkDisabledReasons(snap []serverFolder, rows []row) *failure {
 		switch {
 		case live[r.msgID] && r.reason != "moved":
 			return &failure{"wrong disabled reason", fmt.Sprintf("%s (%s/uid %d) was disabled but is still on the server, so it is a move: reason %q, want \"moved\"", r.msgID, r.folder, r.uid, r.reason)}
-		case !live[r.msgID] && (r.reason == "" || r.reason == "moved"):
-			return &failure{"wrong disabled reason", fmt.Sprintf("%s (%s/uid %d) was disabled and is nowhere on the server, so it was removed: reason %q is not a removal reason", r.msgID, r.folder, r.uid, r.reason)}
+		case !live[r.msgID] && r.reason != "server_removed":
+			return &failure{"wrong disabled reason", fmt.Sprintf("%s (%s/uid %d) was disabled and is nowhere on the server, so it was removed: reason %q, want \"server_removed\" (round 38)", r.msgID, r.folder, r.uid, r.reason)}
 		}
 	}
 	return nil
