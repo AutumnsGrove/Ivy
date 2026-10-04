@@ -64,6 +64,22 @@ describe('connectEvents', () => {
 		expect(onHint).not.toHaveBeenCalled();
 	});
 
+	it('asks for a refetch when the stream reopens, but not on the first open', () => {
+		stub();
+		const onReconnect = vi.fn();
+		connectEvents(() => {}, onReconnect);
+		const source = FakeEventSource.instances[0];
+
+		source.emit('open', '');
+		expect(onReconnect).not.toHaveBeenCalled();
+		// Hints have no replay, so whatever was missed while the stream was down
+		// (a suspended Safari tab, a Tailscale blip) is only recovered by a refetch.
+		source.emit('open', '');
+		expect(onReconnect).toHaveBeenCalledTimes(1);
+		source.emit('open', '');
+		expect(onReconnect).toHaveBeenCalledTimes(2);
+	});
+
 	it('closes the source, so a destroyed layout stops the stream', () => {
 		stub();
 		const close = connectEvents(() => {});

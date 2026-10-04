@@ -28,9 +28,21 @@ const PATH = '/api/v1/events';
  * Opens the hub stream and calls `onHint` for every hint. Returns a close
  * function. The server names its events (`event: message.changed`), so each type
  * needs its own listener; `onmessage` alone would never fire.
+ *
+ * Hints have no replay, so every reopen after the first (the browser reconnects
+ * on its own) calls `onReconnect`: whatever was missed while the stream was down
+ * is only recovered by refetching what is on screen.
  */
-export function connectEvents(onHint: (event: ServerEvent) => void): () => void {
+export function connectEvents(
+	onHint: (event: ServerEvent) => void,
+	onReconnect: () => void = () => {}
+): () => void {
 	const source = new EventSource(PATH);
+	let opened = false;
+	source.addEventListener('open', () => {
+		if (opened) onReconnect();
+		opened = true;
+	});
 	for (const type of EVENT_TYPES) {
 		source.addEventListener(type, (event) => {
 			// The hub always sends one JSON object on one line. A malformed frame is

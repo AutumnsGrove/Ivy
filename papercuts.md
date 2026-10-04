@@ -695,3 +695,12 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   `TestWorkerStopsPromptlyWhenTheIdleConnectionStalls` (a 5 s `Latency` armed after the first
   reconcile, then cancel; failed before the fix with `the worker did not stop while its idle
   connection was stalled`). Fixed with the same `context.AfterFunc` close `fetch` uses.
+
+- **#60** · `2d39e8d` · `web/src/lib/api/events.ts`, `web/src/routes/+layout.svelte` · **bug** · the
+  events client promised "a reconnect means refetch what is on screen" but did nothing on reopen, and
+  the hub sends no hint on connect and has no replay. A suspended Safari tab or a Tailscale blip
+  therefore left the screen stale until the next unrelated hint. Reproduced by the Vitest case
+  `asks for a refetch when the stream reopens, but not on the first open` (failed before the fix:
+  `expected vi.fn() to be called 1 times, but got 0`). `connectEvents` takes an `onReconnect` called
+  on every `open` after the first; the layout passes `invalidateAll`. The browser-level behaviour
+  (iOS Safari really resuming the stream) is not verified here.

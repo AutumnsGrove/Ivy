@@ -19,7 +19,12 @@
 	onDestroy(viewport.start());
 	// Client-only (ssr = false), so EventSource exists. A hint means "refetch what
 	// is on screen"; the hub coalesces duplicate hints, so this stays cheap.
-	onDestroy(connectEvents(() => void invalidateAll()));
+	onDestroy(
+		connectEvents(
+			() => void invalidateAll(),
+			() => void invalidateAll()
+		)
+	);
 </script>
 
 <svelte:head>
