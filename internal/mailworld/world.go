@@ -61,13 +61,15 @@ func New(opts ...Option) (*World, error) {
 	}
 
 	w.srv = imapserver.New(&imapserver.Options{
-		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
+		NewSession: func(conn *imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
 			sess := w.mem.NewSession()
-			if w.hasFault(AuthFail{}) || w.hasFault(FailFetch{}) {
+			if w.hasFault(AuthFail{}) || w.hasFault(FailFetch{}) || w.hasFault(AckThenDrop{}) {
 				sess = faultSession{
 					Session:   sess,
+					conn:      conn.NetConn(),
 					authFail:  w.hasFault(AuthFail{}),
 					fetchFail: w.hasFault(FailFetch{}),
+					ackDrop:   w.hasFault(AckThenDrop{}),
 				}
 			}
 			return sess, nil, nil
@@ -236,6 +238,12 @@ type LLMDown struct{}
 // provider gives when an account's spend cap is hit.
 type LLMCapReached struct{}
 
+// AckThenDrop sends a successful response to a STORE, EXPUNGE or MOVE and then
+// closes the connection a moment later, modelling the ack that races a dropped
+// link. A client that reads the ack proceeds; one that does not sees a drop.
+// It lasts until the faults are cleared, which a test does before recovery.
+type AckThenDrop struct{}
+
 func (DropConnection) isFault() {}
 func (Unreachable) isFault()    {}
 func (AuthFail) isFault()       {}
@@ -243,14 +251,17 @@ func (FailFetch) isFault()      {}
 func (Latency) isFault()        {}
 func (LLMDown) isFault()        {}
 func (LLMCapReached) isFault()  {}
+func (AckThenDrop) isFault()    {}
 
 // faultSession injects per-connection faults while preserving the optional
 // interfaces the server requires for the capabilities we advertise (it panics
 // if NAMESPACE or MOVE is advertised but absent).
 type faultSession struct {
 	imapserver.Session
+	conn      net.Conn
 	authFail  bool
 	fetchFail bool
+	ackDrop   bool
 }
 
 func (s faultSession) Login(username, password string) error {
@@ -272,7 +283,33 @@ func (s faultSession) Namespace() (*imap.NamespaceData, error) {
 }
 
 func (s faultSession) Move(w *imapserver.MoveWriter, set imap.NumSet, dest string) error {
-	return s.Session.(imapserver.SessionMove).Move(w, set, dest)
+	err := s.Session.(imapserver.SessionMove).Move(w, set, dest)
+	s.ackThenDrop()
+	return err
+}
+
+func (s faultSession) Store(w *imapserver.FetchWriter, set imap.NumSet, flags *imap.StoreFlags, options *imap.StoreOptions) error {
+	err := s.Session.Store(w, set, flags, options)
+	s.ackThenDrop()
+	return err
+}
+
+func (s faultSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) error {
+	err := s.Session.Expunge(w, uids)
+	s.ackThenDrop()
+	return err
+}
+
+// ackThenDrop closes the connection shortly after the response is written, so
+// the client usually reads the ack first and then sees the link die.
+func (s faultSession) ackThenDrop() {
+	if !s.ackDrop || s.conn == nil {
+		return
+	}
+	go func() {
+		time.Sleep(2 * time.Millisecond)
+		_ = s.conn.Close()
+	}()
 }
 
 // latency returns the delay an armed Latency fault asks for, if any. Unlike

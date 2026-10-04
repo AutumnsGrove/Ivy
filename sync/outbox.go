@@ -35,6 +35,11 @@ type OutboxWorker struct {
 	conn     *session
 	lastBusy time.Time
 	jitter   func(time.Duration) time.Duration
+
+	// afterAck is a test seam: it runs after a command is acknowledged and before
+	// the mirror update, so a test can simulate the process dying in that window
+	// (the C4 crash test). Nil in production.
+	afterAck func(store.OutboxOp) error
 }
 
 // OutboxWorkerOption customises an OutboxWorker.
@@ -273,6 +278,9 @@ func (w *OutboxWorker) dispatchMove(ctx context.Context, c *session, op store.Ou
 	if err := w.moveMessage(c, uid, dst.Name); err != nil {
 		return w.serverError(ctx, op, err)
 	}
+	if err := w.afterAckCrash(op); err != nil {
+		return err
+	}
 	return w.finishMove(ctx, op, rowID)
 }
 
@@ -316,6 +324,9 @@ func (w *OutboxWorker) dispatchFlags(ctx context.Context, c *session, op store.O
 	if err != nil {
 		return w.serverError(ctx, op, err)
 	}
+	if err := w.afterAckCrash(op); err != nil {
+		return err
+	}
 	return w.finishFlags(ctx, op, rowID, flags)
 }
 
@@ -354,6 +365,9 @@ func (w *OutboxWorker) dispatchExpunge(ctx context.Context, c *session, op store
 	w.notify(ctx, op.ID)
 	if err := w.expungeMessage(c, uid); err != nil {
 		return w.serverError(ctx, op, err)
+	}
+	if err := w.afterAckCrash(op); err != nil {
+		return err
 	}
 	return w.finishExpunge(ctx, op, rowID)
 }
@@ -578,6 +592,15 @@ func (w *OutboxWorker) hideRow(ctx context.Context, rowID, reason string) error 
 		return err
 	}
 	return nil
+}
+
+// afterAckCrash is the C4 test seam: it returns nil in production and the
+// injected error (a simulated crash) in the crash-window test.
+func (w *OutboxWorker) afterAckCrash(op store.OutboxOp) error {
+	if w.afterAck == nil {
+		return nil
+	}
+	return w.afterAck(op)
 }
 
 // ---------------------------------------------------------------- outcomes
