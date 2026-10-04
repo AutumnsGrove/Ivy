@@ -333,6 +333,33 @@ The seams fixed up front so the chunks stayed independently committable:
 - Not done: the visual baselines; real-stack twins of the state specs (chunks 3 and 5); the
   `window_fetch_in_load` warning the mock suite now prints on every page.
 
+## 3a: sync core (done 2026-10-04, gate C2 plus the steady-state work)
+
+The runner is the mirror's write path now. `Fetcher.Fetch` snapshots every mailbox (envelopes,
+flags, sizes), reconciles folder by folder, and disables — never deletes — what the server no
+longer holds. Move vs removal is decided after the account pass (`moved` when the Message-ID is
+still live elsewhere, `server_removed` otherwise). Message identity carries the folder's
+UIDVALIDITY (mirror migration 9, plus `folders.gone_at`), so a rebuilt mailbox that reuses a UID
+cannot collide with the disabled row's id, unique key or spool file, and the spool path includes
+the validity. The model-based convergence test passes on 24 seeds x 640 operations on both the
+CONDSTORE and no-CONDSTORE variants, and a deliberate break reproduces the C1 red (38 ops shrunk
+to 3).
+
+Steady state: a folder with a stored modseq uses a QRESYNC delta (`VANISHED` + `CHANGEDSINCE`),
+falling back to the full scan without CONDSTORE or after a UIDVALIDITY change; a folder's modseq
+only advances once all its bodies are stored, so an interrupted delta cannot skip unfetched mail.
+`Worker` reconciles, then idles on INBOX (own connection, work on another, backoff + jitter) and
+re-syncs on a notification, the idle timeout or a reconnect. `ivy run` owns one worker per account
+and publishes `sync.state` hints; `sync_state` records `ok`/`auth_failed`/`unreachable`/`error` with
+a bounded detail. The frontend `EventSource` client in `web/src/lib/api/events.ts` turns each hint
+into an `invalidateAll` on the open screen (Vitest + a Playwright refetch test). A configured
+account can say `insecure: true` for the loopback dev fake (default off, non-loopback refused).
+
+Not done or deferred: `COMPRESS=DEFLATE` toward IMAP (`PERFORMANCE.md` 1); the mass-disable alert
+and Restore/Purge endpoints (3b); benchmarks live in `sync/bench_test.go`
+(`BenchmarkSyncBackfill` 200 ms / `BenchmarkSyncDelta` 33 ms on the M2, small profile). The
+real-mailbox live check and the potato numbers remain for the operator.
+
 ## Other history worth keeping
 
 - Frontend facts: SvelteKit **3** config lives in `vite.config.ts`; aliases are the `#lib/...`

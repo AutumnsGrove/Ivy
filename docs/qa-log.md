@@ -988,3 +988,26 @@ Implementation decisions made while finishing the 3a Go scope after C2; the hand
   hosts. Named for the unsafe thing, per STANDARDS.md 4a.7.
 - **Still open:** the frontend `EventSource` client and its Playwright coverage. The Go hub and
   endpoint are done and tested; the browser side was left rather than half-built.
+
+## Round 41 — 3a closed out (2026-10-04, agent)
+
+The loose ends from round 40 were finished in the same session, and the definition-of-done checks
+were run.
+
+- **Frontend `EventSource` client.** `web/src/lib/api/events.ts` is the one constructor of
+  `EventSource` (per the API-client rule). The server names its events, so it registers a listener
+  for each of `message.changed`, `folder.changed`, `sync.state`, `outbox.state` and `health.alert`;
+  a malformed frame is ignored. The root layout opens it and calls `invalidateAll()` on every hint
+  (the hub coalesces duplicates). The mock E2E fixture answers `/api/v1/events` with a valid empty
+  stream so the app connects without a console error, and `web/e2e/events.spec.ts` sends one hint
+  and proves the inbox is fetched again. Vitest covers the client with a fake `EventSource`.
+- **Checks run green (round 41):** `make check` (drift, gofumpt, vet, staticcheck, Go `-race`,
+  `pnpm check`, 209 Vitest), `govulncheck` (local Go 1.26.6, so the 1.26.1 note is stale), the mock
+  Playwright suite (242 passed / 10 skipped) and the real-binary smoke slice (8/8). Only the
+  operator's real-mailbox live check and the potato numbers remain, plus Claude's fresh-session C2
+  review.
+- **Benchmarks added:** `sync/bench_test.go` has `BenchmarkSyncBackfill` (200-message cold backfill)
+  and `BenchmarkSyncDelta` (steady-state QRESYNC re-sync of an unchanged mailbox), per
+  PERFORMANCE.md's small-data rule.
+- **3a ends here.** The next gate is C3 (the outbox op states before 3d). 3b's backend can start
+  after C2 is cleared; its Restore/Purge and mass-disable screens wait on the C0 canvas board.

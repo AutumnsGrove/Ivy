@@ -5,9 +5,9 @@ Continuation of 3a after the C2 checkpoint. The runner's Go scope is now complet
 INBOX and re-syncs on a notification or the idle timeout. `ivy run` owns one worker per configured
 account. All of it is committed in small stages (`b1ca426`, `d95bebe`, `2c6fe0a`, `14c927a`).
 
-Still open, and the only known 3a-era item left: the **frontend `EventSource` client** in
-`web/src/lib/api/` plus its Playwright coverage (the C1 note named it). The Go hub and endpoint
-already exist and are tested; only the browser side is missing.
+Still open and deferred to 3b: the mass-disable alert and the Restore/Purge endpoints. The
+frontend `EventSource` client landed after this note was first written (commit `2d39e8d`), so 3a's
+list is complete.
 
 ## 1. sync_state (commit b1ca426)
 
@@ -65,8 +65,14 @@ so the design's periodic fallback covers it. The notification path is still exer
 
 ## 4. Where the work stands
 
-Full suite `CGO_ENABLED=1 go test -race ./...` is green, `go vet`, `staticcheck` and `gofumpt` are
-clean. The 3a Go scope in `next_steps.md` (runner, resumable backfill, IDLE, QRESYNC/fallback,
-UIDVALIDITY, SSE hub, convergence test) is done. The next gate is **C3** (write down the outbox op
-states before coding 3d). The frontend `EventSource` client is the one loose end, and it is browser
-work with a Playwright requirement, not a Go change.
+Full suite `CGO_ENABLED=1 go test -race ./...` is green; `make check` (drift, fmt, vet, staticcheck,
+Go `-race`, `pnpm check`, 209 Vitest) is green; `govulncheck` clean (local Go 1.26.6); the mock
+Playwright suite is 242 passed / 10 skipped; the real-binary smoke slice is 8/8. `BenchmarkSyncBackfill`
+(200-message cold backfill) and `BenchmarkSyncDelta` (steady-state QRESYNC) live in
+`sync/bench_test.go`. The frontend `EventSource` client is in `web/src/lib/api/events.ts` with a
+Vitest test and a Playwright refetch test (`web/e2e/events.spec.ts`).
+
+The 3a Go scope in `next_steps.md` (runner, resumable backfill, IDLE, QRESYNC/fallback, UIDVALIDITY,
+SSE hub, convergence test) is done. The next gate is **C3** (write down the outbox op states before
+coding 3d). The real-mailbox live check and the potato numbers are operator follow-ups, and C2 wants
+Claude's fresh-session review of the tests and design.

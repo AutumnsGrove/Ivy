@@ -5,12 +5,12 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-04 (round 40: 3a's Go scope is complete; sync_state, QRESYNC deltas and the
-IDLE worker all landed, and `ivy run` owns one worker per account). The full Go suite is `-race`
-green, `go vet`, `staticcheck` and `gofumpt` are clean. The frontend checks and the real-binary
-smoke slice were not re-run this round. The only 3a-era item left is the frontend `EventSource`
-client in `web/src/lib/api/` and its Playwright coverage. Chunks 0, 1 and 2a-2h are done except the
-visual baselines of 2g and 2h (they need the CI harness regenerated).
+last updated: 2026-10-04 (round 41: 3a is done). The full Go suite is `-race` green, `make check`
+(drift, fmt, vet, staticcheck, Go tests, `pnpm check`, 209 Vitest) is green, `govulncheck` is clean,
+the mock Playwright suite is 242 passed / 10 skipped and the real-binary smoke slice is 8/8.
+Chunks 0, 1 and 2a-2h are done except the visual baselines of 2g and 2h (they need the CI harness
+regenerated). The next gate is C3 before 3b/3d; 3b's backend can start once C2 has Claude's
+fresh-session review and you clear it.
 
 ## How to run a chunk
 
@@ -37,7 +37,7 @@ visual baselines of 2g and 2h (they need the CI harness regenerated).
 | 2a-2f Read: store, fetch, parse, render, thread, gateway | done |
 | 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
-| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | 3a Go done; frontend events client open; next gate C3 (3d) |
+| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | 3a done; 3b backend next after C2 review (screens wait on C0) |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | not started |
 | 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | not started |
 
@@ -249,19 +249,21 @@ fixed checkpoints C0-C5 and stop-triggers T1-T10, each leaving a committed file 
 inside 3a: whether 3a needs the backfill/steady-state split (decide at checkpoint C2; the model may
 propose it).
 
-**3a runner landed** (2026-10-04): the C2 checkpoint is in
-`docs/handoffs/2026-10-04-C2-runner.md`, and the steady-state work that followed (sync_state,
-QRESYNC deltas, the IDLE worker and the `ivy run` wiring) is in
-`docs/handoffs/2026-10-04-3a-steady-state.md`. `Fetcher.Fetch` reconciles the mirror to the server;
-`TestSyncConvergesToTheServer` passes on both variants (24 seeds, 640 operations each, deltas on
-every sync after the first), QRESYNC falls back to a full scan without CONDSTORE, and a deliberate
-break reproduces the C1 red (38 ops shrunk to 3 in 14 replays). The runner writes `sync_state`; the
-worker idles on INBOX (two connections at most) with backoff and jitter; `ivy run` starts one worker
-per configured account. The schema that came with it: mirror migration 9 (`folders.gone_at`,
-`messages.uidvalidity` in the identity and spool path, append-only), the `server_removed` reason, and
-the uidvalidity-aware fast seeder. **The one remaining 3a-era item is the frontend `EventSource`
-client** (`web/src/lib/api/`) and its Playwright test; the Go hub and endpoint are done. **Next gate:
-C3**, writing down the outbox op states before coding 3d.
+**3a is done** (2026-10-04): the C2 checkpoint is in `docs/handoffs/2026-10-04-C2-runner.md`, and
+the steady-state work that followed (sync_state, QRESYNC deltas, the IDLE worker, the `ivy run`
+wiring and the frontend events client) is in `docs/handoffs/2026-10-04-3a-steady-state.md`.
+`Fetcher.Fetch` reconciles the mirror to the server; `TestSyncConvergesToTheServer` passes on both
+variants (24 seeds, 640 operations each, deltas on every sync after the first), QRESYNC falls back
+to a full scan without CONDSTORE, and a deliberate break reproduces the C1 red (38 ops shrunk to 3
+in 14 replays). The runner writes `sync_state`; the worker idles on INBOX (two connections at most)
+with backoff and jitter; `ivy run` starts one worker per configured account; the frontend events
+client refetches on a hint. The schema that came with it: mirror migration 9 (`folders.gone_at`,
+`messages.uidvalidity` in the identity and spool path, append-only), the `server_removed` reason,
+and the uidvalidity-aware fast seeder. `make check`, the mock Playwright suite (242), the smoke
+slice (8/8), `govulncheck` and the Go suite were run green; benchmarks are in `sync/bench_test.go`.
+**Remaining for the operator:** the real-mailbox/`ivy doctor` live check and potato numbers, and
+C2's fresh-session review. **Next gate: C3**, writing down the outbox op states before coding 3d;
+3b's backend (disable/restore/purge) can start after C2 is cleared, its screens wait on C0.
 
 ## Operator actions still open
 
