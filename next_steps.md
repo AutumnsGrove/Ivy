@@ -240,8 +240,16 @@ Three decisions recorded with the split:
 - **Backups (3c):** before 3d, because the outbox is unrecoverable and must be backed up as soon as
   it exists.
 
-Still to decide inside 3a: whether 3a itself needs the backfill/steady-state split, and the **N8**
-threat-model line (identical `Message-ID`s share a content key) before 3a/3b land.
+**Chunk 3 is handed over with `docs/CHUNK3-BRIEF.md`** (read it after this file and before any code):
+the invariants, the settled decisions (qa-log round 37: move vs delete, sync defers to the outbox,
+N8, hints-only SSE), the traps earlier work found, per-stage bounds, and **escalation gates**:
+fixed checkpoints C0-C5 and stop-triggers T1-T10, each leaving a committed file in
+`docs/handoffs/`. Claude reviews in a separate fresh session, starting from those files. Still open
+inside 3a: whether 3a needs the backfill/steady-state split (decide at checkpoint C2; the model may
+propose it).
+
+**Waiting at:** nothing yet (chunk 3 not started). When work stops at a checkpoint or trigger, put
+the line here.
 
 ## Operator actions still open
 

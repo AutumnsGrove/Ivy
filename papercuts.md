@@ -187,7 +187,8 @@ the suite passes with `CGO_ENABLED=1 go test -race`.
   rows are upserted (a repeat sync skips known UIDs), but chunk 3's flag/move updates and any
   re-sync would blank the sanitised HTML 2d writes and the thread ids 2e writes. Give those
   columns targeted `UPDATE`s (or leave them out of the conflict set) when they land.
-- **N8 (open, design)** · `efbeb2f` · `store/contentkey.go` · identical `Message-ID`s share a
+- **N8 (decided in round 37: accept for tags; chunk 5 verdict rows bind to a body hash and are
+  ignored on mismatch)** · `efbeb2f` · `store/contentkey.go` · identical `Message-ID`s share a
   content key by design (a message in two folders is one message), but derived state
   (`needs_me`, tags) keys on `(account_id, content_key)`, so a hostile sender who copies a victim
   message's `Message-ID` inherits its verdict and tags. Fine for a single operator today; worth a

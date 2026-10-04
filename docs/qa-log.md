@@ -878,3 +878,33 @@ push, so it is cut the way 1 and 2 were. Four answers settled it:
 
 The stage table and the constraints are in `next_steps.md` ("The chunk plan"). Still open inside
 3a: the backfill/steady-state split, and the N8 threat-model line for duplicate `Message-ID`s.
+
+## Round 37 — the open design questions before chunk 3 (2026-10-04, operator)
+
+Chunk 3 is the hardest chunk (about 8 of 10; 3a and 3d are 9). Four design calls were open and each
+shapes a schema or a contract, so they were settled before any code. All took the recommended option.
+
+- **Move vs delete.** When a UID vanishes from a folder and the same content key appears in another
+  folder in the same pass, it is a **move**: the old row is hidden with `disabled_reason = 'moved'`
+  (kept, never counted as "server removed"), the new row is live, tags carry over by content key.
+  Only keys found nowhere become disabled-as-removed. A move still erases nothing.
+- **Pending writes vs sync ("server wins").** **Sync defers to the outbox**: while a row has a
+  pending outbox op, sync does not overwrite that row's flags or folder. On success the outbox
+  updates the DB; on failure the row rolls back and the next sync converges. "DB == server after
+  quiescence" therefore holds for every row without a pending op, and for all rows once the outbox
+  is empty. Reads never join the outbox.
+- **N8 (identical `Message-ID`s share a content key).** Accept it for tags (harmless labels; a
+  message in two folders is one message). **Chunk 5 verdict rows must store a hash of the message's
+  normalised headers and body and are ignored on mismatch**, so a copied `Message-ID` inherits no
+  verdict. No schema change now.
+- **SSE contract: hints only.** One stream, `/api/v1/events`, small typed events (`message.changed`,
+  `folder.changed`, `sync.state`, `outbox.state`, `health.alert`) that say what to refetch. No replay
+  and no event ids: after any reconnect the client refetches what it is showing.
+- **Mass-disable threshold (set by the agent, a tunable constant, not a design call):** a sweep
+  that disables more than 50 messages, or more than 20% of a folder that held at least 10, raises the
+  Mirror health alert.
+- **How chunk 3 is handed over.** The work goes to a faster model (DeepSeek, through pi) with
+  `docs/CHUNK3-BRIEF.md` as its standing instructions, and Claude reviews at the end with the
+  review skill. Rather than Claude writing the 3a/3d test harness first, the brief carries
+  **escalation gates**: fixed checkpoints where the model must stop for review, and objective
+  triggers on which it must stop and say "this needs Claude".

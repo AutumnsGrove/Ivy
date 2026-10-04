@@ -202,7 +202,15 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
 5. **UIDVALIDITY change:** drop that folder's mirror rows and re-sync it (messages are matched by
    Message-ID where possible to preserve tags/snoozes). Tested with the fake server.
 6. **Convergence invariant:** after quiescence, DB == server. Conflicts are resolved server-wins;
-   locally owned state keys on `(account, Message-ID)` so it survives moves and UID changes.
+   locally owned state keys on `(account, content key)` so it survives moves and UID changes.
+   Two rules settled in round 37:
+   - **Sync defers to the outbox.** While a row has a pending outbox op, sync does not overwrite
+     that row's flags or folder. The invariant holds for every row without a pending op, and for
+     all rows once the outbox is empty. Reads never join the outbox.
+   - **Move vs delete.** A UID that vanishes from a folder whose content key appears in another
+     folder in the same pass is a **move**: the old row gets `disabled_reason = 'moved'` (kept,
+     hidden, not counted as "server removed"), the new row is live, tags follow the content key.
+     Only a key found nowhere is disabled as removed.
 7. **Write path (settled):** action -> outbox row -> IMAP command (STORE/MOVE/EXPUNGE/APPEND) ->
    on success update the DB; the UI updates optimistically and rolls back on rejection. Outbox
    retries survive restarts and dropped connections.
@@ -219,7 +227,11 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
    health alert with a one-click Restore; sync continues because disabling is reversible. Scenario
    tests: the fake server empties a mailbox, resets UIDVALIDITY, and restores messages. Disabled
    raw blobs are part of the backups (section 9).
-8. **Events:** every DB change fans out through an SSE hub so open clients update live.
+8. **Events:** every DB change fans out through an SSE hub so open clients update live. The
+   contract (round 37) is **hints only**: one stream, `/api/v1/events`, small typed events
+   (`message.changed`, `folder.changed`, `sync.state`, `outbox.state`, `health.alert`) that say what
+   to refetch. No replay and no event ids; after any reconnect the client refetches what it is
+   showing. A slow client's queue is bounded and drops hints (the next refetch heals it).
 9. **Spam handling (round 17, proposed):** the provider filters (Purelymail: SpamAssassin, Junk
    folder). Ivy stores the parsed `X-Spam-Status` score/flag on each message, treats the `junk`
    folder as a normal mirrored folder, and implements Mark spam / Not junk as IMAP MOVE to and from
