@@ -43,7 +43,9 @@ ivy/
   llm/               chat/vision client + THE gate (opt-in, isolation, caps, ledger)
   triage/            needs-me cascade, categories, receipts/ledger, newsletter feed/digest, rules
   compose/           MIME build (enmime builder), identities, signatures, undo-send queue
-  gateway/           HTTP handlers, SSE hub, stats, settings, update endpoints
+  events/            the SSE hub: typed hints, bounded per-client queues (no dependency on sync or gateway,
+                     so sync can publish and gateway can serve)
+  gateway/           HTTP handlers, the /events stream, stats, settings, update endpoints
   update/            ivy update: resolve GHCR digest, signal the host watcher, health check, rollback
   backup/            daily snapshots (15 days) of state.db + disabled blobs, restore
   web/               SvelteKit app; its build is copied into internal/webui/build by
@@ -231,7 +233,14 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
    contract (round 37) is **hints only**: one stream, `/api/v1/events`, small typed events
    (`message.changed`, `folder.changed`, `sync.state`, `outbox.state`, `health.alert`) that say what
    to refetch. No replay and no event ids; after any reconnect the client refetches what it is
-   showing. A slow client's queue is bounded and drops hints (the next refetch heals it).
+   showing. A slow client's queue is bounded and drops hints (the next refetch heals it). In code:
+   `events.Hub` never blocks `Publish`; a hint equal to one already queued is coalesced (so a
+   backfill's thousand `message.changed` collapse to one), a full queue drops its **oldest** hint
+   and counts it, and closing the hub (wired to `http.Server.RegisterOnShutdown`) ends every open
+   stream, which would otherwise never go idle for `Shutdown`. Behind any wrapper writer the handler
+   needs `Unwrap()` for `http.ResponseController` to flush (`gateway.errorWriter` once lacked it).
+   `sync_state` (migration 8 of the mirror) holds per-account status; `store.SetSyncState` keeps
+   `last_ok_at` across a failure and clears the error text on recovery.
 9. **Spam handling (round 17, proposed):** the provider filters (Purelymail: SpamAssassin, Junk
    folder). Ivy stores the parsed `X-Spam-Status` score/flag on each message, treats the `junk`
    folder as a normal mirrored folder, and implements Mark spam / Not junk as IMAP MOVE to and from

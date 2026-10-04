@@ -310,6 +310,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server-sent hints that something changed
+         * @description A stream of small typed hints that say what to refetch (round 37). Each frame is `event: <type>` and one `data:` line holding an Event as JSON. There are no event ids and no replay: after any reconnect, refetch what you are showing. A slow client's queue is bounded and drops its oldest hints. Comment lines (`: keepalive`) are heartbeats, and the first frame is `retry: 3000`. At most 16 streams are open at once.
+         */
+        get: operations["streamEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -319,6 +339,15 @@ export interface components {
             code: string;
             message: string;
             detail?: string;
+        };
+        /** @description One hint on the event stream. It says what changed, never the new value. */
+        Event: {
+            /** @enum {string} */
+            type: "message.changed" | "folder.changed" | "sync.state" | "outbox.state" | "health.alert";
+            accountId?: string;
+            folder?: string;
+            /** @description Stable reason, used by health.alert */
+            code?: string;
         };
         Version: {
             version: string;
@@ -979,6 +1008,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthOverview"];
+                };
+            };
+        };
+    };
+    streamEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An open event stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["Event"];
+                };
+            };
+            /** @description Too many streams are open (`too_many_streams`) or Ivy is shutting down (`unavailable`) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };

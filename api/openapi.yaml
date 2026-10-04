@@ -307,6 +307,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthOverview"
+  /events:
+    get:
+      operationId: streamEvents
+      summary: Server-sent hints that something changed
+      description: >
+        A stream of small typed hints that say what to refetch (round 37). Each
+        frame is `event: <type>` and one `data:` line holding an Event as JSON.
+        There are no event ids and no replay: after any reconnect, refetch what
+        you are showing. A slow client's queue is bounded and drops its oldest
+        hints. Comment lines (`: keepalive`) are heartbeats, and the first frame
+        is `retry: 3000`. At most 16 streams are open at once.
+      responses:
+        "200":
+          description: An open event stream
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "503":
+          description: Too many streams are open (`too_many_streams`) or Ivy is shutting down (`unavailable`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   parameters:
     MessageID:
@@ -334,6 +358,25 @@ components:
           type: string
         detail:
           type: string
+    Event:
+      type: object
+      description: One hint on the event stream. It says what changed, never the new value.
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [message.changed, folder.changed, sync.state, outbox.state, health.alert]
+          # Without explicit names the Go constant for sync.state is `SyncState`,
+          # which collides with the SyncState type.
+          x-enum-varnames:
+            [EventTypeMessageChanged, EventTypeFolderChanged, EventTypeSyncState, EventTypeOutboxState, EventTypeHealthAlert]
+        accountId:
+          type: string
+        folder:
+          type: string
+        code:
+          type: string
+          description: Stable reason, used by health.alert
     Version:
       type: object
       required: [version]

@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/AutumnsGrove/Ivy/config"
+	"github.com/AutumnsGrove/Ivy/events"
 	"github.com/AutumnsGrove/Ivy/gateway"
 	"github.com/AutumnsGrove/Ivy/internal/devstack"
 	"github.com/AutumnsGrove/Ivy/internal/mailworld"
@@ -187,12 +188,14 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
 	}
 	defer dbs.Close()
 
+	hub := events.New()
 	srv := &http.Server{
 		Addr:              stack.Config.Listen,
-		Handler:           gateway.New(dbs, version, webui.FS).WithAllowedHosts(stack.Config.HostAllowList()).Handler(),
+		Handler:           gateway.New(dbs, version, webui.FS).WithEvents(hub).WithAllowedHosts(stack.Config.HostAllowList()).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}
+	srv.RegisterOnShutdown(hub.Close) // open streams are never idle; see cmd.go
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 

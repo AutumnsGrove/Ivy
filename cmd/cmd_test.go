@@ -82,6 +82,44 @@ func TestRunServesAndShutsDown(t *testing.T) {
 	}
 }
 
+// An open event stream is never idle, so http.Server.Shutdown would wait out its
+// whole timeout for it. The run command must close the hub on shutdown.
+func TestRunShutsDownPromptlyWithAnEventStreamOpen(t *testing.T) {
+	t.Parallel()
+	addr := freeAddr(t)
+	dir := t.TempDir()
+	configPath := writeConfig(t, dir, "listen: "+addr+"\ndata_dir: "+dir+"\n")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	root := New("test")
+	root.SetArgs([]string{"--config", configPath, "run"})
+	root.SetOut(os.Stderr)
+	root.SetErr(os.Stderr)
+	done := make(chan error, 1)
+	go func() { done <- root.ExecuteContext(ctx) }()
+	waitForHealth(t, "http://"+addr+"/api/v1/health")
+
+	resp, err := http.Get("http://" + addr + "/api/v1/events")
+	if err != nil {
+		t.Fatalf("open stream: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("stream status = %d, want 200", resp.StatusCode)
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("run returned %v, want a clean shutdown", err)
+		}
+	case <-time.After(4 * time.Second): // under Shutdown's own 5 s timeout
+		t.Fatal("run did not shut down while a stream was open")
+	}
+}
+
 func freeAddr(t *testing.T) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")

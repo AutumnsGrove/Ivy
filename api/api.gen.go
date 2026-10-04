@@ -112,6 +112,33 @@ func (e CheckDetailSureness) Valid() bool {
 	}
 }
 
+// Defines values for EventType.
+const (
+	EventTypeFolderChanged  EventType = "folder.changed"
+	EventTypeHealthAlert    EventType = "health.alert"
+	EventTypeMessageChanged EventType = "message.changed"
+	EventTypeOutboxState    EventType = "outbox.state"
+	EventTypeSyncState      EventType = "sync.state"
+)
+
+// Valid indicates whether the value is a known member of the EventType enum.
+func (e EventType) Valid() bool {
+	switch e {
+	case EventTypeFolderChanged:
+		return true
+	case EventTypeHealthAlert:
+		return true
+	case EventTypeMessageChanged:
+		return true
+	case EventTypeOutboxState:
+		return true
+	case EventTypeSyncState:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LivenessStatus.
 const (
 	LivenessStatusOk          LivenessStatus = "ok"
@@ -326,6 +353,19 @@ type Error struct {
 	Detail  *string `json:"detail,omitempty"`
 	Message string  `json:"message"`
 }
+
+// Event One hint on the event stream. It says what changed, never the new value.
+type Event struct {
+	AccountId *string `json:"accountId,omitempty"`
+
+	// Code Stable reason, used by health.alert
+	Code   *string   `json:"code,omitempty"`
+	Folder *string   `json:"folder,omitempty"`
+	Type   EventType `json:"type"`
+}
+
+// EventType defines model for Event.Type.
+type EventType string
 
 // HealthOverview defines model for HealthOverview.
 type HealthOverview struct {

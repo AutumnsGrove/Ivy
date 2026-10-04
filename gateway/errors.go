@@ -57,6 +57,11 @@ func (e *errorWriter) WriteHeader(status int) {
 	e.ResponseWriter.WriteHeader(status)
 }
 
+// Unwrap lets http.ResponseController reach the real writer. Without it a
+// handler behind this wrapper cannot Flush or set a write deadline, which
+// silently turns a server-sent-event stream into a buffered response.
+func (e *errorWriter) Unwrap() http.ResponseWriter { return e.ResponseWriter }
+
 // Write discards the plain-text body that follows a rewritten error; the JSON
 // envelope was already written.
 func (e *errorWriter) Write(p []byte) (int, error) {

@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
+	"github.com/AutumnsGrove/Ivy/events"
 	"github.com/AutumnsGrove/Ivy/internal/asset"
 	"github.com/AutumnsGrove/Ivy/internal/compress"
 	"github.com/AutumnsGrove/Ivy/store"
@@ -22,6 +24,9 @@ type Server struct {
 	static  fs.FS
 	// allowedHosts are the names, besides loopback, the API answers to.
 	allowedHosts map[string]bool
+	// events is the hint hub behind /api/v1/events; nil means no stream is served.
+	events    *events.Hub
+	heartbeat time.Duration
 }
 
 // WithAllowedHosts sets the host names the API answers to besides loopback
@@ -69,6 +74,9 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/messages/{id}/inline/{cid}", s.handleInline)
 	api.HandleFunc("GET /api/v1/messages/{id}/attachments/{part}", s.handleAttachment)
 	api.HandleFunc("GET /api/v1/mirror/health", s.handleMirrorHealth)
+	if s.events != nil {
+		api.HandleFunc("GET /api/v1/events", s.handleEvents)
+	}
 
 	root := http.NewServeMux()
 	root.Handle("/api/", s.hostGuard(noStore(apiCSP(compress.Middleware(originGuard(jsonErrors(api)))))))

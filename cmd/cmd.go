@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/AutumnsGrove/Ivy/config"
+	"github.com/AutumnsGrove/Ivy/events"
 	"github.com/AutumnsGrove/Ivy/gateway"
 	"github.com/AutumnsGrove/Ivy/internal/webui"
 	"github.com/AutumnsGrove/Ivy/store"
@@ -80,12 +81,16 @@ func runCmd(configPath *string, version string) *cobra.Command {
 
 			// No Read/WriteTimeout: SSE streams and large bodies are long-lived. The
 			// header and idle timeouts still shed slow-loris connections.
+			hub := events.New()
 			srv := &http.Server{
 				Addr:              cfg.Listen,
-				Handler:           gateway.New(dbs, version, webui.FS).WithAllowedHosts(cfg.HostAllowList()).Handler(),
+				Handler:           gateway.New(dbs, version, webui.FS).WithEvents(hub).WithAllowedHosts(cfg.HostAllowList()).Handler(),
 				ReadHeaderTimeout: 10 * time.Second,
 				IdleTimeout:       2 * time.Minute,
 			}
+			// An open stream is never idle, so Shutdown would wait on it until its
+			// timeout; closing the hub is what ends the streams.
+			srv.RegisterOnShutdown(hub.Close)
 
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()

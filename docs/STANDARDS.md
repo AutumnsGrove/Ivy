@@ -201,6 +201,11 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Sanitised HTML body (`render.MaxHTMLBytes`) | 8 MiB | body is not rendered; the plain-text view carries the message |
 | IMAP dial and TLS handshake | 15 s | error, retried by the caller |
 | Dev control-socket call | 30 s | error |
+| Open event streams (`events.MaxSubscribers`) | 16 | the next is refused with 503 `too_many_streams`; it works once one closes |
+| Hints queued per event stream (`events.QueueSize`) | 64 | the oldest is dropped and counted (`Subscription.Dropped`); the client refetches anyway |
+| One event-stream write (`eventWriteTimeout`) | 10 s | the stream ends and frees its slot |
+| Idle event stream | 20 s | a `: keepalive` comment is sent; a failed write ends the stream |
+| Account sync error detail (`store.MaxSyncErrorDetail`) | 1024 bytes | refused by `SetSyncState`; the caller shortens it |
 
 ## 5. Frontend standards
 
@@ -245,7 +250,10 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
   `<meta>` CSP inside a frame is ignored by Chromium).
 - Every response is compressed (section 7) and carries correct `ETag`/`Cache-Control`; list and
   thread endpoints are shaped so a large thread streams or pages rather than arriving as one blob.
-- SSE has event ids and `Last-Event-ID` resume so a phone waking up catches up cleanly.
+- SSE is **hints only (round 37)**: no event ids and no `Last-Event-ID` resume. A phone waking up
+  refetches what it is showing, so the stream never has to remember the past. An identical hint
+  already queued for a client is coalesced, a slow client's bounded queue sheds its oldest hint,
+  and the handler sets a write deadline on every write (the server has no `WriteTimeout`).
 
 ## 7. Performance and compression (from day one)
 
