@@ -94,13 +94,13 @@ fast`, the `full == fast` agreement test and named-state Playwright (`DEV.md` 4,
   subject), written after the mirror in both modes, **once per `state.db`** (a `dev.state_seeded`
   setting), so a restart never overwrites what the operator changed. New `store` calls:
   `UpsertTag`, `TagMessage`, `SetSetting`, `GetSetting`. No settings are seeded: nothing reads them.
-- **Open, needs a decision: `fast` is not fast.** Measured 2026-10-04 (laptop): `demo` 246 ms full
-  vs 272 ms fast; `large` (100k) full 3m17s, and fast did not finish in 280 s (2.8 GB of data). The
-  cost is per-message parse plus two SQLite transactions, which both modes share, so the doc's
-  "about a second, even for large" and "`reset` restores in under 5 s" (`DEV.md` 2, 3, 8) cannot
-  hold by seeding. The doc's own answer is a cached built snapshot of the database files keyed by
-  profile, seed and schema version; today a snapshot is only a recipe. Options: build that cache,
-  or batch the seeder in one transaction (measure first), or relax the claim.
+- ~~`fast` is not fast~~ **settled (qa-log round 35): a built-database cache.** Measured 2026-10-04
+  (laptop): seeding costs the same as syncing (`demo` 246 ms full vs 272 ms fast; `large` 100k about
+  3m20s), because both pay parse plus two SQLite transactions per message. So an empty data dir is
+  now restored by file copy from `.dev/cache/<key>` (profile, seed, accounts, both schema versions,
+  `DerivedVersion`); only a clean build is cached, and a bad cache falls back to a visible rebuild.
+  **Restore: `demo` 9 ms, `large` 3.5 s** (2.8 GB; the cache doubles the disk use, delete
+  `.dev/cache` to reclaim it). `reset` keeps the cache; the first build per profile is still slow.
 - Named-state Playwright: each `DEV.md` 4 state, run against `ivy-dev up --mode fast`.
 
 **4. Chunk 3 is split into eight stages (round 36; the plan is in "The chunk plan" below).** 3a
