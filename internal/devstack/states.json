@@ -1,0 +1,12 @@
+[
+  { "name": "sync-auth-failed", "description": "IMAP login is rejected", "scenarios": ["sync-error"] },
+  { "name": "unreachable", "description": "every connection is dropped immediately", "scenarios": ["offline"] },
+  { "name": "backfilling", "description": "IMAP responses are slow, as while a sync runs", "scenarios": [] },
+  { "name": "fetch-failed", "description": "FETCH fails, for message and attachment errors", "scenarios": ["fetch-error", "attachment-error"] },
+  { "name": "send-too-large", "description": "SMTP rejects with 552", "scenarios": ["send-failed"] },
+  { "name": "send-transient-4xx", "description": "SMTP rejects with a transient 450", "scenarios": [] },
+  { "name": "llm-cap-reached", "description": "LLM calls answer 429", "scenarios": ["limit", "cap-hit"] },
+  { "name": "llm-provider-down", "description": "LLM calls answer 503", "scenarios": ["provider-down"] },
+  { "name": "offline", "description": "the provider is unreachable", "scenarios": ["offline"] },
+  { "name": "mirror-healthy", "description": "clear every fault, the happy path", "scenarios": [] }
+]

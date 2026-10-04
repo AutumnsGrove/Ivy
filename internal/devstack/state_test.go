@@ -3,6 +3,9 @@ package devstack_test
 import (
 	"bytes"
 	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
 	"testing"
 	"time"
 
@@ -208,4 +211,53 @@ func chatStatus(t *testing.T, w *mailworld.World) int {
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode
+}
+
+// frontendScenarios reads the names web/src/lib/api/scenario.ts honours, so a
+// state can never point at a ?scenario= the app would silently ignore.
+func frontendScenarios(t *testing.T) map[string]bool {
+	t.Helper()
+	src, err := os.ReadFile(filepath.Join("..", "..", "web", "src", "lib", "api", "scenario.ts"))
+	if err != nil {
+		t.Fatalf("read scenario.ts: %v", err)
+	}
+	block := regexp.MustCompile(`(?s)SCENARIOS = \[(.*?)\] as const`).FindSubmatch(src)
+	if block == nil {
+		t.Fatal("SCENARIOS array not found in scenario.ts")
+	}
+	out := map[string]bool{}
+	for _, m := range regexp.MustCompile(`'([a-z-]+)'`).FindAllSubmatch(block[1], -1) {
+		out[string(m[1])] = true
+	}
+	if len(out) == 0 {
+		t.Fatal("no scenarios parsed from scenario.ts")
+	}
+	return out
+}
+
+func TestStateScenariosExistInTheFrontend(t *testing.T) {
+	t.Parallel()
+	known := frontendScenarios(t)
+	for _, s := range devstack.States() {
+		if s.Description == "" {
+			t.Errorf("state %q has no description", s.Name)
+		}
+		for _, sc := range s.Scenarios {
+			if !known[sc] {
+				t.Errorf("state %q names scenario %q, which scenario.ts does not define", s.Name, sc)
+			}
+		}
+	}
+}
+
+func TestEveryFaultStateButOneHasADesignedScreenOrSaysWhyNot(t *testing.T) {
+	t.Parallel()
+	// A fault state with no scenario is a hole in the designed screens, so the
+	// holes are listed here by name and each must be a deliberate decision.
+	noScreenYet := map[string]bool{"send-transient-4xx": true}
+	for _, s := range devstack.States() {
+		if len(s.Scenarios) == 0 && s.Name != "mirror-healthy" && s.Name != "backfilling" && !noScreenYet[s.Name] {
+			t.Errorf("state %q maps to no scenario and is not a known gap", s.Name)
+		}
+	}
 }
