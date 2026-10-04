@@ -675,3 +675,15 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   the time and `SyncedAt` was missing). With no view left that renders a time, `gateway.since`, the
   `Server.now` clock and its test hook were removed. Web tests: `formatSince` (units, German, the
   month cut-over, skew) and `syncLine` (three cases).
+
+## `9f0f4ef..7d99f92` Review of the 3a runner (C2 and the steady state)
+
+- **#58** · `d95bebe` · `sync/sync.go` · **bug** · a folder renamed away and then back kept its
+  stored modseq (the row is only marked gone), and the rename keeps UIDVALIDITY, so on a QRESYNC
+  server the next sync was a delta that answered "nothing changed": the messages disabled while the
+  name was gone never came back and the folder showed 0 of 2. Only the condstore variant failed, and
+  the 24 default seeds ran just 3 renames, so the convergence test never composed the sequence.
+  Reproduced by `TestRenamedAwayAndBackKeepsItsMessages` (`sync/revive_test.go`: create, append x2,
+  sync, rename away, sync, rename back, sync; failed before the fix with `the server holds 2 messages
+  and the mirror shows 0 visible`). `canUseDelta` now refuses a folder with `gone_at` set, so a revived
+  name gets a full read and its disabled rows are upserted back to life.

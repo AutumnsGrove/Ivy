@@ -370,8 +370,11 @@ type folderSnapshot struct {
 
 // canUseDelta reports whether a folder has a stored UIDVALIDITY and modseq to
 // resume from. Whether the server supports QRESYNC is decided once per account.
+// A folder marked gone has had its messages disabled, so the server's "nothing
+// changed since the modseq" no longer describes the mirror: when the name comes
+// back with the same UIDVALIDITY (a rename away and back) it needs a full read.
 func canUseDelta(existing store.Folder, found bool) bool {
-	return found && existing.UIDValidity != 0 && existing.HighestModSeq > 0
+	return found && existing.GoneAt.IsZero() && existing.UIDValidity != 0 && existing.HighestModSeq > 0
 }
 
 // folderRow looks up a mailbox's mirror row. found is false for a folder the
