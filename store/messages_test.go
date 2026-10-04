@@ -34,7 +34,7 @@ func TestMessageRoundTrip(t *testing.T) {
 		DeliveredTo:    []Address{},
 		Date:           date,
 		Size:           1234,
-		Flags:          []string{`\Seen`, `\Flagged`},
+		Flags:          []string{`\Flagged`, `\Seen`}, // stored sorted
 		InternalDate:   date.Add(time.Minute),
 		HasAttachments: true,
 		RawBlob:        []byte("raw bytes"),
@@ -371,5 +371,33 @@ func TestSpooledPathsIncludesDisabledMessages(t *testing.T) {
 	}
 	if len(got) != 2 || !got["spool/folder-1/1.eml"] || !got["spool/folder-1/2.eml"] {
 		t.Errorf("SpooledPaths = %v, want both files including the disabled message's", got)
+	}
+}
+
+// A server may list the same flags in any order (the fake one does), so two
+// fetches of one message must not produce two different rows.
+func TestFlagsAreStoredAsASortedSet(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct-1")
+	seedFolder(t, dbs, "acct-1", "folder-1")
+
+	for i, flags := range [][]string{{`\Seen`, `\Flagged`}, {`\Flagged`, `\Seen`}, {`\Seen`, `\Seen`, `\Flagged`}} {
+		m := Message{
+			ID: "msg-1", AccountID: "acct-1", FolderID: "folder-1", UID: 1,
+			ContentKey: ContentKey("<m1@example.test>", nil), MessageID: "<m1@example.test>",
+			Flags: flags, InternalDate: time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC),
+		}
+		if err := dbs.UpsertMessage(ctx, m); err != nil {
+			t.Fatalf("upsert %d: %v", i, err)
+		}
+		got, err := dbs.GetMessage(ctx, "msg-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := []string{`\Flagged`, `\Seen`}; !slices.Equal(got.Flags, want) {
+			t.Errorf("input %v: stored flags %v, want %v", flags, got.Flags, want)
+		}
 	}
 }

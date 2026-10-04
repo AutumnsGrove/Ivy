@@ -379,7 +379,10 @@ func marshalAddresses(list []Address) (any, error) {
 	return string(b), nil
 }
 
+// marshalFlags stores flags as a sorted set: a server may list the same flags in
+// any order, and the order carries no meaning, so it must not change the row.
 func marshalFlags(flags []string) (any, error) {
+	flags = slices.Compact(slices.Sorted(slices.Values(flags)))
 	if flags == nil {
 		flags = []string{}
 	}
