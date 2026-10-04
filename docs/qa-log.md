@@ -1149,3 +1149,32 @@ and the test suite no longer leaves the OS short of ports.
   `~/Documents/Projects/go-imap` (branch `ivy-beta8-condstore`) for later changes.
 - **N27 (missed backup slot).** On start the loop runs a backup at once when any target has no
   snapshot or its newest is a day old (`backup.Manager.Due`), then keeps the daily schedule.
+
+## Round 46 — the outbox design review, gate C3 (2026-10-04, agent; operator answers)
+
+The first C3 draft (`docs/handoffs/2026-10-04-C3-outbox.md`) was reviewed against `ARCHITECTURE.md`
+section 4, the round 37 rules and the sync code. Six defects were found and corrected in the design
+(`papercuts.md` #79-#84); the four questions the draft left open are settled.
+
+- **Q: what is the reader's "delete"?** (operator) **A `move` to the Trash role.** `expunge` is only
+  for emptying Trash, and the API refuses it for any other folder, so a single tap can never erase mail.
+- **Q: how long do terminal outbox rows stay?** (operator) **Seven days**, then pruned (the only
+  deletion the outbox does, and only of terminal rows).
+- **Q: one in-flight op per account, or per folder?** (operator) **Per account.**
+- **Q: undo, and CLAUDE.md rule 6 ("nothing moves or deletes without confirmation").** (operator)
+  **Moves and deletes need a confirmation modal before the op is enqueued; the undo toast is not a
+  confirmation.** Archive, delete, mark spam and not-junk are moves and get the modal; flag and unflag
+  change no folder and do not. Emptying Trash gets a stronger modal with the count. **Undo is an
+  inverse op** sent after dispatch (no hold-back window), and `cancelled` only means "superseded before
+  dispatch". This adds a UI requirement to 3d: a confirm modal on those actions.
+- **Reviewer's changes the operator accepted ("keep it all"):**
+  - the idempotency key is unique over non-terminal ops only (a repeated action must work);
+  - a message is identified by `(content_key, source_folder_id)`, never the content key alone (N8);
+  - the resolved `(uidvalidity, uid)` is persisted when the op becomes `in_flight`, and recovery asks
+    about that message first, re-resolving by Message-ID only after a UIDVALIDITY change;
+  - the mirror update is idempotent and runs before `done`, because `mirror.db` and `state.db` cannot
+    share a transaction; the outbox hides the source row through sync's own disable function and never
+    writes a destination row;
+  - retry is bounded (8 attempts, 24 h, 500 queued ops) and IMAP `NO` is classified by response code;
+  - the outbox owns its own connection rather than sharing the sync worker's IDLE connection;
+  - `move` needs `MOVE` and `expunge` needs `UIDPLUS`, otherwise the op fails instead of emulating them.

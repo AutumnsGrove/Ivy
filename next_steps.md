@@ -5,12 +5,12 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-04 (C3 written, waiting for review). The full Go suite is `-race` green and
+last updated: 2026-10-04 (C3 reviewed and corrected, waiting for the go). The full Go suite is `-race` green and
 the new `backup`, `blobstore` and `lockfile` packages are tested against a fake clock. Chunks 0, 1
 and 2a-2h are done except the visual baselines of 2g and 2h (they need the CI harness regenerated).
 3a and 3b's backend are done, and 3c (backups, including the disabled-blob store) is done; **the C0
-canvas board is the one thing blocking the 3b screens, and C3 (outbox op states) is written and
-waiting for review before 3d**.
+canvas board is the one thing blocking the 3b screens, and C3 (outbox op states) is reviewed, with
+six defects corrected (round 46), and waits only for the explicit go before 3d**.
 
 ## How to run a chunk
 
@@ -69,10 +69,12 @@ and `ivy doctor` warns when every target shares the data disk. Tests: `internal/
 
 **Next, in order:**
 
-1. **Waiting at C3** (see `docs/handoffs/2026-10-04-C3-outbox.md`): the outbox op states, durable
-   points, idempotency key and crash-after-ack story are written down. **3d does not start until this
-   is reviewed and given an explicit go.** After that go: **3d Outbox + write path**, then gate C4
-   (the crash-window failure-injection test).
+1. **C3 is reviewed; waiting for the explicit go** (see `docs/handoffs/2026-10-04-C3-outbox.md`):
+   the op states, durable points, idempotency key, the message identity (content key plus source
+   folder), the resolved-UID recovery and the crash-after-ack story are written down and corrected.
+   Moves and deletes get a confirmation modal before they are enqueued; undo is an inverse op. After
+   the go: **3d Outbox + write path**, then gate C4 (the crash-window failure-injection test, whose
+   case list is in the doc).
 2. **C0 canvas board** for the three 3b screens, whenever the operator is ready; the backend and API
    are already committed.
 3. **3e-3h** per the chunk plan below. 3h (the deploy track) is independent and can run at any point.
@@ -254,8 +256,8 @@ when a daily slot was missed, and the go-imap fork is at `v2.0.0-beta.8-ivy.3` (
 
 **Remaining for the operator:** the real-mailbox live check of the daily backup and `ivy restore`,
 and the potato numbers for the snapshot time.
-**Next stage: 3d** (after gate C3, the outbox op states); **next gate: C3**, writing down those
-states before coding 3d.
+**Next stage: 3d** (gate C3, the outbox op states, is written and reviewed; it starts on the
+operator's go); **next gate after that: C4**, the ack-then-kill failure-injection test.
 
 ## Operator actions still open
 

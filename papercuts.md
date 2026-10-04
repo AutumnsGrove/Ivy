@@ -903,3 +903,30 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   `TestTestConnectionsToTheFakeDoNotLeaveTimeWaitSockets` counted 40 lingering sockets after 80
   connections before the fix; loopback test dials (`Fetcher.dial` for insecure accounts and the
   mailworld client) now set `SO_LINGER` 0, and a whole run leaves ~144.
+
+## C3 outbox design review (2026-10-04)
+
+All six are defects in the design document, found before any code existed and fixed in
+`docs/handoffs/2026-10-04-C3-outbox.md`; qa-log round 46 has the operator's decisions.
+
+- **#79** · C3 draft · **bug (design)** · the idempotency key was unique over every row, so flag, unflag,
+  flag again made the third tap a no-op against the finished first op. Now a partial unique index over
+  `pending` and `in_flight` ops, with a C4 test for the sequence.
+- **#80** · C3 draft · **bug (design)** · "the mirror update and `in_flight → done` are one
+  transaction" cannot hold across `mirror.db` and `state.db`. The order is now ack, idempotent mirror
+  update, then `done`, and recovery re-applies the update.
+- **#81** · C3 draft · **bug (design)** · `source_folder_id` was only a hint, so with N8 duplicates (mail
+  sent to yourself, Bcc) an Archive could act on the Sent copy. It is part of the op's identity and
+  resolution looks only inside that folder.
+- **#82** · C3 draft · **bug (design)** · recovery by content key could be fooled by a pre-existing copy,
+  and a UIDVALIDITY change could aim a stored UID at a different message. The resolved
+  `(uidvalidity, uid)` is persisted at `in_flight`; recovery checks that message first and re-resolves by
+  Message-ID only after a UIDVALIDITY change, failing as `ambiguous` rather than guessing.
+- **#83** · C3 draft · **standards** · retry had no attempt, age or queue bound and every IMAP `NO` was
+  retried. Caps added (8 attempts, 24 h, 500 ops) with a response-code table.
+- **#84** · C3 draft · **standards** · `cancelled` was nearly unreachable, undo was undefined, and nothing
+  satisfied CLAUDE.md rule 6 for moves. Undo is an inverse op, `cancelled` means superseded, and moves
+  and deletes need a confirmation modal (operator decision).
+- Also corrected in the doc, not numbered: the `in_flight` definition, sharing the sync connection
+  (the outbox owns its own), `MOVE`/`UIDPLUS` requirements instead of emulation, and reusing sync's
+  `disableRef` so a hidden row keeps its blob-store copy.
