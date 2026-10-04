@@ -78,10 +78,14 @@ over 16 messages (plus 8 ack-then-drop seeds) and proves exactly-once; `mailworl
 moves/deletes, the optimistic overlay with rollback and the undo toast are all committed, and one
 outbox worker per account is wired into `ivy run`.
 
-**Left out of 3d deliberately (small UI entry points, not core):** a flag/junk control in the reader
-(the read API has no `flagged` field yet, so there is no state to toggle), the Empty-Trash UI (the
-API refuses expunge outside Trash; there is no trash screen), and a queue/history screen that uses
-the `retry`/`dismiss` endpoints. They ride with the reader/settings screens that need C0 or chunk 5.
+**Reader entry points are now in too** (`960cea5`): the read API carries a denormalised `flagged`
+column, so the list shows a star and the reader toggles it with no confirmation; the More menu moves
+mail to and from Junk through the same outbox; and `/settings/outbox` lists what is waiting with
+retry and dismiss. **The one 3d leftover is Empty Trash**: the gateway already refuses `expunge`
+outside the Trash role, but the nav's Trash link has no route and there is no folder-role view to
+empty, so the control rides with 3g's reading/folder work. (A one-off `empty-trash` endpoint that
+enqueues an `expunge` per message was sketched and dropped rather than add a second, weaker path to
+erasure.)
 
 **Next, in order:**
 

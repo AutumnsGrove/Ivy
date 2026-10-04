@@ -442,9 +442,16 @@ sends every action through `api.enqueueAction`, confirms moves and deletes with 
 the op is terminal, and offers the inverse op as Undo. `make check`'s Go and web halves, the mock
 Playwright suite (251 passed) and the race suite are green.
 
-**Still open inside 3d (documented in `next_steps.md`):** a flag/junk control in the reader (the read
-API has no `flagged` field yet), the Empty-Trash UI (the API refuses expunge outside Trash; there is
-no trash screen), and a queue/history screen for `retry`/`dismiss`.
+**The reader entry points followed** (`960cea5`): the read API gained a denormalised `flagged`
+column (mirror migration 11) so the list and reader show a star and toggle it without a
+confirmation; the reader's More menu moves mail to and from Junk through the same outbox; and
+`/settings/outbox` lists live and recent ops with retry and dismiss.
+
+**Still open inside 3d:** the Empty-Trash UI. The gateway already refuses `expunge` outside the
+Trash role, but there is no Trash/folder view to empty (the nav's Trash link has no route), so the
+control waits on the folder view that 3g's reading work brings — a one-off endpoint that enqueues an
+`expunge` per trashed message was sketched and deliberately not shipped rather than add a second,
+weaker path to erasure.
 
 ## Other history worth keeping
 
