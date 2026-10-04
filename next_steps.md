@@ -266,7 +266,9 @@ by the QRESYNC delta, an idle connection that ignored cancellation, no refetch w
 reopens; 300 extra convergence seeds on both variants were clean). Its three open items are fixed
 too (#61-#63: a folder-churn convergence mix, a 2-minute stall guard on IMAP commands, and a snapshot
 that holds 190 B per message instead of 775); still open: N21 (sync_state write after a cancelled
-pass) and N22 (a move mislabelled `server_removed` when a pass dies mid-way, needs a decision).
+pass). N22 is fixed too (#64): a disabled row is `pending_classification` until a completed pass
+settles it to `moved` or `server_removed`, so 3b must treat a pending row as not yet restorable and
+not yet counted by the mass-disable alert.
 **Remaining for the operator:** the real-mailbox/`ivy doctor` live check and potato numbers.
 **Next gate: C3**, writing down the outbox op states before coding 3d;
 3b's backend (disable/restore/purge) can start after C2 is cleared, its screens wait on C0.

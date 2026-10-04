@@ -322,11 +322,10 @@ func (f *Fetcher) fetchAll(ctx context.Context, c *session, acct Account) (Resul
 	}
 
 	var res Result
-	var disabled []disabledRef
 	seen := make(map[string]bool, len(snaps))
 	for _, snap := range snaps {
 		seen[snap.Name] = true
-		stored, skipped, err := f.reconcileFolder(ctx, c, acct, snap, &disabled)
+		stored, skipped, err := f.reconcileFolder(ctx, c, acct, snap)
 		if err != nil {
 			return res, err
 		}
@@ -334,13 +333,15 @@ func (f *Fetcher) fetchAll(ctx context.Context, c *session, acct Account) (Resul
 		res.Stored += stored
 		res.Skipped += skipped
 	}
-	if err := f.markGoneFolders(ctx, acct.ID, seen, &disabled); err != nil {
+	if err := f.markGoneFolders(ctx, acct.ID, seen); err != nil {
 		return res, err
 	}
-	// Move vs removal is decided once the whole account is known: a row disabled
-	// here whose Message-ID is still live elsewhere is a move (round 37). Doing it
-	// after the pass is what lets the QRESYNC delta skip a full-account scan.
-	if err := f.reclassifyDisabled(ctx, acct.ID, disabled); err != nil {
+	// Move vs removal is decided once the whole account is known: a disabled row
+	// whose Message-ID is still live elsewhere is a move (round 37). Settling every
+	// pending row, not only this pass's, is what makes a pass that died earlier
+	// harmless, and doing it after the pass is what lets the QRESYNC delta skip a
+	// full-account scan.
+	if err := f.dbs.SettlePendingDisabled(ctx, acct.ID); err != nil {
 		return res, err
 	}
 	return res, nil
@@ -473,7 +474,7 @@ func (f *Fetcher) snapshotFolder(ctx context.Context, c *session, acct Account, 
 // deleted: a row the server no longer holds in this folder is disabled, with
 // "moved" when its content still lives elsewhere on the server and
 // "server_removed" otherwise (rounds 37 and 38).
-func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account, snap folderSnapshot, disabled *[]disabledRef) (stored, skipped int, err error) {
+func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account, snap folderSnapshot) (stored, skipped int, err error) {
 	folder := store.Folder{
 		ID:            folderRowID(acct.ID, snap.Name),
 		AccountID:     acct.ID,
@@ -508,7 +509,7 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 	// A UIDVALIDITY change invalidates every UID the folder held. Disable what
 	// the old validity left behind and read the new validity as if it were new.
 	if !snap.Found || validityChanged {
-		if err := f.disableRefs(ctx, refs, disabled); err != nil {
+		if err := f.disableRefs(ctx, refs); err != nil {
 			return 0, 0, err
 		}
 		refs = nil
@@ -518,7 +519,7 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 	for _, ref := range refs {
 		if ref.UIDValidity != snap.UIDValidity {
 			// A leftover from an earlier validity that was never disabled.
-			if err := f.disableRef(ctx, ref, disabled); err != nil {
+			if err := f.disableRef(ctx, ref); err != nil {
 				return 0, 0, err
 			}
 			continue
@@ -534,7 +535,7 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 	var newUIDs []uint32
 	for uid, ref := range mirrored {
 		if snap.Delta && snap.Vanished.Contains(imap.UID(uid)) {
-			if err := f.disableRef(ctx, ref, disabled); err != nil {
+			if err := f.disableRef(ctx, ref); err != nil {
 				return 0, 0, err
 			}
 			continue
@@ -546,7 +547,7 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 				skipped++
 				continue
 			}
-			if err := f.disableRef(ctx, ref, disabled); err != nil {
+			if err := f.disableRef(ctx, ref); err != nil {
 				return 0, 0, err
 			}
 			continue
@@ -613,7 +614,7 @@ func reselect(c *session, name string) error {
 // markGoneFolders hides a mirror folder the server no longer lists and disables
 // its live messages, exactly as a vanished UID is handled. Rows, raw bytes and
 // spool files stay (CHUNK3-BRIEF.md 1).
-func (f *Fetcher) markGoneFolders(ctx context.Context, accountID string, seen map[string]bool, disabled *[]disabledRef) error {
+func (f *Fetcher) markGoneFolders(ctx context.Context, accountID string, seen map[string]bool) error {
 	folders, err := f.dbs.AllFolders(ctx, accountID)
 	if err != nil {
 		return err
@@ -626,7 +627,7 @@ func (f *Fetcher) markGoneFolders(ctx context.Context, accountID string, seen ma
 		if err != nil {
 			return err
 		}
-		if err := f.disableRefs(ctx, refs, disabled); err != nil {
+		if err := f.disableRefs(ctx, refs); err != nil {
 			return err
 		}
 		if err := f.dbs.SetFolderGone(ctx, folder.ID, f.now()); err != nil {
@@ -636,58 +637,22 @@ func (f *Fetcher) markGoneFolders(ctx context.Context, accountID string, seen ma
 	return nil
 }
 
-// disabledRef is a row this pass disabled before the whole account was known.
-type disabledRef struct {
-	id        string
-	messageID string
-}
-
-// reclassifyDisabled turns this pass's provisional server_removed rows into
-// moves where the Message-ID is still live elsewhere in the account. It runs
-// after every folder so a move is seen whichever folder was processed first
-// (round 37), which is what lets the QRESYNC delta skip a full-account scan.
-func (f *Fetcher) reclassifyDisabled(ctx context.Context, accountID string, disabled []disabledRef) error {
-	if len(disabled) == 0 {
-		return nil
-	}
-	live, err := f.dbs.LiveMessageIDs(ctx, accountID)
-	if err != nil {
-		return err
-	}
-	for _, d := range disabled {
-		if !live[d.messageID] {
-			continue
-		}
-		if err := f.dbs.SetMessageDisabledReason(ctx, d.id, disabledReasonMoved); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// Disabled reasons: a message that vanished from a folder but still exists
-// elsewhere on the server moved; one that is nowhere was removed.
-const (
-	disabledReasonMoved         = "moved"
-	disabledReasonServerRemoved = "server_removed"
-)
-
-func (f *Fetcher) disableRefs(ctx context.Context, refs []store.SyncMessageRef, disabled *[]disabledRef) error {
+func (f *Fetcher) disableRefs(ctx context.Context, refs []store.SyncMessageRef) error {
 	for _, ref := range refs {
-		if err := f.disableRef(ctx, ref, disabled); err != nil {
+		if err := f.disableRef(ctx, ref); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// disableRef hides a vanished row for now; reclassifyDisabled may relabel it a
-// move once the whole account has been read.
-func (f *Fetcher) disableRef(ctx context.Context, ref store.SyncMessageRef, disabled *[]disabledRef) error {
-	if err := f.dbs.DisableMessage(ctx, ref.ID, disabledReasonServerRemoved, f.now()); err != nil {
+// disableRef hides a vanished row as pending: whether it moved or was removed is
+// only known once the whole account has been read, and the label lives in the
+// row so a pass that dies first leaves it for the next one to settle.
+func (f *Fetcher) disableRef(ctx context.Context, ref store.SyncMessageRef) error {
+	if err := f.dbs.DisableMessage(ctx, ref.ID, store.DisabledPending, f.now()); err != nil {
 		return fmt.Errorf("disable message %s: %w", ref.ID, err)
 	}
-	*disabled = append(*disabled, disabledRef{id: ref.ID, messageID: ref.MessageID})
 	return nil
 }
 

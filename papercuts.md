@@ -721,14 +721,25 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   `server_removed` for good, because `reclassifyDisabled` runs only at the end of a successful pass.
   `BenchmarkSyncFullScanHeap` is kept as an upper bound (it includes the in-process fake's garbage).
   The potato figure is still an operator measurement; the laptop slope is what is recorded.
-- **N22 (open, pre-existing)** · `9f0f4ef` · `sync/sync.go` · a pass that fails after disabling rows
-  but before `reclassifyDisabled` (any error in a later folder's bodies) leaves those rows labelled
-  `server_removed` even when their content moved, and a later pass never relabels them because the
-  first disable wins. The window is the whole body phase, so it is the common failure case.
-  Recommendation: reclassify in a deferred step on every exit, and have a successful pass also relabel
-  earlier `server_removed` rows whose Message-ID is live (a set-based UPDATE, which also drops the
-  in-memory live-ID map). It changes what "moved" means for a message deleted and later re-received,
-  which is why it needs your decision.
+- **#64 (resolves N22)** · `9f0f4ef` · `sync/sync.go`, `store/messages.go` · **bug** · a pass that
+  died after disabling a source folder's row but before the destination's new copy was read left the
+  row labelled `server_removed` although the message had only moved, and no later pass relabelled it
+  (the first disable wins; the provisional list lived in memory and was lost). Reproduced by
+  `TestAnInterruptedPassStillCallsAMoveAMove` (the connection dropped after each of 1 to 40 commands,
+  both folder orders): 3 of the 80 drop points failed with `disabled as "server_removed", want
+  "moved"`. Fixed by keeping the provisional label in the row (`disabled_reason =
+  'pending_classification'`, `store.DisabledPending`) and settling every pending row in one
+  set-based UPDATE at the end of a pass that completed (`store.SettlePendingDisabled`: moved if the
+  same Message-ID is live in another row, else `server_removed`). This replaces the in-memory
+  `disabledRef` list, `LiveMessageIDs` and `SetMessageDisabledReason`, so the account's Message-IDs
+  are never loaded either. It deliberately does not relabel rows that were already settled, so a
+  message deleted and later re-received stays `server_removed`
+  (`TestAReceivedAgainMessageDoesNotMakeAnOldRemovalAMove`), which is why no decision was needed. For
+  3b: a row can read `pending_classification` between an interrupted pass and the next completed
+  one; treat it as not yet restorable and not yet counted by the mass-disable alert.
+  Two small behaviour notes: a message with no Message-ID is never called a move (the old map treated
+  every empty id as live), and the constants `DisabledPending/Moved/Removed` now live in `store`.
+  Convergence: the default suite and 100 extra seeds on each of the default and churn mixes pass.
 - **#62 (resolves N19)** · `9f0f4ef`, `2c6fe0a` · `sync/stall.go`, `sync/sync.go`, `sync/worker.go` ·
   **risk** · nothing but a cancelled `ctx` ended a command to a server that accepted the connection
   and then stopped answering. The premise of N19 was partly wrong: our go-imap fork already bounds a

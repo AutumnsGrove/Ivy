@@ -326,46 +326,38 @@ func (d *DBs) DisableMessage(ctx context.Context, id, reason string, at time.Tim
 	return nil
 }
 
-// SetMessageDisabledReason corrects the reason on a row this pass disabled,
-// once the whole account showed the content still lives elsewhere (a move).
-func (d *DBs) SetMessageDisabledReason(ctx context.Context, id, reason string) error {
-	res, err := d.Mirror.Write.ExecContext(ctx,
-		`UPDATE messages SET disabled_reason = ? WHERE id = ? AND disabled_at IS NOT NULL`, reason, id)
-	if err != nil {
-		return fmt.Errorf("set message %s disabled reason: %w", id, err)
+// Why a message is disabled. A message that vanished from a folder but still
+// exists elsewhere on the server moved; one that is nowhere was removed. Sync
+// cannot tell which until it has read the whole account, so it disables with
+// DisabledPending and settles every pending row at the end of a pass that
+// completed; a pass that dies in between leaves them pending for the next one.
+const (
+	DisabledPending = "pending_classification"
+	DisabledMoved   = "moved"
+	DisabledRemoved = "server_removed"
+)
+
+// SettlePendingDisabled gives every pending disabled row of an account its real
+// reason: moved when the same Message-ID is live in some other row, removed
+// otherwise. It runs inside the database, so the account's Message-IDs are never
+// held in memory.
+func (d *DBs) SettlePendingDisabled(ctx context.Context, accountID string) error {
+	if _, err := d.Mirror.Write.ExecContext(ctx, `
+		UPDATE messages SET disabled_reason = ?
+		WHERE account_id = ? AND disabled_at IS NOT NULL AND disabled_reason = ?
+		  AND message_id_hdr IN (
+			SELECT message_id_hdr FROM messages
+			WHERE account_id = ? AND disabled_at IS NULL AND message_id_hdr <> '')`,
+		DisabledMoved, accountID, DisabledPending, accountID); err != nil {
+		return fmt.Errorf("settle moved messages of %s: %w", accountID, err)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("set message %s disabled reason: %w", id, err)
-	}
-	if n == 0 {
-		return ErrNotFound
+	if _, err := d.Mirror.Write.ExecContext(ctx, `
+		UPDATE messages SET disabled_reason = ?
+		WHERE account_id = ? AND disabled_at IS NOT NULL AND disabled_reason = ?`,
+		DisabledRemoved, accountID, DisabledPending); err != nil {
+		return fmt.Errorf("settle removed messages of %s: %w", accountID, err)
 	}
 	return nil
-}
-
-// LiveMessageIDs returns the Message-IDs of every live (not disabled) row in an
-// account. The sync runner uses it after a pass to reclassify the rows it
-// disabled: a Message-ID still live in another folder is a move, not a removal.
-func (d *DBs) LiveMessageIDs(ctx context.Context, accountID string) (map[string]bool, error) {
-	rows, err := d.Mirror.Read.QueryContext(ctx,
-		`SELECT message_id_hdr FROM messages WHERE account_id = ? AND disabled_at IS NULL`, accountID)
-	if err != nil {
-		return nil, fmt.Errorf("live message ids for %s: %w", accountID, err)
-	}
-	defer func() { _ = rows.Close() }()
-	ids := map[string]bool{}
-	for rows.Next() {
-		var id sql.NullString
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("live message ids for %s: %w", accountID, err)
-		}
-		ids[id.String] = true
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("live message ids for %s: %w", accountID, err)
-	}
-	return ids, nil
 }
 
 // SetMessageFlags updates the sync-owned flag columns of a live message. It is
