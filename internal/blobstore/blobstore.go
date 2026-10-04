@@ -65,6 +65,17 @@ func (s *Store) Path(hash string) string {
 	return p
 }
 
+// RelPath is the sharded path relative to the store root, e.g. "ab/abcd...". It
+// is used to find the same blob under a backup target. A malformed hash is an
+// error, not a panic, because the hash may have come from the database.
+func (s *Store) RelPath(hash string) (string, error) {
+	p, err := s.pathFor(hash)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Rel(s.dir, p)
+}
+
 // Has reports whether the store already holds the given hash.
 func (s *Store) Has(hash string) bool {
 	p, err := s.pathFor(hash)

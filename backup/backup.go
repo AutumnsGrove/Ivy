@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -98,8 +99,10 @@ func (m *Manager) Run(ctx context.Context) (Result, error) {
 	if len(m.targets) == 0 {
 		return Result{}, errors.New("backup: no targets configured")
 	}
-	// Reconcile first, but a hidden blob that cannot be read must not block the
-	// state snapshot: it is reported at the end and retried on the next run.
+	// Reconcile and purge first, but neither must block the state snapshot: a
+	// hidden blob that cannot be read or a target that is offline is reported at
+	// the end and retried on the next run.
+	pendingErr := m.processPendingBlobDeletions(ctx)
 	reconcileErr := m.reconcileDisabled(ctx)
 
 	staging, err := os.MkdirTemp("", "ivy-backup-")
@@ -142,7 +145,7 @@ func (m *Manager) Run(ctx context.Context) (Result, error) {
 			errs = append(errs, fmt.Errorf("target %s: prune: %w", target, err))
 		}
 	}
-	return res, errors.Join(reconcileErr, errors.Join(errs...))
+	return res, errors.Join(pendingErr, reconcileErr, errors.Join(errs...))
 }
 
 // writeTarget copies the new snapshot and any new blobs to one target and
@@ -499,6 +502,81 @@ func copyFile(src, dst string) (err error) {
 	return out.Close()
 }
 
+// PurgeBlob erases one purged blob from the local store and every target, then
+// forgets the pending deletion once every target is clean. It returns whether a
+// retry is still needed (a target that is offline keeps the record) and any
+// error. If another hidden row still needs the bytes, nothing is deleted and the
+// stale pending record is cleared instead (N24).
+func PurgeBlob(ctx context.Context, dbs *store.DBs, targets []string, hash string) (bool, error) {
+	if hash == "" {
+		return false, nil
+	}
+	ref, err := dbs.BlobReferenced(ctx, hash)
+	if err != nil {
+		return true, err
+	}
+	if ref {
+		// Shared again since the purge was requested: keep the bytes and stop
+		// treating the deletion as pending.
+		return false, dbs.ClearPendingBlobDeletion(ctx, hash)
+	}
+	rel, err := dbs.Blobs.RelPath(hash)
+	if err != nil {
+		// A malformed hash cannot name a blob; drop the record rather than retry it
+		// forever.
+		return false, errors.Join(err, dbs.ClearPendingBlobDeletion(ctx, hash))
+	}
+
+	var (
+		errs    []error
+		pending bool
+	)
+	if err := os.Remove(filepath.Join(dbs.Blobs.Dir(), rel)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		pending = true
+		errs = append(errs, fmt.Errorf("remove local blob %s: %w", hash, err))
+	}
+	for _, target := range targets {
+		// A target directory that is not there is offline, not clean: keep the
+		// record so the erasure is retried when it is back.
+		switch _, err := os.Stat(target); {
+		case errors.Is(err, fs.ErrNotExist):
+			pending = true
+			continue
+		case err != nil:
+			pending = true
+			errs = append(errs, fmt.Errorf("target %s: %w", target, err))
+			continue
+		}
+		if err := os.Remove(filepath.Join(target, blobsDir, rel)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			pending = true
+			errs = append(errs, fmt.Errorf("remove blob from %s: %w", target, err))
+		}
+	}
+	if !pending {
+		if err := dbs.ClearPendingBlobDeletion(ctx, hash); err != nil {
+			return true, errors.Join(append(errs, err)...)
+		}
+	}
+	return pending, errors.Join(errs...)
+}
+
+// processPendingBlobDeletions retries every blob a purge still has to erase from
+// the targets. A target that is offline leaves its hash pending for the next
+// run, so the erasure survives restarts and a restore.
+func (m *Manager) processPendingBlobDeletions(ctx context.Context) error {
+	hashes, err := m.dbs.PendingBlobDeletions(ctx)
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, hash := range hashes {
+		if _, err := PurgeBlob(ctx, m.dbs, m.targets, hash); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // mirrorTree copies every regular file under src that dst does not already have.
 // Blobs are content-addressed, so an existing file is by definition the same
 // bytes and is left untouched.
@@ -527,7 +605,15 @@ func mirrorTree(ctx context.Context, src, dst string) error {
 		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 			return err
 		}
-		return copyFile(path, target)
+		if err := copyFile(path, target); err != nil {
+			// A source that vanished between the walk and the copy is a concurrent
+			// purge; the target simply does not get that blob.
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		return nil
 	})
 	if errors.Is(err, os.ErrNotExist) {
 		return nil

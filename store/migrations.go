@@ -404,6 +404,20 @@ var stateMigrations = []migration{
 			)`,
 		},
 	},
+	{
+		version: 3,
+		statements: []string{
+			// Blobs a purge wants erased from every backup target. It is locally owned
+			// state (backed up), so an offline target is retried after a restore rather
+			// than losing the erasure (N24). The hash is primary-keyed, so purging two
+			// rows that share a blob records it once; the row is cleared only once every
+			// target is clean.
+			`CREATE TABLE pending_blob_deletions (
+				content_hash TEXT PRIMARY KEY,
+				recorded_at  TEXT NOT NULL DEFAULT (datetime('now'))
+			)`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state

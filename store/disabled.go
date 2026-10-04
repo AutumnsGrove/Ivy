@@ -102,43 +102,84 @@ func (d *DBs) RestoreAccountDisabled(ctx context.Context, accountID string) (int
 	return int(n), nil
 }
 
+// PurgedMessage is the outcome of a purge. RawPath is the spool file to unlink
+// (empty when the message had none). BlobHash is the blob store copy; when
+// BlobUnreferenced is true no other hidden row shares those bytes, so the caller
+// erases the blob locally and from every backup target (N24).
+type PurgedMessage struct {
+	RawPath          string
+	BlobHash         string
+	BlobUnreferenced bool
+}
+
 // PurgeMessage is the only erasure Ivy has: it deletes one hidden message's row
-// and attachment rows and returns its spool path (empty when it had none) so the
-// caller can unlink the file. A live row is refused with ErrNotDisabled, so the
-// reader's ordinary delete can never be wired to it. Deleting the row before the
-// file means a crash leaves an orphan the spool sweep collects, never a row
-// pointing at a file that is gone.
-func (d *DBs) PurgeMessage(ctx context.Context, id string) (string, error) {
+// and attachment rows and reports what else the caller must erase. A live row is
+// refused with ErrNotDisabled, so the reader's ordinary delete can never be
+// wired to it. Deleting the row before the file means a crash leaves an orphan
+// the spool sweep collects, never a row pointing at a file that is gone. The
+// pending blob deletion is recorded before the row goes, so a crash in between
+// still leaves the erasure to be retried (N24).
+func (d *DBs) PurgeMessage(ctx context.Context, id string) (PurgedMessage, error) {
+	var (
+		rawPath, blobHash string
+		disabledAt        sql.NullString
+	)
+	err := d.Mirror.Read.QueryRowContext(ctx,
+		`SELECT COALESCE(raw_path, ''), COALESCE(disabled_blob, ''), disabled_at FROM messages WHERE id = ?`,
+		id).Scan(&rawPath, &blobHash, &disabledAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return PurgedMessage{}, ErrNotFound
+	}
+	if err != nil {
+		return PurgedMessage{}, fmt.Errorf("purge message %s: %w", id, err)
+	}
+	if !disabledAt.Valid {
+		return PurgedMessage{}, ErrNotDisabled
+	}
+
+	// Decide whether the blob outlives this row, and record the deletion before
+	// the row is removed. If the delete then fails the record is cleared again.
+	unreferenced := false
+	if blobHash != "" {
+		var refs int
+		if err := d.Mirror.Read.QueryRowContext(ctx,
+			`SELECT count(*) FROM messages WHERE disabled_blob = ? AND id <> ?`, blobHash, id).Scan(&refs); err != nil {
+			return PurgedMessage{}, fmt.Errorf("purge message %s: count blob refs: %w", id, err)
+		}
+		unreferenced = refs == 0
+	}
+	if unreferenced {
+		if err := d.RecordPendingBlobDeletion(ctx, blobHash); err != nil {
+			return PurgedMessage{}, err
+		}
+	}
+
+	if err := d.deleteMessageRows(ctx, id); err != nil {
+		if unreferenced {
+			_ = d.ClearPendingBlobDeletion(ctx, blobHash)
+		}
+		return PurgedMessage{}, err
+	}
+	return PurgedMessage{RawPath: rawPath, BlobHash: blobHash, BlobUnreferenced: unreferenced}, nil
+}
+
+// deleteMessageRows removes a message's attachment rows and its row in one
+// transaction.
+func (d *DBs) deleteMessageRows(ctx context.Context, id string) error {
 	tx, err := d.Mirror.Write.BeginTx(ctx, nil)
 	if err != nil {
-		return "", fmt.Errorf("purge message %s: %w", id, err)
+		return fmt.Errorf("purge message %s: %w", id, err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	var (
-		rawPath    sql.NullString
-		disabledAt sql.NullString
-	)
-	err = tx.QueryRowContext(ctx,
-		`SELECT raw_path, disabled_at FROM messages WHERE id = ?`, id).Scan(&rawPath, &disabledAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", ErrNotFound
-	}
-	if err != nil {
-		return "", fmt.Errorf("purge message %s: %w", id, err)
-	}
-	if !disabledAt.Valid {
-		return "", ErrNotDisabled
-	}
-
 	if _, err := tx.ExecContext(ctx, `DELETE FROM attachments WHERE message_id = ?`, id); err != nil {
-		return "", fmt.Errorf("purge message %s: delete attachments: %w", id, err)
+		return fmt.Errorf("purge message %s: delete attachments: %w", id, err)
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM messages WHERE id = ?`, id); err != nil {
-		return "", fmt.Errorf("purge message %s: delete row: %w", id, err)
+		return fmt.Errorf("purge message %s: delete row: %w", id, err)
 	}
 	if err := tx.Commit(); err != nil {
-		return "", fmt.Errorf("purge message %s: %w", id, err)
+		return fmt.Errorf("purge message %s: %w", id, err)
 	}
-	return rawPath.String, nil
+	return nil
 }

@@ -502,6 +502,193 @@ func TestRunStillSnapshotsWhenADisabledBlobIsUnreadable(t *testing.T) {
 	}
 }
 
+// A purged blob is erased locally and from every target, and the pending record
+// is cleared once they are all clean.
+func TestPurgeBlobErasesLocalAndEveryTarget(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openStore(t, t.TempDir())
+	defer dbs.Close()
+	targetA := filepath.Join(t.TempDir(), "a")
+	targetB := filepath.Join(t.TempDir(), "b")
+	now := baseTime
+	m := New(dbs, []string{targetA, targetB}, WithClock(clock(t, &now)))
+
+	hash, _, err := dbs.Blobs.Put(ctx, strings.NewReader("purge me"))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if _, err := m.Run(ctx); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if err := dbs.RecordPendingBlobDeletion(ctx, hash); err != nil {
+		t.Fatalf("RecordPendingBlobDeletion: %v", err)
+	}
+
+	pending, err := PurgeBlob(ctx, dbs, m.targets, hash)
+	if err != nil {
+		t.Fatalf("PurgeBlob: %v", err)
+	}
+	if pending {
+		t.Error("PurgeBlob reported a retry though every target was reachable")
+	}
+	if dbs.Blobs.Has(hash) {
+		t.Error("the local blob survived the purge")
+	}
+	for _, target := range []string{targetA, targetB} {
+		if _, err := os.Stat(targetBlobPath(target, hash)); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("blob still in target %s (err %v)", target, err)
+		}
+	}
+	if got, err := dbs.PendingBlobDeletions(ctx); err != nil || len(got) != 0 {
+		t.Errorf("pending after purge = %v (%v), want none", got, err)
+	}
+}
+
+// A target that is not there is offline, not clean: the record stays and the
+// erasure is retried when the target is back.
+func TestPurgeBlobRetriesAnOfflineTarget(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openStore(t, t.TempDir())
+	defer dbs.Close()
+	targetA := filepath.Join(t.TempDir(), "a")
+	targetB := filepath.Join(t.TempDir(), "b")
+	now := baseTime
+	m := New(dbs, []string{targetA, targetB}, WithClock(clock(t, &now)))
+
+	hash, _, err := dbs.Blobs.Put(ctx, strings.NewReader("purge me"))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if _, err := m.Run(ctx); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if err := dbs.RecordPendingBlobDeletion(ctx, hash); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	if err := os.RemoveAll(targetB); err != nil {
+		t.Fatalf("unmount target B: %v", err)
+	}
+
+	pending, err := PurgeBlob(ctx, dbs, m.targets, hash)
+	if err != nil {
+		t.Fatalf("PurgeBlob with an offline target: %v", err)
+	}
+	if !pending {
+		t.Error("PurgeBlob said the erasure was clean with a target offline")
+	}
+	if _, err := os.Stat(targetBlobPath(targetA, hash)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("reachable target kept the blob (err %v)", err)
+	}
+	if got, err := dbs.PendingBlobDeletions(ctx); err != nil || len(got) != 1 {
+		t.Fatalf("pending = %v (%v), want the hash kept", got, err)
+	}
+
+	// Bring the target back with the blob on it and retry.
+	if err := os.MkdirAll(filepath.Dir(targetBlobPath(targetB, hash)), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(targetBlobPath(targetB, hash), []byte("purge me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pending, err = PurgeBlob(ctx, dbs, m.targets, hash)
+	if err != nil {
+		t.Fatalf("PurgeBlob after remount: %v", err)
+	}
+	if pending {
+		t.Error("PurgeBlob still pending after the target returned")
+	}
+	if _, err := os.Stat(targetBlobPath(targetB, hash)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("remounted target kept the blob (err %v)", err)
+	}
+	if got, err := dbs.PendingBlobDeletions(ctx); err != nil || len(got) != 0 {
+		t.Errorf("pending after retry = %v (%v), want none", got, err)
+	}
+}
+
+// If another hidden row still needs the bytes, the purge must keep them and
+// forget the stale record rather than evict a shared blob.
+func TestPurgeBlobKeepsASharedBlob(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openStore(t, t.TempDir())
+	defer dbs.Close()
+	target := filepath.Join(t.TempDir(), "a")
+	now := baseTime
+	m := New(dbs, []string{target}, WithClock(clock(t, &now)))
+
+	hash, _, err := dbs.Blobs.Put(ctx, strings.NewReader("shared"))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	seedDisabledRow(t, dbs, "acct-1", "folder-1", "m1", []byte("shared"))
+	if _, err := dbs.Mirror.Write.ExecContext(ctx,
+		`UPDATE messages SET disabled_blob = ? WHERE id = 'm1'`, hash); err != nil {
+		t.Fatalf("point the row at the blob: %v", err)
+	}
+	if err := dbs.RecordPendingBlobDeletion(ctx, hash); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	pending, err := PurgeBlob(ctx, dbs, m.targets, hash)
+	if err != nil {
+		t.Fatalf("PurgeBlob: %v", err)
+	}
+	if pending {
+		t.Error("PurgeBlob reported a retry for a still-referenced blob")
+	}
+	if !dbs.Blobs.Has(hash) {
+		t.Error("a shared blob was evicted")
+	}
+	if got, err := dbs.PendingBlobDeletions(ctx); err != nil || len(got) != 0 {
+		t.Errorf("pending = %v (%v), want the stale record cleared", got, err)
+	}
+}
+
+// A daily run erases anything a purge left pending, without being asked.
+func TestRunProcessesPendingBlobDeletions(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openStore(t, t.TempDir())
+	defer dbs.Close()
+	target := filepath.Join(t.TempDir(), "a")
+	now := baseTime
+	m := New(dbs, []string{target}, WithClock(clock(t, &now)))
+
+	hash, _, err := dbs.Blobs.Put(ctx, strings.NewReader("leave me pending"))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if _, err := m.Run(ctx); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+	if err := dbs.RecordPendingBlobDeletion(ctx, hash); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	now = baseTime.AddDate(0, 0, 1) // a distinct snapshot name for the second run
+	if _, err := m.Run(ctx); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	if dbs.Blobs.Has(hash) {
+		t.Error("the local blob survived the run's pending cleanup")
+	}
+	if _, err := os.Stat(targetBlobPath(target, hash)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the target blob survived the run's pending cleanup (err %v)", err)
+	}
+	if got, err := dbs.PendingBlobDeletions(ctx); err != nil || len(got) != 0 {
+		t.Errorf("pending after run = %v (%v), want none", got, err)
+	}
+	if n := len(snapshotFiles(t, target)); n != 2 {
+		t.Errorf("snapshots = %d, want 2 (the run still snapshots)", n)
+	}
+}
+
+func targetBlobPath(target, hash string) string {
+	return filepath.Join(target, blobsDir, hash[:2], hash)
+}
+
 func seedDisabledRow(t *testing.T, dbs *store.DBs, accountID, folderID, id string, raw []byte) {
 	t.Helper()
 	ctx := context.Background()

@@ -146,12 +146,12 @@ func TestPurgeMessageErasesRowAndAttachments(t *testing.T) {
 		t.Fatalf("seed attachments: %v", err)
 	}
 
-	rawPath, err := dbs.PurgeMessage(ctx, "m1")
+	purged, err := dbs.PurgeMessage(ctx, "m1")
 	if err != nil {
 		t.Fatalf("PurgeMessage: %v", err)
 	}
-	if rawPath != "spool/folder-1/1.eml" {
-		t.Errorf("rawPath = %q, want the spool path", rawPath)
+	if purged.RawPath != "spool/folder-1/1.eml" {
+		t.Errorf("rawPath = %q, want the spool path", purged.RawPath)
 	}
 	if _, err := dbs.GetMessage(ctx, "m1"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("purged message still readable: %v", err)

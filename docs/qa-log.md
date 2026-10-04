@@ -1088,3 +1088,35 @@ One bug in the stage was found by the real-binary smoke slice, not the unit test
 field and the spawned `ivy` reloads the YAML it wrote (`papercuts.md` #67). Fixed in `BuildConfig`,
 with `TestWrittenConfigReloads` pinning the round trip. Recorded because it is the reason the
 backend stage still runs `make smoke`.
+
+## Round 44 — N24: purge erases everywhere (2026-10-04, agent; two operator answers)
+
+N24 was the open design question 3c raised: `PurgeMessage` deleted the row and spool but left the
+content-addressed blob, so "Purge forever" was not true once a backup had a copy.
+
+- **Q: what should purge guarantee?** (operator) **Erase everywhere.** The blob is deleted from the
+  local store and from every configured backup target, but only when no other hidden row shares the
+  bytes (reference counting; N8 means identical mail can share a hash). A shared blob is kept.
+- **Q: what about an offline or unmounted target?** (operator) **Durable retry.** The erasure is
+  recorded in `state.db` (`pending_blob_deletions`, state migration 3) and the daily backup retries
+  it until every target is clean. state.db is backed up, so the record also survives a restore. An
+  absent target directory is treated as offline, not clean.
+
+Design notes, so the next reader does not have to reconstruct them:
+
+- **`PurgeMessage` returns `PurgedMessage{RawPath, BlobHash, BlobUnreferenced}`.** It records the
+  pending deletion **before** deleting the row, so a crash in between leaves the erasure to be
+  retried; if the delete fails the record is cleared again. The last-reference check counts rows
+  other than the one being purged.
+- **`backup.PurgeBlob`** removes the blob from the local store and every target, clearing the
+  record only when the erasure is complete. It refuses to evict bytes another hidden row still
+  references and clears the then-stale record. `backup.Run` calls `processPendingBlobDeletions`
+  before the snapshot, so a purge retries without being asked and a target that is back online is
+  cleaned on the next daily run. `mirrorTree` skips a source blob that vanished (a concurrent
+  purge), so a backup never fails over it.
+- **The gateway** wires the target list through `WithBackupTargets` (set by `ivy run` from the
+  config) and erases immediately after a purge, for the common case where every target is reachable.
+  A failure or a pending target is logged, never fatal: the row is already gone and the record is
+  durable.
+- **Purge is still single-message only** (`qa-log.md` round 42), so this cannot erase a mailbox by
+  accident; each erase is a deliberate tap.

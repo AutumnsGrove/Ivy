@@ -105,7 +105,7 @@ func runCmd(configPath *string, version string) *cobra.Command {
 			hub := events.New()
 			srv := &http.Server{
 				Addr:              cfg.Listen,
-				Handler:           gateway.New(dbs, version, webui.FS).WithEvents(hub).WithAllowedHosts(cfg.HostAllowList()).Handler(),
+				Handler:           gateway.New(dbs, version, webui.FS).WithEvents(hub).WithAllowedHosts(cfg.HostAllowList()).WithBackupTargets(cfg.BackupTargets()).Handler(),
 				ReadHeaderTimeout: 10 * time.Second,
 				IdleTimeout:       2 * time.Minute,
 			}

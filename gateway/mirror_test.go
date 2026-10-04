@@ -140,6 +140,83 @@ func TestPurgeMessageEndpoint(t *testing.T) {
 
 // Restore changes what every open screen shows, so it must publish the same
 // refetch hint a sync does.
+// Purge is the one erasure: the row, its attachments and its spool file all go,
+// and the blob store copy goes too when nothing else needs it (N24).
+func TestPurgeErasesTheBlobLocallyAndFromTargets(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	target := filepath.Join(t.TempDir(), "backup")
+	srv, dbs := newConfiguredServer(t, func(s *Server) { s.WithBackupTargets([]string{target}) })
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox})
+
+	hash, _, err := dbs.Blobs.Put(ctx, strings.NewReader("raw bytes"))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	m := disabledInboxMessage("m1", "acct-1", "inbox-1", store.DisabledRemoved)
+	m.DisabledBlob = hash
+	mustMessage(t, dbs, m)
+	// The daily backup has already mirrored the blob to the target.
+	targetBlob := filepath.Join(target, "blobs", hash[:2], hash)
+	if err := os.MkdirAll(filepath.Dir(targetBlob), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(targetBlob, []byte("raw bytes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if code := doJSON(t, http.MethodDelete, srv.URL+"/api/v1/mirror/messages/m1", nil, nil, nil); code != http.StatusNoContent {
+		t.Fatalf("purge status = %d, want 204", code)
+	}
+	if dbs.Blobs.Has(hash) {
+		t.Error("the local blob survived the purge")
+	}
+	if _, err := os.Stat(targetBlob); !os.IsNotExist(err) {
+		t.Errorf("the target blob survived the purge (err %v)", err)
+	}
+	if pending, err := dbs.PendingBlobDeletions(ctx); err != nil || len(pending) != 0 {
+		t.Errorf("pending after purge = %v (%v), want none", pending, err)
+	}
+}
+
+// Two hidden rows that share bytes keep the blob when one is purged; the last
+// one erases it.
+func TestPurgeKeepsASharedBlob(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	srv, dbs := newSeededServer(t)
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox})
+
+	hash, _, err := dbs.Blobs.Put(ctx, strings.NewReader("shared bytes"))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	for _, id := range []string{"m1", "m2"} {
+		m := disabledInboxMessage(id, "acct-1", "inbox-1", store.DisabledRemoved)
+		m.DisabledBlob = hash
+		mustMessage(t, dbs, m)
+	}
+
+	if code := doJSON(t, http.MethodDelete, srv.URL+"/api/v1/mirror/messages/m1", nil, nil, nil); code != http.StatusNoContent {
+		t.Fatalf("first purge status = %d, want 204", code)
+	}
+	if !dbs.Blobs.Has(hash) {
+		t.Error("purging one of two rows evicted the shared blob")
+	}
+	if pending, err := dbs.PendingBlobDeletions(ctx); err != nil || len(pending) != 0 {
+		t.Errorf("pending after first purge = %v (%v), want none", pending, err)
+	}
+
+	if code := doJSON(t, http.MethodDelete, srv.URL+"/api/v1/mirror/messages/m2", nil, nil, nil); code != http.StatusNoContent {
+		t.Fatalf("second purge status = %d, want 204", code)
+	}
+	if dbs.Blobs.Has(hash) {
+		t.Error("the last reference left the blob behind")
+	}
+}
+
 func TestRestoreMessagePublishesAHint(t *testing.T) {
 	t.Parallel()
 	srv, _ := newEventsServer(t, func(s *Server) {

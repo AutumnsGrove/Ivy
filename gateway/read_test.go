@@ -26,13 +26,23 @@ var testNow = time.Date(2026, 10, 2, 15, 30, 0, 0, time.UTC)
 // clock. It returns the store so a test can seed mail directly, the way sync
 // would.
 func newSeededServer(t *testing.T) (*httptest.Server, *store.DBs) {
+	return newConfiguredServer(t, nil)
+}
+
+// newConfiguredServer is newSeededServer with a hook to set options on the
+// Server before it is wrapped in the handler.
+func newConfiguredServer(t *testing.T, configure func(*Server)) (*httptest.Server, *store.DBs) {
 	t.Helper()
 	dbs, err := store.Open(context.Background(), t.TempDir())
 	if err != nil {
 		t.Fatalf("store.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = dbs.Close() })
-	srv := httptest.NewServer(New(dbs, "test-version", testStaticFS()).Handler())
+	s := New(dbs, "test-version", testStaticFS())
+	if configure != nil {
+		configure(s)
+	}
+	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
 	return srv, dbs
 }

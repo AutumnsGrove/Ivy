@@ -791,14 +791,18 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
 
 ## 3c backups (agent, 2026-10-04)
 
-- **N24 (open, decision)** · `store/disabled.go`, `backup/` · **design** · `PurgeMessage` erases the
-  row, its attachment rows and its spool file but **leaves the blob store copy**. The store is
-  append-only and content-addressed, and one blob can back several rows (N8: identical Message-IDs
-  share a content key), so deleting it on one row's purge could break another row that still points
-  at the same hash. "Purge forever" therefore does not remove the only remaining bytes. Decide
-  before purge is exposed in the UI: either reference-counted blob deletion on purge, or rename the
-  action so it does not promise more than it does. The simple fix is a `SELECT count(*) FROM
-  messages WHERE disabled_blob = ?` before unlinking, inside the purge transaction.
+- **N24 (resolved 2026-10-04, operator).** Purge now erases everywhere: when no other hidden row
+  shares the bytes (reference-counted), `PurgeMessage` records the blob hash in `state.db`
+  (`pending_blob_deletions`, state migration 3) before it deletes the row, and the gateway erases the
+  local blob and the copy in every backup target. A target that is offline is not treated as clean:
+  the record stays and the daily backup retries it (`backup.PurgeBlob`, `processPendingBlobDeletions`),
+  so the erasure also survives a restore. A blob another row still needs is never evicted, and the
+  stale record is cleared. Tests: `store/blobdeletion_test.go`, `backup/backup_test.go`
+  (`TestPurgeBlobErasesLocalAndEveryTarget`, `TestPurgeBlobRetriesAnOfflineTarget`,
+  `TestPurgeBlobKeepsASharedBlob`, `TestRunProcessesPendingBlobDeletions`),
+  `gateway/mirror_test.go`. The crash window is closed by recording the pending deletion before the
+  row goes: if the delete then fails it is cleared, and if a crash leaves a still-referenced blob the
+  backup's reference check skips it until the last row is purged.
 - **#66** · `c510612..e8d8c6f` · `sync/sync.go` · **risk** · the disable path copies a message's
   bytes to the blob store through `MessageRawReader`, which opens the spool file while the mirror's
   read cursor (for the reference list) is done and the write connection is free; the copy is bounded

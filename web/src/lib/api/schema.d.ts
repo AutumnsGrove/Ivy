@@ -362,7 +362,7 @@ export interface paths {
         post?: never;
         /**
          * Permanently erase one hidden message
-         * @description The only erasure Ivy has. It deletes the row and its attachments and unlinks the spool file. A live message is refused, so the reader's ordinary delete can never reach it.
+         * @description The only erasure Ivy has. It deletes the row and its attachments, unlinks the spool file, and erases the message's blob from the local store and every backup target when no other hidden message shares those bytes. An offline backup target keeps the deletion pending and the daily backup retries it. A live message is refused, so the reader's ordinary delete can never reach it.
          */
         delete: operations["purgeMessage"];
         options?: never;

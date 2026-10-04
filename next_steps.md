@@ -5,7 +5,7 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-04 (round 43: 3c backups are done). The full Go suite is `-race` green and the
+last updated: 2026-10-04 (round 44: N24 fixed). The full Go suite is `-race` green and the
 new `backup`, `blobstore` and `lockfile` packages are tested against a fake clock. Chunks 0, 1 and
 2a-2h are done except the visual baselines of 2g and 2h (they need the CI harness regenerated).
 3a and 3b's backend are done, and 3c (backups, including the disabled-blob store) is done; **the C0
@@ -99,9 +99,6 @@ Grouped by where it lands. Each item names its source so it can be found again.
   potato; the ratio is the claim, not the milliseconds.
 - **N8** identical `Message-ID`s share a content key, and so tags and verdicts; needs a threat-model
   line before chunk 3.
-- **N24** purge leaves the append-only blob-store copy of a hidden message, so "purge forever" does
-  not remove the last bytes when another row may share the hash; decide reference-counted deletion or
-  rename the action before the UI exposes it.
 - **N3** the fake `/systemone` has no `score` questions (chunk 5).
 - The thread-subject fallback groups unrelated automated mail with generic subjects ("Your
   receipt"); revisit when newsletters and receipts have their own views.
@@ -245,8 +242,9 @@ in `api/openapi.yaml`.
 
 **3c is done** (round 43: `internal/blobstore`, `internal/lockfile`, `backup/`, mirror migration 10,
 the sync disable-path copy, `ivy backup`/`restore`, the daily scheduler, the `doctor` warning, all in
-`docs/BUILD-LOG.md`). The decisions are in qa-log round 43; N24 (purge and the append-only blob) is
-the one open question it raised.
+`docs/BUILD-LOG.md`). The decisions are in qa-log round 43; **N24 is fixed** (round 44): purge now
+erases the blob locally and from every backup target when no row shares it, with a durable
+`pending_blob_deletions` retry for an offline target.
 
 **Remaining for the operator:** the real-mailbox live check of the daily backup and `ivy restore`,
 and the potato numbers for the snapshot time.

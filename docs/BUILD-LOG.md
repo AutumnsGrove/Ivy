@@ -389,8 +389,15 @@ snapshot (15 days kept, never below the 10 newest). `ivy backup` runs one now, `
 one daily at `backup.at` (default 03:00) on an owned goroutine, and `ivy restore <snapshot>`
 replaces `state.db` in place and merges the blobs stored beside the snapshot. A data-directory flock
 (`ivy.lock`, `internal/lockfile`) is held by `ivy run` so restore can refuse while a server is up;
-`ivy doctor` warns when every target shares the data directory's device. Purge keeps the blob: the
-store is append-only and one blob may back several rows (open question in `papercuts.md`).
+`ivy doctor` warns when every target shares the data directory's device.
+
+**N24 (fixed the same day):** purge now erases everywhere. `PurgeMessage` records the blob hash in
+`state.db` (`pending_blob_deletions`, state migration 3) when no other hidden row shares the bytes,
+and `backup.PurgeBlob` erases the local blob and the copy in every target, clearing the record only
+when the erasure is complete. A target that is offline keeps the record and the daily backup retries
+it, so the erasure survives restarts and a restore. A blob another row still references is never
+evicted. The gateway erases immediately through `WithBackupTargets`; a pending target is logged, not
+fatal. `mirrorTree` skips a source blob that a concurrent purge removed.
 
 One self-found bug in the stage (`papercuts.md` #67): the new strict `backup.at` check broke the
 dev stack, because `devstack.BuildConfig` built a `Config` without the field and the CLI reloads the

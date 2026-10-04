@@ -27,6 +27,17 @@ type Server struct {
 	// events is the hint hub behind /api/v1/events; nil means no stream is served.
 	events    *events.Hub
 	heartbeat time.Duration
+	// backupTargets are the folders a purge must erase a blob from as well, so
+	// "purge forever" includes the off-device copies (N24). Empty is fine for a
+	// server with no backup configured.
+	backupTargets []string
+}
+
+// WithBackupTargets sets the folders a purge erases blobs from in addition to
+// the local store.
+func (s *Server) WithBackupTargets(targets []string) *Server {
+	s.backupTargets = targets
+	return s
 }
 
 // WithAllowedHosts sets the host names the API answers to besides loopback

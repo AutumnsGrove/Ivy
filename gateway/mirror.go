@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/AutumnsGrove/Ivy/api"
+	"github.com/AutumnsGrove/Ivy/backup"
 	"github.com/AutumnsGrove/Ivy/events"
 	"github.com/AutumnsGrove/Ivy/store"
 )
@@ -49,9 +50,12 @@ func (s *Server) handleRestoreAccountHidden(w http.ResponseWriter, r *http.Reque
 
 // handlePurgeMessage permanently erases one hidden message. It is the only
 // erasure Ivy has, so a message that is not hidden is refused rather than
-// destroyed: the reader's ordinary delete can never reach this.
+// destroyed: the reader's ordinary delete can never reach this. The blob store
+// copy is erased too, locally and from every backup target, when no other hidden
+// row shares it; a target that is offline leaves the deletion pending for the
+// next backup run (N24).
 func (s *Server) handlePurgeMessage(w http.ResponseWriter, r *http.Request) {
-	rawPath, err := s.dbs.PurgeMessage(r.Context(), r.PathValue("id"))
+	purged, err := s.dbs.PurgeMessage(r.Context(), r.PathValue("id"))
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		s.notFound(w, r, "message")
@@ -65,8 +69,20 @@ func (s *Server) handlePurgeMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	// The row is already gone, so an unlink failure leaves an orphan the spool
 	// sweep collects; it must not fail the request.
-	if err := s.removeSpool(rawPath); err != nil {
+	if err := s.removeSpool(purged.RawPath); err != nil {
 		slog.WarnContext(r.Context(), "gateway: cannot unlink the purged spool file", "error", err)
+	}
+	if purged.BlobUnreferenced && purged.BlobHash != "" {
+		// The bytes are no longer needed here. Erase them everywhere now; an
+		// offline target keeps the record and the daily backup retries it.
+		pending, err := backup.PurgeBlob(r.Context(), s.dbs, s.backupTargets, purged.BlobHash)
+		if err != nil {
+			slog.WarnContext(r.Context(), "gateway: blob purge needs a retry",
+				"hash", purged.BlobHash, "error", err)
+		} else if pending {
+			slog.InfoContext(r.Context(), "gateway: blob purge waiting on an offline backup target",
+				"hash", purged.BlobHash)
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 	s.hintMessageChanged("")
