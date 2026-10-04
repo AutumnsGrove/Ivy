@@ -117,9 +117,12 @@ baselines remain, with the 2g ones. What it delivered:
   (`make dev` from a clean checkout with the default `--llm live`, the rails, hot reload).
 
 **4. Chunk 3 is split into eight stages (round 36; the plan is in "The chunk plan" below).** 3a
-(sync core) is next once 2h and the gating spikes (`docs/SPIKES.md`) are confirmed; 3h (the deploy
-track: `Dockerfile`, GHCR publish, `ivy update`) is pulled forward and runs in parallel because it
-touches no mail code.
+(sync core) is next: 2h is done and every spike has run (S1 to S10, S9 moot; `docs/SPIKES.md`,
+write-ups in `docs/spikes/`, qa-log round 30), so nothing gates it. Known partial spikes, none of
+which block 3a: S1 send-as scope and Resend DMARC (taken on the operator's report), S5 iPad over
+HTTPS only (no iPhone, plain HTTP or `image/heic`), S6 OOXML not run, S4 and S10 on synthetic data.
+3h (the deploy track: `Dockerfile`, GHCR publish, `ivy update`) is pulled forward and runs in
+parallel because it touches no mail code.
 
 ## Backlog
 
