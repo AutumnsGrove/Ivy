@@ -474,6 +474,34 @@ func TestDecompressRejectsAnOversizedSnapshot(t *testing.T) {
 	}
 }
 
+// A hidden message whose bytes cannot be read is reported but does not stop the
+// state.db snapshot or its target: the bytes are retried on the next run.
+func TestRunStillSnapshotsWhenADisabledBlobIsUnreadable(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openStore(t, t.TempDir())
+	defer dbs.Close()
+	seedDisabledRow(t, dbs, "acct-1", "folder-1", "m1", []byte("x"))
+	if _, err := dbs.Mirror.Write.ExecContext(ctx,
+		`UPDATE messages SET raw_blob = NULL, raw_path = 'spool/missing.eml' WHERE id = 'm1'`); err != nil {
+		t.Fatalf("point at a missing spool: %v", err)
+	}
+
+	target := filepath.Join(t.TempDir(), "backups")
+	now := baseTime
+	m := New(dbs, []string{target}, WithClock(clock(t, &now)))
+	res, err := m.Run(ctx)
+	if err == nil {
+		t.Error("Run did not report the unreadable hidden blob")
+	}
+	if len(res.Snapshots) != 1 {
+		t.Fatalf("Snapshots = %d, want the state snapshot even with a broken blob", len(res.Snapshots))
+	}
+	if n := len(snapshotFiles(t, target)); n != 1 {
+		t.Errorf("target has %d snapshots, want 1", n)
+	}
+}
+
 func seedDisabledRow(t *testing.T, dbs *store.DBs, accountID, folderID, id string, raw []byte) {
 	t.Helper()
 	ctx := context.Background()

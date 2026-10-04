@@ -175,6 +175,40 @@ func TestMessageRawReaderReportsMissingBytes(t *testing.T) {
 	}
 }
 
+// A spool file that has gone missing is reported to the callback as a read
+// error, and the walk continues to the next hidden row instead of aborting.
+func TestEachDisabledRawReportsAnUnreadableSpoolAndContinues(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct-1")
+	seedFolder(t, dbs, "acct-1", "folder-1")
+	seedDisabledRaw(t, dbs, "m-broken", "acct-1", "folder-1", DisabledRemoved, 1, nil, "spool/missing.eml")
+	seedDisabledRaw(t, dbs, "m-ok", "acct-1", "folder-1", DisabledRemoved, 2, []byte("good bytes"), "")
+
+	seen := map[string]bool{}
+	err := dbs.EachDisabledRaw(ctx, func(id, _ string, raw io.Reader) error {
+		data, readErr := io.ReadAll(raw)
+		seen[id] = true
+		if id == "m-broken" {
+			if readErr == nil {
+				t.Errorf("reading the missing spool returned no error")
+			}
+			return nil
+		}
+		if readErr != nil || string(data) != "good bytes" {
+			t.Errorf("%s = %q, %v", id, data, readErr)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("EachDisabledRaw: %v", err)
+	}
+	if !seen["m-broken"] || !seen["m-ok"] {
+		t.Errorf("walk did not visit both rows: %v", seen)
+	}
+}
+
 func seedLiveMessage(t *testing.T, dbs *DBs, id, accountID, folderID string, uid uint32) {
 	t.Helper()
 	if err := dbs.UpsertMessage(context.Background(), Message{

@@ -98,9 +98,9 @@ func (m *Manager) Run(ctx context.Context) (Result, error) {
 	if len(m.targets) == 0 {
 		return Result{}, errors.New("backup: no targets configured")
 	}
-	if err := m.reconcileDisabled(ctx); err != nil {
-		return Result{}, fmt.Errorf("backup: reconcile disabled blobs: %w", err)
-	}
+	// Reconcile first, but a hidden blob that cannot be read must not block the
+	// state snapshot: it is reported at the end and retried on the next run.
+	reconcileErr := m.reconcileDisabled(ctx)
 
 	staging, err := os.MkdirTemp("", "ivy-backup-")
 	if err != nil {
@@ -142,7 +142,7 @@ func (m *Manager) Run(ctx context.Context) (Result, error) {
 			errs = append(errs, fmt.Errorf("target %s: prune: %w", target, err))
 		}
 	}
-	return res, errors.Join(errs...)
+	return res, errors.Join(reconcileErr, errors.Join(errs...))
 }
 
 // writeTarget copies the new snapshot and any new blobs to one target and
@@ -243,19 +243,27 @@ func pruneSet(snaps []Snapshot, now time.Time, keep time.Duration, floor int) []
 // if they are not there already, healing a row disabled before the store existed
 // or one whose copy failed. It streams one message at a time.
 func (m *Manager) reconcileDisabled(ctx context.Context) error {
-	return m.dbs.EachDisabledRaw(ctx, func(id, hash string, raw io.Reader) error {
+	var errs []error
+	iterErr := m.dbs.EachDisabledRaw(ctx, func(id, hash string, raw io.Reader) error {
 		if hash != "" && m.dbs.Blobs.Has(hash) {
 			return nil
 		}
 		stored, _, err := m.dbs.Blobs.Put(ctx, raw)
 		if err != nil {
-			return fmt.Errorf("store blob for %s: %w", id, err)
+			// One unreadable message must not stop the others; keep going and
+			// report it after the snapshot.
+			errs = append(errs, fmt.Errorf("store blob for %s: %w", id, err))
+			return nil
 		}
 		if stored == hash {
 			return nil
 		}
-		return m.dbs.SetDisabledBlob(ctx, id, stored)
+		if err := m.dbs.SetDisabledBlob(ctx, id, stored); err != nil {
+			errs = append(errs, fmt.Errorf("record blob for %s: %w", id, err))
+		}
+		return nil
 	})
+	return errors.Join(append(errs, iterErr)...)
 }
 
 // Verify checks that a compressed snapshot decodes into a healthy SQLite file.

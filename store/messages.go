@@ -394,18 +394,26 @@ func (d *DBs) EachDisabledRaw(ctx context.Context, fn func(id, blobHash string, 
 }
 
 // withRaw presents a row's bytes, whether they live in the row or in a spool
-// file, and closes the file afterwards.
+// file. A spool file that cannot be opened is handed to fn as a reader that
+// fails on first use, so one unreadable message does not stop the caller's walk
+// over the others (the caller decides whether to skip or abort).
 func (d *DBs) withRaw(rawPath string, blob []byte, fn func(io.Reader) error) error {
 	if rawPath != "" {
 		f, err := os.Open(filepath.Join(d.Dir, filepath.FromSlash(rawPath)))
 		if err != nil {
-			return fmt.Errorf("open spool %s: %w", rawPath, err)
+			return fn(errorReader{err: fmt.Errorf("open spool %s: %w", rawPath, err)})
 		}
 		defer func() { _ = f.Close() }()
 		return fn(f)
 	}
 	return fn(bytes.NewReader(blob))
 }
+
+// errorReader fails every read with err, standing in for a spool file that
+// could not be opened.
+type errorReader struct{ err error }
+
+func (e errorReader) Read([]byte) (int, error) { return 0, e.err }
 
 // MessageRawReader opens one message's original bytes regardless of hidden
 // state, so the disable path can copy them into the blob store before the row
