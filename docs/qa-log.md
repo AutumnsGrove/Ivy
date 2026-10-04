@@ -1042,3 +1042,43 @@ were run.
 - **Not done, on purpose:** the Restore/Purge and mass-disable screens (gate C0); the property test
   that no sync sequence deletes a row already exists (`checkNothingErased` in the convergence
   harness), so 3b only added the scenario and endpoint tests.
+
+## Round 43 — 3c backups and the disabled-blob store (2026-10-04, agent; three operator answers)
+
+3c was scoped from `next_steps.md`, `ARCHITECTURE.md` 9 and `TESTING.md` 6. Three questions were
+open because the docs pulled in different directions.
+
+- **Q: does 3c include the content-addressed disabled-blob store, or only the state.db snapshot?**
+  (operator) **Include the blob store.** `ARCHITECTURE.md` 9 and `TESTING.md` 6 both put it in the
+  backup, and the mirror is never backed up, so without it the one class of mail a mirror rebuild
+  cannot bring back would have no off-device copy.
+- **Q: which targets?** (operator) **Local folders only** for now. An S3-compatible target is a
+  later track and will be a **hand-written S3-style client for Ivy's exact use case, not an
+  imported SDK**; `next_steps.md` records that so it is not re-litigated.
+- **Q: what does the one-line restore do?** (operator) **In place, server stopped.** It verifies the
+  snapshot, moves the current `state.db` aside and writes the snapshot back, refusing while a server
+  holds the data-directory lock.
+
+Decisions taken inside that scope (settled policy: once a day, 15 days, floor of 10):
+
+- **The blob store lives at `data/blobs`**, is keyed by the SHA-256 of the message bytes
+  (content-addressed), de-duplicates identical mail and is append-only: `Put` never rewrites or
+  removes, and the backup mirrors it whole and never prunes it by age. A disabled message's hash is
+  recorded on its mirror row (`messages.disabled_blob`, migration 10); `EachDisabledRaw` streams
+  hidden rows' bytes for a backup-time reconcile, so a row disabled before the store existed, or a
+  copy that failed, is healed on the next run.
+- **`VACUUM INTO` + zstd.** The plain snapshot and the compressed archive are both verified
+  (`PRAGMA integrity_check`) before anything is written, and each target's copy is verified again
+  before that target is pruned. A target that fails is reported and skipped; the others still run.
+- **Prune is per target and only after its verified new snapshot**: remove a snapshot when
+  `now - at >= 15 days` **and** it is not among the 10 newest. A clock jump or a failed run can
+  therefore never empty the target.
+- **A data-directory flock (`ivy.lock`)** is held by `ivy run` for its whole life and checked by
+  `ivy restore`. It is an `flock`, so a crash leaves no stale lock. This is what makes "server
+  stopped" a fact rather than a hope.
+- **`ivy backup`** writes one snapshot now (also used by the daily scheduler inside `ivy run`),
+  **`ivy restore <snapshot>`** is the one-line restore, and `ivy doctor` warns when every target is
+  on the data directory's device. Backups run at `backup.at` (default `03:00` local).
+- **Purge does not delete the blob.** The store is append-only and de-duplicated, and one blob can
+  back several rows, so `PurgeMessage` keeps the file; this is recorded as an open question in
+  `papercuts.md` rather than guessed away.

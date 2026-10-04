@@ -376,6 +376,22 @@ cancelled pass's `sync_state` on a detached context (N21). Scenario tests cover 
 emptying a mailbox (rows, blobs and spool files survive), a UIDVALIDITY rebuild and a restored
 message keeping its tags. Screens wait on gate C0.
 
+## 3c: backups and the disabled-blob store (done 2026-10-04)
+
+The disabled-blob store landed with the backup that needs it. `internal/blobstore` is a
+content-addressed, de-duplicated, append-only store under `data/blobs`; `sync` copies a message's
+raw bytes there as it is hidden (mirror migration 10 records the hash as `messages.disabled_blob`,
+and a gone spool file sends the same path through one reader), so a mirror rebuild can never lose
+the one kind of mail the server no longer holds. `backup/` takes a consistent `VACUUM INTO`
+snapshot of `state.db`, zstd-compresses it, verifies both the plain and compressed forms and each
+target's copy, mirrors new blobs to every target, and prunes each target only after its verified new
+snapshot (15 days kept, never below the 10 newest). `ivy backup` runs one now, `ivy run` schedules
+one daily at `backup.at` (default 03:00) on an owned goroutine, and `ivy restore <snapshot>`
+replaces `state.db` in place and merges the blobs stored beside the snapshot. A data-directory flock
+(`ivy.lock`, `internal/lockfile`) is held by `ivy run` so restore can refuse while a server is up;
+`ivy doctor` warns when every target shares the data directory's device. Purge keeps the blob: the
+store is append-only and one blob may back several rows (open question in `papercuts.md`).
+
 ## Other history worth keeping
 
 - Frontend facts: SvelteKit **3** config lives in `vite.config.ts`; aliases are the `#lib/...`

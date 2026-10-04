@@ -5,13 +5,12 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-04 (round 42: 3b's backend is done). The full Go suite is `-race` green,
-`make check` (drift, fmt, vet, staticcheck, Go tests, `pnpm check`, 210 Vitest) is green,
-`govulncheck` is clean, the mock Playwright suite is 242 passed / 10 skipped and the real-binary
-smoke slice is 8/8. Chunks 0, 1 and 2a-2h are done except the visual baselines of 2g and 2h (they
-need the CI harness regenerated). 3a and 3b's backend are done; **the C0 canvas board for the
-Restore/Purge and mass-disable screens is the one thing blocking those, and C3 (outbox op states)
-is the next gate before 3d**; 3c (backups) can start now.
+last updated: 2026-10-04 (round 43: 3c backups are done). The full Go suite is `-race` green and the
+new `backup`, `blobstore` and `lockfile` packages are tested against a fake clock. Chunks 0, 1 and
+2a-2h are done except the visual baselines of 2g and 2h (they need the CI harness regenerated).
+3a and 3b's backend are done, and 3c (backups, including the disabled-blob store) is done; **the C0
+canvas board is the one thing blocking the 3b screens, and C3 (outbox op states) is the next gate
+before 3d**.
 
 ## How to run a chunk
 
@@ -38,7 +37,7 @@ is the next gate before 3d**; 3c (backups) can start now.
 | 2a-2f Read: store, fetch, parse, render, thread, gateway | done |
 | 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
-| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c next |
+| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d next |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | not started |
 | 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | not started |
 
@@ -49,32 +48,42 @@ until chunks 3 and 5, and the mock E2E suite fakes the real requests at the netw
 (`e2e/api.ts`). Mutating actions (archive, delete, tag, save rule, send) only toast until chunks 3
 and 4.
 
-Backend: `store/` (two DBs), `config/`, `sync/` (one-shot read fetch), `mime/`, `render/`,
-`thread/`, `gateway/` (read API, body/inline/attachment documents, account profile), `internal/*`
-(mailworld, devstack, compress, asset), `cmd/` (`ivy`, `ivy-dev`, `ivy-assets`). No `Dockerfile`
-or image-publish workflow yet.
+Backend: `store/` (two DBs plus the disabled-blob store), `config/`, `sync/` (runner, IDLE,
+QRESYNC deltas), `mime/`, `render/`, `thread/`, `gateway/` (read API, body/inline/attachment
+documents, account profile, hidden-mail restore/purge), `backup/` (snapshot, prune, mirror, restore),
+`internal/*` (mailworld, devstack, compress, asset, blobstore, lockfile), `cmd/` (`ivy`, `ivy-dev`,
+`ivy-assets`). No `Dockerfile` or image-publish workflow yet.
 
 ## ▶ Now
 
-**3b's backend is done** (round 42). The detail is in `docs/BUILD-LOG.md`; the decisions are in
-qa-log round 42. In short: `store` gained `DisabledStats`, `RestoreMessage`,
-`RestoreAccountDisabled` and `PurgeMessage` (a live row is refused); Mirror health carries the
-per-account `hidden` breakdown; `POST /mirror/messages/{id}/restore`,
-`POST /mirror/accounts/{id}/restore` and `DELETE /mirror/messages/{id}` are live; a completed pass
-that trips either mass-disable threshold raises `health.alert` `mass_disable`; N21 is closed. The
-Restore/Purge and mass-disable **screens are not designed**: the operator asked for a canvas board,
-which is gate **C0**.
+**3c is done** (round 43). `internal/blobstore` is a content-addressed, de-duplicated, append-only
+store under `data/blobs`; `sync` copies a hidden message's bytes there at disable time (mirror
+migration 10 records `messages.disabled_blob`, and a backup-time reconcile heals older rows).
+`backup/` takes a verified `VACUUM INTO` + zstd snapshot of `state.db`, mirrors the blob store to
+every target, and prunes each target only after its verified new snapshot (15 days, floor 10).
+`ivy backup` runs one now, `ivy run` schedules one daily at `backup.at` (default 03:00), `ivy
+restore <snapshot>` replaces `state.db` in place behind the `ivy.lock` flock that `ivy run` holds,
+and `ivy doctor` warns when every target shares the data disk. Tests: `internal/blobstore`,
+`internal/lockfile`, `store/blob_test.go`, `sync/blob_test.go`, `backup/backup_test.go`,
+`config/backup_test.go`, `cmd/backup_test.go`.
 
 **Next, in order:**
 
-1. **3c Backups** (depends on nothing, lands before the outbox exists). Daily `state.db`
-   `VACUUM INTO` + zstd + verify; prune after 15 days with the floor of 10; targets; one-line
-   restore; `ivy doctor` warnings.
-2. **C3**, then **3d Outbox + write path**. C3 is the half page of op states, durable points and the
+1. **C3**, then **3d Outbox + write path**. C3 is the half page of op states, durable points and the
    crash-after-ack story, written before any outbox code.
-3. **C0 canvas board** for the three 3b screens, whenever the operator is ready; the backend and API
+2. **C0 canvas board** for the three 3b screens, whenever the operator is ready; the backend and API
    are already committed.
-4. **3e-3h** per the chunk plan below. 3h (the deploy track) is independent and can run at any point.
+3. **3e-3h** per the chunk plan below. 3h (the deploy track) is independent and can run at any point.
+
+**Deliberately deferred from 3c** (do not re-litigate):
+
+- **S3-compatible backup targets.** The target is a local folder only for now. The later track is a
+  **hand-written S3-style client for Ivy's exact use case, not an imported SDK** (operator, round 43).
+- **Backup status on the reading surface.** The last successful backup time (`ARCHITECTURE.md` 9) and
+  a Mirror-health line for backup failures are not exposed over the API yet; there is no backup
+  endpoint in `api/openapi.yaml`. Add them when the settings/health UI next changes.
+- **On-disk directory name.** The blob store lives at `data/blobs`; `ARCHITECTURE.md` 9 describes
+  the concept without naming it, so the doc is unchanged.
 
 Known partial spikes that still do not block: S1 send-as scope and Resend DMARC (taken on the
 operator's report), S5 iPad over HTTPS only (no iPhone, plain HTTP or `image/heic`), S6 OOXML not
@@ -90,6 +99,9 @@ Grouped by where it lands. Each item names its source so it can be found again.
   potato; the ratio is the claim, not the milliseconds.
 - **N8** identical `Message-ID`s share a content key, and so tags and verdicts; needs a threat-model
   line before chunk 3.
+- **N24** purge leaves the append-only blob-store copy of a hidden message, so "purge forever" does
+  not remove the last bytes when another row may share the hash; decide reference-counted deletion or
+  rename the action before the UI exposes it.
 - **N3** the fake `/systemone` has no `score` questions (chunk 5).
 - The thread-subject fallback groups unrelated automated mail with generic subjects ("Your
   receipt"); revisit when newsletters and receipts have their own views.
@@ -231,9 +243,15 @@ The Restore/Purge and mass-disable **screens are not designed** and wait on gate
 asked for a canvas board); the API is written and committed first, per the brief. The API contract is
 in `api/openapi.yaml`.
 
-**Remaining for the operator:** the real-mailbox/`ivy doctor` live check and potato numbers.
-**Next stage: 3c** (backups, runs before 3d); **next gate: C3**, writing down the outbox op states
-before coding 3d.
+**3c is done** (round 43: `internal/blobstore`, `internal/lockfile`, `backup/`, mirror migration 10,
+the sync disable-path copy, `ivy backup`/`restore`, the daily scheduler, the `doctor` warning, all in
+`docs/BUILD-LOG.md`). The decisions are in qa-log round 43; N24 (purge and the append-only blob) is
+the one open question it raised.
+
+**Remaining for the operator:** the real-mailbox live check of the daily backup and `ivy restore`,
+and the potato numbers for the snapshot time.
+**Next stage: 3d** (after gate C3, the outbox op states); **next gate: C3**, writing down those
+states before coding 3d.
 
 ## Operator actions still open
 

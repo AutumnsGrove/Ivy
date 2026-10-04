@@ -296,9 +296,19 @@ func verifyStateFile(ctx context.Context, path string) error {
 // Restore replaces the data directory's state.db with a verified snapshot and
 // merges the blob store stored beside it. It refuses while a server holds the
 // data-directory lock, and moves the replaced state.db aside rather than
-// deleting it.
+// deleting it. It does not open the databases: the caller must have stopped the
+// server (the lock proves it).
 func (m *Manager) Restore(ctx context.Context, snapshotPath string) error {
-	lock, err := lockfile.Acquire(filepath.Join(m.dbs.Dir, LockName))
+	return Restore(ctx, m.dbs.Dir, snapshotPath)
+}
+
+// Restore is the package-level restore, usable without an open store so the CLI
+// can replace state.db.
+func Restore(ctx context.Context, dataDir, snapshotPath string) error {
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		return fmt.Errorf("backup: restore: %w", err)
+	}
+	lock, err := lockfile.Acquire(filepath.Join(dataDir, LockName))
 	if err != nil {
 		return fmt.Errorf("backup: restore: %w", err)
 	}
@@ -308,12 +318,12 @@ func (m *Manager) Restore(ctx context.Context, snapshotPath string) error {
 		return fmt.Errorf("backup: restore: %w", err)
 	}
 
-	stateDB := filepath.Join(m.dbs.Dir, "state.db")
-	tmp := filepath.Join(m.dbs.Dir, "state.db.restore")
+	stateDB := filepath.Join(dataDir, "state.db")
+	tmp := filepath.Join(dataDir, ".state.db.restore")
 	if err := decompressZstd(snapshotPath, tmp); err != nil {
 		return fmt.Errorf("backup: restore: %w", err)
 	}
-	aside := stateDB + ".replaced-" + m.now().UTC().Format("20060102T150405Z")
+	aside := stateDB + ".replaced-" + time.Now().UTC().Format("20060102T150405Z")
 	if err := os.Rename(stateDB, aside); err != nil && !errors.Is(err, os.ErrNotExist) {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("backup: move current state aside: %w", err)
@@ -326,7 +336,7 @@ func (m *Manager) Restore(ctx context.Context, snapshotPath string) error {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("backup: place restored state: %w", err)
 	}
-	if err := mirrorTree(ctx, filepath.Join(filepath.Dir(snapshotPath), blobsDir), m.dbs.Blobs.Dir()); err != nil {
+	if err := mirrorTree(ctx, filepath.Join(filepath.Dir(snapshotPath), blobsDir), filepath.Join(dataDir, blobsDir)); err != nil {
 		return fmt.Errorf("backup: restore blobs: %w", err)
 	}
 	return nil
@@ -412,8 +422,21 @@ func compressZstd(src, dst string) (err error) {
 	return out.Close()
 }
 
+// maxRestoreBytes bounds a snapshot's decompressed size, so a corrupt or hostile
+// archive cannot fill the disk while it is verified or restored.
+const maxRestoreBytes = 1 << 30
+
+// errSnapshotTooLarge reports an archive that decompresses past the bound.
+var errSnapshotTooLarge = errors.New("backup: snapshot is larger than the restore limit")
+
 // decompressZstd writes the plain bytes of a zstd archive to dst.
-func decompressZstd(src, dst string) (err error) {
+func decompressZstd(src, dst string) error {
+	return decompressZstdLimit(src, dst, maxRestoreBytes)
+}
+
+// decompressZstdLimit decompresses at most limit bytes and fails when the
+// archive wants to produce more.
+func decompressZstdLimit(src, dst string, limit int64) (err error) {
 	in, err := os.Open(src) //nolint:gosec // G304: a snapshot path the operator chose
 	if err != nil {
 		return err
@@ -429,9 +452,14 @@ func decompressZstd(src, dst string) (err error) {
 		return err
 	}
 	defer zr.Close()
-	if _, err := io.Copy(out, zr); err != nil {
+	n, err := io.Copy(out, io.LimitReader(zr, limit+1))
+	if err != nil {
 		_ = out.Close()
 		return err
+	}
+	if n > limit {
+		_ = out.Close()
+		return errSnapshotTooLarge
 	}
 	if err := out.Sync(); err != nil {
 		_ = out.Close()

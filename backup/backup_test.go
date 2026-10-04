@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -9,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/klauspost/compress/zstd"
 
 	"github.com/AutumnsGrove/Ivy/internal/lockfile"
 	"github.com/AutumnsGrove/Ivy/store"
@@ -416,6 +419,58 @@ func TestNextDaily(t *testing.T) {
 	}
 	if _, err := NextDaily(at, "25:00"); err == nil {
 		t.Error("NextDaily accepted an invalid time")
+	}
+}
+
+// Two directories under one temp tree are on the same device, which is what
+// doctor warns about; a missing path is an error for the caller to resolve.
+func TestSameDevice(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	child := filepath.Join(dir, "backups")
+	if err := os.MkdirAll(child, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	same, err := SameDevice(dir, child)
+	if err != nil {
+		t.Fatalf("SameDevice: %v", err)
+	}
+	if !same {
+		t.Error("two directories in one temp tree reported different devices")
+	}
+	if _, err := SameDevice(dir, filepath.Join(dir, "missing")); err == nil {
+		t.Error("SameDevice accepted a missing path")
+	}
+}
+
+// A corrupt or hostile archive must not be able to fill the disk while it is
+// verified: decompression is bounded (STANDARDS.md 4a). state.db is about 27 MiB
+// at 100k messages, so a gibibyte is generous headroom.
+func TestDecompressRejectsAnOversizedSnapshot(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	src := filepath.Join(dir, "big.zst")
+	f, err := os.Create(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw, err := zstd.NewWriter(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := zw.Write(bytes.Repeat([]byte("a"), 4096)); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	err = decompressZstdLimit(src, filepath.Join(dir, "out.db"), 1024)
+	if !errors.Is(err, errSnapshotTooLarge) {
+		t.Fatalf("decompressZstdLimit = %v, want errSnapshotTooLarge", err)
 	}
 }
 

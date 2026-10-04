@@ -788,3 +788,21 @@ Second pass over the unreviewed range, security-sensitive slice first (round 32)
   (the oracle file itself stays untouched). One `//nolint:contextcheck` with its reason, for the
   fake mail server, which takes no context. Recommendation (open, your call): add `golangci-lint
   run` to `make check`, or the gap reopens with the next stage.
+
+## 3c backups (agent, 2026-10-04)
+
+- **N24 (open, decision)** · `store/disabled.go`, `backup/` · **design** · `PurgeMessage` erases the
+  row, its attachment rows and its spool file but **leaves the blob store copy**. The store is
+  append-only and content-addressed, and one blob can back several rows (N8: identical Message-IDs
+  share a content key), so deleting it on one row's purge could break another row that still points
+  at the same hash. "Purge forever" therefore does not remove the only remaining bytes. Decide
+  before purge is exposed in the UI: either reference-counted blob deletion on purge, or rename the
+  action so it does not promise more than it does. The simple fix is a `SELECT count(*) FROM
+  messages WHERE disabled_blob = ?` before unlinking, inside the purge transaction.
+- **#66** · `c510612..e8d8c6f` · `sync/sync.go` · **risk** · the disable path copies a message's
+  bytes to the blob store through `MessageRawReader`, which opens the spool file while the mirror's
+  read cursor (for the reference list) is done and the write connection is free; the copy is bounded
+  by the existing spool size limits. No defect found, recorded because it is the first code that
+  reads mail bytes on the write path. The blob copy failure path warns and leaves the hash empty,
+  and the next `backup.Run` reconciles it (`TestRunReconcilesDisabledBlobs`), so it is never silent
+  and never permanent.
