@@ -961,3 +961,10 @@ Baseline before any change: `go build`, `go vet`, `staticcheck`, `gofumpt -l`, t
   `outbox_full` instead of returning the op already queued. Reproduced with
   `TestEnqueueOutboxIsIdempotentEvenWhenTheQueueIsFull` (failed with `outbox full`). The idempotent
   lookup now runs first.
+
+### `0be4836` Add the outbox HTTP surface and run wiring
+
+- **#88** · `0be4836` · `gateway/outbox.go` · **bug** · a `move` whose destination was a folder the server no
+  longer lists (`gone_at` set) was accepted with 202 and could only fail at dispatch. Reproduced with
+  `TestEnqueueMoveToAGoneFolderIsRefused` (got 202, wanted 409 `bad_destination`); the destination
+  check now refuses a gone folder.

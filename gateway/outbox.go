@@ -96,7 +96,7 @@ func (s *Server) outboxAction(ctx context.Context, msg store.Message, body api.O
 			return "", store.OutboxExpect{}, "bad_destination", nil
 		case err != nil:
 			return "", store.OutboxExpect{}, "", err
-		case dest.AccountID != msg.AccountID:
+		case dest.AccountID != msg.AccountID, !dest.GoneAt.IsZero():
 			return "", store.OutboxExpect{}, "bad_destination", nil
 		case dest.ID == msg.FolderID:
 			return "", store.OutboxExpect{}, "same_folder", nil

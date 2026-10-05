@@ -252,3 +252,23 @@ func TestInboxCarriesTheFlaggedState(t *testing.T) {
 		t.Fatal("the flagged message is not in the inbox")
 	}
 }
+
+// A folder the server no longer lists cannot receive mail, so a move into it is
+// refused up front instead of queueing an op that can only fail.
+func TestEnqueueMoveToAGoneFolderIsRefused(t *testing.T) {
+	t.Parallel()
+	srv, dbs := outboxServer(t)
+	mustFolder(t, dbs, store.Folder{ID: "old-1", AccountID: "acct-1", Name: "Old", Role: store.RoleOther, UIDValidity: 1, LastSyncAt: testNow})
+	if err := dbs.SetFolderGone(context.Background(), "old-1", testNow); err != nil {
+		t.Fatalf("set gone: %v", err)
+	}
+
+	dest := "old-1"
+	var body api.Error
+	code := postJSON(t, srv.URL+"/api/v1/outbox", api.OutboxAction{
+		MessageId: "m1", Action: api.OutboxActionMove, DestinationFolderId: &dest,
+	}, &body)
+	if code != http.StatusConflict || body.Code != "bad_destination" {
+		t.Fatalf("status/code = %d/%s, want 409/bad_destination", code, body.Code)
+	}
+}
