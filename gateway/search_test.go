@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -114,5 +115,61 @@ func TestSearchFallsBackWhenTheQueryCannotBeEmbedded(t *testing.T) {
 	if out.Total != 1 || out.Hits[0].Subject != "Lunch plans" {
 		body, _ := json.Marshal(out)
 		t.Fatalf("fallback search = %s, want the keyword hit", body)
+	}
+}
+
+// fixedEmbedder answers every query with one vector, as a working provider
+// would, and counts the (paid) calls it was asked for.
+type fixedEmbedder struct {
+	vec   llm.Vector
+	model string
+	calls atomic.Int32
+}
+
+func (f *fixedEmbedder) EmbedQuery(context.Context, string, string) (llm.Vector, string, error) {
+	f.calls.Add(1)
+	return f.vec, f.model, nil
+}
+
+func storeBodyVector(t *testing.T, dbs *store.DBs, account, key, model string, vals []float32) {
+	t.Helper()
+	v := llm.Quantise(vals)
+	if err := dbs.UpsertEmbeddings(context.Background(), []store.Embedding{{
+		AccountID: account, Ref: key, Kind: store.ExtractKindBody, Model: model,
+		Dims: v.Dims, Scale: v.Scale, Norm: v.Norm, Vector: v.Encode(),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The search screen always asks for "All accounts" and sends no account_id. The
+// handler only embedded the query when an account was named, so meaning-based
+// search never ran from the screen at all, while the worker kept paying to embed
+// every message for it.
+func TestSearchWithoutAnAccountStillSearchesByMeaning(t *testing.T) {
+	t.Parallel()
+	dbs, err := store.Open(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = dbs.Close() })
+	seedSearchMail(t, dbs)
+	storeBodyVector(t, dbs, "a1", "ck1", "m", []float32{0, 0.5, 0, 0})
+	storeBodyVector(t, dbs, "a1", "ck2", "m", []float32{0.5, 0, 0, 0})
+	emb := &fixedEmbedder{vec: llm.Quantise([]float32{0.5, 0, 0, 0}), model: "m"}
+	srv := httptest.NewServer(New(dbs, "test", testStaticFS()).WithSearch(emb).Handler())
+	t.Cleanup(srv.Close)
+
+	// No word of the query is in either message: only meaning can find it.
+	var out api.SearchResults
+	if code := getJSON(t, srv.URL+"/api/v1/search?q=midday+meal", &out); code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", code)
+	}
+	if len(out.Hits) == 0 || out.Hits[0].Id != "m2" {
+		body, _ := json.Marshal(out)
+		t.Fatalf("hits = %s, want the lunch message first by meaning", body)
+	}
+	if got := emb.calls.Load(); got != 1 {
+		t.Errorf("%d query embeddings, want exactly 1 paid call", got)
 	}
 }

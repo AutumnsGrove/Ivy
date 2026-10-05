@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -47,18 +48,10 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		fts[i] = search.Hit{AccountID: h.AccountID, ContentKey: h.ContentKey}
 	}
 
-	var vec []search.Hit
+	vec := s.semanticHits(r.Context(), q, accounts, limit)
 	semantic := map[string]bool{}
-	if s.queryEmbed != nil && s.searchService != nil && len(accounts) > 0 {
-		v, model, err := s.queryEmbed.EmbedQuery(r.Context(), accounts[0], q)
-		if err == nil && v.Dims > 0 {
-			if vh, verr := s.searchService.VectorSearch(r.Context(), v, accounts, model, limit); verr == nil {
-				vec = vh
-				for _, h := range vh {
-					semantic[refKey(h.AccountID, h.ContentKey)] = true
-				}
-			}
-		}
+	for _, h := range vec {
+		semantic[refKey(h.AccountID, h.ContentKey)] = true
 	}
 
 	fused := fts
@@ -107,6 +100,48 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	out.Total = len(out.Hits)
 	writeJSON(w, http.StatusOK, out)
+}
+
+// semanticHits embeds the query once and scans the stored vectors for it. The
+// screen's "All accounts" names no account, so each account is offered to the
+// gate in turn until one has a provider that will take it: at most one paid
+// call. Anything that stops it, a policy refusal on every account or an outage,
+// leaves the caller with keyword hits alone.
+func (s *Server) semanticHits(ctx context.Context, q string, accounts []string, limit int) []search.Hit {
+	if s.queryEmbed == nil || s.searchService == nil {
+		return nil
+	}
+	candidates := accounts
+	if len(candidates) == 0 {
+		all, err := s.dbs.ListAccounts(ctx)
+		if err != nil {
+			slog.WarnContext(ctx, "search: listing accounts for the query embedding failed", "error", err)
+			return nil
+		}
+		for _, a := range all {
+			candidates = append(candidates, a.ID)
+		}
+	}
+	for _, id := range candidates {
+		v, model, err := s.queryEmbed.EmbedQuery(ctx, id, q)
+		switch {
+		case err == nil && v.Dims > 0:
+			hits, verr := s.searchService.VectorSearch(ctx, v, accounts, model, limit)
+			if verr != nil {
+				slog.WarnContext(ctx, "search: vector scan failed, keyword only", "error", verr)
+				return nil
+			}
+			return hits
+		case errors.Is(err, llm.ErrNoProvider), errors.Is(err, llm.ErrNotEnabled), errors.Is(err, llm.ErrCapReached):
+			continue // this account cannot embed; another may
+		default:
+			if err != nil {
+				slog.WarnContext(ctx, "search: query embedding failed, keyword only", "account", id, "error", err)
+			}
+			return nil
+		}
+	}
+	return nil
 }
 
 func clampSearchLimit(s string) int {

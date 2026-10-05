@@ -1112,3 +1112,14 @@ The watcher script had no test at all, so the three defects below were found by 
   Reproduced with `TestForeignImageIsRefused` (`registry.example.net/someone/else@sha256:...` was pulled
   and reported `ok`; failed before the fix). The pattern is now pinned to `ghcr.io/autumnsgrove/ivy`,
   the same constant as `update.DefaultRepo`.
+
+### `d570eeb` Serve /search and wire it into the app
+
+- **#102** · `d570eeb` · `gateway/search.go` · **bug** · the handler only embedded the query when the
+  request named an `account_id`, but the search screen always shows "All accounts" and sends none (its
+  loader calls `api.search(q)`). Meaning-based search therefore never ran from the app at all, while the
+  embed worker kept paying to embed every message for it, and no test covered the semantic path through
+  the handler. Reproduced with `TestSearchWithoutAnAccountStillSearchesByMeaning` (a query sharing no
+  word with either message returned 0 hits; failed before the fix). With no account named, accounts are
+  now offered to the gate in turn until one will take the query, so at most one paid call is made; a
+  provider outage or vector-scan failure is logged and search stays keyword-only.
