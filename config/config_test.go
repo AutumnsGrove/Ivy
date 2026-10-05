@@ -266,3 +266,55 @@ func TestDefaultListenAvoidsWranglersPort(t *testing.T) {
 		t.Errorf("DefaultListen %q uses wrangler's port", DefaultListen)
 	}
 }
+
+func TestLLMDefaults(t *testing.T) {
+	t.Parallel()
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.LLM.OpenRouterBase != DefaultOpenRouterURL {
+		t.Errorf("OpenRouterBase = %q, want %q", cfg.LLM.OpenRouterBase, DefaultOpenRouterURL)
+	}
+	if cfg.LLM.EmbedModel != DefaultEmbedModel {
+		t.Errorf("EmbedModel = %q, want %q", cfg.LLM.EmbedModel, DefaultEmbedModel)
+	}
+	if cfg.LLM.MonthlyCapUSD != DefaultMonthlyCapUSD {
+		t.Errorf("MonthlyCapUSD = %v, want %v", cfg.LLM.MonthlyCapUSD, DefaultMonthlyCapUSD)
+	}
+}
+
+func TestEmbedProviderNeedsOptInForHosted(t *testing.T) {
+	t.Parallel()
+	base := Account{ID: "a", Address: "a@example.com", IMAPHost: "i", IMAPPort: 993,
+		SMTPHost: "s", SMTPPort: 465, Username: "a"}
+
+	hosted := base
+	hosted.EmbedProvider = "openrouter"
+	cfg := &Config{Listen: DefaultListen, DataDir: "d", Accounts: []Account{hosted},
+		Backup: Backup{At: DefaultBackupAt}, LLM: LLM{OpenRouterBase: DefaultOpenRouterURL}}
+	if err := cfg.validate(); err == nil {
+		t.Error("openrouter embeddings without llm_enabled accepted, want an error")
+	}
+
+	hosted.LLMEnabled = true
+	cfg.Accounts = []Account{hosted}
+	if err := cfg.validate(); err != nil {
+		t.Errorf("openrouter embeddings with llm_enabled rejected: %v", err)
+	}
+
+	local := base
+	local.EmbedProvider = "ollama"
+	local.LLMEnabled = false
+	cfg.Accounts = []Account{local}
+	if err := cfg.validate(); err != nil {
+		t.Errorf("local ollama embeddings with smart features off rejected: %v", err)
+	}
+
+	bad := base
+	bad.EmbedProvider = "magic"
+	cfg.Accounts = []Account{bad}
+	if err := cfg.validate(); err == nil {
+		t.Error("unknown embed_provider accepted, want an error")
+	}
+}

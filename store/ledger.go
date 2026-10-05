@@ -40,41 +40,64 @@ func Period(t time.Time) string {
 	return t.UTC().Format("2006-01")
 }
 
-// RecordAPICall appends a ledger row and adds its cost to the monthly counter
-// in one transaction, so the stats panel and the cap can never disagree about
-// what was spent. It is the only writer of either table.
+// RecordAPICall appends one ledger row. It is a convenience over RecordAPICalls
+// for the single-call case.
 func (d *DBs) RecordAPICall(ctx context.Context, c APICall) error {
-	estimated := 0
-	if c.CostEstimated {
-		estimated = 1
+	return d.RecordAPICalls(ctx, []APICall{c})
+}
+
+// RecordAPICalls appends ledger rows and adds their cost to the monthly
+// counters in one transaction, so the stats panel and the cap can never
+// disagree about what was spent. A batch (one embedding call's per-message
+// rows) lands as a unit. It is the only writer of either table.
+func (d *DBs) RecordAPICalls(ctx context.Context, calls []APICall) error {
+	if len(calls) == 0 {
+		return nil
 	}
 	tx, err := d.State.Write.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("record api call: %w", err)
+		return fmt.Errorf("record api calls: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.ExecContext(ctx, `
+	insertCall, err := tx.PrepareContext(ctx, `
 		INSERT INTO api_calls (
 			at, provider, endpoint, model, feature, account_id, content_key,
 			input_tokens, output_tokens, cost_usd, cost_estimated, latency_ms, outcome, call_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.At.UTC().Format(time.RFC3339), c.Provider, c.Endpoint, c.Model, c.Feature,
-		c.AccountID, c.ContentKey, c.InputTokens, c.OutputTokens, c.CostUSD, estimated,
-		c.LatencyMS, c.Outcome, c.CallID); err != nil {
-		return fmt.Errorf("record api call: %w", err)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("record api calls: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `
+	defer func() { _ = insertCall.Close() }()
+	upsertCap, err := tx.PrepareContext(ctx, `
 		INSERT INTO api_caps (account_id, period, endpoint, spent_usd, calls)
 		VALUES (?, ?, ?, ?, 1)
 		ON CONFLICT(account_id, period, endpoint) DO UPDATE SET
 			spent_usd = spent_usd + excluded.spent_usd,
-			calls     = calls + 1`,
-		c.AccountID, Period(c.At), c.Endpoint, c.CostUSD); err != nil {
-		return fmt.Errorf("record api call: %w", err)
+			calls     = calls + 1`)
+	if err != nil {
+		return fmt.Errorf("record api calls: %w", err)
+	}
+	defer func() { _ = upsertCap.Close() }()
+
+	for _, c := range calls {
+		estimated := 0
+		if c.CostEstimated {
+			estimated = 1
+		}
+		if _, err := insertCall.ExecContext(ctx,
+			c.At.UTC().Format(time.RFC3339), c.Provider, c.Endpoint, c.Model, c.Feature,
+			c.AccountID, c.ContentKey, c.InputTokens, c.OutputTokens, c.CostUSD, estimated,
+			c.LatencyMS, c.Outcome, c.CallID); err != nil {
+			return fmt.Errorf("record api calls: %w", err)
+		}
+		if _, err := upsertCap.ExecContext(ctx,
+			c.AccountID, Period(c.At), c.Endpoint, c.CostUSD); err != nil {
+			return fmt.Errorf("record api calls: %w", err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("record api call: %w", err)
+		return fmt.Errorf("record api calls: %w", err)
 	}
 	return nil
 }

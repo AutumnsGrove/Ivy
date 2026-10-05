@@ -19,9 +19,16 @@ import (
 
 // Defaults used when ivy.yaml does not say otherwise.
 const (
-	DefaultListen   = "127.0.0.1:8418"
-	DefaultDataDir  = "./data"
-	DefaultBackupAt = "03:00"
+	DefaultListen        = "127.0.0.1:8418"
+	DefaultDataDir       = "./data"
+	DefaultBackupAt      = "03:00"
+	DefaultOpenRouterURL = "https://openrouter.ai/api/v1"
+	// DefaultEmbedModel is the operator's choice (round 30): fast, cheap, a 32k
+	// context, and it returns native int8 vectors.
+	DefaultEmbedModel = "perplexity/pplx-embed-v1-0.6b"
+	// DefaultMonthlyCapUSD bounds hosted embeddings out of the box (round 54).
+	// The measured rate is about $0.15 per 100k messages.
+	DefaultMonthlyCapUSD = 5.0
 )
 
 // Config is the non-secret file configuration. Behavior settings live in the
@@ -36,6 +43,21 @@ type Config struct {
 	AllowedHosts []string  `yaml:"allowed_hosts"`
 	Accounts     []Account `yaml:"accounts"`
 	Backup       Backup    `yaml:"backup"`
+	LLM          LLM       `yaml:"llm"`
+}
+
+// LLM holds the non-secret settings for remote model providers. The API key is
+// a secret and is read only from the environment (OPENROUTER_API_KEY), never
+// from here (ARCHITECTURE.md 8).
+type LLM struct {
+	// OpenRouterBase is the OpenRouter-compatible base URL, including /api/v1.
+	OpenRouterBase string `yaml:"openrouter_base"`
+	// EmbedModel is the embeddings model id used with the hosted provider.
+	EmbedModel string `yaml:"embed_model"`
+	// OllamaURL is the optional local embeddings endpoint.
+	OllamaURL string `yaml:"ollama_url"`
+	// MonthlyCapUSD bounds hosted embedding spend per account and month.
+	MonthlyCapUSD float64 `yaml:"monthly_cap_usd"`
 }
 
 // Backup is where the daily state.db snapshot goes and when it runs. Targets
@@ -124,6 +146,11 @@ type Account struct {
 	// verdicts Ivy may believe (RFC 8601; N9 in papercuts.md). Empty is the safe
 	// default: no header is trusted. Only set ids a configured provider adds.
 	TrustedAuthservIDs []string `yaml:"trusted_authserv_ids"`
+	// EmbedProvider chooses where this account's vectors come from: "" (off),
+	// "openrouter" (hosted; requires llm_enabled) or "ollama" (local, allowed
+	// even with smart features off). Empty keeps an account out of every hosted
+	// call (ARCHITECTURE.md 6).
+	EmbedProvider string `yaml:"embed_provider"`
 	// Insecure sends the IMAP login in plaintext. It exists only for the loopback
 	// dev fake; the zero value is implicit TLS, so a forgotten field can never put
 	// a real password on the wire unencrypted. Named for the unsafe thing
@@ -137,7 +164,16 @@ type Account struct {
 // beside it is loaded without overriding the real environment. Environment
 // variables (IVY_LISTEN, IVY_DATA_DIR, IVY_<ID>_PASSWORD) take precedence.
 func Load(path string) (*Config, error) {
-	cfg := &Config{Listen: DefaultListen, DataDir: DefaultDataDir, Backup: Backup{At: DefaultBackupAt}}
+	cfg := &Config{
+		Listen:  DefaultListen,
+		DataDir: DefaultDataDir,
+		Backup:  Backup{At: DefaultBackupAt},
+		LLM: LLM{
+			OpenRouterBase: DefaultOpenRouterURL,
+			EmbedModel:     DefaultEmbedModel,
+			MonthlyCapUSD:  DefaultMonthlyCapUSD,
+		},
+	}
 
 	if path != "" {
 		data, err := os.ReadFile(path) //nolint:gosec // G304: the operator chose this config path with --config
@@ -247,6 +283,23 @@ func (c *Config) validate() error {
 		if a.Username == "" {
 			return fmt.Errorf("%s: username is empty", where)
 		}
+		switch a.EmbedProvider {
+		case "", "off", "ollama":
+		case "openrouter":
+			// Hosted embeddings send message text off the device, so they need
+			// the account's smart-features opt-in as well as the provider choice.
+			if !a.LLMEnabled {
+				return fmt.Errorf("%s: embed_provider openrouter needs llm_enabled", where)
+			}
+		default:
+			return fmt.Errorf("%s: unknown embed_provider %q", where, a.EmbedProvider)
+		}
+	}
+	if c.LLM.MonthlyCapUSD < 0 {
+		return errors.New("llm.monthly_cap_usd must not be negative")
+	}
+	if strings.TrimSpace(c.LLM.OpenRouterBase) == "" {
+		return errors.New("llm.openrouter_base is empty")
 	}
 	return nil
 }
