@@ -56,3 +56,25 @@ test('client-side routes survive a cold load (SPA fallback)', async ({ page }) =
 	await page.goto('/settings');
 	await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 });
+
+// A tag is a keyword written to the real (fake) IMAP server through the outbox,
+// and the membership follows the acknowledged write (chunk 3e): this runs the
+// whole path in the production binary, not just the pieces.
+test('tags a message through the real outbox and clears the tag again', async ({ request }, testInfo) => {
+	const inbox = await (await request.get('/api/v1/inbox')).json();
+	const id: string = inbox.items[0].id;
+
+	const created = await request.post('/api/v1/tags', { data: { name: `smoke ${testInfo.project.name}`, color: 'mint' } });
+	expect(created.status()).toBe(201);
+	const tag = await created.json();
+
+	const queued = await request.post('/api/v1/outbox', { data: { messageId: id, action: 'tag', tagId: tag.id } });
+	expect(queued.status()).toBe(202);
+	const tagIds = async (): Promise<string[]> => ((await (await request.get(`/api/v1/messages/${id}`)).json()).tagIds ?? []) as string[];
+	await expect.poll(tagIds, { timeout: 20_000 }).toContain(tag.id);
+
+	// Deleting the tag clears its keyword from the server first, then forgets it.
+	const removed = await request.delete(`/api/v1/tags/${tag.id}`);
+	expect(removed.status()).toBe(204);
+	expect(await tagIds()).not.toContain(tag.id);
+});
