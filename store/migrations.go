@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -13,6 +14,11 @@ type migration struct {
 	version    int
 	statements []string
 }
+
+// ErrSchemaNewer reports a database migrated by a newer Ivy than this binary.
+// It is what stops an update rollback from running old code on a schema it does
+// not know.
+var ErrSchemaNewer = errors.New("database is newer than this Ivy")
 
 // migrate applies every migration newer than the database's user_version, each
 // in its own transaction. Migrations are idempotent by construction: a database
@@ -27,6 +33,9 @@ func migrate(ctx context.Context, db *sql.DB, migrations []migration) error {
 	var current int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&current); err != nil {
 		return fmt.Errorf("read user_version: %w", err)
+	}
+	if newest := migrations[len(migrations)-1].version; current > newest {
+		return fmt.Errorf("%w: schema version %d, this binary knows up to %d; run the newer image, or restore a backup taken before the update", ErrSchemaNewer, current, newest)
 	}
 	pending := false
 	for _, m := range migrations {

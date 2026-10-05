@@ -1339,3 +1339,11 @@ expunge against the live Trash, N32); a real OpenRouter embeddings response (doe
 vector scan time over a real mailbox; the update rollback against a real unhealthy image. The published
 `:latest` image predates this branch, so the potato only gets these fixes after the branch is merged to
 `main` and `docker-publish.yml` has run.
+
+## Resolution of the open items (round 58)
+
+- **N41 resolved** · `store/migrations.go` · `migrate` refuses a database whose `user_version` is newer than
+  the newest migration the binary knows (`ErrSchemaNewer`, with a message naming both versions and the way
+  out), for the mirror and the state database alike. A rollback onto a migrated schema now fails loudly and
+  the watcher reports the container's log. Reproduced with `TestOpenRefusesADatabaseNewerThanTheBinary`
+  (opened without error; failed before the fix).
