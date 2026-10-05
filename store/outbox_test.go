@@ -390,3 +390,25 @@ func itoa(n int) string {
 	}
 	return string(buf[i:])
 }
+
+// A double tap on a full queue is still the same action: it must report the
+// op that already exists rather than a "queue full" the operator cannot act on.
+func TestEnqueueOutboxIsIdempotentEvenWhenTheQueueIsFull(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	for i := 0; i < MaxQueuedOps; i++ {
+		op := flagOp("op-"+itoa(i), "key-"+itoa(i), "folder-inbox")
+		if _, _, err := dbs.EnqueueOutbox(ctx, op); err != nil {
+			t.Fatalf("enqueue %d: %v", i, err)
+		}
+	}
+	got, created, err := dbs.EnqueueOutbox(ctx, flagOp("repeat", "key-0", "folder-inbox"))
+	if err != nil {
+		t.Fatalf("repeat of a queued action on a full queue = %v, want the existing op", err)
+	}
+	if created || got.ID != "op-0" {
+		t.Errorf("got id %q created=%v, want the existing op-0 with created=false", got.ID, created)
+	}
+}

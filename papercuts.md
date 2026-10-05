@@ -953,3 +953,11 @@ Baseline before any change: `go build`, `go vet`, `staticcheck`, `gofumpt -l`, t
   still blocked 5 s later before the fix. The connection now has a `context.AfterFunc` close hook from
   the moment it is dialled, and a failure caused by that cancellation returns the context error instead
   of costing the op an attempt.
+
+### `5611a5b` Add the outbox table and its state machine
+
+- **#87** · `5611a5b` · `store/outbox.go` · **bug** · `EnqueueOutbox` checked the 500-op cap before looking
+  for an existing live op with the same idempotency key, so a double tap on a full queue was refused as
+  `outbox_full` instead of returning the op already queued. Reproduced with
+  `TestEnqueueOutboxIsIdempotentEvenWhenTheQueueIsFull` (failed with `outbox full`). The idempotent
+  lookup now runs first.

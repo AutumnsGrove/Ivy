@@ -151,6 +151,16 @@ func (d *DBs) EnqueueOutbox(ctx context.Context, op OutboxOp) (OutboxOp, bool, e
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// A repeat of a queued action is the same action, so it is answered before
+	// the cap: a double tap on a full queue must not read as "queue full".
+	existing, err := outboxByKey(ctx, tx, key)
+	switch {
+	case err == nil:
+		return existing, false, tx.Commit()
+	case !errors.Is(err, ErrNotFound):
+		return OutboxOp{}, false, err
+	}
+
 	var queued int
 	if err := tx.QueryRowContext(ctx,
 		`SELECT count(*) FROM outbox WHERE account_id = ? AND state IN (?, ?)`,
@@ -159,14 +169,6 @@ func (d *DBs) EnqueueOutbox(ctx context.Context, op OutboxOp) (OutboxOp, bool, e
 	}
 	if queued >= MaxQueuedOps {
 		return OutboxOp{}, false, ErrOutboxFull
-	}
-
-	existing, err := outboxByKey(ctx, tx, key)
-	switch {
-	case err == nil:
-		return existing, false, tx.Commit()
-	case !errors.Is(err, ErrNotFound):
-		return OutboxOp{}, false, err
 	}
 
 	var seq int64
