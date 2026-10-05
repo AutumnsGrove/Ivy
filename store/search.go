@@ -377,3 +377,49 @@ func FTSQuery(q string) string {
 	}
 	return b.String()
 }
+
+// IndexMissingSearchDocs builds the search document of up to limit visible
+// content keys that have none, newest first, and returns how many it built.
+// Migration 13 created the index empty, so mail mirrored before it has no
+// document and nothing else would ever make one. An empty message still gets a
+// (never matching) document, so each key is built once and the backlog drains.
+func (d *DBs) IndexMissingSearchDocs(ctx context.Context, accountID string, limit int) (int, error) {
+	if limit <= 0 {
+		return 0, nil
+	}
+	rows, err := d.Mirror.Read.QueryContext(ctx, `
+		SELECT m.content_key
+		FROM messages m
+		WHERE m.account_id = ? AND m.disabled_at IS NULL
+		  AND NOT EXISTS (
+			SELECT 1 FROM search_docs d
+			WHERE d.account_id = m.account_id AND d.content_key = m.content_key)
+		GROUP BY m.content_key
+		ORDER BY max(m.date) DESC
+		LIMIT ?`, accountID, limit)
+	if err != nil {
+		return 0, fmt.Errorf("missing search docs: %w", err)
+	}
+	var keys []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("missing search docs: %w", err)
+		}
+		keys = append(keys, key)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return 0, fmt.Errorf("missing search docs: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, fmt.Errorf("missing search docs: %w", err)
+	}
+	for i, key := range keys {
+		if err := d.ReindexContent(ctx, accountID, key); err != nil {
+			return i, err
+		}
+	}
+	return len(keys), nil
+}

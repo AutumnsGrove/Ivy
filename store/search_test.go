@@ -240,3 +240,43 @@ func TestExtractedTextRoundTrip(t *testing.T) {
 		t.Fatalf("missing ref error = %v, want ErrNotFound", err)
 	}
 }
+
+// Migration 13 creates the search index empty. Mail mirrored before it exists
+// has no search document, and nothing else would ever build one: a message is
+// indexed when it is derived, and it was already derived. So the missing ones
+// are found and indexed in bounded batches.
+func TestIndexMissingSearchDocsBackfillsAnExistingMirror(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct")
+	seedFolder(t, dbs, "acct", "f1")
+	for i, key := range []string{"ck1", "ck2", "ck3"} {
+		if err := dbs.UpsertMessage(ctx, Message{
+			ID: "m" + key, AccountID: "acct", FolderID: "f1", UID: uint32(i + 1), ContentKey: key,
+			Subject: "Subject " + key, BodyText: "needle" + key, Date: time.Date(2026, 9, 1+i, 9, 0, 0, 0, time.UTC),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if hits, _ := dbs.SearchFTS(ctx, "needleck3", nil, 10); len(hits) != 0 {
+		t.Fatalf("setup: %d hits before any indexing, want 0", len(hits))
+	}
+
+	n, err := dbs.IndexMissingSearchDocs(ctx, "acct", 2)
+	if err != nil || n != 2 {
+		t.Fatalf("first batch = %d, %v; want 2", n, err)
+	}
+	// Newest first: ck3 and ck2 are findable, ck1 is not yet.
+	for key, want := range map[string]int{"needleck3": 1, "needleck2": 1, "needleck1": 0} {
+		if hits, _ := dbs.SearchFTS(ctx, key, nil, 10); len(hits) != want {
+			t.Errorf("%s: %d hits after the first batch, want %d", key, len(hits), want)
+		}
+	}
+	if n, err := dbs.IndexMissingSearchDocs(ctx, "acct", 2); err != nil || n != 1 {
+		t.Fatalf("second batch = %d, %v; want 1", n, err)
+	}
+	if n, err := dbs.IndexMissingSearchDocs(ctx, "acct", 2); err != nil || n != 0 {
+		t.Fatalf("third batch = %d, %v; want 0 (nothing left to index)", n, err)
+	}
+}

@@ -133,3 +133,35 @@ func TestSharedAttachmentTextIsIndexedForEveryMessageCarryingIt(t *testing.T) {
 		t.Fatalf("%d messages found by the shared attachment's text, want both", len(hits))
 	}
 }
+
+// Settle indexes whatever mirrored mail has no search document yet, so a mirror
+// that predates the search index becomes searchable without a re-sync.
+func TestSettleIndexesMailThatPredatesTheSearchIndex(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+	acc.Deliver("INBOX", mailworld.Msg().From("a@example.com").Subject("Old mail").
+		Date(time.Date(2026, 4, 1, 9, 0, 0, 0, time.UTC)).MessageID("<old@grove.test>").Text("zucchini harvest").Build())
+	f := ivysync.NewFetcher(dbs)
+	if _, err := f.Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret")); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	// Put the mirror back the way it was before the index existed.
+	for _, stmt := range []string{`DELETE FROM search_docs`, `DELETE FROM search_index`} {
+		if _, err := dbs.Mirror.Write.ExecContext(ctx, stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if hits, _ := dbs.SearchFTS(ctx, "zucchini", nil, 10); len(hits) != 0 {
+		t.Fatalf("setup: %d hits with the index emptied", len(hits))
+	}
+
+	if err := f.Settle(ctx, "acct-1"); err != nil {
+		t.Fatalf("Settle: %v", err)
+	}
+	if hits, _ := dbs.SearchFTS(ctx, "zucchini", nil, 10); len(hits) != 1 {
+		t.Fatalf("%d hits after Settle, want the old message indexed", len(hits))
+	}
+}

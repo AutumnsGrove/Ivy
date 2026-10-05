@@ -1280,3 +1280,19 @@ on parts and no use of the caller's deadline).
   Reading makes this reachable in weeks. Fixing it means a cursor in the `Reading` and `Inbox` contract
   and the screens, so it is not done here. Recommend keyset paging on (date, id) like the inbox, with the
   Reading feed taking `cursor` and returning `nextCursor`.
+
+### `0c7abc0` Add the FTS index, extracted text and cost ledger schemas
+
+- **#117** · `0c7abc0`, `b74c0c2` · `store/search.go`, `sync/sync.go` · **bug** · migration 13 creates
+  `search_index` empty and `DerivedVersion` was not bumped, and a message is only indexed when it is
+  derived. Any mirror that already held mail when this version first ran (an existing dev mirror, or the
+  potato's if it has synced before) had no search document for any of it, and nothing would ever build
+  one, so old mail was invisible to keyword search for good. Reproduced with
+  `TestIndexMissingSearchDocsBackfillsAnExistingMirror` and
+  `TestSettleIndexesMailThatPredatesTheSearchIndex` (the second: index emptied, `Settle` run, 0 hits;
+  failed before the fix). `Settle` now builds the missing documents in batches of 500
+  (`IndexMissingSearchDocs`), newest first. A fresh install is unaffected.
+- **N38 (open, measure first)** · `0c7abc0` · `store/search.go` · the backfill query has to scan the
+  account's messages and probe `search_docs` on every settle to prove nothing is missing, so it costs a
+  full pass in the steady state, like `RebuildPeople` (N36). Measure both at 5k messages on the potato; if
+  they matter, keep a per-account "backfill complete" marker in `state.db` and skip once it is set.

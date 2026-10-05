@@ -18,6 +18,10 @@ import (
 // full of PDFs heals across runs instead of stalling a fetch.
 const extractBatch = 100
 
+// indexBatch bounds how many messages one settle pass gives a search document to
+// when they predate the index.
+const indexBatch = 500
+
 // extractTimeout bounds one attachment's extraction. A hostile or enormous
 // document cannot hold a sync worker past this (STANDARDS.md 4a).
 const extractTimeout = 20 * time.Second
