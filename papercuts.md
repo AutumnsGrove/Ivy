@@ -994,13 +994,15 @@ Baseline before any change: `go build`, `go vet`, `staticcheck`, `gofumpt -l`, t
   (`store.SettledMoveDestination`) to the copy in the folder it delivered it to, so a same-Message-ID copy
   in another folder (N8) is never mistaken for it; when sync has not mirrored the arrival yet it answers
   409 `not_synced`. The web client knows the new code (before it was coerced to `internal_error`).
-- **N30 (open, needs a design decision)** · `6b0135f` · `sync/outbox.go` · Undo of a move can only act once
-  sync has mirrored the arrival in the destination, so within the first few seconds it answers
-  `not_synced`, which is the window the toast is on screen. Options: after a MOVE the worker mirrors the
-  arrival itself (the server's `COPYUID` names the new UID; fetch and upsert that one message), or the
-  worker asks the sync worker for an immediate pass of the destination folder. Recommendation: use
-  `COPYUID`, since it needs no new coupling between the two workers. Not done here because it changes
-  what `finishMove` writes to the mirror.
+- **#94 (was N30, decided by the operator 2026-10-05: mirror via COPYUID)** · `6b0135f` · `sync/outbox.go` ·
+  **bug** · Undo of a move could only act once sync had mirrored the arrival, so within the first seconds
+  (the toast's window) it answered `not_synced`. Reproduced with
+  `TestOutboxMoveMirrorsTheArrivalImmediately` (no row in the destination mirror after the op was done).
+  After a MOVE the worker now uses the `COPYUID` destination UIDs to fetch and store the arrived message
+  with sync's own `fetchBatch` (peeking, so nothing is marked seen). It is best effort and logged: the
+  move already happened, and sync still mirrors the arrival if this fails (`not_synced` is then the honest
+  answer). The same test proves the next sync pass adopts that row rather than listing the message twice.
+  A crash between the ack and this step is covered by sync, as before.
 - **#92** · `4d23d76`/`0be4836` · `sync/outbox.go`, `gateway/outbox.go` · **standards** · the CI step
   `golangci-lint` (pinned v2.12.1, `.golangci.yml`) failed on the outbox code with 8 findings the local
   gates (`vet`, `staticcheck`, `gofumpt`) do not run: three non-exhaustive IMAP `switch`es, the builtins

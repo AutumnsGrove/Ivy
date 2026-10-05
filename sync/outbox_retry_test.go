@@ -179,3 +179,47 @@ func TestOutboxOutageDoesNotExhaustAttempts(t *testing.T) {
 		t.Fatalf("after the outage op is %q (%s), want done", got.State, got.LastErrorCode)
 	}
 }
+
+// Undo needs the message in the destination's mirror the moment the move is
+// done, so the worker mirrors the arrival itself (from the server's COPYUID)
+// instead of leaving it for the next sync pass.
+func TestOutboxMoveMirrorsTheArrivalImmediately(t *testing.T) {
+	t.Parallel()
+	fx := newOutboxFixture(t)
+	if err := fx.acc.CreateMailbox("Archive"); err != nil {
+		t.Fatalf("create Archive: %v", err)
+	}
+	fx.acc.Deliver("INBOX", rawFor(1))
+	fx.fetch(t)
+	inbox := mustFolder(t, fx.dbs, "acct-1", "INBOX")
+	archive := mustFolder(t, fx.dbs, "acct-1", "Archive")
+	op := fx.enqueue(t, store.OutboxOp{
+		ID: "op-1", Kind: store.OutboxMove,
+		ContentKey: contentKeyFor(1), SourceFolderID: inbox.ID,
+		Expect: store.OutboxExpect{DestFolderID: archive.ID},
+	})
+	fx.run(t) // no sync pass after the move
+
+	assertOutboxDone(t, fx.dbs, op.ID)
+	id, _, err := fx.dbs.MessageRowRef(fx.ctx, "acct-1", contentKeyFor(1), archive.ID)
+	if err != nil {
+		t.Fatalf("the arrival is not in the Archive mirror: %v", err)
+	}
+	if _, err := fx.dbs.GetMessage(fx.ctx, id); err != nil {
+		t.Fatalf("the arrived row is not live: %v", err)
+	}
+
+	// The next sync pass must adopt that row, not mirror the message twice.
+	fx.fetch(t)
+	again, _, err := fx.dbs.MessageRowRef(fx.ctx, "acct-1", contentKeyFor(1), archive.ID)
+	if err != nil || again != id {
+		t.Fatalf("after a sync pass the arrival is row %q (%v), want the same row %q", again, err, id)
+	}
+	page, err := fx.dbs.ListInbox(fx.ctx, store.InboxQuery{Role: store.RoleArchive})
+	if err != nil {
+		t.Fatalf("list archive: %v", err)
+	}
+	if len(page.Items) != 1 {
+		t.Errorf("Archive lists %d messages after a sync pass, want 1", len(page.Items))
+	}
+}

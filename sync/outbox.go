@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/emersion/go-imap/v2"
+	"github.com/emersion/go-imap/v2/imapclient"
 
 	"github.com/AutumnsGrove/Ivy/store"
 )
@@ -277,13 +278,36 @@ func (w *OutboxWorker) dispatchMove(ctx context.Context, c *session, op store.Ou
 		return err
 	}
 	w.notify(ctx, op.ID)
-	if err := w.moveMessage(c, uid, dst.Name); err != nil {
+	moved, err := w.moveMessage(c, uid, dst.Name)
+	if err != nil {
 		return w.serverError(ctx, op, err)
 	}
 	if err := w.afterAckCrash(op); err != nil {
 		return err
 	}
+	w.mirrorArrival(ctx, c, dst, moved)
 	return w.finishMove(ctx, op, rowID)
+}
+
+// mirrorArrival stores the moved message in the destination's mirror straight
+// away, using the UID the server reported (COPYUID), so an Undo can act on it
+// before the next sync pass. It is best effort: the move already happened, and
+// sync mirrors the arrival later if this cannot.
+func (w *OutboxWorker) mirrorArrival(ctx context.Context, c *session, dst store.Folder, moved *imapclient.MoveData) {
+	if moved == nil || moved.UIDValidity == 0 {
+		return
+	}
+	set, ok := moved.DestUIDs.(imap.UIDSet)
+	if !ok || len(set) == 0 {
+		return
+	}
+	if _, err := w.selectFolder(c, dst.Name); err != nil {
+		slog.WarnContext(ctx, "outbox: could not select the destination to mirror a move", "account", w.acct.ID, "error", err)
+		return
+	}
+	if _, err := w.fetcher.fetchBatch(ctx, c, w.acct, dst.ID, moved.UIDValidity, set); err != nil {
+		slog.WarnContext(ctx, "outbox: could not mirror a moved message", "account", w.acct.ID, "error", err)
+	}
 }
 
 func (w *OutboxWorker) dispatchFlags(ctx context.Context, c *session, op store.OutboxOp) error {
@@ -818,10 +842,9 @@ func (w *OutboxWorker) applyFlags(c *session, uid uint32, expect store.OutboxExp
 	return nil
 }
 
-func (w *OutboxWorker) moveMessage(c *session, uid uint32, dest string) error {
+func (w *OutboxWorker) moveMessage(c *session, uid uint32, dest string) (*imapclient.MoveData, error) {
 	defer c.watch()()
-	_, err := c.Move(imap.UIDSetNum(imap.UID(uid)), dest).Wait()
-	return err
+	return c.Move(imap.UIDSetNum(imap.UID(uid)), dest).Wait()
 }
 
 func (w *OutboxWorker) expungeMessage(c *session, uid uint32) error {
