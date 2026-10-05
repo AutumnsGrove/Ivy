@@ -173,3 +173,43 @@ func TestSearchWithoutAnAccountStillSearchesByMeaning(t *testing.T) {
 		t.Errorf("%d query embeddings, want exactly 1 paid call", got)
 	}
 }
+
+// An attachment is embedded under its content hash, shared by every message
+// that carries it. A vector hit on it is a hit on those messages, but the hit
+// was handed on with the hash as if it were a message's content key, which
+// resolves to nothing, so everything paid for attachment meaning was dropped.
+func TestSearchByMeaningFindsTheMessageCarryingAnAttachment(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs, err := store.Open(ctx, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = dbs.Close() })
+	seedSearchMail(t, dbs)
+	if err := dbs.ReplaceMessageAttachments(ctx, "m2", []store.Attachment{{
+		ID: "att1", MessageID: "m2", Filename: "menu.pdf", MIMEType: "application/pdf",
+		Size: 10, ContentHash: "hash-menu", StoragePath: "1",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	v := llm.Quantise([]float32{0.5, 0, 0, 0})
+	if err := dbs.UpsertEmbeddings(ctx, []store.Embedding{{
+		AccountID: "a1", Ref: "hash-menu", Kind: store.ExtractKindAttachment, Model: "m",
+		Dims: v.Dims, Scale: v.Scale, Norm: v.Norm, Vector: v.Encode(),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	emb := &fixedEmbedder{vec: v, model: "m"}
+	srv := httptest.NewServer(New(dbs, "test", testStaticFS()).WithSearch(emb).Handler())
+	t.Cleanup(srv.Close)
+
+	var out api.SearchResults
+	if code := getJSON(t, srv.URL+"/api/v1/search?q=midday+meal", &out); code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", code)
+	}
+	if len(out.Hits) != 1 || out.Hits[0].Id != "m2" {
+		body, _ := json.Marshal(out)
+		t.Fatalf("hits = %s, want the message that carries the attachment", body)
+	}
+}

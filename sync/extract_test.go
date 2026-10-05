@@ -104,3 +104,32 @@ func TestUnsupportedAttachmentIsRecordedOnce(t *testing.T) {
 		t.Fatalf("pending = %+v, want none", pending)
 	}
 }
+
+// One file shared by several messages is read once, keyed by its content hash.
+// Only the one message the pending query happened to pick was reindexed, so the
+// text was findable through one of them and silently missing from the rest.
+func TestSharedAttachmentTextIsIndexedForEveryMessageCarryingIt(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+	pdf := pdfWith("Quarterly forecast figures")
+	for i, id := range []string{"<a@grove.test>", "<b@grove.test>"} {
+		acc.Deliver("INBOX", mailworld.Msg().From("fin@example.com").Subject(fmt.Sprintf("Forecast %d", i)).
+			Date(time.Date(2026, 4, 1+i, 9, 0, 0, 0, time.UTC)).MessageID(id).Text("see attached").
+			Attach("forecast.pdf", "application/pdf", pdf).Build())
+	}
+
+	if _, err := ivysync.NewFetcher(dbs).Fetch(ctx, accountFor(t, w, "acct-1", "me@grove.test", "secret")); err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	// "figures" is only in the PDF, not in either subject or body.
+	hits, err := dbs.SearchFTS(ctx, "figures", []string{"acct-1"}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 2 {
+		t.Fatalf("%d messages found by the shared attachment's text, want both", len(hits))
+	}
+}

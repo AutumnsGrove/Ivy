@@ -1123,3 +1123,20 @@ The watcher script had no test at all, so the three defects below were found by 
   word with either message returned 0 hits; failed before the fix). With no account named, accounts are
   now offered to the gate in turn until one will take the query, so at most one paid call is made; a
   provider outage or vector-scan failure is logged and search stays keyword-only.
+
+### `e34fc80` Index mail into FTS and embed it once in the background
+
+- **#103** · `e34fc80` · `search/search.go` · **bug** · attachments are embedded under their content
+  hash, but `VectorSearch` returned that hash as a hit's content key, which resolves to no message, so
+  `handleSearch` dropped every attachment match as "hidden by the time the page was built". Everything
+  paid for attachment meaning was unreachable, and the dead hits also took up result slots.
+  Reproduced with `TestSearchByMeaningFindsTheMessageCarryingAnAttachment` (0 hits; failed before the
+  fix). Attachment matches now fan back out to every visible message that carries the file
+  (`store.ContentRefsForAttachment`, bounded by `MaxAttachmentRefs`), best match first. The scan's
+  dead no-op loop and its key-collision between body and attachment refs went with it.
+- **#104** · `b74c0c2` · `sync/extract.go` · **bug** · extracted attachment text is keyed by the file's
+  hash and shared by every message carrying it, but `ExtractTexts` reindexed only the one message the
+  pending query picked, so the text was searchable through one message and silently missing from the
+  rest (a forwarded PDF, a re-sent invoice). Reproduced with
+  `TestSharedAttachmentTextIsIndexedForEveryMessageCarryingIt` (1 of 2 messages found; failed before the
+  fix). It now reindexes every message with that hash.

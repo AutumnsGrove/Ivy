@@ -1,11 +1,12 @@
 package search
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/AutumnsGrove/Ivy/llm"
@@ -23,43 +24,82 @@ func New(dbs *store.DBs, gate *llm.Gate) *Service {
 	return &Service{dbs: dbs, gate: gate}
 }
 
-// VectorSearch returns the content keys nearest to a query embedding by
+// scoredRef is the best chunk score of one embedded document: a message body
+// (ref is its content key) or an attachment (ref is its content hash).
+type scoredRef struct {
+	accountID string
+	ref       string
+	kind      string
+	score     float64
+}
+
+// VectorSearch returns the messages nearest to a query embedding by
 // brute-force cosine, streamed from SQLite in one pass. A document's score is
 // its best chunk. It never loads every vector into memory; only the running
-// best score per content key is kept, which is a few bytes per document.
+// best score per document is kept, which is a few bytes each. An attachment
+// match is a match on every message that carries the file, so it is resolved
+// back to those messages, best first, until limit messages are found.
 func (s *Service) VectorSearch(ctx context.Context, query llm.Vector, accounts []string, model string, limit int) ([]Hit, error) {
 	if limit <= 0 || query.Dims == 0 {
 		return nil, nil
 	}
-	best := make(map[string]float64)
-	var hits []Hit
+	best := make(map[string]*scoredRef)
 	err := s.dbs.EachEmbedding(ctx, accounts, model, func(e store.Embedding) error {
 		v, ok := llm.DecodeVector(e.Vector, e.Scale, e.Norm, e.Dims)
 		if !ok || v.Dims != query.Dims {
 			return nil // a corrupt or mismatched row is skipped, never scored
 		}
 		score := query.Cosine(v)
-		key := e.AccountID + "\x00" + e.Ref
+		key := e.AccountID + "\x00" + e.Kind + "\x00" + e.Ref
 		if prev, ok := best[key]; ok {
-			if score > prev {
-				best[key] = score
-			}
+			prev.score = max(prev.score, score)
 			return nil
 		}
-		best[key] = score
-		hits = append(hits, Hit{AccountID: e.AccountID, ContentKey: e.Ref})
+		best[key] = &scoredRef{accountID: e.AccountID, ref: e.Ref, kind: e.Kind, score: score}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	for i := range hits {
-		hits[i] = Hit{AccountID: hits[i].AccountID, ContentKey: hits[i].ContentKey}
+	ranked := make([]*scoredRef, 0, len(best))
+	for _, r := range best {
+		ranked = append(ranked, r)
 	}
-	// Sort by the best chunk score, descending.
-	sort.SliceStable(hits, func(i, j int) bool {
-		return best[hits[i].AccountID+"\x00"+hits[i].ContentKey] > best[hits[j].AccountID+"\x00"+hits[j].ContentKey]
+	// Ties break on identity so the order is the same on every run.
+	slices.SortFunc(ranked, func(a, b *scoredRef) int {
+		return cmp.Or(
+			cmp.Compare(b.score, a.score),
+			cmp.Compare(a.accountID, b.accountID),
+			cmp.Compare(a.ref, b.ref),
+		)
 	})
+
+	var hits []Hit
+	seen := make(map[string]bool)
+	add := func(accountID, contentKey string) {
+		key := accountID + "\x00" + contentKey
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		hits = append(hits, Hit{AccountID: accountID, ContentKey: contentKey})
+	}
+	for _, r := range ranked {
+		if len(hits) >= limit {
+			break
+		}
+		if r.kind != store.ExtractKindAttachment {
+			add(r.accountID, r.ref)
+			continue
+		}
+		refs, err := s.dbs.ContentRefsForAttachment(ctx, r.accountID, r.ref)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range refs {
+			add(m.AccountID, m.ContentKey)
+		}
+	}
 	if len(hits) > limit {
 		hits = hits[:limit]
 	}

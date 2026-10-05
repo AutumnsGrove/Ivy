@@ -52,8 +52,16 @@ func (f *Fetcher) ExtractTexts(ctx context.Context, accountID string, limit int)
 		}); err != nil {
 			return done, err
 		}
-		if err := f.dbs.ReindexContent(ctx, m.AccountID, m.ContentKey); err != nil {
+		// The text is keyed by the file's hash, so every message that carries the
+		// file gets it in its search document, not only the one picked to read it.
+		refs, err := f.dbs.ContentRefsForAttachment(ctx, "", p.Hash)
+		if err != nil {
 			return done, err
+		}
+		for _, ref := range refs {
+			if err := f.dbs.ReindexContent(ctx, ref.AccountID, ref.ContentKey); err != nil {
+				return done, err
+			}
 		}
 		done++
 	}

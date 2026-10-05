@@ -134,3 +134,50 @@ func attachmentID(messageID, path string) string {
 	sum := sha256.Sum256([]byte(messageID + "\x00" + path))
 	return hex.EncodeToString(sum[:16])
 }
+
+// MaxAttachmentRefs bounds how many messages one attachment hash resolves to, so
+// a file attached to a great many messages (a logo in every signature) cannot
+// turn one extraction or one search hit into an unbounded reindex or result.
+const MaxAttachmentRefs = 1000
+
+// ContentRef names one message by the durable identity the derived tables use.
+type ContentRef struct {
+	AccountID  string
+	ContentKey string
+}
+
+// ContentRefsForAttachment returns the visible messages that carry an
+// attachment, newest first, one per content key. Extracted text and embeddings
+// are keyed by the attachment's content hash, shared by every message with that
+// file, so anything found by hash has to fan back out to all of them. An empty
+// accountID means every account.
+func (d *DBs) ContentRefsForAttachment(ctx context.Context, accountID, hash string) ([]ContentRef, error) {
+	if hash == "" {
+		return nil, nil
+	}
+	rows, err := d.Mirror.Read.QueryContext(ctx, `
+		SELECT m.account_id, m.content_key
+		FROM attachments a
+		JOIN messages m ON m.id = a.message_id
+		WHERE a.content_hash = ? AND m.disabled_at IS NULL
+		  AND (? = '' OR m.account_id = ?)
+		GROUP BY m.account_id, m.content_key
+		ORDER BY max(m.date) DESC
+		LIMIT ?`, hash, accountID, accountID, MaxAttachmentRefs)
+	if err != nil {
+		return nil, fmt.Errorf("content refs for attachment: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []ContentRef
+	for rows.Next() {
+		var r ContentRef
+		if err := rows.Scan(&r.AccountID, &r.ContentKey); err != nil {
+			return nil, fmt.Errorf("content refs for attachment: %w", err)
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("content refs for attachment: %w", err)
+	}
+	return out, nil
+}
