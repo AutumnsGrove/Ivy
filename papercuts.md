@@ -1140,3 +1140,29 @@ The watcher script had no test at all, so the three defects below were found by 
   rest (a forwarded PDF, a re-sent invoice). Reproduced with
   `TestSharedAttachmentTextIsIndexedForEveryMessageCarryingIt` (1 of 2 messages found; failed before the
   fix). It now reindexes every message with that hash.
+
+### `71fd522` Add tier 0-1 attachment text extraction
+
+Attachments are sender-controlled and extraction runs inside the sync worker's Settle, so these are
+denial-of-service paths on the board. Sizes were measured at several scales with a hard `timeout`
+before fixing: an `.ics` with 10k/20k/40k/80k folded lines took 11/39/171/556 ms (quadratic, so a
+1 MiB file is tens of seconds and a 32 MiB one effectively forever); an OOXML archive of 8 KiB parts
+inflating to 8 MiB of markup each took 0.28/1.1/4.5 s for 1/4/16 parts (linear in parts, with no cap
+on parts and no use of the caller's deadline).
+
+- **#105** · `71fd522` · `extract/extract.go` · **bug** · `unfold` appended each continuation line to the
+  previous one with `+=`, copying the growing line on every fold. Reproduced with
+  `TestExtractCalendarManyFoldsIsLinear` (200k folds: 2.3-2.6 s, asserted under 1 s; failed before the
+  fix). The line is now built in a `strings.Builder`.
+- **#106** · `71fd522` · `extract/extract.go` · **bug** · the OOXML walk never looked at `ctx`, and each
+  part could inflate to `MaxInputBytes` (32 MiB) with no limit on the total or on the number of parts,
+  while output limits never fire for markup with no text. So the 20 s `extractTimeout` did nothing for
+  `.docx/.xlsx/.pptx`, and a zip of a few KiB held the settle pass for minutes. Reproduced with
+  `TestExtractOOXMLHonoursItsDeadline` (ran ~7 s past a 150 ms deadline) and
+  `TestExtractOOXMLInflationIsBounded` (a part after the budget was still read). The walk now polls the
+  context and shares a 64 MiB inflation budget across the archive (`maxOOXMLInflate`).
+- **#107** · `71fd522` · `extract/extract.go` · **bug** · `appendXMLText` stopped a part when the
+  builder's total length reached the room *left*, so once earlier parts had used a little over half of
+  `MaxOutputBytes`, every later part was cut off after its first run of text (a big shared-strings
+  table starved every worksheet). Reproduced with `TestExtractOOXMLLaterPartsGetTheRemainingRoom` (the
+  second part's text was missing; failed before the fix). The ceiling is now computed per part.

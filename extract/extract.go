@@ -15,6 +15,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"errors"
 	"io"
 	"path/filepath"
 	"strings"
@@ -48,6 +49,12 @@ const (
 	MaxOutputBytes = 1 << 20
 	MaxPages       = 500
 )
+
+// maxOOXMLInflate bounds the markup read from one OOXML archive in total. Each
+// part is capped at MaxInputBytes, but an archive of a few KiB can hold
+// thousands of parts that each inflate to that, so the sum needs its own ceiling.
+// A var only so a test can lower it.
+var maxOOXMLInflate int64 = 64 << 20
 
 // Result is the plain text of one document. Text is empty unless Status is
 // StatusOK.
@@ -85,7 +92,7 @@ func Extract(ctx context.Context, filename, contentType string, data []byte) Res
 	case kindPDF:
 		return extractPDF(ctx, data)
 	case kindOOXML:
-		return extractOOXML(data)
+		return extractOOXML(ctx, data)
 	default:
 		return Result{Status: StatusUnsupported}
 	}
@@ -218,17 +225,26 @@ func extractPDF(ctx context.Context, data []byte) (res Result) {
 // extractOOXML reads the text of a Word, Excel or PowerPoint file. It walks
 // only the parts that carry text and ignores everything else, so an embedded
 // object or a macro never reaches the caller.
-func extractOOXML(data []byte) Result {
+func extractOOXML(ctx context.Context, data []byte) Result {
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return Result{Tier: TierDocument, Status: StatusFailed}
 	}
 	var out strings.Builder
+	budget := maxOOXMLInflate
 	for _, f := range zr.File {
 		if !isTextPart(f.Name) {
 			continue
 		}
-		if err := appendXMLText(&out, f, MaxOutputBytes-out.Len()); err != nil {
+		if budget <= 0 {
+			break
+		}
+		read, err := appendXMLText(ctx, &out, f, MaxOutputBytes-out.Len(), budget)
+		budget -= read
+		if ctx.Err() != nil {
+			return Result{Tier: TierDocument, Status: StatusFailed}
+		}
+		if err != nil {
 			continue // one unreadable part does not lose the others
 		}
 		if out.Len() >= MaxOutputBytes {
@@ -236,6 +252,19 @@ func extractOOXML(data []byte) Result {
 		}
 	}
 	return finish(TierDocument, out.String())
+}
+
+// countingReader tells appendXMLText how much of the archive's inflation budget
+// a part used, whether or not the part parsed.
+type countingReader struct {
+	r io.Reader
+	n int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
 }
 
 // isTextPart selects the document parts that hold user text, by prefix so a
@@ -261,32 +290,40 @@ func isTextPart(name string) bool {
 // appendXMLText streams one XML part and appends its character data, inserting
 // a space at each text run so adjacent runs do not glue together. xml.Decoder
 // does not resolve external entities, so a crafted file cannot make it fetch
-// anything.
-func appendXMLText(out *strings.Builder, f *zip.File, limit int) error {
+// anything. It reads at most budget bytes of markup (and never more than
+// MaxInputBytes), returns how many it read, and stops when ctx is done: a part
+// of nothing but tags yields no text, so the output limit never stops it.
+func appendXMLText(ctx context.Context, out *strings.Builder, f *zip.File, limit int, budget int64) (int64, error) {
 	if limit <= 0 {
-		return nil
+		return 0, nil
 	}
 	rc, err := f.Open()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer func() { _ = rc.Close() }()
 
-	dec := xml.NewDecoder(io.LimitReader(rc, MaxInputBytes))
-	for {
+	// limit is the room left for this part; out already holds earlier parts' text.
+	ceiling := out.Len() + limit
+	src := &countingReader{r: io.LimitReader(rc, min(budget, MaxInputBytes))}
+	dec := xml.NewDecoder(src)
+	for tokens := 1; ; tokens++ {
+		if tokens%1024 == 0 && ctx.Err() != nil {
+			return src.n, ctx.Err()
+		}
 		tok, err := dec.Token()
-		if err == io.EOF {
-			return nil
+		if errors.Is(err, io.EOF) {
+			return src.n, nil
 		}
 		if err != nil {
-			return err
+			return src.n, err
 		}
 		if cd, ok := tok.(xml.CharData); ok {
 			out.Write(cd)
 			out.WriteByte(' ')
 		}
-		if out.Len() >= limit {
-			return nil
+		if out.Len() >= ceiling {
+			return src.n, nil
 		}
 	}
 }
@@ -316,21 +353,35 @@ func calendarText(s string) string {
 }
 
 // unfold joins RFC 5545 folded lines: a line that begins with a space or tab
-// continues the previous one.
+// continues the previous one. The line being built is a Builder, not a string
+// appended to in place: a sender can fold one property hundreds of thousands of
+// times, and re-copying the growing line on every fold is quadratic.
 func unfold(s string) []string {
 	raw := strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
 	out := make([]string, 0, len(raw))
+	var cur strings.Builder
+	open := false
+	flush := func() {
+		if open {
+			out = append(out, cur.String())
+			cur.Reset()
+			open = false
+		}
+	}
 	for _, line := range raw {
 		line = strings.TrimRight(line, "\r")
 		if line == "" {
 			continue
 		}
-		if (line[0] == ' ' || line[0] == '\t') && len(out) > 0 {
-			out[len(out)-1] += line[1:]
+		if (line[0] == ' ' || line[0] == '\t') && open {
+			cur.WriteString(line[1:])
 			continue
 		}
-		out = append(out, line)
+		flush()
+		cur.WriteString(line)
+		open = true
 	}
+	flush()
 	return out
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestExtractCalendarInvite(t *testing.T) {
@@ -208,4 +209,115 @@ func buildZip(t *testing.T, files map[string]string) []byte {
 		t.Fatalf("zip close: %v", err)
 	}
 	return buf.Bytes()
+}
+
+// A calendar attachment is sender-controlled. Unfolding appended each
+// continuation to the previous line by string concatenation, so a file made of
+// one property folded many times copied the growing line on every fold:
+// quadratic, and a 1 MiB .ics held the extractor for minutes on the board.
+func TestExtractCalendarManyFoldsIsLinear(t *testing.T) {
+	t.Parallel()
+	ics := "BEGIN:VEVENT\nSUMMARY:start" + strings.Repeat("\n a", 200_000) + "\nEND:VEVENT\n"
+	start := time.Now()
+	got := Extract(context.Background(), "folds.ics", "text/calendar", []byte(ics))
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("200k folds took %v, want well under a second (linear)", elapsed)
+	}
+	if got.Status != StatusOK || !strings.HasPrefix(got.Text, "start") {
+		t.Errorf("result = %q/%.20q, want the unfolded summary", got.Status, got.Text)
+	}
+}
+
+// markupPart is a zip entry made of tags and no text: it costs the parser time
+// and yields nothing, so output limits never stop it.
+func markupPart(t *testing.T, zw *zip.Writer, name string, mib int) {
+	t.Helper()
+	w, err := zw.Create(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunk := []byte(strings.Repeat("<a/>", 1<<18)) // 1 MiB
+	for range mib {
+		if _, err := w.Write(chunk); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// The caller's deadline is the documented time bound, but the OOXML walk never
+// looked at it: a few KiB of zip inflating to gigabytes of markup ignored the
+// extraction timeout.
+func TestExtractOOXMLHonoursItsDeadline(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for i := range 40 {
+		markupPart(t, zw, fmt.Sprintf("xl/worksheets/sheet%d.xml", i), 4)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	got := Extract(ctx, "bomb.xlsx", "", buf.Bytes())
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("extraction ran %v past a 150ms deadline", elapsed)
+	}
+	if got.Status != StatusFailed {
+		t.Errorf("status = %q, want %q for a cancelled walk", got.Status, StatusFailed)
+	}
+}
+
+// Beyond the deadline, the total markup read from one archive has its own
+// ceiling, so a document cannot cost an unbounded amount of inflation.
+func TestExtractOOXMLInflationIsBounded(t *testing.T) {
+	old := maxOOXMLInflate
+	maxOOXMLInflate = 1 << 20
+	t.Cleanup(func() { maxOOXMLInflate = old })
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	markupPart(t, zw, "xl/worksheets/sheet1.xml", 2) // over the ceiling by itself
+	w, err := zw.Create("xl/sharedStrings.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = w.Write([]byte(`<sst><si><t>needle</t></si></sst>`))
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	got := Extract(context.Background(), "big.xlsx", "", buf.Bytes())
+	if strings.Contains(got.Text, "needle") {
+		t.Errorf("read a part after the inflation ceiling was spent: %q", got.Text)
+	}
+}
+
+// The per-part stop compared the text gathered so far, across every part, with
+// the room left, so once an earlier part had used a little over half the cap
+// each later part was cut off after its first run of text.
+func TestExtractOOXMLLaterPartsGetTheRemainingRoom(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, err := zw.Create("xl/sharedStrings.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = fmt.Fprintf(w, "<sst><si><t>%s</t></si></sst>", strings.Repeat("word ", 130_000)) // ~650 KB of the 1 MiB cap
+	w, err = zw.Create("xl/worksheets/sheet1.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = w.Write([]byte("<ws><c><t>first</t></c><c><t>needle</t></c></ws>"))
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	got := Extract(context.Background(), "sheet.xlsx", "", buf.Bytes())
+	if !strings.Contains(got.Text, "needle") {
+		t.Errorf("a later part was cut off after its first run of text")
+	}
 }
