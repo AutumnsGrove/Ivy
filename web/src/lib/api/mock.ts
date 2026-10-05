@@ -286,11 +286,11 @@ export const askAnswer: AskAnswer = {
 
 export const tags: TagsOverview = {
 	mine: [
-		{ id: 't1', name: 'receipts', color: 'sky', count: 24 },
-		{ id: 't2', name: 'legal', color: 'coral', count: 3 },
-		{ id: 't3', name: 'contact form', color: 'rose', count: 11 },
-		{ id: 't4', name: 'grove', color: 'teal', count: 7 },
-		{ id: 't5', name: 'ideas', color: 'lilac', count: 2 }
+		{ id: 't1', slug: 'receipts', name: 'receipts', color: 'sky', count: 24 },
+		{ id: 't2', slug: 'legal', name: 'legal', color: 'coral', count: 3 },
+		{ id: 't3', slug: 'contact-form', name: 'contact form', color: 'rose', count: 11 },
+		{ id: 't4', slug: 'grove', name: 'grove', color: 'teal', count: 7 },
+		{ id: 't5', slug: 'ideas', name: 'ideas', color: 'lilac', count: 2 }
 	],
 	placed: [
 		{ id: 'p1', name: 'needs you', count: 2 },

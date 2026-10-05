@@ -19,7 +19,7 @@ const maxTagBodyBytes = 4 << 10
 const defaultTagColor = api.Lilac
 
 func userTag(t store.TagSummary) api.UserTag {
-	return api.UserTag{Id: t.ID, Name: t.Name, Color: api.TagColor(t.Color), Count: t.Count}
+	return api.UserTag{Id: t.ID, Slug: t.Slug, Name: t.Name, Color: api.TagColor(t.Color), Count: t.Count}
 }
 
 // handleListTags serves the operator's tags with their message counts. The

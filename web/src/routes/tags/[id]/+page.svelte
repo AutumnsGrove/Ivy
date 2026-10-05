@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { api } from '#lib/api/client.js';
+	import { ApiError } from '#lib/api/errors.js';
+	import { removeTag } from '#lib/tagManage.js';
 	import Page from '#lib/components/shell/Page.svelte';
 	import Button from '#lib/components/ui/Button.svelte';
 	import Field from '#lib/components/ui/Field.svelte';
@@ -18,14 +21,29 @@
 		color = data.tag.color;
 	});
 
-	function save() {
-		toasts.push({ text: 'Tag saved', tone: 'ok' });
-		void goto('/tags');
+	let saving = $state(false);
+
+	async function save() {
+		if (!name.trim() || saving) return;
+		saving = true;
+		try {
+			await api.updateTag(data.tag.id, { name: name.trim(), color });
+			toasts.push({ text: 'Tag saved', tone: 'ok' });
+			await goto('/tags', { invalidateAll: true });
+		} catch (e) {
+			toasts.push({ text: e instanceof ApiError ? e.message : "Couldn't save the tag", tone: 'danger' });
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function remove() {
+		if (await removeTag(data.tag)) await goto('/tags', { invalidateAll: true });
 	}
 </script>
 
 <TopBar title="Edit tag" backHref="/tags">
-	{#snippet trailing()}<Button size="sm" variant="primary" onclick={save}>Save</Button>{/snippet}
+	{#snippet trailing()}<Button size="sm" variant="primary" onclick={() => void save()} disabled={!name.trim() || saving}>Save</Button>{/snippet}
 </TopBar>
 
 <Page>
@@ -42,7 +60,7 @@
 		<TagColorPicker bind:value={color} labels />
 		<p class="note">Every colour comes with a deeper shade for the day theme, so tags stay readable in both.</p>
 
-		<div class="del"><Button variant="danger-text" onclick={() => toasts.push({ text: 'Delete is not wired up yet', tone: 'warn' })}>Delete tag</Button></div>
+		<div class="del"><Button variant="danger-text" onclick={() => void remove()}>Delete tag</Button></div>
 	</div>
 </Page>
 

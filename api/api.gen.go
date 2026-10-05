@@ -563,9 +563,12 @@ type MailMessage struct {
 	Subject    string   `json:"subject"`
 	Summary    *string  `json:"summary,omitempty"`
 	Tag        *string  `json:"tag,omitempty"`
-	ToFull     string   `json:"toFull"`
-	ToShort    string   `json:"toShort"`
-	Unread     bool     `json:"unread"`
+
+	// TagIds Every tag the message is in, for the tag picker; `tag` is the first by name
+	TagIds  *[]string `json:"tagIds,omitempty"`
+	ToFull  string    `json:"toFull"`
+	ToShort string    `json:"toShort"`
+	Unread  bool      `json:"unread"`
 }
 
 // MailSummary defines model for MailSummary.
@@ -740,6 +743,9 @@ type UserTag struct {
 	Count int      `json:"count"`
 	Id    string   `json:"id"`
 	Name  string   `json:"name"`
+
+	// Slug The ASCII slug fixed at creation; the tag's IMAP keyword is `$ivy-<slug>`
+	Slug string `json:"slug"`
 }
 
 // Version defines model for Version.

@@ -26,7 +26,9 @@ const CODES = new Set<string>([
 	'not_synced',
 	'not_failed',
 	'not_terminal',
-	'unknown_action'
+	'unknown_action',
+	'unknown_tag',
+	'too_many_tags'
 ]);
 
 /** Joins a path to its present query values, dropping empty ones. Values are escaped. */
@@ -54,6 +56,9 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 		throw new ApiError('offline', "Can't reach Ivy");
 	}
 	if (!res.ok) throw await errorFrom(res);
+	// A 204 (a delete) has no body to read; only a 2xx that should have one and
+	// does not parse is a server fault.
+	if (res.status === 204) return undefined as T;
 	try {
 		return (await res.json()) as T;
 	} catch {

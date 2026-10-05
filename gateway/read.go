@@ -160,7 +160,7 @@ func (s *Server) messageView(r *http.Request, m store.Message) (api.MailMessage,
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return api.MailMessage{}, err
 	}
-	names, err := s.tagNames(r.Context(), m.AccountID, []string{m.ContentKey})
+	tags, err := s.dbs.TagsForMessages(r.Context(), m.AccountID, []string{m.ContentKey})
 	if err != nil {
 		return api.MailMessage{}, err
 	}
@@ -184,8 +184,14 @@ func (s *Server) messageView(r *http.Request, m store.Message) (api.MailMessage,
 		htmlBody := m.BodyHTML
 		v.Html = &htmlBody
 	}
-	if name, ok := names[m.ContentKey]; ok {
-		v.Tag = &name
+	if mine := tags[m.ContentKey]; len(mine) > 0 {
+		first := mine[0].Name
+		v.Tag = &first
+		ids := make([]string, len(mine))
+		for i, t := range mine {
+			ids[i] = t.ID
+		}
+		v.TagIds = &ids
 	}
 	return v, nil
 }

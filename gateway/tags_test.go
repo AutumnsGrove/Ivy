@@ -58,7 +58,7 @@ func TestCreateListAndUpdateTags(t *testing.T) {
 	if code := sendJSON(t, http.MethodPost, srv.URL+"/api/v1/tags", map[string]string{"name": " Café ", "color": "rose"}, &created); code != http.StatusCreated {
 		t.Fatalf("create status = %d, want 201", code)
 	}
-	if created.Id == "" || created.Name != "Café" || created.Color != api.Rose || created.Count != 0 {
+	if created.Id == "" || created.Name != "Café" || created.Slug != "cafe" || created.Color != api.Rose || created.Count != 0 {
 		t.Errorf("created = %+v", created)
 	}
 	// No colour asked for gets the accent, so a tag is never colourless.
@@ -297,6 +297,9 @@ func TestMessagesCarryTheirTag(t *testing.T) {
 	var msg api.MailMessage
 	if code := getJSON(t, srv.URL+"/api/v1/messages/m1", &msg); code != http.StatusOK || msg.Tag == nil || *msg.Tag != "Bills" {
 		t.Errorf("message tag = %v (status %d), want Bills", msg.Tag, code)
+	}
+	if msg.TagIds == nil || !slices.Equal(*msg.TagIds, []string{bills.ID, work.ID}) {
+		t.Errorf("message tagIds = %v, want [%s %s] for the picker", msg.TagIds, bills.ID, work.ID)
 	}
 
 	untagged := inboxMessage("m9", "acct-1", "inbox-1", testNow, false)

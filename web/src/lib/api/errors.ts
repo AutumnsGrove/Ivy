@@ -23,7 +23,9 @@ export type ErrorCode =
 	| 'not_synced'
 	| 'not_failed'
 	| 'not_terminal'
-	| 'unknown_action';
+	| 'unknown_action'
+	| 'unknown_tag'
+	| 'too_many_tags';
 
 /** Every API failure the UI can branch on; never a bare Error. */
 export class ApiError extends Error {

@@ -8,6 +8,10 @@ import type { OutboxAction, OutboxItem } from './types.js';
 // Module-level so the overlay outlives any one screen and its reload.
 let live = $state<OutboxItem[]>([]);
 
+// A tag's IMAP keyword; the slug after it is the tag's `slug` in the API.
+const TAG_PREFIX = '$ivy-';
+const isTagKeyword = (flag: string) => flag.toLowerCase().startsWith(TAG_PREFIX);
+
 function isLiveItem(op: OutboxItem): boolean {
 	return op.state === 'pending' || op.state === 'in_flight';
 }
@@ -22,17 +26,37 @@ export const outbox = {
 		return live.some((op) => op.messageId === id && (op.kind === 'move' || op.kind === 'expunge'));
 	},
 
-	/** The flag state a live flag op asks for, or null when none applies. */
+	/**
+	 * The flag state the live flag ops ask for, or null when none applies. Ops
+	 * run in queue order, so a later one wins. A tag is a flags op too (a
+	 * `$ivy-` keyword), and it says nothing about the star or the seen state.
+	 */
 	flags(id: string): { flagged?: boolean; seen?: boolean } | null {
-		const op = live.find((o) => o.messageId === id && o.kind === 'flags');
-		if (!op) return null;
-		const add = op.flagsAdd ?? [];
-		const clear = op.flagsClear ?? [];
 		const out: { flagged?: boolean; seen?: boolean } = {};
-		if (add.includes('\\flagged')) out.flagged = true;
-		if (clear.includes('\\flagged')) out.flagged = false;
-		if (add.includes('\\seen')) out.seen = true;
-		if (clear.includes('\\seen')) out.seen = false;
+		for (const op of live) {
+			if (op.messageId !== id || op.kind !== 'flags') continue;
+			const add = op.flagsAdd ?? [];
+			const clear = op.flagsClear ?? [];
+			if (add.includes('\\flagged')) out.flagged = true;
+			if (clear.includes('\\flagged')) out.flagged = false;
+			if (add.includes('\\seen')) out.seen = true;
+			if (clear.includes('\\seen')) out.seen = false;
+		}
+		return Object.keys(out).length > 0 ? out : null;
+	},
+
+	/**
+	 * The tags a message has live ops for, by slug: true while a tag is on its
+	 * way, false while its removal is. The server keeps the membership until the
+	 * op is done, so the picker reads this over what the server last said.
+	 */
+	tags(id: string): Record<string, boolean> {
+		const out: Record<string, boolean> = {};
+		for (const op of live) {
+			if (op.messageId !== id || op.kind !== 'flags') continue;
+			for (const flag of op.flagsAdd ?? []) if (isTagKeyword(flag)) out[flag.slice(TAG_PREFIX.length).toLowerCase()] = true;
+			for (const flag of op.flagsClear ?? []) if (isTagKeyword(flag)) out[flag.slice(TAG_PREFIX.length).toLowerCase()] = false;
+		}
 		return out;
 	},
 

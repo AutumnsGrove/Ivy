@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { invalidateAll } from '$app/navigation';
+	import { api } from '#lib/api/client.js';
+	import { ApiError } from '#lib/api/errors.js';
 	import type { TagColor } from '#lib/types.js';
 	import { toasts } from '#lib/toast.js';
 	import Button from '../ui/Button.svelte';
@@ -13,13 +16,24 @@
 	let name = $state('');
 	let color = $state<TagColor>('lilac');
 	let auto = $state(false);
+	let saving = $state(false);
 
-	function create() {
-		if (!name.trim()) return;
-		toasts.push({ text: `Tag “${name.trim()}” created`, tone: 'ok' });
-		open = false;
-		name = '';
-		auto = false;
+	async function create() {
+		const trimmed = name.trim();
+		if (!trimmed || saving) return;
+		saving = true;
+		try {
+			const tag = await api.createTag({ name: trimmed, color });
+			toasts.push({ text: `Tag “${tag.name}” created`, tone: 'ok' });
+			open = false;
+			name = '';
+			auto = false;
+			await invalidateAll();
+		} catch (e) {
+			toasts.push({ text: e instanceof ApiError ? e.message : "Couldn't create the tag", tone: 'danger' });
+		} finally {
+			saving = false;
+		}
 	}
 </script>
 
@@ -43,7 +57,7 @@
 
 	<div class="acts">
 		<Button size="lg" block onclick={() => (open = false)}>Cancel</Button>
-		<Button size="lg" variant="primary" block onclick={create} disabled={!name.trim()}>Create tag</Button>
+		<Button size="lg" variant="primary" block onclick={() => void create()} disabled={!name.trim() || saving}>Create tag</Button>
 	</div>
 </Sheet>
 

@@ -593,6 +593,8 @@ export interface components {
             flagged?: boolean;
             needs: boolean;
             tag?: string;
+            /** @description Every tag the message is in, for the tag picker; `tag` is the first by name */
+            tagIds?: string[];
             toShort: string;
             toFull: string;
             summary?: string;
@@ -664,6 +666,8 @@ export interface components {
         };
         UserTag: {
             id: string;
+            /** @description The ASCII slug fixed at creation; the tag's IMAP keyword is `$ivy-<slug>` */
+            slug: string;
             name: string;
             color: components["schemas"]["TagColor"];
             count: number;

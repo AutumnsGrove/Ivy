@@ -821,6 +821,11 @@ components:
           type: boolean
         tag:
           type: string
+        tagIds:
+          type: array
+          description: Every tag the message is in, for the tag picker; `tag` is the first by name
+          items:
+            type: string
         toShort:
           type: string
         toFull:
@@ -971,10 +976,13 @@ components:
             $ref: "#/components/schemas/AskSource"
     UserTag:
       type: object
-      required: [id, name, color, count]
+      required: [id, slug, name, color, count]
       properties:
         id:
           type: string
+        slug:
+          type: string
+          description: The ASCII slug fixed at creation; the tag's IMAP keyword is `$ivy-<slug>`
         name:
           type: string
         color:

@@ -1,6 +1,6 @@
 // The one module that talks to the outside. Screens import `api`, never `fetch`.
 // The reader endpoints answer from the Go gateway; the routes that have no
-// backend yet (search, ask, tags, rules, people, checks, reading) still answer
+// backend yet (search, ask, rules, people, checks, reading) still answer
 // from mock data until their chunks land (3/4). Signatures do not change when a
 // body is swapped.
 import type {
@@ -26,7 +26,10 @@ import type {
 	Settings,
 	SpendPeriod,
 	SpendSummary,
-	TagsOverview
+	TagCreate,
+	TagsOverview,
+	TagUpdate,
+	UserTag
 } from '../types';
 import { pageCalls, summarise } from '../spend';
 import { ApiError, type ErrorCode } from './errors';
@@ -86,6 +89,27 @@ export const api = {
 
 	dismissOutbox: (id: string): Promise<void> =>
 		request<void>(`/outbox/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+	// --- tags: kept locally and as `$ivy-<slug>` keywords on the server (3e) ---
+	listTags: (): Promise<TagsOverview> => request<TagsOverview>('/tags'),
+
+	createTag: (tag: TagCreate): Promise<UserTag> =>
+		request<UserTag>('/tags', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(tag)
+		}),
+
+	/** Rename or recolour; the slug, and so the server keyword, never changes. */
+	updateTag: (id: string, patch: TagUpdate): Promise<UserTag> =>
+		request<UserTag>(`/tags/${encodeURIComponent(id)}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(patch)
+		}),
+
+	/** Clears the keyword from the server through the outbox, then removes the tag. */
+	deleteTag: (id: string): Promise<void> => request<void>(`/tags/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
 	/** Rename an account or choose its icon; omitted fields keep their value. */
 	updateAccountProfile: (id: string, profile: { displayName?: string; icon?: string }): Promise<Account> =>
@@ -152,7 +176,6 @@ export const api = {
 		return tick({ ...mock.askAnswer, question });
 	},
 
-	listTags: (): Promise<TagsOverview> => tick(mock.tags),
 	listPeople: (): Promise<Person[]> => tick(mock.people),
 
 	async getPerson(id: string): Promise<Person> {

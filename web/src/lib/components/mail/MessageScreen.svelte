@@ -8,12 +8,14 @@
 	import Glass from '../ui/Glass.svelte';
 	import IconButton from '../ui/IconButton.svelte';
 	import Sheet from '../ui/Sheet.svelte';
+	import TagPicker from '../tags/TagPicker.svelte';
 	import MessageLoader from './MessageLoader.svelte';
 
 	type Props = { id: string; accounts: Account[]; scenario: Scenario | null };
 	let { id, accounts, scenario }: Props = $props();
 	const back = $derived(withScenario('/', scenario));
 	let more = $state(false);
+	let tagging = $state(false);
 
 	async function archive() {
 		if (await archiveMessage(id)) await goto(back);
@@ -29,7 +31,7 @@
 		<span class="grow"></span>
 		<IconButton label="Archive" onclick={() => void archive()}><Archive /></IconButton>
 		<IconButton label="Delete" onclick={() => void remove()}><Trash2 /></IconButton>
-		<IconButton label="Tag"><Tag /></IconButton>
+		<IconButton label="Tag" onclick={() => (tagging = true)}><Tag /></IconButton>
 		<IconButton label="More" onclick={() => (more = true)}><Ellipsis /></IconButton>
 	</header>
 
@@ -41,6 +43,8 @@
 		<Button variant="primary" size="lg" href="/compose?reply={id}"><Reply />Reply</Button>
 		<Button size="lg" href="/compose?forward={id}">Forward</Button>
 	</Glass>
+
+	<TagPicker {id} bind:open={tagging} />
 
 	<Sheet bind:open={more} title="More actions">
 		<h2 class="sheet-title">More actions</h2>

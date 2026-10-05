@@ -7,11 +7,13 @@
 	import Glass from '../ui/Glass.svelte';
 	import IconButton from '../ui/IconButton.svelte';
 	import Sheet from '../ui/Sheet.svelte';
+	import TagPicker from '../tags/TagPicker.svelte';
 	import MessageLoader from './MessageLoader.svelte';
 
 	type Props = { id: string; accounts: Account[]; scenario: Scenario | null };
 	let { id, accounts, scenario }: Props = $props();
 	let more = $state(false);
+	let tagging = $state(false);
 
 	async function archive() {
 		await archiveMessage(id);
@@ -25,7 +27,7 @@
 	<div class="tools">
 		<IconButton label="Archive" onclick={() => void archive()}><Archive /></IconButton>
 		<IconButton label="Delete" onclick={() => void remove()}><Trash2 /></IconButton>
-		<IconButton label="Tag"><Tag /></IconButton>
+		<IconButton label="Tag" onclick={() => (tagging = true)}><Tag /></IconButton>
 		<span class="grow"></span>
 		<IconButton label="More" onclick={() => (more = true)}><Ellipsis /></IconButton>
 	</div>
@@ -38,6 +40,8 @@
 			<Button href="/compose?forward={id}">Forward</Button>
 		</div>
 	</div>
+
+	<TagPicker {id} bind:open={tagging} />
 
 	<Sheet bind:open={more} title="More actions">
 		<h2 class="sheet-title">More actions</h2>

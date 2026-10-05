@@ -56,6 +56,25 @@ describe('request', () => {
 		await expect(request('/ask')).rejects.toMatchObject({ code: 'provider_error' });
 	});
 
+	it('treats a 204 as success with nothing to read, not as an unreadable body', async () => {
+		const mock = vi.fn(async () => ({
+			ok: true,
+			status: 204,
+			json: async () => {
+				throw new SyntaxError('Unexpected end of JSON input');
+			}
+		}));
+		vi.stubGlobal('fetch', mock);
+		await expect(request<void>('/tags/t1', { method: 'DELETE' })).resolves.toBeUndefined();
+	});
+
+	it('keeps the tag refusal codes the tag screens word themselves', async () => {
+		stub(reply(409, { code: 'too_many_tags', message: 'There are too many tags' }));
+		await expect(request('/tags', { method: 'POST' })).rejects.toMatchObject({ code: 'too_many_tags' });
+		stub(reply(409, { code: 'unknown_tag', message: 'That tag no longer exists' }));
+		await expect(request('/outbox', { method: 'POST' })).rejects.toMatchObject({ code: 'unknown_tag' });
+	});
+
 	it('treats a body it cannot parse as a server failure, not a success', async () => {
 		stub({ ok: false, status: 500, json: async () => { throw new SyntaxError('bad json'); } });
 		await expect(request('/inbox')).rejects.toMatchObject({ code: 'internal_error' });

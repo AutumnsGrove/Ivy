@@ -23,7 +23,9 @@ const STATUS = {
 	not_synced: 409,
 	not_failed: 409,
 	not_terminal: 409,
-	unknown_action: 409
+	unknown_action: 409,
+	unknown_tag: 409,
+	too_many_tags: 409
 } as const satisfies Record<ApiError['code'], number>;
 
 /**
