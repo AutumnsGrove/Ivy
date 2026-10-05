@@ -1215,3 +1215,11 @@ on parts and no use of the caller's deadline).
   goes verbatim to a paid provider (and into an FTS expression). Reproduced with
   `TestSearchRejectsAnOversizeQuery` (a 2049-byte query returned 200; failed before the fix). It is now
   capped at 2048 bytes with a 400.
+
+### `d570eeb` (startup wiring)
+
+- **#113** · `d570eeb` · `cmd/embed.go` · **standards** · `buildEmbedders` dropped an account without a
+  word when `embed_provider: openrouter` had no `OPENROUTER_API_KEY` (the key lives in `data/.env`, easy
+  to forget on a fresh install) or `embed_provider: ollama` had no `llm.ollama_url`, so search stayed
+  keyword-only and nothing said why. Reproduced with `TestBuildEmbeddersSaysWhyAnAccountIsLeftOut` (empty
+  log; failed before the fix). Each case now logs a warning naming the account and the missing setting.

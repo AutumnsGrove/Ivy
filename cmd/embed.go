@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 
 	"github.com/AutumnsGrove/Ivy/config"
@@ -21,12 +22,16 @@ func buildEmbedders(cfg *config.Config) (map[string]llm.Embedder, map[string]str
 		switch a.EmbedProvider {
 		case "openrouter":
 			if apiKey == "" {
+				slog.Warn("embeddings are off for this account: embed_provider is openrouter but OPENROUTER_API_KEY is not set",
+					"account", a.ID)
 				continue
 			}
 			embedders[a.ID] = llm.NewOpenRouter(cfg.LLM.OpenRouterBase, apiKey)
 			models[a.ID] = cfg.LLM.EmbedModel
 		case "ollama":
 			if cfg.LLM.OllamaURL == "" {
+				slog.Warn("embeddings are off for this account: embed_provider is ollama but llm.ollama_url is not set",
+					"account", a.ID)
 				continue
 			}
 			embedders[a.ID] = llm.NewOllama(cfg.LLM.OllamaURL)
