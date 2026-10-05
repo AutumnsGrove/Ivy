@@ -26,8 +26,6 @@ import (
 	"github.com/AutumnsGrove/Ivy/gateway"
 	"github.com/AutumnsGrove/Ivy/internal/lockfile"
 	"github.com/AutumnsGrove/Ivy/internal/webui"
-	"github.com/AutumnsGrove/Ivy/llm"
-	"github.com/AutumnsGrove/Ivy/search"
 	"github.com/AutumnsGrove/Ivy/store"
 	ivysync "github.com/AutumnsGrove/Ivy/sync"
 	"github.com/AutumnsGrove/Ivy/update"
@@ -106,14 +104,12 @@ func runCmd(configPath *string, version string) *cobra.Command {
 
 			// The embeddings gate is the only path to a paid provider; search uses it
 			// for the query embedding and the embed worker for each message.
-			gate := llm.NewGate(dbs)
-			embedders, embedModels := buildEmbedders(cfg)
-			queryEmbed := newQueryEmbedder(cfg, gate, embedders, embedModels)
+			embedding := NewEmbedding(cfg, dbs, os.Getenv("OPENROUTER_API_KEY"))
 
 			// No Read/WriteTimeout: SSE streams and large bodies are long-lived. The
 			// header and idle timeouts still shed slow-loris connections.
 			hub := events.New()
-			api := gateway.New(dbs, version, webui.FS).WithSearch(queryEmbed).WithEvents(hub).WithAllowedHosts(cfg.HostAllowList()).WithBackupTargets(cfg.BackupTargets())
+			api := gateway.New(dbs, version, webui.FS).WithSearch(embedding.Query).WithEvents(hub).WithAllowedHosts(cfg.HostAllowList()).WithBackupTargets(cfg.BackupTargets())
 
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -191,12 +187,11 @@ func runCmd(configPath *string, version string) *cobra.Command {
 			// Embedding is a low-priority background queue: one job at a time, so it
 			// never competes with sync for the potato's CPU or the provider's rate
 			// limit (ARCHITECTURE.md 6).
-			if accountCfgs := embedAccounts(cfg, embedders, embedModels); len(accountCfgs) > 0 {
-				embedWorker := search.NewEmbedWorker(dbs, gate, accountCfgs, search.WorkerOptions{})
+			if embedding.Worker != nil {
 				workers.Add(1)
 				go func() {
 					defer workers.Done()
-					if err := embedWorker.Run(workerCtx); err != nil && !errors.Is(err, context.Canceled) {
+					if err := embedding.Worker.Run(workerCtx); err != nil && !errors.Is(err, context.Canceled) {
 						slog.WarnContext(workerCtx, "embed worker stopped", "error", err)
 					}
 				}()

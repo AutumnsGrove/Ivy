@@ -265,7 +265,7 @@ func TestUpNoWebServesHealthAndShutsDown(t *testing.T) {
 	defer cancel()
 
 	cmd := newRootCommand()
-	cmd.SetArgs([]string{"--root", root, "up", "--no-web", "--watch=false", "--profile", "minimal", "--listen", addr})
+	cmd.SetArgs([]string{"--root", root, "up", "--no-web", "--watch=false", "--profile", "minimal", "--llm", "fake", "--listen", addr})
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
 
@@ -298,7 +298,7 @@ func TestUpServesTheSeededInbox(t *testing.T) {
 	defer cancel()
 
 	cmd := newRootCommand()
-	cmd.SetArgs([]string{"--root", root, "up", "--no-web", "--watch=false", "--profile", "minimal", "--listen", addr})
+	cmd.SetArgs([]string{"--root", root, "up", "--no-web", "--watch=false", "--profile", "minimal", "--llm", "fake", "--listen", addr})
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
 	done := make(chan error, 1)
@@ -438,5 +438,63 @@ func TestUpDefaultsToTheConfigListenAddress(t *testing.T) {
 	}
 	if got := up.Flags().Lookup("listen").DefValue; got != config.DefaultListen {
 		t.Errorf("up --listen defaults to %q, want config.DefaultListen %q", got, config.DefaultListen)
+	}
+}
+
+// The in-process dev server used to build its gateway without the search stack
+// and never started the embed worker, so dev (and any test run through it) was
+// keyword-only while production searched by meaning. With the fake provider the
+// seeded mail is embedded and a query no message contains still finds its
+// neighbours.
+func TestUpEmbedsTheSeededMailAndSearchesByMeaning(t *testing.T) {
+	root := shortRoot(t)
+	addr := freeAddr(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cmd := newRootCommand()
+	cmd.SetArgs([]string{"--root", root, "up", "--no-web", "--watch=false", "--profile", "minimal", "--llm", "fake", "--listen", addr})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	done := make(chan error, 1)
+	go func() { done <- cmd.ExecuteContext(ctx) }()
+	waitForHealth(t, "http://"+addr+"/api/v1/health")
+
+	type results struct {
+		Hits []struct {
+			Semantic *bool `json:"semantic"`
+		} `json:"hits"`
+	}
+	var got results
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		resp, err := http.Get("http://" + addr + "/api/v1/search?q=qzxjvk")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got = results{}
+		err = json.NewDecoder(resp.Body).Decode(&got)
+		resp.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Hits) > 0 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if len(got.Hits) == 0 || got.Hits[0].Semantic == nil || !*got.Hits[0].Semantic {
+		t.Errorf("hits = %+v: the dev stack found nothing by meaning, so it is not running the search that ships", got.Hits)
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("up returned %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("up did not shut down")
 	}
 }

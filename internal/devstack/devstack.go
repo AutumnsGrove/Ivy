@@ -298,3 +298,25 @@ func accountID(address string) string {
 	}
 	return strings.ToLower(local)
 }
+
+// FakeKey is the throwaway OpenRouter key the dev Ivy gets when it talks to the
+// fake provider. The fake ignores it, and handing it this instead of whatever is
+// in the operator's environment means a real key never reaches a fake endpoint.
+const FakeKey = "dev-fake-key"
+
+// ResolveLLM decides which provider the dev stack really uses and the key the dev
+// Ivy gets (DEV.md section 5). The fake gets FakeKey. Live needs a key, from the
+// environment first and then the repo's .env; with none it starts on the fake
+// instead of failing, and the returned note says so, for the caller to print.
+func ResolveLLM(want LLM, envKey, dotenvKey string) (mode LLM, key, note string) {
+	if want == LLMFake {
+		return LLMFake, FakeKey, ""
+	}
+	if envKey != "" {
+		return LLMLive, envKey, ""
+	}
+	if dotenvKey != "" {
+		return LLMLive, dotenvKey, ""
+	}
+	return LLMFake, FakeKey, "llm: no OPENROUTER_API_KEY in the environment or .env, so this run uses the fake provider (no spend, canned answers)"
+}

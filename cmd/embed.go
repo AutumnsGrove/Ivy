@@ -4,18 +4,43 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
 
 	"github.com/AutumnsGrove/Ivy/config"
+	"github.com/AutumnsGrove/Ivy/gateway"
 	"github.com/AutumnsGrove/Ivy/llm"
 	"github.com/AutumnsGrove/Ivy/search"
+	"github.com/AutumnsGrove/Ivy/store"
 )
+
+// Embedding is the search side of the one gate: what the gateway needs to embed a
+// query, and the background worker that embeds mail once. `ivy run` and the dev
+// harness both build it here, so the dev stack and the e2e suite exercise the
+// code that ships.
+type Embedding struct {
+	// Query embeds a search query through the gate. Never nil: an account with no
+	// provider answers llm.ErrNoProvider, which search reads as keyword-only.
+	Query gateway.QueryEmbedder
+	// Worker embeds each message once. Nil when no account has a usable provider.
+	Worker *search.EmbedWorker
+}
+
+// NewEmbedding builds the embedding stack from the operator's config. apiKey is
+// the hosted provider's key (the environment's OPENROUTER_API_KEY in production);
+// an account that needs it and has none is left out with a warning.
+func NewEmbedding(cfg *config.Config, dbs *store.DBs, apiKey string) *Embedding {
+	gate := llm.NewGate(dbs)
+	embedders, models := buildEmbedders(cfg, apiKey)
+	emb := &Embedding{Query: newQueryEmbedder(cfg, gate, embedders, models)}
+	if accounts := embedAccounts(cfg, embedders, models); len(accounts) > 0 {
+		emb.Worker = search.NewEmbedWorker(dbs, gate, accounts, search.WorkerOptions{})
+	}
+	return emb
+}
 
 // buildEmbedders picks the provider per account from the operator's config. An
 // account with no provider, or a hosted one with no API key, is left out, so
 // search for it stays keyword-only and never reaches a paid endpoint.
-func buildEmbedders(cfg *config.Config) (map[string]llm.Embedder, map[string]string) {
-	apiKey := os.Getenv("OPENROUTER_API_KEY")
+func buildEmbedders(cfg *config.Config, apiKey string) (map[string]llm.Embedder, map[string]string) {
 	embedders := map[string]llm.Embedder{}
 	models := map[string]string{}
 	for _, a := range cfg.Accounts {

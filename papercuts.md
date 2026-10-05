@@ -1399,3 +1399,14 @@ vector scan time over a real mailbox; the update rollback against a real unhealt
   `nextCursor`, so a search shows at most the top 200 fused hits. That is probably enough for a person, so it
   is not changed here; if wanted, an offset cursor over the fused ranking (fetch `offset + limit`, slice) is
   the cheap way.
+- **N39 resolved** · `cmd/embed.go`, `cmd/cmd.go`, `cmd/ivy-dev/main.go`, `internal/devstack/devstack.go` ·
+  the search stack (gate, embedders, query embedder, embed worker) is built by one exported
+  `cmd.NewEmbedding(cfg, dbs, apiKey)`, used by `ivy run` and by the in-process dev server, so dev and the e2e
+  suite run the code that ships. Reproduced with `TestUpEmbedsTheSeededMailAndSearchesByMeaning` (the dev
+  server found nothing by meaning after 15 s; failed before the fix) and
+  `TestNewEmbeddingEmbedsAndAnswersQueriesAgainstTheFakeProvider`. Two things DEV.md already promised and the
+  code did not do came with it: `devstack.ResolveLLM` makes `--llm live` with no `OPENROUTER_API_KEY` (in the
+  environment or the repo `.env`) start on the fake and say so, and the dev Ivy is handed a throwaway key
+  when it talks to the fake, so a real key in the operator's environment never reaches the fake endpoint. The
+  existing in-process `up` tests now pass `--llm fake` explicitly: with the stack wired, a real key in a
+  developer's environment would otherwise have sent them to the live provider.

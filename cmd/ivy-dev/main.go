@@ -14,11 +14,13 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	ivycmd "github.com/AutumnsGrove/Ivy/cmd"
 	"github.com/AutumnsGrove/Ivy/config"
 	"github.com/AutumnsGrove/Ivy/events"
 	"github.com/AutumnsGrove/Ivy/gateway"
@@ -74,10 +76,14 @@ func upCmd(root *string) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts.Root = *root
 			applyRecipe(cmd, &opts)
-			if watch {
-				return runWatched(cmd, opts, noWeb)
+			key, err := resolveLLM(cmd, &opts)
+			if err != nil {
+				return err
 			}
-			return runUp(cmd, opts, noWeb)
+			if watch {
+				return runWatched(cmd, opts, noWeb, key)
+			}
+			return runUp(cmd, opts, noWeb, key)
 		},
 	}
 	f := cmd.Flags()
@@ -93,6 +99,23 @@ func upCmd(root *string) *cobra.Command {
 	f.BoolVar(&noWeb, "no-web", false, "do not start the Vite dev server")
 	f.BoolVar(&watch, "watch", true, "rebuild and restart Ivy on Go changes")
 	return cmd
+}
+
+// resolveLLM settles which provider this run really uses and returns the
+// OpenRouter key the dev Ivy gets: the key for live (from the environment or the
+// repo's .env), a throwaway for the fake. Live with no key falls back to the fake
+// and says so, as DEV.md section 5 promises.
+func resolveLLM(cmd *cobra.Command, opts *devstack.Options) (string, error) {
+	dot, err := devstack.ReadEnv(filepath.Join(opts.Root, ".env"), "OPENROUTER_API_KEY")
+	if err != nil {
+		return "", err
+	}
+	mode, key, note := devstack.ResolveLLM(opts.LLM, os.Getenv("OPENROUTER_API_KEY"), dot["OPENROUTER_API_KEY"])
+	if note != "" {
+		fmt.Fprintln(cmd.ErrOrStderr(), note)
+	}
+	opts.LLM = mode
+	return key, nil
 }
 
 // printStack reports what up started; both the watch and no-watch paths use it.
@@ -114,7 +137,7 @@ func printStack(out io.Writer, opts devstack.Options, stack *devstack.Stack) {
 
 // runWatched starts a prepared stack and supervises the real Ivy binary,
 // rebuilding and restarting it on Go file changes (DEV.md section 1).
-func runWatched(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
+func runWatched(cmd *cobra.Command, opts devstack.Options, noWeb bool, llmKey string) error {
 	moduleRoot, err := devstack.ModuleRoot(opts.Root)
 	if err != nil {
 		return err
@@ -136,7 +159,10 @@ func runWatched(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
 	}
 
 	bin := filepath.Join(devstack.DevDir(opts.Root), "ivy")
+	// Later entries win, so this replaces any OPENROUTER_API_KEY already in the
+	// environment: the fake gets a throwaway, never the real key.
 	env := append(os.Environ(), stack.PasswordEnv()...)
+	env = append(env, "OPENROUTER_API_KEY="+llmKey)
 	web := startWeb(ctx, cmd, opts, noWeb)
 	fmt.Fprintln(out, "press Ctrl-C to stop")
 
@@ -169,7 +195,7 @@ func runWatched(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
 
 // runUp starts a prepared stack and the real Ivy gateway in-process, then
 // blocks until Ctrl-C. The --watch=false path, used by fast tests.
-func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
+func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool, llmKey string) error {
 	stack, err := devstack.Prepare(opts)
 	if err != nil {
 		return err
@@ -188,10 +214,25 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool) error {
 	}
 	defer dbs.Close()
 
+	// The same search and embedding stack `ivy run` builds, so dev exercises what ships.
+	embedding := ivycmd.NewEmbedding(stack.Config, dbs, llmKey)
+	var workers sync.WaitGroup
+	workerCtx, stopWorkers := context.WithCancel(ctx)
+	defer func() { stopWorkers(); workers.Wait() }()
+	if embedding.Worker != nil {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			if err := embedding.Worker.Run(workerCtx); err != nil && !errors.Is(err, context.Canceled) {
+				fmt.Fprintf(cmd.ErrOrStderr(), "embed worker stopped: %v\n", err)
+			}
+		}()
+	}
+
 	hub := events.New()
 	srv := &http.Server{
 		Addr:              stack.Config.Listen,
-		Handler:           gateway.New(dbs, version, webui.FS).WithEvents(hub).WithAllowedHosts(stack.Config.HostAllowList()).Handler(),
+		Handler:           gateway.New(dbs, version, webui.FS).WithSearch(embedding.Query).WithEvents(hub).WithAllowedHosts(stack.Config.HostAllowList()).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}
