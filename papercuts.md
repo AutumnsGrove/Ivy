@@ -1001,3 +1001,11 @@ Baseline before any change: `go build`, `go vet`, `staticcheck`, `gofumpt -l`, t
   worker asks the sync worker for an immediate pass of the destination folder. Recommendation: use
   `COPYUID`, since it needs no new coupling between the two workers. Not done here because it changes
   what `finishMove` writes to the mirror.
+- **#92** · `4d23d76`/`0be4836` · `sync/outbox.go`, `gateway/outbox.go` · **standards** · the CI step
+  `golangci-lint` (pinned v2.12.1, `.golangci.yml`) failed on the outbox code with 8 findings the local
+  gates (`vet`, `staticcheck`, `gofumpt`) do not run: three non-exhaustive IMAP `switch`es, the builtins
+  `clear` and `cap` shadowed, three unused parameters. Reproduced by building the pinned linter (the
+  preinstalled v2.5 refuses a Go 1.26 module) and running it: 8 issues before, 0 after. The switches got
+  explicit `default` branches with a reason, the builtins were renamed, and `ctx` was removed from the
+  five IMAP helpers that never used it (the commands take no context; cancellation closes the connection,
+  #86), rather than renamed to `_`.

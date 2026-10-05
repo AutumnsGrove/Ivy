@@ -86,7 +86,7 @@ func (cw *crashWorld) crashOnce(t *testing.T) (recovered store.OutboxOp) {
 	ctx := context.Background()
 	poisoned := NewOutboxWorker(NewFetcher(cw.dbs), cw.acct)
 	armed := false
-	poisoned.afterAck = func(op store.OutboxOp) error {
+	poisoned.afterAck = func(store.OutboxOp) error {
 		if armed {
 			return nil
 		}

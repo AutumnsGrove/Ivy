@@ -290,8 +290,8 @@ func (s *Server) outboxItem(ctx context.Context, op store.OutboxOp) api.OutboxIt
 		item.FlagsAdd = &add
 	}
 	if len(op.Expect.FlagsClear) > 0 {
-		clear := op.Expect.FlagsClear
-		item.FlagsClear = &clear
+		cleared := op.Expect.FlagsClear
+		item.FlagsClear = &cleared
 	}
 	if op.LastErrorCode != "" {
 		item.LastErrorCode = &op.LastErrorCode
