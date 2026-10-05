@@ -1020,11 +1020,15 @@ Baseline before any change: `go build`, `go vet`, `staticcheck`, `gofumpt -l`, t
   only a server NO to the op counts; a failed dial, login, drop or stall leaves the attempt count alone,
   backs off on its own consecutive-failure counter, and the 24 h age cap still bounds the op. The
   STANDARDS limits row says so.
-- **N32 (open, unverified here)** · the web e2e could run only on Chromium through a throwaway config
-  pointing at the container's older build (WebKit and the real-binary smoke cannot launch in this
-  environment: `webkit-2359` and `chromium_headless_shell-1243` are missing). The phone (WebKit)
-  project, `make smoke` and everything on the potato (real Purelymail MOVE/UIDPLUS behaviour, the
-  `COPYUID` question in N30) remain unverified.
+- **N32 (partly verified 2026-10-05, remainder open)** · Playwright wants `webkit-2359` and
+  `chromium_headless_shell-1243`, which this container lacks (it has Chromium 1194 only). With a
+  throwaway config (deleted afterwards) pointing at that Chromium, the **whole e2e suite passed on both
+  projects (258 passed, 10 skipped by design)** and the **real-binary `make smoke` passed (8/8)** against
+  the embedded, precompressed build. The "phone" project there is the iPhone 14 profile (viewport, touch,
+  user agent) on Chromium, **not WebKit**. Still unverified: true WebKit/Safari rendering on iPhone and
+  iPad, and everything that needs the Le Potato or a real Purelymail mailbox (real MOVE/UIDPLUS/COPYUID
+  behaviour for #94, `expunge` against the live Trash). Run `make e2e` and `make smoke` once somewhere
+  with the pinned browsers, and do a live archive, undo and Empty Trash on the potato.
 
 ### Reviewed with no finding
 
