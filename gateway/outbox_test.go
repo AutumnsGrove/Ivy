@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/AutumnsGrove/Ivy/api"
 	"github.com/AutumnsGrove/Ivy/store"
@@ -139,7 +140,7 @@ func TestListOutboxSplitsActiveAndRecent(t *testing.T) {
 	if _, _, err := dbs.EnqueueOutbox(context.Background(), store.OutboxOp{
 		ID: "op-old", AccountID: "acct-1", Kind: store.OutboxFlags,
 		ContentKey: "ck:m1", SourceFolderID: "inbox-1",
-		Expect: store.OutboxExpect{FlagsAdd: []string{`\Seen`}},
+		Expect: store.OutboxExpect{FlagsAdd: []string{`\Seen`}}, CreatedAt: testNow,
 	}); err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
@@ -166,7 +167,7 @@ func TestRetryOutbox(t *testing.T) {
 	if _, _, err := dbs.EnqueueOutbox(context.Background(), store.OutboxOp{
 		ID: "op-failed", AccountID: "acct-1", Kind: store.OutboxFlags,
 		ContentKey: "ck:m1", SourceFolderID: "inbox-1",
-		Expect: store.OutboxExpect{FlagsAdd: []string{`\flagged`}},
+		Expect: store.OutboxExpect{FlagsAdd: []string{`\flagged`}}, CreatedAt: testNow,
 	}); err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
@@ -250,5 +251,120 @@ func TestInboxCarriesTheFlaggedState(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("the flagged message is not in the inbox")
+	}
+}
+
+// A folder the server no longer lists cannot receive mail, so a move into it is
+// refused up front instead of queueing an op that can only fail.
+func TestEnqueueMoveToAGoneFolderIsRefused(t *testing.T) {
+	t.Parallel()
+	srv, dbs := outboxServer(t)
+	mustFolder(t, dbs, store.Folder{ID: "old-1", AccountID: "acct-1", Name: "Old", Role: store.RoleOther, UIDValidity: 1, LastSyncAt: testNow})
+	if err := dbs.SetFolderGone(context.Background(), "old-1", testNow); err != nil {
+		t.Fatalf("set gone: %v", err)
+	}
+
+	dest := "old-1"
+	var body api.Error
+	code := postJSON(t, srv.URL+"/api/v1/outbox", api.OutboxAction{
+		MessageId: "m1", Action: api.OutboxActionMove, DestinationFolderId: &dest,
+	}, &body)
+	if code != http.StatusConflict || body.Code != "bad_destination" {
+		t.Fatalf("status/code = %d/%s, want 409/bad_destination", code, body.Code)
+	}
+}
+
+// The gateway reads time through an injected clock (STANDARDS.md), so a queued
+// op and its retry carry the clock's time rather than the wall clock's.
+func TestOutboxTimestampsComeFromTheInjectedClock(t *testing.T) {
+	t.Parallel()
+	fixed := testNow.Add(-90 * time.Minute)
+	srv, dbs := newConfiguredServer(t, func(s *Server) { s.WithClock(func() time.Time { return fixed }) })
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox, UIDValidity: 1, LastSyncAt: testNow})
+	mustMessage(t, dbs, inboxMessage("m1", "acct-1", "inbox-1", testNow, false))
+
+	var item api.OutboxItem
+	if code := postJSON(t, srv.URL+"/api/v1/outbox", api.OutboxAction{MessageId: "m1", Action: api.OutboxActionFlag}, &item); code != http.StatusAccepted {
+		t.Fatalf("enqueue status = %d, want 202", code)
+	}
+	if !item.CreatedAt.Equal(fixed) {
+		t.Errorf("CreatedAt = %s, want the injected %s", item.CreatedAt, fixed)
+	}
+
+	if err := dbs.SetOutboxFailed(context.Background(), item.Id, "noperm", "no", testNow); err != nil {
+		t.Fatalf("fail: %v", err)
+	}
+	var retried api.OutboxItem
+	if code := postJSON(t, srv.URL+"/api/v1/outbox/"+item.Id+"/retry", nil, &retried); code != http.StatusOK {
+		t.Fatalf("retry status = %d, want 200", code)
+	}
+	if !retried.UpdatedAt.Equal(fixed) {
+		t.Errorf("UpdatedAt after retry = %s, want the injected %s", retried.UpdatedAt, fixed)
+	}
+}
+
+// archiveAndSettle archives m1 through the API and then plays the worker's
+// part: the server moved it, so the inbox row is hidden as moved and the op is
+// done. It returns the archive folder id.
+func archiveAndSettle(t *testing.T, srv *httptest.Server, dbs *store.DBs) {
+	t.Helper()
+	ctx := context.Background()
+	mustFolder(t, dbs, store.Folder{ID: "archive-1", AccountID: "acct-1", Name: "Archive", Role: store.RoleArchive, UIDValidity: 1, LastSyncAt: testNow})
+	var item api.OutboxItem
+	if code := postJSON(t, srv.URL+"/api/v1/outbox", api.OutboxAction{MessageId: "m1", Action: api.OutboxActionArchive}, &item); code != http.StatusAccepted {
+		t.Fatalf("archive status = %d, want 202", code)
+	}
+	if err := dbs.DisableMessage(ctx, "m1", store.DisabledMoved, testNow, ""); err != nil {
+		t.Fatalf("hide m1: %v", err)
+	}
+	if err := dbs.SetOutboxDone(ctx, item.Id, testNow); err != nil {
+		t.Fatalf("settle op: %v", err)
+	}
+}
+
+// Undo after the server has moved the message is the normal case (the toast
+// outlives the worker's first pass). The reader still holds the old row id, so
+// the gateway must follow that row to the copy in the destination folder, and
+// move that copy back.
+func TestUndoOfASettledMoveActsOnTheCopyInTheDestination(t *testing.T) {
+	t.Parallel()
+	srv, dbs := outboxServer(t)
+	archiveAndSettle(t, srv, dbs)
+	// Sync has since mirrored the arrival under a new row id and UID.
+	arrived := inboxMessage("m1-arrived", "acct-1", "archive-1", testNow, false)
+	arrived.ContentKey = "ck:m1"
+	mustMessage(t, dbs, arrived)
+
+	back := "inbox-1"
+	var undo api.OutboxItem
+	code := postJSON(t, srv.URL+"/api/v1/outbox", api.OutboxAction{
+		MessageId: "m1", Action: api.OutboxActionMove, DestinationFolderId: &back,
+	}, &undo)
+	if code != http.StatusAccepted {
+		t.Fatalf("undo status = %d, want 202", code)
+	}
+	if undo.SourceFolderId == nil || *undo.SourceFolderId != "archive-1" {
+		t.Errorf("undo source = %v, want archive-1 (where the message is now)", undo.SourceFolderId)
+	}
+	if undo.MessageId != "m1-arrived" {
+		t.Errorf("undo acts on %q, want the arrived copy m1-arrived", undo.MessageId)
+	}
+}
+
+// Before sync has seen the arrival there is no row to act on; the answer is a
+// retryable conflict, not "not found".
+func TestUndoBeforeTheArrivalIsMirroredSaysSoPlainly(t *testing.T) {
+	t.Parallel()
+	srv, dbs := outboxServer(t)
+	archiveAndSettle(t, srv, dbs)
+
+	back := "inbox-1"
+	var body api.Error
+	code := postJSON(t, srv.URL+"/api/v1/outbox", api.OutboxAction{
+		MessageId: "m1", Action: api.OutboxActionMove, DestinationFolderId: &back,
+	}, &body)
+	if code != http.StatusConflict || body.Code != "not_synced" {
+		t.Fatalf("status/code = %d/%s, want 409/not_synced", code, body.Code)
 	}
 }

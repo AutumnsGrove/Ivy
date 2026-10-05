@@ -735,3 +735,18 @@ func (d *DBs) SpooledPaths(ctx context.Context) (map[string]bool, error) {
 	}
 	return paths, nil
 }
+
+// GetMessageIncludingHidden is GetMessage without the disabled filter. The
+// outbox needs it to follow a row a settled move has hidden to the copy that
+// arrived in the destination folder.
+func (d *DBs) GetMessageIncludingHidden(ctx context.Context, id string) (Message, error) {
+	row := d.Mirror.Read.QueryRowContext(ctx, messageSelect+` WHERE id = ?`, id)
+	m, err := scanMessage(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Message{}, ErrNotFound
+	}
+	if err != nil {
+		return Message{}, fmt.Errorf("get message %s: %w", id, err)
+	}
+	return m, nil
+}

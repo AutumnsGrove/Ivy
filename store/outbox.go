@@ -142,7 +142,7 @@ func (d *DBs) EnqueueOutbox(ctx context.Context, op OutboxOp) (OutboxOp, bool, e
 		now = op.CreatedAt
 	}
 	if now.IsZero() {
-		now = time.Now()
+		return OutboxOp{}, false, errors.New("enqueue outbox: the op carries no timestamp")
 	}
 
 	tx, err := d.State.Write.BeginTx(ctx, nil)
@@ -150,6 +150,16 @@ func (d *DBs) EnqueueOutbox(ctx context.Context, op OutboxOp) (OutboxOp, bool, e
 		return OutboxOp{}, false, fmt.Errorf("enqueue outbox: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	// A repeat of a queued action is the same action, so it is answered before
+	// the cap: a double tap on a full queue must not read as "queue full".
+	existing, err := outboxByKey(ctx, tx, key)
+	switch {
+	case err == nil:
+		return existing, false, tx.Commit()
+	case !errors.Is(err, ErrNotFound):
+		return OutboxOp{}, false, err
+	}
 
 	var queued int
 	if err := tx.QueryRowContext(ctx,
@@ -159,14 +169,6 @@ func (d *DBs) EnqueueOutbox(ctx context.Context, op OutboxOp) (OutboxOp, bool, e
 	}
 	if queued >= MaxQueuedOps {
 		return OutboxOp{}, false, ErrOutboxFull
-	}
-
-	existing, err := outboxByKey(ctx, tx, key)
-	switch {
-	case err == nil:
-		return existing, false, tx.Commit()
-	case !errors.Is(err, ErrNotFound):
-		return OutboxOp{}, false, err
 	}
 
 	var seq int64
@@ -657,4 +659,29 @@ func canonicalFlagSet(in []string) []string {
 	}
 	slices.Sort(out)
 	return slices.Compact(out)
+}
+
+// SettledMoveDestination returns the folder the newest finished move of a
+// message (named by content key and the folder it left) delivered it to, or
+// ErrNotFound. A reader's Undo arrives holding the id of the row the move
+// hid, and this is how it finds where the message went without guessing from
+// the content key alone, which a copy in another folder can share.
+func (d *DBs) SettledMoveDestination(ctx context.Context, accountID, contentKey, sourceFolderID string) (string, error) {
+	var raw string
+	err := d.State.Read.QueryRowContext(ctx, `
+		SELECT expect FROM outbox
+		WHERE account_id = ? AND content_key = ? AND source_folder_id = ? AND kind = ? AND state = ?
+		ORDER BY seq DESC LIMIT 1`,
+		accountID, contentKey, sourceFolderID, OutboxMove, OutboxDone).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("settled move of %s: %w", contentKey, err)
+	}
+	expect, err := decodeExpect(raw)
+	if err != nil {
+		return "", fmt.Errorf("settled move of %s: expect: %w", contentKey, err)
+	}
+	return expect.DestFolderID, nil
 }

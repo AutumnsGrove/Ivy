@@ -20,6 +20,7 @@ const STATUS = {
 	bad_destination: 409,
 	same_folder: 409,
 	not_trash: 409,
+	not_synced: 409,
 	not_failed: 409,
 	not_terminal: 409,
 	unknown_action: 409

@@ -1349,7 +1349,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            /** @description The action cannot be queued: `no_archive_folder` / `no_trash_folder` / `no_junk_folder` when the account has no folder for the role, `outbox_full` when the queue cap is reached, or `not_trash` when an expunge names a folder that is not the trash. */
+            /** @description The action cannot be queued: `no_archive_folder` / `no_trash_folder` / `no_junk_folder` when the account has no folder for the role, `outbox_full` when the queue cap is reached, or `not_trash` when an expunge names a folder that is not the trash, or `not_synced` when the message was named by the row a finished move hid (an Undo) and sync has not yet mirrored it in its new folder. `messageId` of a hidden-by-move row is followed to the copy in the folder that move delivered it to. */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/emersion/go-imap/v2"
+	"github.com/emersion/go-imap/v2/imapclient"
 
 	"github.com/AutumnsGrove/Ivy/store"
 )
@@ -32,9 +33,11 @@ type OutboxWorker struct {
 	idleClose time.Duration
 	onOp      func(store.OutboxOp)
 
-	conn     *session
-	lastBusy time.Time
-	jitter   func(time.Duration) time.Duration
+	conn      *session
+	stopWatch func() bool // detaches conn's close-on-cancel hook
+	outage    int         // consecutive connection failures, for the backoff only
+	lastBusy  time.Time
+	jitter    func(time.Duration) time.Duration
 
 	// afterAck is a test seam: it runs after a command is acknowledged and before
 	// the mirror update, so a test can simulate the process dying in that window
@@ -257,12 +260,12 @@ func (w *OutboxWorker) dispatchMove(ctx context.Context, c *session, op store.Ou
 		return err
 	}
 
-	uidvalidity, uid, found, err := w.locate(ctx, c, op, src.Name, msgID)
+	uidvalidity, uid, found, err := w.locate(c, op, src.Name, msgID)
 	if err != nil {
 		return w.serverError(ctx, op, err)
 	}
 	if !found {
-		inDest, err := w.folderHasMessageID(ctx, c, dst.Name, msgID)
+		inDest, err := w.folderHasMessageID(c, dst.Name, msgID)
 		if err != nil {
 			return w.serverError(ctx, op, err)
 		}
@@ -275,13 +278,36 @@ func (w *OutboxWorker) dispatchMove(ctx context.Context, c *session, op store.Ou
 		return err
 	}
 	w.notify(ctx, op.ID)
-	if err := w.moveMessage(c, uid, dst.Name); err != nil {
+	moved, err := w.moveMessage(c, uid, dst.Name)
+	if err != nil {
 		return w.serverError(ctx, op, err)
 	}
 	if err := w.afterAckCrash(op); err != nil {
 		return err
 	}
+	w.mirrorArrival(ctx, c, dst, moved)
 	return w.finishMove(ctx, op, rowID)
+}
+
+// mirrorArrival stores the moved message in the destination's mirror straight
+// away, using the UID the server reported (COPYUID), so an Undo can act on it
+// before the next sync pass. It is best effort: the move already happened, and
+// sync mirrors the arrival later if this cannot.
+func (w *OutboxWorker) mirrorArrival(ctx context.Context, c *session, dst store.Folder, moved *imapclient.MoveData) {
+	if moved == nil || moved.UIDValidity == 0 {
+		return
+	}
+	set, ok := moved.DestUIDs.(imap.UIDSet)
+	if !ok || len(set) == 0 {
+		return
+	}
+	if _, err := w.selectFolder(c, dst.Name); err != nil {
+		slog.WarnContext(ctx, "outbox: could not select the destination to mirror a move", "account", w.acct.ID, "error", err)
+		return
+	}
+	if _, err := w.fetcher.fetchBatch(ctx, c, w.acct, dst.ID, moved.UIDValidity, set); err != nil {
+		slog.WarnContext(ctx, "outbox: could not mirror a moved message", "account", w.acct.ID, "error", err)
+	}
 }
 
 func (w *OutboxWorker) dispatchFlags(ctx context.Context, c *session, op store.OutboxOp) error {
@@ -299,7 +325,7 @@ func (w *OutboxWorker) dispatchFlags(ctx context.Context, c *session, op store.O
 	if !ok {
 		return w.fail(ctx, op, "message_gone", "the message is not in the mirror")
 	}
-	uidvalidity, uid, found, err := w.locate(ctx, c, op, src.Name, msgID)
+	uidvalidity, uid, found, err := w.locate(c, op, src.Name, msgID)
 	if err != nil {
 		return w.serverError(ctx, op, err)
 	}
@@ -352,7 +378,7 @@ func (w *OutboxWorker) dispatchExpunge(ctx context.Context, c *session, op store
 	if err := w.requireCapability(ctx, c, imap.CapUIDPlus, op, "UIDPLUS"); err != nil {
 		return err
 	}
-	uidvalidity, uid, found, err := w.locate(ctx, c, op, folder.Name, msgID)
+	uidvalidity, uid, found, err := w.locate(c, op, folder.Name, msgID)
 	if err != nil {
 		return w.serverError(ctx, op, err)
 	}
@@ -376,8 +402,8 @@ func (w *OutboxWorker) dispatchExpunge(ctx context.Context, c *session, op store
 // Message-ID (the UID is never resolved at enqueue); for an in-flight recovery
 // it first trusts the stored (UIDVALIDITY, UID), because that is the message the
 // command actually named.
-func (w *OutboxWorker) locate(ctx context.Context, c *session, op store.OutboxOp, folder, msgID string) (uidvalidity, uid uint32, found bool, err error) {
-	uidvalidity, err = w.selectFolder(ctx, c, folder)
+func (w *OutboxWorker) locate(c *session, op store.OutboxOp, folder, msgID string) (uidvalidity, uid uint32, found bool, err error) {
+	uidvalidity, err = w.selectFolder(c, folder)
 	if err != nil {
 		if permanentIMAPError(err) {
 			return 0, 0, false, nil
@@ -394,7 +420,7 @@ func (w *OutboxWorker) locate(ctx context.Context, c *session, op store.OutboxOp
 		}
 		return uidvalidity, 0, false, nil
 	}
-	uid, found, err = w.searchMessageID(ctx, c, msgID)
+	uid, found, err = w.searchMessageID(c, msgID)
 	if err != nil {
 		return 0, 0, false, err
 	}
@@ -425,7 +451,7 @@ func (w *OutboxWorker) recoverMove(ctx context.Context, c *session, op store.Out
 	if !ok || !okDst {
 		return w.fail(ctx, op, "message_gone", "the folder is gone")
 	}
-	uidvalidity, err := w.selectFolder(ctx, c, src.Name)
+	uidvalidity, err := w.selectFolder(c, src.Name)
 	if err != nil && !permanentIMAPError(err) {
 		return w.serverError(ctx, op, err)
 	}
@@ -439,7 +465,7 @@ func (w *OutboxWorker) recoverMove(ctx context.Context, c *session, op store.Out
 		if present {
 			return w.requeue(ctx, op)
 		}
-		inDest, derr := w.folderHasMessageID(ctx, c, dst.Name, msgID)
+		inDest, derr := w.folderHasMessageID(c, dst.Name, msgID)
 		if derr != nil {
 			return w.serverError(ctx, op, derr)
 		}
@@ -450,11 +476,11 @@ func (w *OutboxWorker) recoverMove(ctx context.Context, c *session, op store.Out
 	}
 
 	// The validity changed, so the stored UID proves nothing. Ask both folders.
-	srcHas, serr := w.folderHasMessageID(ctx, c, src.Name, msgID)
+	srcHas, serr := w.folderHasMessageID(c, src.Name, msgID)
 	if serr != nil && !permanentIMAPError(serr) {
 		return w.serverError(ctx, op, serr)
 	}
-	dstHas, derr := w.folderHasMessageID(ctx, c, dst.Name, msgID)
+	dstHas, derr := w.folderHasMessageID(c, dst.Name, msgID)
 	if derr != nil && !permanentIMAPError(derr) {
 		return w.serverError(ctx, op, derr)
 	}
@@ -488,7 +514,7 @@ func (w *OutboxWorker) recoverFlags(ctx context.Context, c *session, op store.Ou
 	if !ok {
 		return w.fail(ctx, op, "message_gone", "the folder is gone")
 	}
-	uid, found, err := w.locateRecoveryUID(ctx, c, op, src.Name, msgID)
+	uid, found, err := w.locateRecoveryUID(c, op, src.Name, msgID)
 	if err != nil {
 		return w.serverError(ctx, op, err)
 	}
@@ -522,7 +548,7 @@ func (w *OutboxWorker) recoverExpunge(ctx context.Context, c *session, op store.
 	if !ok {
 		return w.finishExpunge(ctx, op, rowID)
 	}
-	_, found, err := w.locateRecoveryUID(ctx, c, op, src.Name, msgID)
+	_, found, err := w.locateRecoveryUID(c, op, src.Name, msgID)
 	if err != nil {
 		return w.serverError(ctx, op, err)
 	}
@@ -534,8 +560,8 @@ func (w *OutboxWorker) recoverExpunge(ctx context.Context, c *session, op store.
 
 // locateRecoveryUID is locate for recovery, where a vanished source folder means
 // the UID is simply not there.
-func (w *OutboxWorker) locateRecoveryUID(ctx context.Context, c *session, op store.OutboxOp, folder, msgID string) (uint32, bool, error) {
-	uidvalidity, err := w.selectFolder(ctx, c, folder)
+func (w *OutboxWorker) locateRecoveryUID(c *session, op store.OutboxOp, folder, msgID string) (uint32, bool, error) {
+	uidvalidity, err := w.selectFolder(c, folder)
 	if err != nil {
 		if permanentIMAPError(err) {
 			return 0, false, nil
@@ -552,7 +578,7 @@ func (w *OutboxWorker) locateRecoveryUID(ctx context.Context, c *session, op sto
 		}
 		return 0, false, nil
 	}
-	uid, found, err := w.searchMessageID(ctx, c, msgID)
+	uid, found, err := w.searchMessageID(c, msgID)
 	if err != nil {
 		return 0, false, err
 	}
@@ -606,6 +632,7 @@ func (w *OutboxWorker) afterAckCrash(op store.OutboxOp) error {
 // ---------------------------------------------------------------- outcomes
 
 func (w *OutboxWorker) done(ctx context.Context, op store.OutboxOp) error {
+	w.outage = 0
 	if err := w.fetcher.dbs.SetOutboxDone(ctx, op.ID, w.fetcher.now()); err != nil {
 		return err
 	}
@@ -626,8 +653,31 @@ func (w *OutboxWorker) requeue(ctx context.Context, op store.OutboxOp) error {
 // transient records a retryable failure, or fails the op once the attempt cap is
 // reached. It returns nil because the outcome is on the row, not in a Go error.
 func (w *OutboxWorker) transient(ctx context.Context, op store.OutboxOp, cause error) error {
-	attempts := op.Attempts + 1
+	// The failure may have killed the connection (a drop, a stall, BYE). Reusing
+	// it would fail every retry against a healthy server until the op exhausted
+	// its attempts, so the next attempt dials afresh.
+	w.closeConn()
+	// A shutdown that closed the connection under a command is not the op's
+	// failure: it must not cost an attempt, and recovery handles an in-flight op
+	// on the next start.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	detail := cause.Error()
+	// Only a server that answered NO to this op counts against its attempts. A
+	// failed dial, login, drop or stall says nothing about the op, so an outage
+	// must not exhaust every queued action; the 24 h age cap still bounds it.
+	var imapErr *imap.Error
+	if !errors.As(cause, &imapErr) || imapErr.Type != imap.StatusResponseTypeNo {
+		w.outage++
+		next := w.fetcher.now().Add(w.backoff(w.outage))
+		if err := w.fetcher.dbs.SetOutboxPending(ctx, op.ID, op.Attempts, next, outboxErrorCode(cause), detail, w.fetcher.now()); err != nil {
+			return err
+		}
+		w.notify(ctx, op.ID)
+		return nil
+	}
+	attempts := op.Attempts + 1
 	if attempts >= store.MaxOutboxAttempts {
 		return w.fail(ctx, op, "retries_exhausted", detail)
 	}
@@ -658,6 +708,7 @@ func (w *OutboxWorker) serverError(ctx context.Context, op store.OutboxOp, err e
 		case imap.ResponseCodeNonExistent, imap.ResponseCodeTryCreate, imap.ResponseCodeOverQuota,
 			imap.ResponseCodeNoPerm, imap.ResponseCodeCannot, imap.ResponseCodeClientBug:
 			return w.fail(ctx, op, strings.ToLower(string(imapErr.Code)), err.Error())
+		default: // any other code is worth another try
 		}
 		if imapErr.Type == imap.StatusResponseTypeBad {
 			return w.fail(ctx, op, "protocol_error", err.Error())
@@ -676,10 +727,14 @@ func (w *OutboxWorker) ensureConn(ctx context.Context) (*session, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The IMAP client's commands take no context, so closing the connection is
+	// the only way to stop one that waits on a silent server (as sync does).
+	w.stopWatch = context.AfterFunc(ctx, func() { _ = c.Close() })
 	if err := func() error {
 		defer c.watch()()
 		return c.Login(w.acct.Username, w.acct.Password).Wait()
 	}(); err != nil {
+		w.stopWatch()
 		_ = c.Close()
 		return nil, fmt.Errorf("outbox account %s: login: %w", w.acct.ID, err)
 	}
@@ -688,6 +743,10 @@ func (w *OutboxWorker) ensureConn(ctx context.Context) (*session, error) {
 }
 
 func (w *OutboxWorker) closeConn() {
+	if w.stopWatch != nil {
+		w.stopWatch()
+		w.stopWatch = nil
+	}
 	if w.conn != nil {
 		_ = w.conn.Close()
 		w.conn = nil
@@ -696,7 +755,7 @@ func (w *OutboxWorker) closeConn() {
 
 // ---------------------------------------------------------------- IMAP
 
-func (w *OutboxWorker) selectFolder(ctx context.Context, c *session, name string) (uint32, error) {
+func (w *OutboxWorker) selectFolder(c *session, name string) (uint32, error) {
 	defer c.watch()()
 	data, err := c.Select(name, &imap.SelectOptions{ReadOnly: false}).Wait()
 	if err != nil {
@@ -707,7 +766,7 @@ func (w *OutboxWorker) selectFolder(ctx context.Context, c *session, name string
 
 // searchMessageID searches the currently selected folder for a Message-ID and
 // returns exactly one hit; more than one is an error Ivy refuses to guess past.
-func (w *OutboxWorker) searchMessageID(ctx context.Context, c *session, msgID string) (uint32, bool, error) {
+func (w *OutboxWorker) searchMessageID(c *session, msgID string) (uint32, bool, error) {
 	if msgID == "" {
 		return 0, false, nil
 	}
@@ -750,17 +809,17 @@ func (w *OutboxWorker) uidPresent(c *session, uid uint32) (bool, error) {
 	return len(bufs) > 0, nil
 }
 
-func (w *OutboxWorker) folderHasMessageID(ctx context.Context, c *session, folder, msgID string) (bool, error) {
+func (w *OutboxWorker) folderHasMessageID(c *session, folder, msgID string) (bool, error) {
 	if msgID == "" {
 		return false, nil
 	}
-	if _, err := w.selectFolder(ctx, c, folder); err != nil {
+	if _, err := w.selectFolder(c, folder); err != nil {
 		if permanentIMAPError(err) {
 			return false, nil
 		}
 		return false, err
 	}
-	_, found, err := w.searchMessageID(ctx, c, msgID)
+	_, found, err := w.searchMessageID(c, msgID)
 	if errors.Is(err, errAmbiguous) {
 		return true, nil
 	}
@@ -783,10 +842,9 @@ func (w *OutboxWorker) applyFlags(c *session, uid uint32, expect store.OutboxExp
 	return nil
 }
 
-func (w *OutboxWorker) moveMessage(c *session, uid uint32, dest string) error {
+func (w *OutboxWorker) moveMessage(c *session, uid uint32, dest string) (*imapclient.MoveData, error) {
 	defer c.watch()()
-	_, err := c.Move(imap.UIDSetNum(imap.UID(uid)), dest).Wait()
-	return err
+	return c.Move(imap.UIDSetNum(imap.UID(uid)), dest).Wait()
 }
 
 func (w *OutboxWorker) expungeMessage(c *session, uid uint32) error {
@@ -802,13 +860,13 @@ func (w *OutboxWorker) expungeMessage(c *session, uid uint32) error {
 
 // requireCapability refuses an op the server cannot run atomically rather than
 // emulating it (C3: a MOVE is not COPY+STORE+EXPUNGE; expunge needs UIDPLUS).
-func (w *OutboxWorker) requireCapability(ctx context.Context, c *session, cap imap.Cap, op store.OutboxOp, name string) error {
+func (w *OutboxWorker) requireCapability(ctx context.Context, c *session, capability imap.Cap, op store.OutboxOp, name string) error {
 	defer c.watch()()
 	caps, err := c.Capability().Wait()
 	if err != nil {
 		return w.serverError(ctx, op, err)
 	}
-	if !caps.Has(cap) {
+	if !caps.Has(capability) {
 		return w.fail(ctx, op, "unsupported", "the server does not support "+name)
 	}
 	return nil
@@ -900,6 +958,7 @@ func permanentIMAPError(err error) bool {
 	case imap.ResponseCodeNonExistent, imap.ResponseCodeTryCreate, imap.ResponseCodeOverQuota,
 		imap.ResponseCodeNoPerm, imap.ResponseCodeCannot, imap.ResponseCodeClientBug:
 		return true
+	default: // an unlisted code may clear on its own
 	}
 	return imapErr.Type == imap.StatusResponseTypeBad
 }
@@ -916,6 +975,7 @@ func outboxErrorCode(err error) string {
 			return "bye"
 		case imap.StatusResponseTypeNo:
 			return "unavailable"
+		default: // falls through to the network classification below
 		}
 	}
 	var netErr net.Error

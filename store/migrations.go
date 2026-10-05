@@ -372,6 +372,18 @@ var mirrorMigrations = []migration{
 			`UPDATE messages SET flagged = 1 WHERE flags_json LIKE '%Flagged%'`,
 		},
 	},
+	{
+		version: 12,
+		statements: []string{
+			// v11's LIKE also matched keywords that merely contain the word (a
+			// "$notflagged" label). Recompute from the parsed flag list instead;
+			// v11 stays as released because migrations are append-only.
+			`UPDATE messages SET flagged = 0`,
+			`UPDATE messages SET flagged = 1
+			 WHERE json_valid(flags_json)
+			   AND EXISTS (SELECT 1 FROM json_each(messages.flags_json) WHERE lower(value) = '\flagged')`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.

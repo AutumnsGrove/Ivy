@@ -1213,3 +1213,12 @@ overlay, undo, `ivy run` wiring).
   stays dropped). See the BUILD-LOG 3d entry.
 - **Q: review the other model's work.** (operator) Run the `review-deepseek` skill from commit
   `ea78a63` inclusive to the tip on a `review/` branch; findings go in `papercuts.md`.
+
+## Round 50 — decisions from the deepseek review (2026-10-05, two operator answers)
+
+- **Q: how should Undo of a move work before sync mirrors the arrival (N30)?** (operator) **Mirror via
+  COPYUID.** After a MOVE the outbox worker stores the arrived message itself from the server's
+  destination UIDs, best effort; `not_synced` remains only as the fallback answer.
+- **Q: should connection failures count against an op's 8-attempt cap (N31)?** (operator) **No.** Only
+  a server NO to the op counts; dial, login, drop and stall failures back off separately and the 24 h
+  age cap bounds them. The STANDARDS limits row says so.

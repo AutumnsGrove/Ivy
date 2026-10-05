@@ -40,6 +40,15 @@ describe('outbox api', () => {
 		});
 	});
 
+	it('keeps the not-synced refusal an undo can get before sync catches up', async () => {
+		vi.stubGlobal('fetch', async () =>
+			reply({ code: 'not_synced', message: 'Ivy has not seen the message in its new folder yet' }, 409)
+		);
+		await expect(
+			api.enqueueAction({ messageId: 'm1', action: 'move', destinationFolderId: 'inbox-1' })
+		).rejects.toMatchObject({ code: 'not_synced' });
+	});
+
 	it('lists the overlay and the history', async () => {
 		const calls: string[] = [];
 		vi.stubGlobal('fetch', async (url: string) => {

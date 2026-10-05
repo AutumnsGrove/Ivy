@@ -930,3 +930,115 @@ All six are defects in the design document, found before any code existed and fi
 - Also corrected in the doc, not numbered: the `in_flight` definition, sharing the sync connection
   (the outbox owns its own), `MOVE`/`UIDPLUS` requirements instead of emulation, and reusing sync's
   `disableRef` so a hidden row keeps its blob-store copy.
+
+## Second-opinion review of `ea78a63`..`28ed913` (2026-10-05)
+
+Baseline before any change: `go build`, `go vet`, `staticcheck`, `gofumpt -l`, the full suite and
+`-race` on store, sync and gateway were all green.
+
+### `4d23d76` Add the outbox worker and sync deferral
+
+- **#85** · `4d23d76` · `sync/outbox.go` · **bug** · after a failure that killed the connection (a drop
+  mid-command, a stall, BYE) the worker kept its dead `*session`, so every retry wrote to a closed
+  socket and the op exhausted its 8 attempts as `retries_exhausted` against a healthy server. Every
+  existing test used `RunOnce`, which closes the connection, so none could see it. Reproduced with
+  `TestOutboxRetriesOnAFreshConnectionAfterADrop` (`DropConnection{After: 4}` on the worker's first
+  connection, `Run` with a short jitter): it failed with `failed after 7 attempts ... use of closed
+  network connection` before the fix. `transient` now closes the connection so the next attempt dials
+  afresh.
+- **#86** · `4d23d76` · `sync/outbox.go` · **bug** · the worker's IMAP commands take no context and the
+  worker, unlike sync and the IDLE worker, never closed the connection on cancellation, so shutdown
+  waited out the 2-minute stall timeout behind a server that had gone quiet. Reproduced with
+  `TestOutboxRunStopsPromptlyWhenCancelledMidCommand` (`Latency{1m}`, cancel after 500 ms): `Run` was
+  still blocked 5 s later before the fix. The connection now has a `context.AfterFunc` close hook from
+  the moment it is dialled, and a failure caused by that cancellation returns the context error instead
+  of costing the op an attempt.
+
+### `5611a5b` Add the outbox table and its state machine
+
+- **#87** · `5611a5b` · `store/outbox.go` · **bug** · `EnqueueOutbox` checked the 500-op cap before looking
+  for an existing live op with the same idempotency key, so a double tap on a full queue was refused as
+  `outbox_full` instead of returning the op already queued. Reproduced with
+  `TestEnqueueOutboxIsIdempotentEvenWhenTheQueueIsFull` (failed with `outbox full`). The idempotent
+  lookup now runs first.
+
+### `0be4836` Add the outbox HTTP surface and run wiring
+
+- **#88** · `0be4836` · `gateway/outbox.go` · **bug** · a `move` whose destination was a folder the server no
+  longer lists (`gone_at` set) was accepted with 202 and could only fail at dispatch. Reproduced with
+  `TestEnqueueMoveToAGoneFolderIsRefused` (got 202, wanted 409 `bad_destination`); the destination
+  check now refuses a gone folder.
+- **#89** · `5611a5b`/`0be4836` · `store/outbox.go`, `gateway/outbox.go` · **standards** · STANDARDS.md
+  requires an injected clock, but `EnqueueOutbox` fell back to `time.Now()` when the caller passed no time
+  and the retry handler called `time.Now()` directly, so a test (or a replay) could not control an op's
+  timestamps. Reproduced with `TestOutboxTimestampsComeFromTheInjectedClock` (did not build: no
+  `WithClock`) and `TestEnqueueOutboxRequiresATimestamp` (an untimed enqueue succeeded). The gateway now
+  has `WithClock` (default `time.Now`, stamped on enqueue and retry) and the store refuses an untimed op.
+  Two gateway tests that leaned on the fallback now pass a time.
+
+### `960cea5` Add the reader's flag, junk and outbox queue
+
+- **#90** · `960cea5` · `store/migrations.go` · **bug** · mirror migration 11 backfilled the new `flagged`
+  column with `flags_json LIKE '%Flagged%'`, which also matches a keyword that merely contains the word
+  (`$notflagged`, a tag-style label), so such mail would show a star it never had. Reproduced with
+  `TestFlaggedBackfillMatchesOnlyTheFlaggedFlag` (a v10 database upgraded through `Open`: the keyword row
+  came out `flagged = true`). Migrations are append-only, so v11 is untouched and migration 12 recomputes
+  the column from the parsed flag list (`json_each`, case-insensitive, skipping unparsable JSON).
+- **#91** · `6b0135f` · `gateway/outbox.go` · **bug** · the reader's Undo toast sends the id of the row it just
+  acted on, but once the worker has moved the message that row is hidden as moved and `GetMessage` filters
+  hidden rows, so Undo answered 404 "not found" in the normal case (the worker drains in about a second,
+  the toast lasts four). The e2e only checks that the Undo button appears. Reproduced with
+  `TestUndoOfASettledMoveActsOnTheCopyInTheDestination` (404, wanted 202) and
+  `TestUndoBeforeTheArrivalIsMirroredSaysSoPlainly` (404, wanted 409 `not_synced`). The gateway now
+  follows a row hidden as moved through the newest *finished move op* for that mail
+  (`store.SettledMoveDestination`) to the copy in the folder it delivered it to, so a same-Message-ID copy
+  in another folder (N8) is never mistaken for it; when sync has not mirrored the arrival yet it answers
+  409 `not_synced`. The web client knows the new code (before it was coerced to `internal_error`).
+- **#94 (was N30, decided by the operator 2026-10-05: mirror via COPYUID)** · `6b0135f` · `sync/outbox.go` ·
+  **bug** · Undo of a move could only act once sync had mirrored the arrival, so within the first seconds
+  (the toast's window) it answered `not_synced`. Reproduced with
+  `TestOutboxMoveMirrorsTheArrivalImmediately` (no row in the destination mirror after the op was done).
+  After a MOVE the worker now uses the `COPYUID` destination UIDs to fetch and store the arrived message
+  with sync's own `fetchBatch` (peeking, so nothing is marked seen). It is best effort and logged: the
+  move already happened, and sync still mirrors the arrival if this fails (`not_synced` is then the honest
+  answer). The same test proves the next sync pass adopts that row rather than listing the message twice.
+  A crash between the ack and this step is covered by sync, as before.
+- **#92** · `4d23d76`/`0be4836` · `sync/outbox.go`, `gateway/outbox.go` · **standards** · the CI step
+  `golangci-lint` (pinned v2.12.1, `.golangci.yml`) failed on the outbox code with 8 findings the local
+  gates (`vet`, `staticcheck`, `gofumpt`) do not run: three non-exhaustive IMAP `switch`es, the builtins
+  `clear` and `cap` shadowed, three unused parameters. Reproduced by building the pinned linter (the
+  preinstalled v2.5 refuses a Go 1.26 module) and running it: 8 issues before, 0 after. The switches got
+  explicit `default` branches with a reason, the builtins were renamed, and `ctx` was removed from the
+  five IMAP helpers that never used it (the commands take no context; cancellation closes the connection,
+  #86), rather than renamed to `_`.
+- **#93 (was N31, decided by the operator 2026-10-05: do not count them)** · `4d23d76` · `sync/outbox.go` · a connect or login failure counts
+  as an attempt against the op at the head of the queue (`transient`), so with the 5 s to 15 min backoff
+  an outage of roughly 20 minutes ends every queued action as `failed (retries_exhausted)` and the
+  operator must retry each by hand. That is what STANDARDS 4a documents, but it treats "the server is
+  unreachable" like "the server rejected this op". Reproduced with
+  `TestOutboxOutageDoesNotExhaustAttempts` (`Unreachable` for 1.5 s: op `failed` after 7 attempts). Now
+  only a server NO to the op counts; a failed dial, login, drop or stall leaves the attempt count alone,
+  backs off on its own consecutive-failure counter, and the 24 h age cap still bounds the op. The
+  STANDARDS limits row says so.
+- **N32 (partly verified 2026-10-05, remainder open)** · Playwright wants `webkit-2359` and
+  `chromium_headless_shell-1243`, which this container lacks (it has Chromium 1194 only). With a
+  throwaway config (deleted afterwards) pointing at that Chromium, the **whole e2e suite passed on both
+  projects (258 passed, 10 skipped by design)** and the **real-binary `make smoke` passed (8/8)** against
+  the embedded, precompressed build. The "phone" project there is the iPhone 14 profile (viewport, touch,
+  user agent) on Chromium, **not WebKit**. Still unverified: true WebKit/Safari rendering on iPhone and
+  iPad, and everything that needs the Le Potato or a real Purelymail mailbox (real MOVE/UIDPLUS/COPYUID
+  behaviour for #94, `expunge` against the live Trash). Run `make e2e` and `make smoke` once somewhere
+  with the pinned browsers, and do a live archive, undo and Empty Trash on the potato.
+
+### Reviewed with no finding
+
+`ea78a63` (design revision: its six fixes match what was built), `dbbdb61`, `ef4d42a`, `0c7556f`,
+`28ed913` (crash test, per-folder ownership re-check and docs: read, no defect). The Message-ID search is a
+substring match, but the mirror stores the id with its angle brackets (`wrapMessageID`), so a hit cannot be
+a different message's id.
+
+### Gate at the tip of this review
+
+`go build`, `go vet`, `staticcheck`, `gofumpt -l`, golangci-lint v2.12.1 (CI's pin, 0 issues),
+`CGO_ENABLED=1 go test -race ./...`, arm64 cross-compile, `govulncheck` v1.1.4 on go1.26.8 (none),
+`make drift`, `pnpm check` and `pnpm test` all pass.

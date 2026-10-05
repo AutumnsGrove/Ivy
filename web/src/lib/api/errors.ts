@@ -20,6 +20,7 @@ export type ErrorCode =
 	| 'bad_destination'
 	| 'same_folder'
 	| 'not_trash'
+	| 'not_synced'
 	| 'not_failed'
 	| 'not_terminal'
 	| 'unknown_action';
