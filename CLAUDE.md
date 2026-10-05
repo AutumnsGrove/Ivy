@@ -18,6 +18,11 @@ This file holds rules, not status. What is done, what is next and the backlog li
 decisions into the docs. **Work goes directly on main** (operator's explicit instruction, overriding
 the old "never on main" rule), committed in small stages.
 
+**On any 3+ step job, keep the task list live as you work**, not as a plan you write once and
+abandon. One task `in_progress` at a time, each marked completed the moment it lands; never
+reconcile only at the end. Operator-owned leftovers (a live check, potato numbers) are their own
+pending task, never folded into a line marked done.
+
 Frontend facts worth knowing: SvelteKit **3** (config lives in `vite.config.ts`; aliases are the
 `#lib/...` imports map, not `$lib`); `pnpm test` (Vitest, includes a token guard that fails on raw
 px/colour literals outside `tokens.css`), `pnpm check`, `pnpm exec playwright test` (WebKit phone +
