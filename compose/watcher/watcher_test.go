@@ -60,6 +60,13 @@ type run struct {
 // with a pending request for target.
 func runWatcher(t *testing.T, env ...string) run {
 	t.Helper()
+	return runWatcherFor(t, target, env...)
+}
+
+// runWatcherFor is runWatcher with the reference the signal file holds chosen
+// by the test.
+func runWatcherFor(t *testing.T, requested string, env ...string) run {
+	t.Helper()
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash is not available")
 	}
@@ -88,7 +95,7 @@ func runWatcher(t *testing.T, env ...string) run {
 	if err := os.WriteFile(envFile, []byte("IVY_IMAGE=ghcr.io/autumnsgrove/ivy@sha256:"+strings.Repeat("0", 64)+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(signal, "requested"), []byte(target), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(signal, "requested"), []byte(requested), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -158,5 +165,26 @@ func TestSlowStartingContainerIsNotRolledBack(t *testing.T) {
 	}
 	if !strings.Contains(string(env), target) {
 		t.Errorf(".env = %q, want it pinned to the new image", env)
+	}
+}
+
+// The signal directory is world-writable so the container's uid can reach it
+// through the bind mount, so any local user can drop a file there. The watcher
+// runs docker as the deploy user, which makes the reference it pulls the whole
+// trust boundary: only Ivy's own image may ever be accepted.
+func TestForeignImageIsRefused(t *testing.T) {
+	t.Parallel()
+	foreign := "registry.example.net/someone/else@sha256:" + strings.Repeat("a", 64)
+	r := runWatcherFor(t, foreign)
+
+	res := update.ReadResult(r.signalDir)
+	if res == nil || res.Status != "failed" {
+		t.Fatalf("result = %+v, want a refusal", res)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(r.signalDir), "docker.log")); err == nil {
+		t.Error("docker ran for an image that is not Ivy's")
+	}
+	if r.requestRemains() {
+		t.Error("the refused request was left in place")
 	}
 }

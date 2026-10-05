@@ -1105,3 +1105,10 @@ The watcher script had no test at all, so the three defects below were found by 
   back, discarding a good update. Reproduced with `TestSlowStartingContainerIsNotRolledBack` (60
   `starting` polls, then healthy: reported `failed` before the fix). The poll is now 300 s and the unit's
   `TimeoutStartSec` comment arithmetic (780 s of 1800 s) is updated.
+- **#101** · `7da4aef` · `compose/watcher/update.sh` · **risk** · the watcher accepted any
+  `<repo>@sha256:<digest>` in `requested`. `install.sh` makes the signal directory `0777` so the
+  container's uid can write through the bind mount, so any local user can drop a file there, and the
+  script then runs `docker compose pull`/`up` as the deploy user with the data directory mounted.
+  Reproduced with `TestForeignImageIsRefused` (`registry.example.net/someone/else@sha256:...` was pulled
+  and reported `ok`; failed before the fix). The pattern is now pinned to `ghcr.io/autumnsgrove/ivy`,
+  the same constant as `update.DefaultRepo`.

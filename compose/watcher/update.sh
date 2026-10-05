@@ -110,9 +110,12 @@ fi
 
 # The value is always resolved server-side, never typed by a person, so a
 # malformed one is a bug upstream; failing fast beats discovering it three steps
-# later as an opaque docker compose error, or writing garbage into .env.
-if ! [[ "$TARGET_IMAGE" =~ ^[A-Za-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; then
-	write_result "failed" "update-signal/requested doesn't look like a real image digest reference, refusing to use it: $TARGET_IMAGE"
+# later as an opaque docker compose error, or writing garbage into .env. The
+# repository is pinned (update/update.go DefaultRepo) because the signal
+# directory is world-writable for the container's bind mount: any local user can
+# write this file, and this script runs docker as the deploy user.
+if ! [[ "$TARGET_IMAGE" =~ ^ghcr\.io/autumnsgrove/ivy@sha256:[0-9a-f]{64}$ ]]; then
+	write_result "failed" "update-signal/requested is not a ghcr.io/autumnsgrove/ivy digest reference, refusing to use it: $TARGET_IMAGE"
 	rm -f "$REQUESTED_FILE"
 	exit 1
 fi
