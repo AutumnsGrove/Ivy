@@ -1009,3 +1009,28 @@ Baseline before any change: `go build`, `go vet`, `staticcheck`, `gofumpt -l`, t
   explicit `default` branches with a reason, the builtins were renamed, and `ctx` was removed from the
   five IMAP helpers that never used it (the commands take no context; cancellation closes the connection,
   #86), rather than renamed to `_`.
+- **N31 (open, needs a design decision)** · `4d23d76` · `sync/outbox.go` · a connect or login failure counts
+  as an attempt against the op at the head of the queue (`transient`), so with the 5 s to 15 min backoff
+  an outage of roughly 20 minutes ends every queued action as `failed (retries_exhausted)` and the
+  operator must retry each by hand. That is what STANDARDS 4a documents, but it treats "the server is
+  unreachable" like "the server rejected this op". Recommendation: do not count dial, login or stall
+  failures as attempts (the 24 h age cap already bounds the op), and keep the attempt cap for per-op
+  server errors. Not changed here because it alters the documented limit's meaning.
+- **N32 (open, unverified here)** · the web e2e could run only on Chromium through a throwaway config
+  pointing at the container's older build (WebKit and the real-binary smoke cannot launch in this
+  environment: `webkit-2359` and `chromium_headless_shell-1243` are missing). The phone (WebKit)
+  project, `make smoke` and everything on the potato (real Purelymail MOVE/UIDPLUS behaviour, the
+  `COPYUID` question in N30) remain unverified.
+
+### Reviewed with no finding
+
+`ea78a63` (design revision: its six fixes match what was built), `dbbdb61`, `ef4d42a`, `0c7556f`,
+`28ed913` (crash test, per-folder ownership re-check and docs: read, no defect). The Message-ID search is a
+substring match, but the mirror stores the id with its angle brackets (`wrapMessageID`), so a hit cannot be
+a different message's id.
+
+### Gate at the tip of this review
+
+`go build`, `go vet`, `staticcheck`, `gofumpt -l`, golangci-lint v2.12.1 (CI's pin, 0 issues),
+`CGO_ENABLED=1 go test -race ./...`, arm64 cross-compile, `govulncheck` v1.1.4 on go1.26.8 (none),
+`make drift`, `pnpm check` and `pnpm test` all pass.
