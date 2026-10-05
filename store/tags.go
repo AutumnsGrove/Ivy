@@ -389,3 +389,63 @@ func (d *DBs) DeleteTag(ctx context.Context, id string) error {
 	}
 	return tx.Commit()
 }
+
+// The reserved Reading tag. "Show in Reading" is this tag rather than a table,
+// so a rule and later Jev apply the same mechanism (round 56); the inbox hides
+// mail that carries it. Its slug is fixed and it cannot be deleted.
+const (
+	ReadingTagID   = "t-reading"
+	ReadingSlug    = "reading"
+	ReadingTagName = "Reading"
+	readingColor   = "lilac"
+)
+
+// IsReservedTag reports whether a tag is reserved and must not be deleted.
+func IsReservedTag(id string) bool { return id == ReadingTagID }
+
+// EnsureReadingTag creates the reserved Reading tag if it is missing, so the
+// Reading view always has a tag to read. A tag that already uses the slug is
+// adopted rather than duplicated.
+func (d *DBs) EnsureReadingTag(ctx context.Context) (Tag, error) {
+	tag, err := d.TagBySlug(ctx, ReadingSlug)
+	if err == nil {
+		return tag, nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return Tag{}, err
+	}
+	_, err = d.State.Write.ExecContext(ctx,
+		`INSERT OR IGNORE INTO tags (id, slug, name, color) VALUES (?, ?, ?, ?)`,
+		ReadingTagID, ReadingSlug, ReadingTagName, readingColor)
+	if err != nil {
+		return Tag{}, fmt.Errorf("ensure reading tag: %w", err)
+	}
+	return d.TagBySlug(ctx, ReadingSlug)
+}
+
+// ContentKeysForTag returns the content keys carrying a tag, newest first is not
+// defined here (membership has no date), so a view that needs ordering joins the
+// mirror itself. Bounded by limit so a filter never loads an unbounded set.
+func (d *DBs) ContentKeysForTag(ctx context.Context, tagID string, limit int) ([]string, error) {
+	if limit <= 0 {
+		limit = MaxTagKeywordsPerMessage
+	}
+	rows, err := d.State.Read.QueryContext(ctx,
+		`SELECT content_key FROM message_tags WHERE tag_id = ? LIMIT ?`, tagID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("content keys for tag: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, fmt.Errorf("content keys for tag: %w", err)
+		}
+		out = append(out, key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("content keys for tag: %w", err)
+	}
+	return out, nil
+}

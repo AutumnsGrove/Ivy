@@ -446,6 +446,41 @@ var mirrorMigrations = []migration{
 			`CREATE INDEX idx_embeddings_ref ON embeddings(account_id, ref, kind, model)`,
 		},
 	},
+	{
+		version: 15,
+		statements: []string{
+			// Which messages the ingest rule pass has already run every rule over, so
+			// a steady-state sync evaluates only what arrived and never rescans the
+			// mailbox. It is a rebuildable cache of the mirror, so it lives here and
+			// joins the message rows in one database; the durable match counts are
+			// rule_hits in state.db. A rebuilt mailbox re-evaluates, which only
+			// re-records the same idempotent hits.
+			`CREATE TABLE rule_eval (
+				account_id  TEXT NOT NULL,
+				content_key TEXT NOT NULL,
+				PRIMARY KEY (account_id, content_key)
+			)`,
+		},
+	},
+	{
+		version: 16,
+		statements: []string{
+			// One row per address seen in the visible mail, the derived half of
+			// People (ARCHITECTURE.md 3). It is rebuilt from the mirror, so it lives
+			// here; the operator's merges of several addresses into one person are
+			// the locally owned half, person_links in state.db. An address in
+			// several accounts is one row with a JSON list of accounts.
+			`CREATE TABLE people (
+				address       TEXT PRIMARY KEY,
+				name          TEXT NOT NULL DEFAULT '',
+				accounts_json TEXT NOT NULL DEFAULT '[]',
+				message_count INTEGER NOT NULL DEFAULT 0,
+				first_seen    TEXT,
+				last_seen     TEXT
+			)`,
+			`CREATE INDEX idx_people_last_seen ON people(last_seen DESC)`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.
@@ -582,6 +617,58 @@ var stateMigrations = []migration{
 				spent_usd  REAL NOT NULL DEFAULT 0,
 				calls      INTEGER NOT NULL DEFAULT 0,
 				PRIMARY KEY (account_id, period, endpoint)
+			)`,
+		},
+	},
+	{
+		version: 7,
+		statements: []string{
+			// Rules are data (round 20): conditions and actions are JSON validated
+			// against a closed vocabulary in Go, so running a rule never calls a
+			// model. An empty account_id means every account; the rule pass still
+			// runs per account. They are locally owned, so they live in state.db.
+			`CREATE TABLE rules (
+				id              TEXT PRIMARY KEY,
+				account_id      TEXT NOT NULL DEFAULT '',
+				conditions_json TEXT NOT NULL,
+				actions_json    TEXT NOT NULL,
+				enabled         INTEGER NOT NULL DEFAULT 1,
+				created_at      TEXT NOT NULL,
+				updated_at      TEXT NOT NULL
+			)`,
+			// One row per (rule, account, content key) the rule matched, so "matched
+			// N times" is a lifetime count and re-evaluating a message is idempotent.
+			// Keyed by content key, like tags, so a move never forgets a hit.
+			`CREATE TABLE rule_hits (
+				rule_id     TEXT NOT NULL REFERENCES rules(id),
+				account_id  TEXT NOT NULL,
+				content_key TEXT NOT NULL,
+				matched_at  TEXT NOT NULL,
+				PRIMARY KEY (rule_id, account_id, content_key)
+			)`,
+		},
+	},
+	{
+		version: 8,
+		statements: []string{
+			// Snooze is a local hide-until (round 10): the mail stays on the server
+			// and in the mirror, and the inbox view hides it until `until`. Keyed by
+			// content key, so a move never forgets a snooze.
+			`CREATE TABLE snoozes (
+				account_id  TEXT NOT NULL,
+				content_key TEXT NOT NULL,
+				until       TEXT NOT NULL,
+				created_at  TEXT NOT NULL,
+				PRIMARY KEY (account_id, content_key)
+			)`,
+			// The operator's merges of several addresses into one person. People
+			// themselves are derived (mirror.db, rebuilt from seen addresses), but a
+			// merge is a human decision, so it is locally owned and survives a
+			// rebuild. person_id is the canonical address (or `me`).
+			`CREATE TABLE person_links (
+				address    TEXT PRIMARY KEY,
+				person_id  TEXT NOT NULL,
+				created_at TEXT NOT NULL
 			)`,
 		},
 	},

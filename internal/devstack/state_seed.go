@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/AutumnsGrove/Ivy/config"
+	"github.com/AutumnsGrove/Ivy/rules"
 	"github.com/AutumnsGrove/Ivy/store"
 )
 
@@ -23,11 +25,40 @@ var profiles = []struct{ name, icon string }{
 
 // devTags are the operator's labels, with the colour names the frontend uses.
 var devTags = []store.Tag{
+	{ID: store.ReadingTagID, Slug: store.ReadingSlug, Name: store.ReadingTagName, Color: "lilac"},
 	{ID: "t-receipts", Slug: "receipts", Name: "receipts", Color: "sky"},
 	{ID: "t-legal", Slug: "legal", Name: "legal", Color: "coral"},
 	{ID: "t-contact-form", Slug: "contact-form", Name: "contact form", Color: "rose"},
 	{ID: "t-grove", Slug: "grove", Name: "grove", Color: "teal"},
 	{ID: "t-ideas", Slug: "ideas", Name: "ideas", Color: "lilac"},
+}
+
+// seedRuleTime is fixed, so the rule hits, outbox ops and snoozes the dev seed
+// produces are identical in both modes (the agreement test compares them).
+var seedRuleTime = time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+
+// devRules are the header-only rules the dev mailbox ships with. Their subjects
+// are the generated corpus's, so the example matches real demo mail; the fuzzy
+// "looks like a receipt" conditions arrive with Jev in chunk 5.
+var devRules = []struct {
+	id string
+	in store.RuleInput
+}{
+	{"r-newsletter", store.RuleInput{
+		Conditions: []store.RuleCondition{{Field: store.RuleFieldSubject, Value: "Garden Weekly"}},
+		Actions:    []store.RuleAction{{Type: store.RuleActionReading}},
+		Enabled:    true,
+	}},
+	{"r-receipts", store.RuleInput{
+		Conditions: []store.RuleCondition{{Field: store.RuleFieldSubject, Value: "Receipt for order"}},
+		Actions:    []store.RuleAction{{Type: store.RuleActionTag, TagID: "t-receipts"}},
+		Enabled:    true,
+	}},
+	{"r-contact", store.RuleInput{
+		Conditions: []store.RuleCondition{{Field: store.RuleFieldSubject, Value: "contact form"}},
+		Actions:    []store.RuleAction{{Type: store.RuleActionTag, TagID: "t-contact-form"}},
+		Enabled:    true,
+	}},
 }
 
 // tagFor places a seeded message by its subject: the demo corpus is generated,
@@ -85,5 +116,33 @@ func seedState(ctx context.Context, dbs *store.DBs, accounts []config.Account) e
 			}
 		}
 	}
+	if err := seedRules(ctx, dbs, accounts); err != nil {
+		return err
+	}
 	return dbs.SetSetting(ctx, "", seededKey, "1")
+}
+
+// seedRules writes the dev rules and applies them to the mail already mirrored,
+// which is what makes the dev mailbox show rule matches. Both modes run the same
+// deterministic applier, so their hits and outbox rows agree.
+func seedRules(ctx context.Context, dbs *store.DBs, accounts []config.Account) error {
+	ids := 0
+	applier := rules.NewApplier(dbs,
+		func() time.Time { return seedRuleTime },
+		func() string { ids++; return fmt.Sprintf("seed-op-%03d", ids) })
+	accountIDs := make([]string, len(accounts))
+	for i, a := range accounts {
+		accountIDs[i] = a.ID
+	}
+	for _, r := range devRules {
+		if _, err := dbs.CreateRule(ctx, r.id, r.in, seedRuleTime); err != nil {
+			return fmt.Errorf("devstack: seed rule %s: %w", r.id, err)
+		}
+	}
+	for _, r := range devRules {
+		if _, err := applier.ApplyToExisting(ctx, r.id, accountIDs); err != nil {
+			return fmt.Errorf("devstack: apply rule %s: %w", r.id, err)
+		}
+	}
+	return nil
 }

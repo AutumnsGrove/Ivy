@@ -1309,3 +1309,34 @@ or more characters and CJK without word breaks, does not pay for a 7x index and 
 slower query on the operator's mostly-English mail; if CJK becomes a need, a second
 trigram index can be added beside this one without changing the contract. The choice is
 recorded in migration 13 and in `docs/ARCHITECTURE.md` section 6.
+
+## Round 56 — 3g rules, snooze, People and Reading, the design questions (2026-10-06, operator; five answers plus two follow-ups)
+
+3g's scope touches schema in both databases and the write path, so the open calls were settled
+before any code. Round 20's rule decisions and round 10's local-hide-until snooze still stand.
+
+- **Frontend scope:** **wire all three screens for real.** Rules, People and Reading stop being
+  mock-backed in 3g, including the inbox tag filter. The rule compiler is chunk 5, so 3g ships a
+  **manual structured editor** (conditions and actions from the closed vocabulary below); the
+  "Describe it" free-form screen stays a labelled preview until the compiler lands.
+- **When rules run:** **on ingest, plus an explicit apply-to-existing action.** A rule pass runs in
+  `Settle` over messages the pass has not evaluated yet (bounded), and the operator can apply one
+  rule to existing mail on demand after a free local dry-run count. No LLM is involved (fuzzy
+  conditions are chunk 5).
+- **Reading:** **a reserved tag, visible in Tags, and the inbox hides mail that carries it.** There
+  is no Reading table: "show in Reading" adds the reserved `reading` tag, and later Jev can apply
+  the same tag without a second mechanism (the operator's reason for choosing this). The tag's slug
+  is fixed and it cannot be deleted.
+- **People:** **one person may have several addresses.** The default is one person per address; the
+  operator can merge addresses by hand, and the operator's own account addresses are auto-linked.
+  Merge decisions are locally owned (`state.db`), so a mirror rebuild keeps them.
+- **Header matching:** **case-insensitive substring only, no regex.** Conditions are matched against
+  sender-controlled headers, so a backtracking engine is not worth the ReDoS surface; lengths are
+  bounded.
+
+Vocabulary and mechanics taken from `JEV.md` 3F and `PLAN.md`: conditions are `from`, `subject`,
+`account` and `has_attachment`; actions are the local-only `add tag`, `show in Reading` and
+`snooze`. A tag action goes through the outbox like every other keyword write; `show in Reading` is
+the reserved tag through the same path; snooze is local. Conditions are stored as JSON on the rule,
+validated on the way in against the closed vocabulary. Every count and bound is in
+`STANDARDS.md` 4a with the code.

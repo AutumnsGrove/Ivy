@@ -32,6 +32,7 @@ import (
 
 	mailmime "github.com/AutumnsGrove/Ivy/mime"
 	"github.com/AutumnsGrove/Ivy/render"
+	"github.com/AutumnsGrove/Ivy/rules"
 	"github.com/AutumnsGrove/Ivy/store"
 	"github.com/AutumnsGrove/Ivy/thread"
 )
@@ -269,6 +270,11 @@ func (f *Fetcher) Settle(ctx context.Context, accountID string) error {
 	// Then read the text out of any attachment not yet extracted, so search and
 	// the meaning index see it. A slow document never stalls the fetch itself.
 	if _, err := f.ExtractTexts(ctx, accountID, extractBatch); err != nil && rerr == nil {
+		rerr = err
+	}
+	// Header rules run over the messages this pass has not seen. They are local
+	// and cheap (no model call), and a full outbox is logged rather than fatal.
+	if _, err := rules.NewApplier(f.dbs, f.now, f.newID).Evaluate(ctx, accountID, store.MaxRuleEvalBatch); err != nil && rerr == nil {
 		rerr = err
 	}
 	// Thread even when healing failed: the rows already mirrored are usable.
