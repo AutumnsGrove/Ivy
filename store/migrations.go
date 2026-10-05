@@ -471,12 +471,14 @@ var mirrorMigrations = []migration{
 			// the locally owned half, person_links in state.db. An address in
 			// several accounts is one row with a JSON list of accounts.
 			`CREATE TABLE people (
-				address       TEXT PRIMARY KEY,
+				address       TEXT NOT NULL,
+				account_id    TEXT NOT NULL,
 				name          TEXT NOT NULL DEFAULT '',
-				accounts_json TEXT NOT NULL DEFAULT '[]',
 				message_count INTEGER NOT NULL DEFAULT 0,
 				first_seen    TEXT,
-				last_seen     TEXT
+				last_seen     TEXT,
+				last_subject  TEXT NOT NULL DEFAULT '',
+				PRIMARY KEY (address, account_id)
 			)`,
 			`CREATE INDEX idx_people_last_seen ON people(last_seen DESC)`,
 		},

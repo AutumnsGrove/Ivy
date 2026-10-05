@@ -562,7 +562,9 @@ type Conversation struct {
 	Preview string `json:"preview"`
 	Subject string `json:"subject"`
 	Unread  *bool  `json:"unread,omitempty"`
-	When    string `json:"when"`
+
+	// When The conversation's latest instant, in UTC (the browser formats it)
+	When time.Time `json:"when"`
 }
 
 // Error defines model for Error.
@@ -739,17 +741,31 @@ type OutboxList struct {
 
 // Person defines model for Person.
 type Person struct {
+	// Addresses Every address merged into this person
+	Addresses     []string       `json:"addresses"`
 	Conversations []Conversation `json:"conversations"`
-	Email         string         `json:"email"`
-	Id            string         `json:"id"`
-	Initials      string         `json:"initials"`
-	Latest        string         `json:"latest"`
-	Name          string         `json:"name"`
-	Since         string         `json:"since"`
-	Slot          AccountSlot    `json:"slot"`
-	Tags          []string       `json:"tags"`
-	When          string         `json:"when"`
-	WritesTo      string         `json:"writesTo"`
+
+	// Count How many messages they appear in, across the accounts
+	Count int    `json:"count"`
+	Email string `json:"email"`
+
+	// Id The canonical address; a merged person keeps this id
+	Id       string      `json:"id"`
+	Initials string      `json:"initials"`
+	Latest   string      `json:"latest"`
+	Name     string      `json:"name"`
+	Since    time.Time   `json:"since"`
+	Slot     AccountSlot `json:"slot"`
+	Tags     []string    `json:"tags"`
+	When     time.Time   `json:"when"`
+
+	// WritesTo The account they write to
+	WritesTo string `json:"writesTo"`
+}
+
+// PersonAddress defines model for PersonAddress.
+type PersonAddress struct {
+	Address string `json:"address"`
 }
 
 // PlacedTag defines model for PlacedTag.
@@ -973,6 +989,9 @@ type SnoozeMessageJSONRequestBody = SnoozeRequest
 
 // EnqueueOutboxJSONRequestBody defines body for EnqueueOutbox for application/json ContentType.
 type EnqueueOutboxJSONRequestBody = OutboxAction
+
+// LinkPersonAddressJSONRequestBody defines body for LinkPersonAddress for application/json ContentType.
+type LinkPersonAddressJSONRequestBody = PersonAddress
 
 // CreateRuleJSONRequestBody defines body for CreateRule for application/json ContentType.
 type CreateRuleJSONRequestBody = RuleInput

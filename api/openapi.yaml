@@ -387,6 +387,51 @@ paths:
                 $ref: "#/components/schemas/Person"
         "404":
           $ref: "#/components/responses/NotFound"
+  /people/{id}/addresses:
+    post:
+      operationId: linkPersonAddress
+      summary: Merge another address into this person
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PersonAddress"
+      responses:
+        "204":
+          description: Merged
+        "400":
+          description: The address is empty or is the person itself
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /people/{id}/addresses/{address}:
+    delete:
+      operationId: unlinkPersonAddress
+      summary: Split an address out of this person
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Split
+        "404":
+          $ref: "#/components/responses/NotFound"
   /rules:
     get:
       operationId: listRules
@@ -1233,14 +1278,17 @@ components:
           type: string
         when:
           type: string
+          format: date-time
+          description: The conversation's latest instant, in UTC (the browser formats it)
         unread:
           type: boolean
     Person:
       type: object
-      required: [id, name, initials, email, slot, latest, when, writesTo, since, tags, conversations]
+      required: [id, name, initials, email, slot, latest, when, writesTo, since, count, addresses, tags, conversations]
       properties:
         id:
           type: string
+          description: The canonical address; a merged person keeps this id
         name:
           type: string
         initials:
@@ -1253,10 +1301,21 @@ components:
           type: string
         when:
           type: string
+          format: date-time
         writesTo:
           type: string
+          description: The account they write to
         since:
           type: string
+          format: date-time
+        count:
+          type: integer
+          description: How many messages they appear in, across the accounts
+        addresses:
+          type: array
+          description: Every address merged into this person
+          items:
+            type: string
         tags:
           type: array
           items:
@@ -1265,6 +1324,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Conversation"
+    PersonAddress:
+      type: object
+      required: [address]
+      properties:
+        address:
+          type: string
     RuleCondition:
       type: object
       required: [field, value]

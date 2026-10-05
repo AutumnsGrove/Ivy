@@ -289,8 +289,8 @@ func (d *DBs) TagsForMessages(ctx context.Context, accountID string, contentKeys
 	rows, err := d.State.Read.QueryContext(ctx, `
 		SELECT m.content_key, t.id, t.slug, t.name, t.color
 		FROM message_tags m JOIN tags t ON t.id = m.tag_id
-		WHERE m.account_id = ? AND m.content_key IN (SELECT value FROM json_each(?))
-		ORDER BY lower(t.name), t.id`, accountID, string(keys))
+		WHERE (? = '' OR m.account_id = ?) AND m.content_key IN (SELECT value FROM json_each(?))
+		ORDER BY lower(t.name), t.id`, accountID, accountID, string(keys))
 	if err != nil {
 		return nil, fmt.Errorf("tags for messages: %w", err)
 	}

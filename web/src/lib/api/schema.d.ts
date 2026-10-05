@@ -277,6 +277,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/people/{id}/addresses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Merge another address into this person */
+        post: operations["linkPersonAddress"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/{id}/addresses/{address}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Split an address out of this person */
+        delete: operations["unlinkPersonAddress"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rules": {
         parameters: {
             query?: never;
@@ -767,21 +801,36 @@ export interface components {
             id: string;
             subject: string;
             preview: string;
+            /**
+             * Format: date-time
+             * @description The conversation's latest instant, in UTC (the browser formats it)
+             */
             when: string;
             unread?: boolean;
         };
         Person: {
+            /** @description The canonical address; a merged person keeps this id */
             id: string;
             name: string;
             initials: string;
             email: string;
             slot: components["schemas"]["AccountSlot"];
             latest: string;
+            /** Format: date-time */
             when: string;
+            /** @description The account they write to */
             writesTo: string;
+            /** Format: date-time */
             since: string;
+            /** @description How many messages they appear in, across the accounts */
+            count: number;
+            /** @description Every address merged into this person */
+            addresses: string[];
             tags: string[];
             conversations: components["schemas"]["Conversation"][];
+        };
+        PersonAddress: {
+            address: string;
         };
         RuleCondition: {
             /** @enum {string} */
@@ -1415,6 +1464,61 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Person"];
                 };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    linkPersonAddress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonAddress"];
+            };
+        };
+        responses: {
+            /** @description Merged */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The address is empty or is the person itself */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    unlinkPersonAddress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                address: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Split */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             404: components["responses"]["NotFound"];
         };

@@ -277,6 +277,11 @@ func (f *Fetcher) Settle(ctx context.Context, accountID string) error {
 	if _, err := rules.NewApplier(f.dbs, f.now, f.newID).Evaluate(ctx, accountID, store.MaxRuleEvalBatch); err != nil && rerr == nil {
 		rerr = err
 	}
+	// People is derived from the mirrored headers, so it is rebuilt with the
+	// threads it shares its rows with.
+	if err := f.dbs.RebuildPeople(ctx, accountID); err != nil && rerr == nil {
+		rerr = err
+	}
 	// Thread even when healing failed: the rows already mirrored are usable.
 	if terr := f.threadAccount(ctx, accountID); rerr == nil {
 		return terr
