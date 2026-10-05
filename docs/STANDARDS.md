@@ -228,6 +228,12 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | PDF pages read (`extract.MaxPages`) | 500 | the first 500 pages only |
 | One attachment's extraction time (`extractTimeout`) | 20 s | the attachment's text is dropped; status `failed`, the message is unaffected |
 | Attachments extracted per settle pass (`extractBatch`) | 100 | the rest wait for the next pass |
+| Markup read from one OOXML archive (`extract.maxOOXMLInflate`) | 64 MiB across all its parts, and the caller's deadline | the walk stops; the text found so far is kept, or `failed` on a deadline |
+| Messages one attachment hash resolves to (`store.MaxAttachmentRefs`) | 1000 | the newest 1000 are reindexed or returned as a search hit |
+| Messages given a search document per settle pass (`indexBatch`) | 500 | the rest wait for the next pass |
+| Search query (`maxSearchQueryBytes`) | 2048 bytes | rejected with 400 `bad_request` |
+| Meaning half of a search (`semanticTimeout`) | 5 s | keyword hits only, logged |
+| Consecutive documents the embed worker may fail (`maxConsecutiveFailures`) | 3 | the pass ends and is retried next interval; one failed document is skipped |
 | Embedding inputs per gate call (`llm.MaxBatchInputs`) | 64 | the call is refused, zero cost, and the queue retries in smaller batches |
 | One embedding input (`llm.MaxInputBytes`) | 64 KiB | the call is refused at zero cost; a body is chunked below this first |
 | Rules (`store.MaxRules`) | 100 | creating one more is refused with 409 `too_many_rules` |
