@@ -3,8 +3,10 @@ package extract
 import (
 	"archive/zip"
 	"bytes"
+	"compress/flate"
 	"context"
 	"fmt"
+	"hash/crc32"
 	"strings"
 	"testing"
 	"time"
@@ -228,17 +230,33 @@ func TestExtractCalendarManyFoldsIsLinear(t *testing.T) {
 	}
 }
 
-// markupPart is a zip entry made of tags and no text: it costs the parser time
-// and yields nothing, so output limits never stop it.
-func markupPart(t *testing.T, zw *zip.Writer, name string, mib int) {
+// markupParts adds zip entries made of tags and no text: they cost the parser
+// time and yield nothing, so output limits never stop them. The markup is
+// deflated once and the same bytes reused for every entry, so building a
+// hostile archive costs the test almost nothing.
+func markupParts(t *testing.T, zw *zip.Writer, mib int, names ...string) {
 	t.Helper()
-	w, err := zw.Create(name)
+	raw := bytes.Repeat([]byte("<a/>"), mib<<18) // mib MiB
+	var deflated bytes.Buffer
+	fw, err := flate.NewWriter(&deflated, flate.BestSpeed)
 	if err != nil {
 		t.Fatal(err)
 	}
-	chunk := []byte(strings.Repeat("<a/>", 1<<18)) // 1 MiB
-	for range mib {
-		if _, err := w.Write(chunk); err != nil {
+	if _, err := fw.Write(raw); err != nil {
+		t.Fatal(err)
+	}
+	if err := fw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range names {
+		w, err := zw.CreateRaw(&zip.FileHeader{
+			Name: name, Method: zip.Deflate, CRC32: crc32.ChecksumIEEE(raw),
+			CompressedSize64: uint64(deflated.Len()), UncompressedSize64: uint64(len(raw)),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write(deflated.Bytes()); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -248,12 +266,18 @@ func markupPart(t *testing.T, zw *zip.Writer, name string, mib int) {
 // looked at it: a few KiB of zip inflating to gigabytes of markup ignored the
 // extraction timeout.
 func TestExtractOOXMLHonoursItsDeadline(t *testing.T) {
-	t.Parallel()
+	// Not parallel: it lifts the inflation ceiling so that only the deadline can
+	// stop the walk, and the ceiling is shared state.
+	old := maxOOXMLInflate
+	maxOOXMLInflate = 1 << 40
+	t.Cleanup(func() { maxOOXMLInflate = old })
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
+	var names []string
 	for i := range 40 {
-		markupPart(t, zw, fmt.Sprintf("xl/worksheets/sheet%d.xml", i), 4)
+		names = append(names, fmt.Sprintf("xl/worksheets/sheet%d.xml", i))
 	}
+	markupParts(t, zw, 4, names...)
 	if err := zw.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +303,7 @@ func TestExtractOOXMLInflationIsBounded(t *testing.T) {
 
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
-	markupPart(t, zw, "xl/worksheets/sheet1.xml", 2) // over the ceiling by itself
+	markupParts(t, zw, 2, "xl/worksheets/sheet1.xml") // over the ceiling by itself
 	w, err := zw.Create("xl/sharedStrings.xml")
 	if err != nil {
 		t.Fatal(err)
