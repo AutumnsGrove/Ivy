@@ -968,3 +968,10 @@ Baseline before any change: `go build`, `go vet`, `staticcheck`, `gofumpt -l`, t
   longer lists (`gone_at` set) was accepted with 202 and could only fail at dispatch. Reproduced with
   `TestEnqueueMoveToAGoneFolderIsRefused` (got 202, wanted 409 `bad_destination`); the destination
   check now refuses a gone folder.
+- **#89** · `5611a5b`/`0be4836` · `store/outbox.go`, `gateway/outbox.go` · **standards** · STANDARDS.md
+  requires an injected clock, but `EnqueueOutbox` fell back to `time.Now()` when the caller passed no time
+  and the retry handler called `time.Now()` directly, so a test (or a replay) could not control an op's
+  timestamps. Reproduced with `TestOutboxTimestampsComeFromTheInjectedClock` (did not build: no
+  `WithClock`) and `TestEnqueueOutboxRequiresATimestamp` (an untimed enqueue succeeded). The gateway now
+  has `WithClock` (default `time.Now`, stamped on enqueue and retry) and the store refuses an untimed op.
+  Two gateway tests that leaned on the fallback now pass a time.

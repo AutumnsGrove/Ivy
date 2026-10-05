@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/AutumnsGrove/Ivy/api"
 	"github.com/AutumnsGrove/Ivy/events"
@@ -51,6 +50,7 @@ func (s *Server) handleEnqueueOutbox(w http.ResponseWriter, r *http.Request) {
 	stored, _, err := s.dbs.EnqueueOutbox(ctx, store.OutboxOp{
 		ID: s.newID(), AccountID: msg.AccountID, Kind: kind,
 		ContentKey: msg.ContentKey, SourceFolderID: msg.FolderID, Expect: expect,
+		CreatedAt: s.now(),
 	})
 	switch {
 	case errors.Is(err, store.ErrOutboxFull):
@@ -196,7 +196,7 @@ func (s *Server) handleRetryOutbox(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "not_failed", "That action has not failed")
 		return
 	}
-	if err := s.dbs.RetryOutbox(ctx, id, time.Now()); err != nil {
+	if err := s.dbs.RetryOutbox(ctx, id, s.now()); err != nil {
 		s.serverError(w, r, err)
 		return
 	}

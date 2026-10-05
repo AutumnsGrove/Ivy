@@ -412,3 +412,15 @@ func TestEnqueueOutboxIsIdempotentEvenWhenTheQueueIsFull(t *testing.T) {
 		t.Errorf("got id %q created=%v, want the existing op-0 with created=false", got.ID, created)
 	}
 }
+
+// The store has no clock of its own: a caller that forgets the time gets an
+// error rather than a silent wall-clock stamp that tests and replays cannot control.
+func TestEnqueueOutboxRequiresATimestamp(t *testing.T) {
+	t.Parallel()
+	dbs := openTemp(t)
+	op := flagOp("op-1", "key-a", "folder-inbox")
+	op.CreatedAt = time.Time{}
+	if _, _, err := dbs.EnqueueOutbox(context.Background(), op); err == nil {
+		t.Fatal("enqueue without a timestamp succeeded, want an error")
+	}
+}

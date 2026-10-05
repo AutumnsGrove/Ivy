@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/AutumnsGrove/Ivy/api"
 	"github.com/AutumnsGrove/Ivy/store"
@@ -139,7 +140,7 @@ func TestListOutboxSplitsActiveAndRecent(t *testing.T) {
 	if _, _, err := dbs.EnqueueOutbox(context.Background(), store.OutboxOp{
 		ID: "op-old", AccountID: "acct-1", Kind: store.OutboxFlags,
 		ContentKey: "ck:m1", SourceFolderID: "inbox-1",
-		Expect: store.OutboxExpect{FlagsAdd: []string{`\Seen`}},
+		Expect: store.OutboxExpect{FlagsAdd: []string{`\Seen`}}, CreatedAt: testNow,
 	}); err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
@@ -166,7 +167,7 @@ func TestRetryOutbox(t *testing.T) {
 	if _, _, err := dbs.EnqueueOutbox(context.Background(), store.OutboxOp{
 		ID: "op-failed", AccountID: "acct-1", Kind: store.OutboxFlags,
 		ContentKey: "ck:m1", SourceFolderID: "inbox-1",
-		Expect: store.OutboxExpect{FlagsAdd: []string{`\flagged`}},
+		Expect: store.OutboxExpect{FlagsAdd: []string{`\flagged`}}, CreatedAt: testNow,
 	}); err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
@@ -270,5 +271,35 @@ func TestEnqueueMoveToAGoneFolderIsRefused(t *testing.T) {
 	}, &body)
 	if code != http.StatusConflict || body.Code != "bad_destination" {
 		t.Fatalf("status/code = %d/%s, want 409/bad_destination", code, body.Code)
+	}
+}
+
+// The gateway reads time through an injected clock (STANDARDS.md), so a queued
+// op and its retry carry the clock's time rather than the wall clock's.
+func TestOutboxTimestampsComeFromTheInjectedClock(t *testing.T) {
+	t.Parallel()
+	fixed := testNow.Add(-90 * time.Minute)
+	srv, dbs := newConfiguredServer(t, func(s *Server) { s.WithClock(func() time.Time { return fixed }) })
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox, UIDValidity: 1, LastSyncAt: testNow})
+	mustMessage(t, dbs, inboxMessage("m1", "acct-1", "inbox-1", testNow, false))
+
+	var item api.OutboxItem
+	if code := postJSON(t, srv.URL+"/api/v1/outbox", api.OutboxAction{MessageId: "m1", Action: api.OutboxActionFlag}, &item); code != http.StatusAccepted {
+		t.Fatalf("enqueue status = %d, want 202", code)
+	}
+	if !item.CreatedAt.Equal(fixed) {
+		t.Errorf("CreatedAt = %s, want the injected %s", item.CreatedAt, fixed)
+	}
+
+	if err := dbs.SetOutboxFailed(context.Background(), item.Id, "noperm", "no", testNow); err != nil {
+		t.Fatalf("fail: %v", err)
+	}
+	var retried api.OutboxItem
+	if code := postJSON(t, srv.URL+"/api/v1/outbox/"+item.Id+"/retry", nil, &retried); code != http.StatusOK {
+		t.Fatalf("retry status = %d, want 200", code)
+	}
+	if !retried.UpdatedAt.Equal(fixed) {
+		t.Errorf("UpdatedAt after retry = %s, want the injected %s", retried.UpdatedAt, fixed)
 	}
 }

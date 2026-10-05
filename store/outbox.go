@@ -142,7 +142,7 @@ func (d *DBs) EnqueueOutbox(ctx context.Context, op OutboxOp) (OutboxOp, bool, e
 		now = op.CreatedAt
 	}
 	if now.IsZero() {
-		now = time.Now()
+		return OutboxOp{}, false, errors.New("enqueue outbox: the op carries no timestamp")
 	}
 
 	tx, err := d.State.Write.BeginTx(ctx, nil)

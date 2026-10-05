@@ -37,6 +37,15 @@ type Server struct {
 	// newID generates an outbox op id (C3: the store never invents one). Tests
 	// replace it with a deterministic generator.
 	newID func() string
+	// now is the clock behind every timestamp the handlers write.
+	now func() time.Time
+}
+
+// WithClock replaces the clock, so a test can assert on the times a handler
+// records.
+func (s *Server) WithClock(fn func() time.Time) *Server {
+	s.now = fn
+	return s
 }
 
 // WithIDFunc replaces the outbox op id generator, so a test can assert on ids.
@@ -66,7 +75,7 @@ func (s *Server) WithAllowedHosts(hosts []string) *Server {
 // version endpoint. static is the built frontend; it may be nil before the
 // assets exist.
 func New(dbs *store.DBs, version string, static fs.FS) *Server {
-	return &Server{dbs: dbs, version: version, static: static, newID: randomID}
+	return &Server{dbs: dbs, version: version, static: static, newID: randomID, now: time.Now}
 }
 
 // randomID is a 128-bit random hex string, unique enough for an op id without a
