@@ -187,3 +187,13 @@ func (d *DBs) EachEmbedding(ctx context.Context, accountIDs []string, model stri
 	}
 	return nil
 }
+
+// MarkEmbeddingEmpty records that a document has nothing to embed (no text after
+// trimming), so the pending queries stop offering it. It is a row with zero
+// dimensions and an empty vector, which the vector scan skips as it skips any
+// row that does not decode.
+func (d *DBs) MarkEmbeddingEmpty(ctx context.Context, accountID, ref, kind, model string) error {
+	return d.UpsertEmbeddings(ctx, []Embedding{{
+		AccountID: accountID, Ref: ref, Kind: kind, Model: model, Vector: []byte{},
+	}})
+}

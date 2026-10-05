@@ -1166,3 +1166,24 @@ on parts and no use of the caller's deadline).
   `MaxOutputBytes`, every later part was cut off after its first run of text (a big shared-strings
   table starved every worksheet). Reproduced with `TestExtractOOXMLLaterPartsGetTheRemainingRoom` (the
   second part's text was missing; failed before the fix). The ceiling is now computed per part.
+
+### `e34fc80` (embed worker)
+
+- **#108** · `e34fc80` · `search/search.go`, `store/embeddings.go` · **bug** · a message whose body is only
+  whitespace and which has no subject (or an attachment whose extracted text trims to nothing) yields no
+  chunks, and the worker skipped it with `continue` without recording anything, so it stayed pending and
+  sat at the head of the newest-first, `Batch`-sized queue forever. Enough of them at the head starved
+  every older message of its embedding for good. Reproduced with
+  `TestEmbedWorkerDoesNotStallBehindMailWithNothingToEmbed` (batch 2, three blank messages newer than a
+  real one: the real one was never embedded; failed before the fix). Such a document is now recorded as
+  done with an empty zero-dimension row (`MarkEmbeddingEmpty`) that the vector scan already skips.
+- **#109** · `e34fc80` · `search/search.go` · **bug** · any provider error on one document ended the whole
+  pass, and the next pass met the same document first again, so a single refused document blocked
+  everything behind it (and paid for a failed call every minute). Reproduced with
+  `TestEmbedWorkerSkipsOneRefusedDocument` (nothing embedded; failed before the fix). One failed
+  document is now logged and skipped; three in a row (a real outage) end the pass. A refused document is
+  still retried each pass: see N33.
+- **N33 (open, needs a decision)** · `e34fc80` · `search/search.go` · a document the provider refuses
+  every time is skipped but not remembered, so it costs one failed call and one `error` ledger row per
+  pass (once a minute) for as long as it exists. Recommend counting failures per ref in the ledger and
+  tombstoning after, say, five, once there is a real provider to see what a refusal looks like.

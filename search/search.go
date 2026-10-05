@@ -194,29 +194,29 @@ func (w *EmbedWorker) Run(ctx context.Context) error {
 	}
 }
 
+// maxConsecutiveFailures ends a pass when this many documents in a row fail: one
+// refused document is skipped, but a run of failures means the provider or the
+// store is down, and hammering it pass after pass helps nobody.
+const maxConsecutiveFailures = 3
+
+// embedJob is one pending document: a message body (ref is its content key) or
+// an attachment (ref is its content hash) and the chunks to embed.
+type embedJob struct {
+	ref    string
+	kind   string
+	chunks []string
+}
+
 func (w *EmbedWorker) embedBodies(ctx context.Context, acct AccountConfig) (int, error) {
 	refs, err := w.dbs.PendingBodyRefs(ctx, acct.ID, acct.Model, w.batch)
 	if err != nil {
 		return 0, err
 	}
-	embedded := 0
-	for _, ref := range refs {
-		if ctx.Err() != nil {
-			return embedded, ctx.Err()
-		}
-		chunks := DocChunks(ref.Subject, ref.Body)
-		if len(chunks) == 0 {
-			continue
-		}
-		if err := w.embedChunks(ctx, acct, ref.ContentKey, store.ExtractKindBody, chunks); err != nil {
-			if errors.Is(err, llm.ErrNotEnabled) || errors.Is(err, llm.ErrCapReached) {
-				return embedded, nil // no point trying the rest of this account
-			}
-			return embedded, err
-		}
-		embedded++
+	jobs := make([]embedJob, len(refs))
+	for i, ref := range refs {
+		jobs[i] = embedJob{ref: ref.ContentKey, kind: store.ExtractKindBody, chunks: DocChunks(ref.Subject, ref.Body)}
 	}
-	return embedded, nil
+	return w.runJobs(ctx, acct, jobs)
 }
 
 func (w *EmbedWorker) embedAttachments(ctx context.Context, acct AccountConfig) (int, error) {
@@ -224,22 +224,48 @@ func (w *EmbedWorker) embedAttachments(ctx context.Context, acct AccountConfig) 
 	if err != nil {
 		return 0, err
 	}
-	embedded := 0
-	for _, ref := range refs {
-		if ctx.Err() != nil {
-			return embedded, ctx.Err()
-		}
-		chunks := Chunk(ref.Text, ChunkTokens, ChunkOverlap)
-		if len(chunks) == 0 {
-			continue
-		}
-		if err := w.embedChunks(ctx, acct, ref.Hash, store.ExtractKindAttachment, chunks); err != nil {
-			if errors.Is(err, llm.ErrNotEnabled) || errors.Is(err, llm.ErrCapReached) {
-				return embedded, nil
-			}
+	jobs := make([]embedJob, len(refs))
+	for i, ref := range refs {
+		jobs[i] = embedJob{ref: ref.Hash, kind: store.ExtractKindAttachment, chunks: Chunk(ref.Text, ChunkTokens, ChunkOverlap)}
+	}
+	return w.runJobs(ctx, acct, jobs)
+}
+
+// runJobs embeds one bounded batch of pending documents. The queue is newest
+// first and bounded, so a document that can never leave it would sit at the head
+// and starve everything behind it: a document with nothing to embed is recorded
+// as done, and one the provider refuses is skipped (and logged) rather than
+// ending the pass. A policy refusal ends the pass quietly, since the rest of the
+// account would be refused the same way.
+func (w *EmbedWorker) runJobs(ctx context.Context, acct AccountConfig, jobs []embedJob) (int, error) {
+	embedded, failures := 0, 0
+	for _, job := range jobs {
+		if err := ctx.Err(); err != nil {
 			return embedded, err
 		}
-		embedded++
+		if len(job.chunks) == 0 {
+			if err := w.dbs.MarkEmbeddingEmpty(ctx, acct.ID, job.ref, job.kind, acct.Model); err != nil {
+				return embedded, err
+			}
+			continue
+		}
+		err := w.embedChunks(ctx, acct, job.ref, job.kind, job.chunks)
+		switch {
+		case err == nil:
+			embedded++
+			failures = 0
+		case errors.Is(err, llm.ErrNotEnabled), errors.Is(err, llm.ErrCapReached):
+			return embedded, nil
+		case ctx.Err() != nil:
+			return embedded, ctx.Err()
+		default:
+			failures++
+			slog.WarnContext(ctx, "embed worker: skipped a document that failed",
+				"account", acct.ID, "kind", job.kind, "ref", job.ref, "error", err)
+			if failures >= maxConsecutiveFailures {
+				return embedded, err
+			}
+		}
 	}
 	return embedded, nil
 }

@@ -2,6 +2,8 @@ package search
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -197,5 +199,117 @@ func TestVectorSearchRanksTheMatchingDocument(t *testing.T) {
 	}
 	if len(hits) == 0 || hits[0].ContentKey != "ck1" {
 		t.Fatalf("hits = %+v, want ck1 first", hits)
+	}
+}
+
+// stubEmbedder is a hosted provider that answers every input with one vector,
+// except that it rejects any batch containing a marked input, the way a
+// provider refuses a single document it will not take.
+type stubEmbedder struct {
+	reject string
+}
+
+func (stubEmbedder) Name() string { return "stub" }
+
+func (s stubEmbedder) Embed(_ context.Context, _ string, inputs []string) (llm.EmbedResult, error) {
+	res := llm.EmbedResult{InputTokens: len(inputs), CostUSD: 0.0001}
+	for _, in := range inputs {
+		if s.reject != "" && strings.Contains(in, s.reject) {
+			return llm.EmbedResult{}, errStubRejected
+		}
+		res.Vectors = append(res.Vectors, llm.Quantise([]float32{0.5, 0, 0, 0}))
+	}
+	return res, nil
+}
+
+var errStubRejected = errors.New("stub provider rejected the input")
+
+func seedDated(t *testing.T, dbs *store.DBs, id, key, subject, body string, at time.Time) {
+	t.Helper()
+	if err := dbs.UpsertMessage(context.Background(), store.Message{
+		ID: id, AccountID: "acct", FolderID: "f1", UID: uint32(len(id)) + uint32(at.Day()),
+		ContentKey: key, Subject: subject, BodyText: body, Date: at,
+	}); err != nil {
+		t.Fatalf("seed %s: %v", id, err)
+	}
+}
+
+func seedDatedAccount(t *testing.T, dbs *store.DBs) {
+	t.Helper()
+	ctx := context.Background()
+	if err := dbs.UpsertAccount(ctx, store.Account{ID: "acct", Address: "acct@example.test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := dbs.UpsertFolder(ctx, store.Folder{ID: "f1", AccountID: "acct", Name: "f1", Role: store.RoleInbox}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func embeddedRefs(t *testing.T, dbs *store.DBs) map[string]bool {
+	t.Helper()
+	got := map[string]bool{}
+	err := dbs.EachEmbedding(context.Background(), []string{"acct"}, "m", func(e store.Embedding) error {
+		if e.Dims > 0 {
+			got[e.Ref] = true
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+// A message whose body is only whitespace and which has no subject yields no
+// chunks, so nothing was ever stored for it and it stayed first in the queue:
+// the queue is newest first and bounded, so enough of them at the head starved
+// every older message of its embedding for good.
+func TestEmbedWorkerDoesNotStallBehindMailWithNothingToEmbed(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openStore(t)
+	seedDatedAccount(t, dbs)
+	day := func(d int) time.Time { return time.Date(2026, 9, d, 9, 0, 0, 0, time.UTC) }
+	seedDated(t, dbs, "old", "ck-old", "Invoice", "the domain invoice", day(1))
+	for i := range 3 {
+		seedDated(t, dbs, fmt.Sprintf("blank%d", i), fmt.Sprintf("ck-blank%d", i), "", "  \n ", day(10+i))
+	}
+	worker := NewEmbedWorker(dbs, llm.NewGate(dbs), []AccountConfig{
+		{ID: "acct", Embedder: stubEmbedder{}, Model: "m", Enabled: true, CapUSD: 5},
+	}, WorkerOptions{Batch: 2})
+
+	for range 4 {
+		if _, err := worker.RunOnce(ctx); err != nil {
+			t.Fatalf("RunOnce: %v", err)
+		}
+	}
+	if !embeddedRefs(t, dbs)["ck-old"] {
+		t.Fatal("the older message was never embedded: the queue is stuck behind mail with nothing to embed")
+	}
+}
+
+// One document the provider refuses must not hold up the rest. The pass used to
+// stop at the first provider error, and the next pass met the same document
+// first again, so everything behind it waited on it forever (paying a failed
+// call each minute).
+func TestEmbedWorkerSkipsOneRefusedDocument(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openStore(t)
+	seedDatedAccount(t, dbs)
+	day := func(d int) time.Time { return time.Date(2026, 9, d, 9, 0, 0, 0, time.UTC) }
+	seedDated(t, dbs, "poison", "ck-poison", "Weird", "this one is POISON", day(20))
+	seedDated(t, dbs, "ok1", "ck-ok1", "One", "the first good message", day(10))
+	seedDated(t, dbs, "ok2", "ck-ok2", "Two", "the second good message", day(5))
+	worker := NewEmbedWorker(dbs, llm.NewGate(dbs), []AccountConfig{
+		{ID: "acct", Embedder: stubEmbedder{reject: "POISON"}, Model: "m", Enabled: true, CapUSD: 5},
+	}, WorkerOptions{Batch: 2})
+
+	for range 3 {
+		_, _ = worker.RunOnce(ctx)
+	}
+	got := embeddedRefs(t, dbs)
+	if !got["ck-ok1"] || !got["ck-ok2"] {
+		t.Fatalf("embedded = %v, want both good messages despite the refused one", got)
 	}
 }
