@@ -10,8 +10,8 @@ import "strings"
 // over-estimate: 4 bytes per token, which keeps a chunk under the model
 // context even for dense text.
 const (
-	ChunkTokens  = 512 // approximate tokens per chunk
-	ChunkOverlap = 64  // approximate tokens shared with the next chunk
+	ChunkTokens   = 512 // approximate tokens per chunk
+	ChunkOverlap  = 64  // approximate tokens shared with the next chunk
 	BytesPerToken = 4
 	// MaxChunks bounds one document so a huge body cannot cost an unbounded
 	// embedding bill (STANDARDS.md 4a).

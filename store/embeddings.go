@@ -187,4 +187,3 @@ func (d *DBs) EachEmbedding(ctx context.Context, accountIDs []string, model stri
 	}
 	return nil
 }
-
