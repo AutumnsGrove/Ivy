@@ -35,6 +35,16 @@ func (s *Server) handleListTags(w http.ResponseWriter, r *http.Request) {
 	for _, t := range tags {
 		out.Mine = append(out.Mine, userTag(t))
 	}
+	rules, err := s.dbs.ListRules(r.Context())
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	for _, rule := range rules {
+		if rule.Enabled {
+			out.ActiveRules++
+		}
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -130,6 +140,10 @@ func (s *Server) handleDeleteTag(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		s.serverError(w, r, err)
+		return
+	}
+	if store.IsReservedTag(tag.ID) {
+		writeError(w, http.StatusConflict, "reserved_tag", "Reading is built in and cannot be deleted")
 		return
 	}
 	keyword := store.TagKeyword(tag.Slug)

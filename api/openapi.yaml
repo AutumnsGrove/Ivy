@@ -362,16 +362,70 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Rule"
+    post:
+      operationId: createRule
+      summary: Create a rule
+      description: >
+        Conditions and actions are validated against a closed vocabulary (from,
+        subject, account, has_attachment; tag, reading, snooze). Nothing runs
+        until the rule is enabled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuleInput"
+      responses:
+        "201":
+          description: The new rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rule"
+        "400":
+          description: A condition or action is outside the vocabulary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: There are already too many rules (`too_many_rules`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /rules/dry-run:
+    post:
+      operationId: dryRunRule
+      summary: Count what a condition set would match
+      description: >
+        A free local preview over the most recent messages. It writes nothing,
+        not even a rule.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuleDryRunRequest"
+      responses:
+        "200":
+          description: The preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleDryRunResult"
+        "400":
+          description: A condition is outside the vocabulary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /rules/{id}:
     get:
       operationId: getRule
       summary: One rule
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: "#/components/parameters/RuleID"
       responses:
         "200":
           description: The rule
@@ -379,6 +433,80 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Rule"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: updateRule
+      summary: Replace a rule's conditions, actions and scope
+      parameters:
+        - $ref: "#/components/parameters/RuleID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuleInput"
+      responses:
+        "200":
+          description: The updated rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rule"
+        "400":
+          description: A condition or action is outside the vocabulary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: setRuleEnabled
+      summary: Turn a rule on or off
+      parameters:
+        - $ref: "#/components/parameters/RuleID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuleToggle"
+      responses:
+        "200":
+          description: The updated rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rule"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteRule
+      summary: Delete a rule and its match history
+      parameters:
+        - $ref: "#/components/parameters/RuleID"
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /rules/{id}/apply:
+    post:
+      operationId: applyRule
+      summary: Apply a rule to the mail already mirrored
+      description: >
+        The deliberate way for a new rule to reach old mail; the ingest pass only
+        ever sees messages it has not evaluated. Idempotent.
+      parameters:
+        - $ref: "#/components/parameters/RuleID"
+      responses:
+        "200":
+          description: How many messages matched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleApplyResult"
         "404":
           $ref: "#/components/responses/NotFound"
   /checks:
@@ -625,6 +753,12 @@ components:
       schema:
         type: string
     OutboxID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    RuleID:
       name: id
       in: path
       required: true
@@ -1086,12 +1220,46 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Conversation"
+    RuleCondition:
+      type: object
+      required: [field, value]
+      properties:
+        field:
+          type: string
+          enum: [from, subject, account, has_attachment]
+        value:
+          type: string
+          description: A case-insensitive substring, an account id, or "true"/"false"
+    RuleAction:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [tag, reading, snooze]
+        tagId:
+          type: string
+          description: The tag for a `tag` action
+        snooze:
+          type: string
+          enum: [later_today, tomorrow, weekend, next_week]
     Rule:
       type: object
-      required: [id, when, then, thenToken, matches, on]
+      required: [id, when, then, thenToken, matches, on, accountId, conditions, actions]
       properties:
         id:
           type: string
+        accountId:
+          type: string
+          description: Empty means every account
+        conditions:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuleCondition"
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuleAction"
         when:
           type: string
         whenToken:
@@ -1108,6 +1276,59 @@ components:
           type: integer
         on:
           type: boolean
+    RuleInput:
+      type: object
+      required: [conditions, actions]
+      properties:
+        accountId:
+          type: string
+        conditions:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuleCondition"
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuleAction"
+        enabled:
+          type: boolean
+    RuleToggle:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+    RuleDryRunRequest:
+      type: object
+      required: [conditions]
+      properties:
+        conditions:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuleCondition"
+        accountIds:
+          type: array
+          items:
+            type: string
+    RuleDryRunResult:
+      type: object
+      required: [matched, total]
+      properties:
+        matched:
+          type: integer
+        total:
+          type: integer
+        sample:
+          type: array
+          description: Up to twenty matched messages, for the review screen
+          items:
+            $ref: "#/components/schemas/MailSummary"
+    RuleApplyResult:
+      type: object
+      required: [applied]
+      properties:
+        applied:
+          type: integer
     Check:
       type: object
       required: [id, name, description, builtIn, on]

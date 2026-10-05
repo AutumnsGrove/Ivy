@@ -116,28 +116,28 @@ type RuleHit struct {
 }
 
 // RuleMessage is the header projection the rule pass evaluates. It carries no
-// body, so a pass over a large mailbox stays small.
+// body, so a pass over a large mailbox stays small; ID, Date and Snippet are
+// there so a dry-run preview can render a list row.
 type RuleMessage struct {
+	ID            string
 	ContentKey    string
 	AccountID     string
 	FolderID      string
 	From          string
 	FromName      string
 	Subject       string
+	Snippet       string
 	HasAttachment bool
+	Date          time.Time
 }
 
-// validateRuleInput checks a rule against the closed vocabulary. It is the only
-// place conditions and actions are accepted, so both the ingest pass and the API
-// can trust a stored rule.
-func validateRuleInput(in RuleInput) error {
-	if len(in.Conditions) == 0 || len(in.Conditions) > MaxRuleConditions {
-		return fmt.Errorf("%w: %d conditions", ErrRuleCondition, len(in.Conditions))
+// ValidateConditions checks a condition list against the closed vocabulary. It
+// is exported so the dry run can validate without inventing actions.
+func ValidateConditions(conditions []RuleCondition) error {
+	if len(conditions) == 0 || len(conditions) > MaxRuleConditions {
+		return fmt.Errorf("%w: %d conditions", ErrRuleCondition, len(conditions))
 	}
-	if len(in.Actions) == 0 || len(in.Actions) > MaxRuleActions {
-		return fmt.Errorf("%w: %d actions", ErrRuleAction, len(in.Actions))
-	}
-	for _, c := range in.Conditions {
+	for _, c := range conditions {
 		switch c.Field {
 		case RuleFieldFrom, RuleFieldSubject, RuleFieldAccount:
 			if !validRuleValue(c.Value) {
@@ -151,7 +151,15 @@ func validateRuleInput(in RuleInput) error {
 			return fmt.Errorf("%w: field %q", ErrRuleCondition, c.Field)
 		}
 	}
-	for _, a := range in.Actions {
+	return nil
+}
+
+// ValidateActions checks an action list against the closed vocabulary.
+func ValidateActions(actions []RuleAction) error {
+	if len(actions) == 0 || len(actions) > MaxRuleActions {
+		return fmt.Errorf("%w: %d actions", ErrRuleAction, len(actions))
+	}
+	for _, a := range actions {
 		switch a.Type {
 		case RuleActionTag:
 			if a.TagID == "" {
@@ -167,6 +175,15 @@ func validateRuleInput(in RuleInput) error {
 		}
 	}
 	return nil
+}
+
+// validateRuleInput checks a rule against the closed vocabulary. It is the only
+// place a stored rule is accepted, so the ingest pass can trust every row.
+func validateRuleInput(in RuleInput) error {
+	if err := ValidateConditions(in.Conditions); err != nil {
+		return err
+	}
+	return ValidateActions(in.Actions)
 }
 
 func validRuleValue(v string) bool {
@@ -359,7 +376,7 @@ func (d *DBs) RuleMessages(ctx context.Context, accountID string, limit int, onl
 			date   string
 			hasAtt bool
 		)
-		if err := rows.Scan(&m.ContentKey, &m.AccountID, &m.FolderID, &from, &m.Subject, &hasAtt, &date); err != nil {
+		if err := rows.Scan(&m.ID, &m.ContentKey, &m.AccountID, &m.FolderID, &from, &m.Subject, &m.Snippet, &hasAtt, &date); err != nil {
 			return nil, fmt.Errorf("rule messages: %w", err)
 		}
 		m.HasAttachment = hasAtt
@@ -367,6 +384,11 @@ func (d *DBs) RuleMessages(ctx context.Context, accountID string, limit int, onl
 			var addr Address
 			if err := json.Unmarshal([]byte(from), &addr); err == nil {
 				m.From, m.FromName = addr.Address, addr.Name
+			}
+		}
+		if date != "" {
+			if m.Date, err = parseTime(date); err != nil {
+				return nil, fmt.Errorf("rule messages: %w", err)
 			}
 		}
 		out = append(out, m)
@@ -386,8 +408,8 @@ const ruleSelect = `
 	FROM rules r`
 
 const ruleMessageQuery = `
-	SELECT m.content_key, m.account_id, m.folder_id, COALESCE(m.from_json, ''),
-	       COALESCE(m.subject, ''), m.has_attachments, COALESCE(m.date, '')
+	SELECT m.id, m.content_key, m.account_id, m.folder_id, COALESCE(m.from_json, ''),
+	       COALESCE(m.subject, ''), COALESCE(m.snippet, ''), m.has_attachments, COALESCE(m.date, '')
 	FROM messages m
 	WHERE m.account_id = ?
 	  AND m.disabled_at IS NULL

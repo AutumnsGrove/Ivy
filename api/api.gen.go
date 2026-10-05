@@ -253,6 +253,75 @@ func (e OutboxItemState) Valid() bool {
 	}
 }
 
+// Defines values for RuleActionSnooze.
+const (
+	LaterToday RuleActionSnooze = "later_today"
+	NextWeek   RuleActionSnooze = "next_week"
+	Tomorrow   RuleActionSnooze = "tomorrow"
+	Weekend    RuleActionSnooze = "weekend"
+)
+
+// Valid indicates whether the value is a known member of the RuleActionSnooze enum.
+func (e RuleActionSnooze) Valid() bool {
+	switch e {
+	case LaterToday:
+		return true
+	case NextWeek:
+		return true
+	case Tomorrow:
+		return true
+	case Weekend:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuleActionType.
+const (
+	Reading RuleActionType = "reading"
+	Snooze  RuleActionType = "snooze"
+	Tag     RuleActionType = "tag"
+)
+
+// Valid indicates whether the value is a known member of the RuleActionType enum.
+func (e RuleActionType) Valid() bool {
+	switch e {
+	case Reading:
+		return true
+	case Snooze:
+		return true
+	case Tag:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuleConditionField.
+const (
+	RuleConditionFieldAccount       RuleConditionField = "account"
+	RuleConditionFieldFrom          RuleConditionField = "from"
+	RuleConditionFieldHasAttachment RuleConditionField = "has_attachment"
+	RuleConditionFieldSubject       RuleConditionField = "subject"
+)
+
+// Valid indicates whether the value is a known member of the RuleConditionField enum.
+func (e RuleConditionField) Valid() bool {
+	switch e {
+	case RuleConditionFieldAccount:
+		return true
+	case RuleConditionFieldFrom:
+		return true
+	case RuleConditionFieldHasAttachment:
+		return true
+	case RuleConditionFieldSubject:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SyncState.
 const (
 	SyncStateAuthFailed  SyncState = "auth-failed"
@@ -676,15 +745,78 @@ type RestoreResult struct {
 
 // Rule defines model for Rule.
 type Rule struct {
-	Id        string    `json:"id"`
-	Matches   int       `json:"matches"`
-	On        bool      `json:"on"`
-	Then      string    `json:"then"`
-	ThenColor *TagColor `json:"thenColor,omitempty"`
-	ThenToken string    `json:"thenToken"`
-	When      string    `json:"when"`
-	WhenTail  *string   `json:"whenTail,omitempty"`
-	WhenToken *string   `json:"whenToken,omitempty"`
+	// AccountId Empty means every account
+	AccountId  string          `json:"accountId"`
+	Actions    []RuleAction    `json:"actions"`
+	Conditions []RuleCondition `json:"conditions"`
+	Id         string          `json:"id"`
+	Matches    int             `json:"matches"`
+	On         bool            `json:"on"`
+	Then       string          `json:"then"`
+	ThenColor  *TagColor       `json:"thenColor,omitempty"`
+	ThenToken  string          `json:"thenToken"`
+	When       string          `json:"when"`
+	WhenTail   *string         `json:"whenTail,omitempty"`
+	WhenToken  *string         `json:"whenToken,omitempty"`
+}
+
+// RuleAction defines model for RuleAction.
+type RuleAction struct {
+	Snooze *RuleActionSnooze `json:"snooze,omitempty"`
+
+	// TagId The tag for a `tag` action
+	TagId *string        `json:"tagId,omitempty"`
+	Type  RuleActionType `json:"type"`
+}
+
+// RuleActionSnooze defines model for RuleAction.Snooze.
+type RuleActionSnooze string
+
+// RuleActionType defines model for RuleAction.Type.
+type RuleActionType string
+
+// RuleApplyResult defines model for RuleApplyResult.
+type RuleApplyResult struct {
+	Applied int `json:"applied"`
+}
+
+// RuleCondition defines model for RuleCondition.
+type RuleCondition struct {
+	Field RuleConditionField `json:"field"`
+
+	// Value A case-insensitive substring, an account id, or "true"/"false"
+	Value string `json:"value"`
+}
+
+// RuleConditionField defines model for RuleCondition.Field.
+type RuleConditionField string
+
+// RuleDryRunRequest defines model for RuleDryRunRequest.
+type RuleDryRunRequest struct {
+	AccountIds *[]string       `json:"accountIds,omitempty"`
+	Conditions []RuleCondition `json:"conditions"`
+}
+
+// RuleDryRunResult defines model for RuleDryRunResult.
+type RuleDryRunResult struct {
+	Matched int `json:"matched"`
+
+	// Sample Up to twenty matched messages, for the review screen
+	Sample *[]MailSummary `json:"sample,omitempty"`
+	Total  int            `json:"total"`
+}
+
+// RuleInput defines model for RuleInput.
+type RuleInput struct {
+	AccountId  *string         `json:"accountId,omitempty"`
+	Actions    []RuleAction    `json:"actions"`
+	Conditions []RuleCondition `json:"conditions"`
+	Enabled    *bool           `json:"enabled,omitempty"`
+}
+
+// RuleToggle defines model for RuleToggle.
+type RuleToggle struct {
+	Enabled bool `json:"enabled"`
 }
 
 // SearchHit defines model for SearchHit.
@@ -759,6 +891,9 @@ type MessageID = string
 // OutboxID defines model for OutboxID.
 type OutboxID = string
 
+// RuleID defines model for RuleID.
+type RuleID = string
+
 // NotFound defines model for NotFound.
 type NotFound = Error
 
@@ -795,6 +930,18 @@ type AskJSONRequestBody = AskRequest
 
 // EnqueueOutboxJSONRequestBody defines body for EnqueueOutbox for application/json ContentType.
 type EnqueueOutboxJSONRequestBody = OutboxAction
+
+// CreateRuleJSONRequestBody defines body for CreateRule for application/json ContentType.
+type CreateRuleJSONRequestBody = RuleInput
+
+// DryRunRuleJSONRequestBody defines body for DryRunRule for application/json ContentType.
+type DryRunRuleJSONRequestBody = RuleDryRunRequest
+
+// SetRuleEnabledJSONRequestBody defines body for SetRuleEnabled for application/json ContentType.
+type SetRuleEnabledJSONRequestBody = RuleToggle
+
+// UpdateRuleJSONRequestBody defines body for UpdateRule for application/json ContentType.
+type UpdateRuleJSONRequestBody = RuleInput
 
 // CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
 type CreateTagJSONRequestBody = TagCreate

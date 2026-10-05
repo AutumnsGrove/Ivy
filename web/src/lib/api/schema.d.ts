@@ -266,7 +266,31 @@ export interface paths {
         /** Rules as plain sentences */
         get: operations["listRules"];
         put?: never;
-        post?: never;
+        /**
+         * Create a rule
+         * @description Conditions and actions are validated against a closed vocabulary (from, subject, account, has_attachment; tag, reading, snooze). Nothing runs until the rule is enabled.
+         */
+        post: operations["createRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rules/dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Count what a condition set would match
+         * @description A free local preview over the most recent messages. It writes nothing, not even a rule.
+         */
+        post: operations["dryRunRule"];
         delete?: never;
         options?: never;
         head?: never;
@@ -282,8 +306,31 @@ export interface paths {
         };
         /** One rule */
         get: operations["getRule"];
-        put?: never;
+        /** Replace a rule's conditions, actions and scope */
+        put: operations["updateRule"];
         post?: never;
+        /** Delete a rule and its match history */
+        delete: operations["deleteRule"];
+        options?: never;
+        head?: never;
+        /** Turn a rule on or off */
+        patch: operations["setRuleEnabled"];
+        trace?: never;
+    };
+    "/rules/{id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply a rule to the mail already mirrored
+         * @description The deliberate way for a new rule to reach old mail; the ingest pass only ever sees messages it has not evaluated. Idempotent.
+         */
+        post: operations["applyRule"];
         delete?: never;
         options?: never;
         head?: never;
@@ -711,8 +758,26 @@ export interface components {
             tags: string[];
             conversations: components["schemas"]["Conversation"][];
         };
+        RuleCondition: {
+            /** @enum {string} */
+            field: "from" | "subject" | "account" | "has_attachment";
+            /** @description A case-insensitive substring, an account id, or "true"/"false" */
+            value: string;
+        };
+        RuleAction: {
+            /** @enum {string} */
+            type: "tag" | "reading" | "snooze";
+            /** @description The tag for a `tag` action */
+            tagId?: string;
+            /** @enum {string} */
+            snooze?: "later_today" | "tomorrow" | "weekend" | "next_week";
+        };
         Rule: {
             id: string;
+            /** @description Empty means every account */
+            accountId: string;
+            conditions: components["schemas"]["RuleCondition"][];
+            actions: components["schemas"]["RuleAction"][];
             when: string;
             whenToken?: string;
             whenTail?: string;
@@ -721,6 +786,28 @@ export interface components {
             thenColor?: components["schemas"]["TagColor"];
             matches: number;
             on: boolean;
+        };
+        RuleInput: {
+            accountId?: string;
+            conditions: components["schemas"]["RuleCondition"][];
+            actions: components["schemas"]["RuleAction"][];
+            enabled?: boolean;
+        };
+        RuleToggle: {
+            enabled: boolean;
+        };
+        RuleDryRunRequest: {
+            conditions: components["schemas"]["RuleCondition"][];
+            accountIds?: string[];
+        };
+        RuleDryRunResult: {
+            matched: number;
+            total: number;
+            /** @description Up to twenty matched messages, for the review screen */
+            sample?: components["schemas"]["MailSummary"][];
+        };
+        RuleApplyResult: {
+            applied: number;
         };
         Check: {
             id: string;
@@ -809,6 +896,7 @@ export interface components {
     parameters: {
         MessageID: string;
         OutboxID: string;
+        RuleID: string;
     };
     requestBodies: never;
     headers: never;
@@ -1277,12 +1365,87 @@ export interface operations {
             };
         };
     };
+    createRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleInput"];
+            };
+        };
+        responses: {
+            /** @description The new rule */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rule"];
+                };
+            };
+            /** @description A condition or action is outside the vocabulary */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description There are already too many rules (`too_many_rules`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    dryRunRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleDryRunRequest"];
+            };
+        };
+        responses: {
+            /** @description The preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleDryRunResult"];
+                };
+            };
+            /** @description A condition is outside the vocabulary */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     getRule: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                id: string;
+                id: components["parameters"]["RuleID"];
             };
             cookie?: never;
         };
@@ -1295,6 +1458,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Rule"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RuleID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleInput"];
+            };
+        };
+        responses: {
+            /** @description The updated rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rule"];
+                };
+            };
+            /** @description A condition or action is outside the vocabulary */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RuleID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setRuleEnabled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RuleID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleToggle"];
+            };
+        };
+        responses: {
+            /** @description The updated rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rule"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    applyRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["RuleID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many messages matched */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuleApplyResult"];
                 };
             };
             404: components["responses"]["NotFound"];
