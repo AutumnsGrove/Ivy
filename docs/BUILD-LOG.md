@@ -598,3 +598,49 @@ decisions are round 56.
   their implementation; a fresh review should treat them accordingly.
 - **Left for the operator.** A live check against the real mailbox of a rule tagging mail and a
   snooze waking, and the potato numbers for the rule pass over a large mailbox.
+
+## 3h — the deploy track (2026-10-06, round 57)
+
+The container and update flow from `ARCHITECTURE.md` 9, built as an independent track that touches
+no mail code.
+
+- **Image.** A multi-stage `Dockerfile`: `node:22-bookworm` builds the frontend (pinned pnpm
+  10.32.1, frozen lockfile), `golang:1.26.6-alpine` cross-compiles the pure-Go binary
+  (`CGO_ENABLED=0 GOOS/GOARCH` from buildx), both stages pinned to `--platform=$BUILDPLATFORM` so
+  only the tiny `alpine:3.20` runtime runs per-arch. The frontend build is copied into
+  `internal/webui/build` and precompressed by `cmd/ivy-assets` inside the build stage; nothing
+  compiled is committed. The runtime is non-root, listens on `0.0.0.0:8418`, sets
+  `IVY_DATA_DIR=/data` and `IVY_IN_CONTAINER=1`, and healthchecks `GET /api/v1/health`. Built and
+  booted locally (arm64): version, health, the SPA and the JSON 404 all answer, and Docker reports
+  the container healthy.
+- **Publish.** `.github/workflows/docker-publish.yml` builds `linux/amd64,linux/arm64` and pushes
+  `ghcr.io/autumnsgrove/ivy:latest` plus the short-SHA tag on every push to main, never on a PR,
+  with `contents: read` + `packages: write` only, a non-cancelling concurrency group and the GHA
+  cache. Every action pinned by commit SHA; the version is `r<git-count>.<short-sha>`.
+- **Update core.** A new `update/` package resolves the `:latest` manifest digest from GHCR's OCI
+  API (anonymous token + HEAD), waits out an in-progress `docker-publish.yml` run for main before
+  resolving (best-effort, bounded, optional `GITHUB_TOKEN`), and writes the watcher's signal file
+  atomically after validating the digest. Tests use a fake GHCR and a fake Actions API
+  (`update/update_test.go`).
+- **API + CLI + UI.** `POST /api/v1/update` claims a single in-process slot, starts the resolve in
+  the background and answers 202; `GET /api/v1/update` reports running/done/success/target plus the
+  watcher's own result. A new `update.state` SSE hint tells open clients to refetch. `ivy update`
+  runs the same core. The settings screen shows the real version and wires the Update button to it,
+  showing "Updating…" and following the status. `openapi.yaml` gained the two endpoints and the
+  `UpdateStatus` schema; both generated outputs were regenerated.
+- **Host watcher.** `docker-compose.yml` bind-mounts `data/` and `update-signal/` and runs the
+  container as the deploy user. `compose/watcher/update.sh` (systemd oneshot, unprivileged) pulls
+  the exact digest from the signal file, recreates the service, waits for the image healthcheck and
+  rolls back to the previous image on failure; it is triggered by `ivy-update.path` and backed by
+  `ivy-update.timer`. `install.sh` renders the units, installs the hash-pinned root wrapper
+  (`/etc/ivy/watcher-sync-verify.sh`) and its sudoers rule, and prepares the shared directories.
+  The happy path, the unhealthy-rollback path and the non-digest refusal were exercised against
+  stubbed `docker`/`git`/`systemd` in a sandbox.
+- **Tests.** `update/update_test.go`, `gateway/update_test.go`, `cmd/update_test.go`,
+  `config/config_test.go` (signal dir and token), the new e2e settings spec. Go suite (`-race`),
+  `gofumpt`/`vet`, `pnpm check`, Vitest and the mock Playwright suite are green; the mock suite and
+  `make smoke` for the whole chunk are rerun below.
+- **Left for the operator.** Publish the image once (so `ghcr.io/autumnsgrove/ivy` exists and, if
+  the repo stays private, is reachable by the potato), make the GHCR package visible or
+  `docker login` on the board, then run `sudo ./install.sh` and one real `ivy update` end to end.
+  A live check on the potato of the pull, healthcheck and rollback is the point of this stage.

@@ -1340,3 +1340,34 @@ Vocabulary and mechanics taken from `JEV.md` 3F and `PLAN.md`: conditions are `f
 the reserved tag through the same path; snooze is local. Conditions are stored as JSON on the rule,
 validated on the way in against the closed vocabulary. Every count and bound is in
 `STANDARDS.md` 4a with the code.
+
+## Round 57 — 3h deploy track, the host and registry decisions (2026-10-06, operator; three answers)
+
+3h is the deploy track from the round 36 split: a multi-stage `Dockerfile`, a multi-arch GHCR publish
+on merge to main, a host-side update watcher with a signal file, and `ivy update` (CLI and in-app)
+with SSE progress. Round 29 settled the approach; this round settles the three calls the docs left
+open. The operator's answers:
+
+- **Host install automation: full Polaris parity.** An `install.sh` templates the watcher's systemd
+  units (`.service`/`.path`/`.timer`), the update flow re-syncs those units, and a hash-pinned
+  root-owned wrapper (`/etc/ivy/watcher-sync-verify.sh` plus a sudoers rule) is the only thing the
+  watcher may run as root, so an unreviewed commit to the unit-render script cannot gain root. The
+  watcher itself runs unprivileged in the docker group; the container never touches the Docker
+  socket. This is more surface than the minimal design, chosen deliberately for a reproducible,
+  self-updating board.
+- **Image reference: hardcoded `ghcr.io/autumnsgrove/ivy`.** Like the model registry, it names what
+  the software is, not an operator preference, so it is a constant, not config. Tag `:latest` plus
+  the short SHA; rollback is by name or digest.
+- **CI race: wait on the Actions run.** `ivy update` first polls the most recent `docker-publish.yml`
+  run for `main` and blocks (bounded) while it is queued or in progress before resolving `:latest`
+  from GHCR, closing the window where a click right after a merge would silently deliver the
+  previous build. `GITHUB_TOKEN` in the environment raises the API rate limit; the wait is
+  best-effort and never fails the update on a GitHub API hiccup.
+
+Supporting calls taken while planning (operator may veto): the version string is the Polaris-style
+`r<git-count>.<short-sha>` passed as `-ldflags -X main.version=`; the runtime stage is `alpine` with
+`ca-certificates` and non-root, and reuses `GET /api/v1/health` for the container healthcheck; the
+update signal directory lives inside the bind-mounted data directory (`<data_dir>/update-signal`),
+so one volume covers it and the host watcher watches the same path. The core logic lands in a new
+`update/` package (already in the `ARCHITECTURE.md` layout) so the CLI and the gateway endpoint share
+one tested path; tests use a fake GHCR and a fake GitHub Actions API per `TESTING.md` 6.

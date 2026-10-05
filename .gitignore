@@ -11,6 +11,9 @@
 # Build and tooling output
 /bin/
 /bench/
+# Container deployment state (bind mounts; see docker-compose.yml)
+/data/
+/update-signal/
 node_modules/
 web/.svelte-kit/
 test-results/

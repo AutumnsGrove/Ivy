@@ -1,0 +1,13 @@
+[Unit]
+Description=Trigger the Ivy update watcher when an update is requested
+
+[Path]
+# Fires ivy-update.service the instant update-signal/requested comes into
+# existence — the moment the settings panel's Update button (or `ivy update`)
+# writes it. The service deletes the file on every exit path, so this is a clean
+# edge trigger, not a level condition that could refire spuriously.
+PathExists=@INSTALL_DIR@/update-signal/requested
+Unit=ivy-update.service
+
+[Install]
+WantedBy=multi-user.target

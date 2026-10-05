@@ -1,0 +1,22 @@
+[Unit]
+Description=Ivy Docker update watcher (one-shot)
+# A pull that needs the internet has no reason to run before networking is up.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Runs as the operator account that ran install.sh, which is in the host's
+# docker group so `docker compose` works without sudo. Deliberately not root:
+# this script only runs one fixed sequence (git pull + pull + recreate one named
+# service), so root would add blast radius and nothing else.
+User=@USER@
+WorkingDirectory=@INSTALL_DIR@
+ExecStart=@INSTALL_DIR@/compose/watcher/update.sh
+
+# Must exceed the sum of update.sh's own timeouts: git pull (60) + unit re-sync
+# (60) + compose pull (300) + up (60) + healthcheck poll (120) = 600s worst
+# case, plus the pull's own retries. 1800s leaves real headroom, so systemd
+# cannot SIGKILL the script before its own timeouts fire and leave the request
+# file in place, looking stuck forever.
+TimeoutStartSec=1800

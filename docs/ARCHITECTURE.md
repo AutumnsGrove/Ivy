@@ -461,11 +461,17 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   runs on pull requests. Nothing compiled is committed: `internal/webui/build/` is git-ignored
   apart from a tracked placeholder that keeps `go:embed` and `go build` working from a fresh
   checkout.
-- **`ivy update` (also an in-app button):** resolve the digest of `:latest` on GHCR (waiting out an
-  in-progress CI build), hand off to a host-side update watcher (the Polaris design, with a signal
-  file), which pulls the image, recreates the container, health-checks it, and rolls back to the
-  previous digest on failure. The data directory is a bind-mounted volume, so the SQLite file and
-  backups survive image swaps. Progress reaches the UI over SSE.
+- **`ivy update` (also an in-app button):** resolve the digest of `:latest` from
+  `ghcr.io/autumnsgrove/ivy` on GHCR (waiting out an in-progress `docker-publish.yml` run for main,
+  best-effort, before resolving), hand off to a host-side update watcher (the Polaris design, with a
+  signal file at `<data_dir>/update-signal/requested`), which pulls that exact digest, recreates the
+  container, health-checks it against the image's own HEALTHCHECK, and rolls back to the previous
+  image on failure. The watcher runs unprivileged from the checkout as a systemd oneshot
+  (`ivy-update.path`/`.timer`); `install.sh` installs its units and the hash-pinned root wrapper
+  (`/etc/ivy/watcher-sync-verify.sh`) that is the only thing the update flow may run as root. The
+  data directory is a bind-mounted volume, so the config, SQLite files, blobs and backups survive
+  image swaps. The build version is `r<git-count>.<short-sha>`, passed as `-ldflags -X`;
+  `POST`/`GET /api/v1/update` drive it and a `update.state` SSE hint brings progress to the UI.
 - **Backup (settled, rolling policy changed in round 30):** **once a day, keep 15 days, about 15
   backups; prune anything older than 15 days.** (It was twice a day for 30 days; spike S10 showed
   that copying the mirror is far too heavy, so the policy only has to protect the small state

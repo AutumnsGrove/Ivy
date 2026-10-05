@@ -1,0 +1,10 @@
+[Unit]
+Description=Backstop for the Ivy update watcher (in case an inotify event is missed)
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+Unit=ivy-update.service
+
+[Install]
+WantedBy=timers.target

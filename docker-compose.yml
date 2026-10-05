@@ -1,0 +1,27 @@
+# Ivy's container deployment (ARCHITECTURE.md 9). CI publishes the image; the
+# host only pulls it. Nothing here compiles anything.
+#
+# Layout, relative to this file's directory:
+#   data/           ivy.yaml, .env (secrets), both databases, blobs, backups
+#   update-signal/  the update watcher's request/result files
+#   .env            IVY_IMAGE, rewritten by the watcher to the exact digest
+#
+# ivy.yaml must name the Tailscale host the phone uses in `allowed_hosts`.
+services:
+  ivy:
+    # The watcher pins this to a digest in .env before pulling, so a second
+    # commit landing between a click and the pull cannot ship unseen code.
+    image: ${IVY_IMAGE:-ghcr.io/autumnsgrove/ivy:latest}
+    container_name: ivy
+    restart: unless-stopped
+    # Run as the host deploy user so the bind-mounted data directory is writable
+    # without world permissions. install.sh writes these into .env from the
+    # installing account's uid/gid.
+    user: "${IVY_UID:-1000}:${IVY_GID:-1000}"
+    ports:
+      - "${IVY_PORT:-8418}:8418"
+    volumes:
+      - ./data:/data
+      # A separate mount so the signal files stay out of the backed-up data
+      # directory; the app writes to /data/update-signal either way.
+      - ./update-signal:/data/update-signal

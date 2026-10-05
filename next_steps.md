@@ -5,14 +5,16 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-06 (3g is done: rules as data with a local engine and an ingest pass, local
-hide-until snooze, derived People with merges, and Reading as the reserved tag, wired through the
-API and the screens. Next is the C0 canvas board or 3h; 3b's disabled-mail screens still wait on
-C0.)
+last updated: 2026-10-06 (3g and 3h are done. 3g: rules as data with a local engine and an ingest
+pass, local hide-until snooze, derived People with merges, and Reading as the reserved tag, wired
+through the API and the screens. 3h: the container image, the GHCR publish workflow, the host-side
+update watcher and `ivy update` (CLI and in-app) with SSE progress. Next is the C0 canvas board;
+3b's disabled-mail screens still wait on it, and chunk 4 (send) is next after that.)
 Chunks 0, 1 and 2a-2h are done except the visual baselines of 2g and 2h (they need the CI harness
 regenerated). 3a and 3b's backend are done, 3c (backups, including the disabled-blob store), 3d (the
-outbox and write path), 3e (tags) and **3f (search)** are done; **the C0 canvas board is the one
-thing blocking the 3b screens**.
+outbox and write path), 3e (tags), **3f (search)**, **3g (rules, snooze, People, Reading)** and
+**3h (the deploy track)** are done; **the C0 canvas board is the one thing blocking the 3b
+screens**.
 
 ## How to run a chunk
 
@@ -39,7 +41,7 @@ thing blocking the 3b screens**.
 | 2a-2f Read: store, fetch, parse, render, thread, gateway | done |
 | 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
-| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, rules, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; 3e done; 3f done; **3g done**; 3h next |
+| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, rules, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; 3e done; 3f done; 3g done; **3h done** |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | not started |
 | 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | not started |
 
@@ -116,12 +118,28 @@ are filtered at read time. The Rules list, manual editor and builder, People lis
 a rule tagging mail and a snooze waking, and the potato numbers for the rule pass over a large
 mailbox.
 
+**3h is done** (round 57; `docs/BUILD-LOG.md` has the entry). The multi-stage `Dockerfile` builds
+the frontend and cross-compiles the pure-Go binary, both stages pinned to `$BUILDPLATFORM`, and a
+non-root `alpine` runtime serves the embedded, precompressed assets; it was built and booted
+locally (arm64) with a healthy healthcheck. `.github/workflows/docker-publish.yml` publishes
+`ghcr.io/autumnsgrove/ivy:latest` and the short SHA for amd64+arm64 on merge to main (never on a
+PR). A new `update/` package resolves the `:latest` digest from GHCR, waits out an in-progress
+publish run before resolving (best-effort, optional `GITHUB_TOKEN`), and writes the host watcher's
+signal; `POST`/`GET /api/v1/update` expose it with a single in-process slot and a new `update.state`
+SSE hint, `ivy update` runs the same core, and the settings screen shows the real version and
+drives the Update button. `compose/watcher/update.sh` (systemd oneshot, unprivileged) pulls the
+exact digest, recreates the service, waits for the image healthcheck and rolls back on failure;
+`install.sh` installs the units, the hash-pinned root unit-re-sync wrapper and its sudoers rule.
+`make check`, the Go `-race` suite and the mock Playwright suite are green; the watcher's happy,
+rollback and bad-digest paths were exercised against stubs. **Left for the operator:** publish the
+image once, make the GHCR package reachable from the potato (or `docker login`), then `sudo
+./install.sh` and one real `ivy update` end to end on the board.
+
 **Next, in order:**
 
 1. **C0 canvas board** for the three 3b screens, whenever the operator is ready; the backend and API
    are already committed.
-2. **3h** (the deploy track) is independent and can run at any point.
-3. **Chunk 4 (send)** after that; 3g leaves the free-form rule compiler for chunk 5.
+2. **Chunk 4 (send)** next; 3g leaves the free-form rule compiler for chunk 5.
 
 **Deliberately deferred from 3c** (do not re-litigate):
 
@@ -332,7 +350,13 @@ vector scan (the real provider needs `OPENROUTER_API_KEY` in `.env`).
 
 ## Operator actions still open
 
-- Repo visibility (still private; checklist in `docs/CI.md` 6).
+- Deploy (3h): the repo is public now, so the next push to main publishes
+  `ghcr.io/autumnsgrove/ivy`. Set the GHCR package visibility to public (a package published from a
+  repository still defaults to private), or `docker login` on the potato so it can pull. Then `sudo
+  ./install.sh` in the checkout and one real `ivy update` end to end, recording the result. The
+  update flow is unverified against a real registry+watcher until then.
+- Repo visibility: **public** now (was private). The remaining `docs/CI.md` 6 items (gitleaks over
+  full history, branch ruleset + required checks, secret scanning) are the operator's checklist.
 - Bump the local Go toolchain off 1.26.1, which `govulncheck` flags (fixed in 1.26.2+); CI resolves
   the latest patch.
 - Lore feature names (deferred); Purelymail follow-ups (auth headers, Resend DMARC, alias/send-as

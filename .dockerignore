@@ -1,0 +1,28 @@
+# Keep the build context to source only. The frontend build stage needs
+# web/src and its lockfile; everything a local run produces is excluded so the
+# image never bakes in local state or a stale frontend build.
+.git
+.gitignore
+.dev
+.env
+.env.*
+!.env.example
+data
+update-signal
+*.db
+*.db-wal
+*.db-shm
+bin
+bench
+web/node_modules
+web/.svelte-kit
+web/build
+web/shots
+web/test-results
+web/playwright-report
+web/coverage
+internal/webui/build
+test-results
+playwright-report
+coverage
+docs/design

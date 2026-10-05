@@ -23,11 +23,13 @@ desktop, behind mailworld.
 
 Not yet wired, with the reason: the advisory `bench` job waits until the numbers
 are trusted; `nightly.yml` and the manual `live`/`evals` workflows wait for
-protected Environments and credentials; `docker-publish.yml` waits for the
-Dockerfile (chunk 1/3). The AGPL header check exists in `guard.sh` but is gated
-behind `IVY_LICENCE_HEADERS=1` until the sources carry the SPDX line (section
-6). Path filtering, E2E sharding, the frontend byte budgets and visual/axe
-baselines arrive with the layers they measure.
+protected Environments and credentials. `docker-publish.yml` landed with the
+Dockerfile in 3h (round 57): the image builds and boots locally, and the first
+real publish plus the board pull is the operator's live check. The AGPL header
+check exists in `guard.sh` but is gated behind `IVY_LICENCE_HEADERS=1` until the
+sources carry the SPDX line (section 6). Path filtering, E2E sharding, the
+frontend byte budgets and visual/axe baselines arrive with the layers they
+measure.
 
 ## 1. Phases
 
@@ -103,7 +105,12 @@ ruleset bypass. The target pulls the image; it compiles nothing. Modelled on Pol
 8. **Untrusted inputs in workflows:** PR titles, branch names and commit messages are never
    interpolated into shell commands (use environment variables).
 
-## 6. Before the repository goes public (checklist)
+## 6. Repository visibility (checklist)
+
+**The repository is public as of 2026-10-06** (operator). The items below were the pre-public list;
+the ones left are maintenance now that it is open.
+
+- [x] Repository made public (2026-10-06).
 
 - [x] `LICENSE` (AGPL-3.0), `README.md` and `SECURITY.md` added (round 27). Still to add: licence
       headers per the guard job, a `CONTRIBUTING.md` (TDD rules from `STANDARDS.md`), and enabling
@@ -138,7 +145,9 @@ summary, and treat a PR run over 10 minutes as a bug to fix.
 - [x] `make check` and CI run the same commands. — CI composes the same `make` targets; `make drift`,
       `web-check`, `e2e` and `smoke` are all available locally.
 - [ ] The image publish workflow works once end to end, and the board pulls and runs the arm64 image.
-      — waits for the Dockerfile (chunk 1/3).
+      — the `Dockerfile` and `docker-publish.yml` are written and the image builds and boots locally
+      (3h); the first real publish and the board's `sudo ./install.sh` + `ivy update` live check is
+      the operator's next action.
 - [ ] Section 5 rules are in place and verified from a fork (no secrets reachable). — the workflows
       are written to the rules (pinned SHAs, read-only permissions, no fork secrets); the GitHub
       settings and a fork test are the operator's checklist in section 6.

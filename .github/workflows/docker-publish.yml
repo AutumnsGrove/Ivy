@@ -1,0 +1,63 @@
+name: Publish the container image
+
+# Publishes ghcr.io/autumnsgrove/ivy on every push to main. This is the exact
+# repository and tag the server's update package (update/update.go) resolves a
+# digest against, so the two must stay in step. One image per commit: a floating
+# :latest for convenience, plus a short-SHA tag so a specific build can always
+# be pinned or rolled back to by name (ARCHITECTURE.md 9).
+#
+# Runs only on push to main and by hand. It never runs on a pull_request, so a
+# fork can never reach packages: write or the registry (CI.md section 5).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  # Never cancel a running publish: an interrupted push can leave a partial
+  # manifest on GHCR. A second push just queues behind the first.
+  group: docker-publish
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # Full history: `git rev-list --count HEAD` below needs it.
+          fetch-depth: 0
+
+      - name: Compute the version string (rNNN.short-sha)
+        id: vars
+        run: |
+          echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "version=r$(git rev-list --count HEAD).${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          # arm64 is what the potato runs; amd64 covers dev machines. Only the
+          # tiny final stage is per-arch — see the Dockerfile's BUILDPLATFORM
+          # pins.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/autumnsgrove/ivy:latest
+            ghcr.io/autumnsgrove/ivy:${{ steps.vars.outputs.short_sha }}
+          build-args: |
+            VERSION=${{ steps.vars.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
