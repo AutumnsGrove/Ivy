@@ -1365,3 +1365,23 @@ vector scan time over a real mailbox; the update rollback against a real unhealt
   passes inside a second as one. Reproduced with `TestEmbedWorkerGivesUpOnADocumentAfterFiveRefusals` (10
   calls, still queued; failed before the fix), `TestGateRecordsADocumentRefusalDistinctlyFromAnOutage` and
   `TestCountRejectedCallsCountsCallsNotRows`.
+- **N37 resolved (backend)** · `store/inbox.go`, `gateway/snooze.go`, `api/openapi.yaml` · the Snoozed, tag and
+  Reading views now page with the inbox's keyset cursor (`MessagesByContentRefs` takes a cursor and returns a
+  page; 50 a page, 200 at most). The Reading feed gains `cursor` and `nextCursor`, and its digest counts the
+  whole feed rather than the page. A malformed cursor is a 400 even for an empty view. Reproduced with
+  `TestTagViewPagesThroughEveryMessage`, `TestSnoozedViewPagesThroughEveryMessage` and
+  `TestReadingFeedPagesThroughEveryIssue` (120 messages: these were already satisfied once the store paged;
+  the failing evidence was the old 200-row cap and `TestMessagesByContentRefsPages`, which could not compile
+  against a function with no cursor), plus `TestAnInvalidCursorIsABadRequest` (200 before the fix).
+- **#118** · `dac8acc`, `d570eeb` · `store/inbox.go` · **bug** · found while paging: the keyset comparison
+  `(m.date, m.id) < (?, ?)` is never true for a message with a NULL date, so an undated message was listed
+  only if it fitted on the first page of the inbox, and the cursor for an undated last row was a year-1 date.
+  Reproduced with `TestInboxPagesReachUndatedMail` (3 of 5 messages reached; failed before the fix). The
+  inbox and the local views now order and compare on `COALESCE(date, '')`, and the cursor's presence is
+  decided by its id, not its date.
+- **N35 resolved (backend)** · `gateway/people.go` · `GET /people` returns a `PeoplePage` (`items`,
+  `nextCursor`), 100 a page, most correspondence first, with an offset cursor over the in-memory grouping and
+  a fixed tie-break (map order made equal people swap places between requests, which would have shown a
+  person twice or never across a page boundary). Reproduced with `TestPeoplePagesInHundreds` (the endpoint
+  returned a bare array; failed before the fix). The contract change is breaking, so the web client moves with
+  it.

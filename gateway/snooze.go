@@ -49,12 +49,15 @@ func (s *Server) handleSnoozedInbox(w http.ResponseWriter, r *http.Request, acco
 		s.serverError(w, r, err)
 		return
 	}
-	items, err := s.dbs.MessagesByContentRefs(r.Context(), accountID, refs, store.MaxRuleDryRun)
+	page, err := s.dbs.MessagesByContentRefs(r.Context(), accountID, refs, r.URL.Query().Get("cursor"), 0)
+	if s.badCursor(w, err) {
+		return
+	}
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	out, err := s.inboxResponse(r, store.InboxPage{Items: items}, 0)
+	out, err := s.inboxResponse(r, page, 0)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -79,12 +82,15 @@ func (s *Server) handleTaggedInbox(w http.ResponseWriter, r *http.Request, accou
 		s.serverError(w, r, err)
 		return
 	}
-	items, err := s.dbs.MessagesByContentRefs(r.Context(), accountID, refs, store.MaxInboxLimit)
+	page, err := s.dbs.MessagesByContentRefs(r.Context(), accountID, refs, r.URL.Query().Get("cursor"), 0)
+	if s.badCursor(w, err) {
+		return
+	}
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	out, err := s.inboxResponse(r, store.InboxPage{Items: items}, 0)
+	out, err := s.inboxResponse(r, page, 0)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -153,6 +159,11 @@ func (s *Server) handleUnsnoozeMessage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListReading(w http.ResponseWriter, r *http.Request) {
 	tag, err := s.dbs.TagBySlug(r.Context(), store.ReadingSlug)
 	if errors.Is(err, store.ErrNotFound) {
+		// No Reading tag yet: an empty feed, but a malformed cursor is still a bad request.
+		_, cerr := s.dbs.MessagesByContentRefs(r.Context(), "", nil, r.URL.Query().Get("cursor"), 0)
+		if s.badCursor(w, cerr) {
+			return
+		}
 		writeJSON(w, http.StatusOK, api.ReadingFeed{Digest: "Nothing in Reading yet", Issues: []api.Issue{}})
 		return
 	}
@@ -165,20 +176,38 @@ func (s *Server) handleListReading(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	items, err := s.dbs.MessagesByContentRefs(r.Context(), "", refs, store.MaxInboxLimit)
+	page, err := s.dbs.MessagesByContentRefs(r.Context(), "", refs, r.URL.Query().Get("cursor"), 0)
+	if s.badCursor(w, err) {
+		return
+	}
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	issues := make([]api.Issue, 0, len(items))
-	for _, m := range items {
+	issues := make([]api.Issue, 0, len(page.Items))
+	for _, m := range page.Items {
 		issues = append(issues, issueView(m))
 	}
+	// The digest counts the whole feed, not the page the reader is looking at.
 	digest := "Nothing in Reading yet"
-	if len(issues) > 0 {
-		digest = fmt.Sprintf("%d kept out of your inbox", len(issues))
+	if len(refs) > 0 {
+		digest = fmt.Sprintf("%d kept out of your inbox", len(refs))
 	}
-	writeJSON(w, http.StatusOK, api.ReadingFeed{Digest: digest, Issues: issues})
+	feed := api.ReadingFeed{Digest: digest, Issues: issues}
+	if page.NextCursor != "" {
+		feed.NextCursor = &page.NextCursor
+	}
+	writeJSON(w, http.StatusOK, feed)
+}
+
+// badCursor answers 400 for a cursor the store refuses and reports whether it
+// did; any other error is left to the caller.
+func (s *Server) badCursor(w http.ResponseWriter, err error) bool {
+	if !errors.Is(err, store.ErrBadCursor) {
+		return false
+	}
+	writeError(w, http.StatusBadRequest, "bad_request", "That page link is not valid")
+	return true
 }
 
 // issueView projects a Reading message onto the feed's row.

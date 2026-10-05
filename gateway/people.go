@@ -2,11 +2,13 @@ package gateway
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"hash/crc32"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,15 +33,55 @@ type person struct {
 	writesTo  string
 }
 
-// handleListPeople groups the derived correspondent rows into people. The list
-// carries no conversations or tags: those are a per-person page's work.
+// peoplePageSize is how many people one page of the list carries.
+const peoplePageSize = 100
+
+// peopleOffset reads a People cursor: the offset of the first person of the page,
+// base64 so the client treats it as opaque. The list is the in-memory grouping
+// of every address, in a deterministic order, so an offset is exact; a rebuild
+// between two pages can shift a row, never lose the whole page.
+func peopleOffset(cursor string) (int, error) {
+	if cursor == "" {
+		return 0, nil
+	}
+	b, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return 0, err
+	}
+	n, err := strconv.Atoi(string(b))
+	if err != nil || n < 0 {
+		return 0, errors.New("bad people cursor")
+	}
+	return n, nil
+}
+
+func peopleCursor(offset int) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(strconv.Itoa(offset)))
+}
+
+// handleListPeople groups the derived correspondent rows into people and serves
+// them 100 at a time, most correspondence first. The list carries no
+// conversations or tags: those are a per-person page's work.
 func (s *Server) handleListPeople(w http.ResponseWriter, r *http.Request) {
+	offset, err := peopleOffset(r.URL.Query().Get("cursor"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", "That page link is not valid")
+		return
+	}
 	rows, links, own, err := s.personRows(r.Context())
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
 	groups := groupPeople(rows, links, own)
+	next := ""
+	if offset >= len(groups) {
+		groups = nil
+	} else if end := offset + peoplePageSize; end < len(groups) {
+		groups, next = groups[offset:end], peopleCursor(end)
+	} else {
+		groups = groups[offset:]
+	}
 	out := make([]api.Person, 0, len(groups))
 	for _, p := range groups {
 		out = append(out, api.Person{
@@ -58,7 +100,11 @@ func (s *Server) handleListPeople(w http.ResponseWriter, r *http.Request) {
 			Conversations: []api.Conversation{},
 		})
 	}
-	writeJSON(w, http.StatusOK, out)
+	page := api.PeoplePage{Items: out}
+	if next != "" {
+		page.NextCursor = &next
+	}
+	writeJSON(w, http.StatusOK, page)
 }
 
 // handleGetPerson serves one person with their conversations and tags.
@@ -260,7 +306,10 @@ func groupPeople(rows []store.PersonRow, links map[string]string, own map[string
 		if out[i].count != out[j].count {
 			return out[i].count > out[j].count
 		}
-		return out[i].last.After(out[j].last)
+		if !out[i].last.Equal(out[j].last) {
+			return out[i].last.After(out[j].last)
+		}
+		return out[i].id < out[j].id // map order is random; a page boundary needs a fixed one
 	})
 	return out
 }

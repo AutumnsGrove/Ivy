@@ -96,7 +96,7 @@ func (d *DBs) ListInbox(ctx context.Context, q InboxQuery) (InboxPage, error) {
 	}
 
 	rows, err := d.Mirror.Read.QueryContext(ctx, inboxSelect,
-		role, q.AccountID, q.AccountID, jsonRefs(q.Hide), cursorDate, cursorDate, cursorID, limit)
+		role, q.AccountID, q.AccountID, jsonRefs(q.Hide), cursorID, cursorDate, cursorID, limit)
 	if err != nil {
 		return InboxPage{}, fmt.Errorf("list inbox: %w", err)
 	}
@@ -112,10 +112,7 @@ func (d *DBs) ListInbox(ctx context.Context, q InboxQuery) (InboxPage, error) {
 	if err := rows.Err(); err != nil {
 		return InboxPage{}, fmt.Errorf("list inbox: %w", err)
 	}
-	if len(page.Items) == limit {
-		last := page.Items[len(page.Items)-1]
-		page.NextCursor = encodeCursor(formatTime(last.Date), last.ID)
-	}
+	page.NextCursor = nextCursor(page.Items, limit)
 	return page, nil
 }
 
@@ -147,8 +144,8 @@ const inboxSelect = `
 	  AND m.disabled_at IS NULL
 	  AND (? = '' OR m.account_id = ?)
 	  AND (m.account_id || char(31) || m.content_key) NOT IN (SELECT value FROM json_each(?))
-	  AND (? = '' OR (m.date, m.id) < (?, ?))
-	ORDER BY m.date DESC, m.id DESC
+	  AND (? = '' OR (COALESCE(m.date, ''), m.id) < (?, ?))
+	ORDER BY COALESCE(m.date, '') DESC, m.id DESC
 	LIMIT ?`
 
 const inboxCountsSelect = `
@@ -244,31 +241,43 @@ func jsonRefs(refs []ContentRef) string {
 
 // MessagesByContentRefs returns one summary per (account, content key), newest
 // first, for local views whose membership lives in state.db (snoozed, Reading,
-// a tag). A ref that is hidden or unknown is simply absent.
-func (d *DBs) MessagesByContentRefs(ctx context.Context, accountID string, refs []ContentRef, limit int) ([]MessageSummary, error) {
-	if len(refs) == 0 {
-		return nil, nil
+// a tag), with keyset paging on (date, id) like the inbox. A ref that is hidden
+// or unknown is simply absent. The page carries no counts.
+func (d *DBs) MessagesByContentRefs(ctx context.Context, accountID string, refs []ContentRef, cursor string, limit int) (InboxPage, error) {
+	// Validate the cursor even for an empty view: a bad one is a bad request
+	// whatever the view holds.
+	cursorDate, cursorID, err := decodeCursor(cursor)
+	if err != nil {
+		return InboxPage{}, fmt.Errorf("%w: %w", ErrBadCursor, err)
 	}
-	if limit <= 0 || limit > maxInboxLimit {
+	if len(refs) == 0 {
+		return InboxPage{}, nil
+	}
+	if limit <= 0 {
+		limit = defaultInboxLimit
+	}
+	if limit > maxInboxLimit {
 		limit = maxInboxLimit
 	}
-	rows, err := d.Mirror.Read.QueryContext(ctx, messagesByRefsSelect, accountID, accountID, jsonRefs(refs), limit)
+	rows, err := d.Mirror.Read.QueryContext(ctx, messagesByRefsSelect,
+		accountID, accountID, jsonRefs(refs), cursorID, cursorDate, cursorID, limit)
 	if err != nil {
-		return nil, fmt.Errorf("messages by content refs: %w", err)
+		return InboxPage{}, fmt.Errorf("messages by content refs: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	var out []MessageSummary
+	var page InboxPage
 	for rows.Next() {
 		summary, err := scanInboxSummary(rows)
 		if err != nil {
-			return nil, fmt.Errorf("messages by content refs: %w", err)
+			return InboxPage{}, fmt.Errorf("messages by content refs: %w", err)
 		}
-		out = append(out, summary)
+		page.Items = append(page.Items, summary)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("messages by content refs: %w", err)
+		return InboxPage{}, fmt.Errorf("messages by content refs: %w", err)
 	}
-	return out, nil
+	page.NextCursor = nextCursor(page.Items, limit)
+	return page, nil
 }
 
 const messagesByRefsSelect = `
@@ -283,5 +292,20 @@ const messagesByRefsSelect = `
 	  AND (m.account_id || char(31) || m.content_key) IN (SELECT value FROM json_each(?))
 	GROUP BY m.account_id, m.content_key
 	HAVING m.date IS MAX(m.date)
-	ORDER BY m.date DESC, m.id DESC
+	   AND (? = '' OR (COALESCE(m.date, ''), m.id) < (?, ?))
+	ORDER BY COALESCE(m.date, '') DESC, m.id DESC
 	LIMIT ?`
+
+// nextCursor is the cursor after a full page, or "" when the page was short and
+// so was the last. The date is "" for an undated message, which sorts last.
+func nextCursor(items []MessageSummary, limit int) string {
+	if len(items) < limit {
+		return ""
+	}
+	last := items[len(items)-1]
+	date := ""
+	if !last.Date.IsZero() {
+		date = formatTime(last.Date)
+	}
+	return encodeCursor(date, last.ID)
+}

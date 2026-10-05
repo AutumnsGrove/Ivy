@@ -179,6 +179,12 @@ paths:
     get:
       operationId: listReading
       summary: The Reading feed and its digest
+      parameters:
+        - name: cursor
+          in: query
+          description: The `nextCursor` of the previous page
+          schema:
+            type: string
       responses:
         "200":
           description: The feed
@@ -358,16 +364,20 @@ paths:
   /people:
     get:
       operationId: listPeople
-      summary: Correspondents derived from the mirror
+      summary: Correspondents derived from the mirror, most correspondence first
+      parameters:
+        - name: cursor
+          in: query
+          description: The `nextCursor` of the previous page
+          schema:
+            type: string
       responses:
         "200":
-          description: People
+          description: One page of people (100 at a time)
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Person"
+                $ref: "#/components/schemas/PeoplePage"
   /people/{id}:
     get:
       operationId: getPerson
@@ -1202,6 +1212,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Issue"
+        nextCursor:
+          type: string
+    PeoplePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Person"
+        nextCursor:
+          type: string
     SearchHit:
       type: object
       required: [id, accountId, from, date, subject, preview]

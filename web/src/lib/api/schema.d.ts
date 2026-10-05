@@ -250,7 +250,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Correspondents derived from the mirror */
+        /** Correspondents derived from the mirror, most correspondence first */
         get: operations["listPeople"];
         put?: never;
         post?: never;
@@ -769,6 +769,11 @@ export interface components {
         ReadingFeed: {
             digest: string;
             issues: components["schemas"]["Issue"][];
+            nextCursor?: string;
+        };
+        PeoplePage: {
+            items: components["schemas"]["Person"][];
+            nextCursor?: string;
         };
         SearchHit: {
             id: string;
@@ -1236,7 +1241,10 @@ export interface operations {
     };
     listReading: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The `nextCursor` of the previous page */
+                cursor?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1468,20 +1476,23 @@ export interface operations {
     };
     listPeople: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The `nextCursor` of the previous page */
+                cursor?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description People */
+            /** @description One page of people (100 at a time) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Person"][];
+                    "application/json": components["schemas"]["PeoplePage"];
                 };
             };
         };

@@ -763,6 +763,12 @@ type OutboxList struct {
 	Recent []OutboxItem `json:"recent"`
 }
 
+// PeoplePage defines model for PeoplePage.
+type PeoplePage struct {
+	Items      []Person `json:"items"`
+	NextCursor *string  `json:"nextCursor,omitempty"`
+}
+
 // Person defines model for Person.
 type Person struct {
 	// Addresses Every address merged into this person
@@ -801,8 +807,9 @@ type PlacedTag struct {
 
 // ReadingFeed defines model for ReadingFeed.
 type ReadingFeed struct {
-	Digest string  `json:"digest"`
-	Issues []Issue `json:"issues"`
+	Digest     string  `json:"digest"`
+	Issues     []Issue `json:"issues"`
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 // RestoreResult defines model for RestoreResult.
@@ -1014,6 +1021,18 @@ type ListInboxParamsFolder string
 // ListOutboxParams defines parameters for ListOutbox.
 type ListOutboxParams struct {
 	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
+}
+
+// ListPeopleParams defines parameters for ListPeople.
+type ListPeopleParams struct {
+	// Cursor The `nextCursor` of the previous page
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// ListReadingParams defines parameters for ListReading.
+type ListReadingParams struct {
+	// Cursor The `nextCursor` of the previous page
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // SearchParams defines parameters for Search.

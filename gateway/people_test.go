@@ -16,10 +16,11 @@ func TestListAndGetPeople(t *testing.T) {
 		t.Fatalf("RebuildPeople: %v", err)
 	}
 
-	var people []api.Person
-	if code := getJSON(t, srv.URL+"/api/v1/people", &people); code != http.StatusOK || len(people) != 3 {
-		t.Fatalf("people = %d %+v, want 3", code, people)
+	var listed api.PeoplePage
+	if code := getJSON(t, srv.URL+"/api/v1/people", &listed); code != http.StatusOK || len(listed.Items) != 3 {
+		t.Fatalf("people = %d %+v, want 3", code, listed.Items)
 	}
+	people := listed.Items
 	var billing *api.Person
 	for i := range people {
 		if people[i].Email == "billing@cloudflare.com" {
@@ -56,10 +57,11 @@ func TestMergeAndSplitAddresses(t *testing.T) {
 		t.Fatalf("merge status = %d, want 204", code)
 	}
 
-	var people []api.Person
-	if code := getJSON(t, srv.URL+"/api/v1/people", &people); code != http.StatusOK {
+	var listed api.PeoplePage
+	if code := getJSON(t, srv.URL+"/api/v1/people", &listed); code != http.StatusOK {
 		t.Fatalf("list after merge = %d", code)
 	}
+	people := listed.Items
 	if len(people) != 2 {
 		t.Fatalf("after merge there are %d people, want 2", len(people))
 	}
@@ -82,8 +84,8 @@ func TestMergeAndSplitAddresses(t *testing.T) {
 	if code := sendJSON(t, http.MethodDelete, srv.URL+"/api/v1/people/"+url.PathEscape(canonical)+"/addresses/"+url.PathEscape(merged), nil, nil); code != http.StatusNoContent {
 		t.Fatalf("split status = %d, want 204", code)
 	}
-	people = nil
-	if code := getJSON(t, srv.URL+"/api/v1/people", &people); code != http.StatusOK || len(people) != 3 {
-		t.Errorf("after split there are %d people, want 3", len(people))
+	listed = api.PeoplePage{}
+	if code := getJSON(t, srv.URL+"/api/v1/people", &listed); code != http.StatusOK || len(listed.Items) != 3 {
+		t.Errorf("after split there are %d people, want 3", len(listed.Items))
 	}
 }
