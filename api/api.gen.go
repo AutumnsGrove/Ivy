@@ -166,9 +166,11 @@ const (
 	OutboxActionNotJunk OutboxActionAction = "not_junk"
 	OutboxActionSeen    OutboxActionAction = "seen"
 	OutboxActionSpam    OutboxActionAction = "spam"
+	OutboxActionTag     OutboxActionAction = "tag"
 	OutboxActionTrash   OutboxActionAction = "trash"
 	OutboxActionUnflag  OutboxActionAction = "unflag"
 	OutboxActionUnseen  OutboxActionAction = "unseen"
+	OutboxActionUntag   OutboxActionAction = "untag"
 )
 
 // Valid indicates whether the value is a known member of the OutboxActionAction enum.
@@ -188,11 +190,15 @@ func (e OutboxActionAction) Valid() bool {
 		return true
 	case OutboxActionSpam:
 		return true
+	case OutboxActionTag:
+		return true
 	case OutboxActionTrash:
 		return true
 	case OutboxActionUnflag:
 		return true
 	case OutboxActionUnseen:
+		return true
+	case OutboxActionUntag:
 		return true
 	default:
 		return false
@@ -590,6 +596,9 @@ type OutboxAction struct {
 
 	// MessageId The mirror row the action applies to
 	MessageId string `json:"messageId"`
+
+	// TagId The tag for `tag` and `untag`. Tagging is the `$ivy-<slug>` keyword written to the server; `untag` clears it from every live copy of the message.
+	TagId *string `json:"tagId,omitempty"`
 }
 
 // OutboxActionAction defines model for OutboxAction.Action.
@@ -704,6 +713,20 @@ type SyncState string
 // TagColor defines model for TagColor.
 type TagColor string
 
+// TagCreate defines model for TagCreate.
+type TagCreate struct {
+	Color *TagColor `json:"color,omitempty"`
+
+	// Name At most 64 characters
+	Name string `json:"name"`
+}
+
+// TagUpdate defines model for TagUpdate.
+type TagUpdate struct {
+	Color *TagColor `json:"color,omitempty"`
+	Name  *string   `json:"name,omitempty"`
+}
+
 // TagsOverview defines model for TagsOverview.
 type TagsOverview struct {
 	ActiveRules int         `json:"activeRules"`
@@ -762,3 +785,9 @@ type AskJSONRequestBody = AskRequest
 
 // EnqueueOutboxJSONRequestBody defines body for EnqueueOutbox for application/json ContentType.
 type EnqueueOutboxJSONRequestBody = OutboxAction
+
+// CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
+type CreateTagJSONRequestBody = TagCreate
+
+// UpdateTagJSONRequestBody defines body for UpdateTag for application/json ContentType.
+type UpdateTagJSONRequestBody = TagUpdate

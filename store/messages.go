@@ -751,6 +751,41 @@ func (d *DBs) GetMessageIncludingHidden(ctx context.Context, id string) (Message
 	return m, nil
 }
 
+// KeywordRow names a live mirror row that carries a keyword.
+type KeywordRow struct {
+	AccountID  string
+	ContentKey string
+	FolderID   string
+}
+
+// KeywordRows lists the live rows carrying a keyword, optionally narrowed to one
+// account and one content key (empty means any), at most limit of them. Flags are
+// case-insensitive on the server, so the comparison is too.
+func (d *DBs) KeywordRows(ctx context.Context, keyword, accountID, contentKey string, limit int) ([]KeywordRow, error) {
+	rows, err := d.Mirror.Read.QueryContext(ctx, `
+		SELECT m.account_id, m.content_key, m.folder_id FROM messages m
+		WHERE m.disabled_at IS NULL
+		  AND (? = '' OR m.account_id = ?) AND (? = '' OR m.content_key = ?)
+		  AND EXISTS (
+			SELECT 1 FROM json_each(CASE WHEN json_valid(m.flags_json) THEN m.flags_json ELSE '[]' END)
+			WHERE lower(value) = ?)
+		ORDER BY m.account_id, m.content_key, m.folder_id LIMIT ?`,
+		accountID, accountID, contentKey, contentKey, strings.ToLower(keyword), limit)
+	if err != nil {
+		return nil, fmt.Errorf("rows carrying %s: %w", keyword, err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []KeywordRow
+	for rows.Next() {
+		var r KeywordRow
+		if err := rows.Scan(&r.AccountID, &r.ContentKey, &r.FolderID); err != nil {
+			return nil, fmt.Errorf("rows carrying %s: %w", keyword, err)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // AnotherRowCarriesKeyword reports whether a live row other than exceptID, of the
 // same account and content key, carries a keyword. Flags are case-insensitive on
 // the server, so the comparison is too; keyword is lower-case.

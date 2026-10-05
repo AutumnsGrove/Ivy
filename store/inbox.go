@@ -16,15 +16,16 @@ const (
 // MessageSummary is the list-view projection of a message: enough for the
 // inbox row without loading a body.
 type MessageSummary struct {
-	ID        string
-	AccountID string
-	From      Address
-	Subject   string
-	Snippet   string
-	Date      time.Time
-	Unread    bool
-	Flagged   bool
-	Needs     bool
+	ID         string
+	AccountID  string
+	ContentKey string
+	From       Address
+	Subject    string
+	Snippet    string
+	Date       time.Time
+	Unread     bool
+	Flagged    bool
+	Needs      bool
 }
 
 // InboxQuery selects a page of inbox summaries. An empty AccountID means the
@@ -127,7 +128,7 @@ func (d *DBs) scanInboxCounts(ctx context.Context, role, accountID string, page 
 const inboxSelect = `
 	SELECT m.id, m.account_id, COALESCE(m.from_json, ''), COALESCE(m.subject, ''),
 	       COALESCE(m.snippet, ''), COALESCE(m.date, ''), m.seen, m.flagged,
-	       CASE WHEN n.account_id IS NULL THEN 0 ELSE 1 END
+	       CASE WHEN n.account_id IS NULL THEN 0 ELSE 1 END, m.content_key
 	FROM messages m
 	JOIN folders f ON f.id = m.folder_id
 	LEFT JOIN needs_me n ON n.account_id = m.account_id
@@ -161,7 +162,7 @@ func scanInboxSummary(s scanner) (MessageSummary, error) {
 		needs    bool
 	)
 	err := s.Scan(&summary.ID, &summary.AccountID, &fromJSON, &summary.Subject,
-		&summary.Snippet, &date, &unread, &flagged, &needs)
+		&summary.Snippet, &date, &unread, &flagged, &needs, &summary.ContentKey)
 	if err != nil {
 		return MessageSummary{}, err
 	}

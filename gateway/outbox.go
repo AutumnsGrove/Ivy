@@ -66,6 +66,17 @@ func (s *Server) handleEnqueueOutbox(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	if body.Action == api.OutboxActionUntag {
+		if err := s.clearOtherCopies(ctx, msg, expect); err != nil {
+			if errors.Is(err, store.ErrOutboxFull) {
+				writeError(w, http.StatusConflict, "outbox_full",
+					"There are too many unsent actions; wait for them to finish")
+				return
+			}
+			s.serverError(w, r, err)
+			return
+		}
+	}
 	s.hintOutbox(msg.AccountID)
 	writeJSON(w, http.StatusAccepted, s.outboxItem(ctx, stored))
 }
@@ -126,6 +137,9 @@ func (s *Server) outboxAction(ctx context.Context, msg store.Message, body api.O
 		return store.OutboxFlags, store.OutboxExpect{FlagsAdd: []string{`\Seen`}}, "", nil
 	case api.OutboxActionUnseen:
 		return store.OutboxFlags, store.OutboxExpect{FlagsClear: []string{`\Seen`}}, "", nil
+	case api.OutboxActionTag, api.OutboxActionUntag:
+		expect, code, err := s.tagKeywordAction(ctx, body)
+		return store.OutboxFlags, expect, code, err
 	case api.OutboxActionMove:
 		if body.DestinationFolderId == nil || *body.DestinationFolderId == "" {
 			return "", store.OutboxExpect{}, "bad_destination", nil
@@ -189,6 +203,8 @@ func outboxActionMessage(code string) string {
 		return "The message is already in that folder"
 	case "not_trash":
 		return "Only the Trash folder may be emptied"
+	case "unknown_tag":
+		return "That tag no longer exists"
 	default:
 		return "That action is not available"
 	}

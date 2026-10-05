@@ -209,6 +209,101 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TagsOverview"
+    post:
+      operationId: createTag
+      summary: Create a tag
+      description: >
+        The tag's slug (its IMAP keyword `$ivy-<slug>`) is fixed here; a name that
+        slugs like an existing one gets a numeric suffix.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagCreate"
+      responses:
+        "201":
+          description: The new tag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserTag"
+        "400":
+          description: The name is empty or too long, or the colour is not one of the palette
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: There are already too many tags (`too_many_tags`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /tags/{id}:
+    patch:
+      operationId: updateTag
+      summary: Rename or recolour a tag
+      description: The slug never changes, so the keyword already on the server keeps its meaning.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagUpdate"
+      responses:
+        "200":
+          description: The updated tag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserTag"
+        "400":
+          description: The name or colour is not valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No such tag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteTag
+      summary: Delete a tag and clear its keyword from the server
+      description: >
+        Queues one outbox flags op per message copy that carries the keyword, then
+        removes the tag and its memberships. If those ops would not fit in the outbox
+        nothing is deleted (`outbox_full`).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: No such tag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Too many keywords to clear at once (`outbox_full`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /people:
     get:
       operationId: listPeople
@@ -886,6 +981,22 @@ components:
           $ref: "#/components/schemas/TagColor"
         count:
           type: integer
+    TagCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: At most 64 characters
+        color:
+          $ref: "#/components/schemas/TagColor"
+    TagUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        color:
+          $ref: "#/components/schemas/TagColor"
     PlacedTag:
       type: object
       required: [id, name, count]
@@ -1054,14 +1165,19 @@ components:
           description: The mirror row the action applies to
         action:
           type: string
-          enum: [archive, trash, spam, not_junk, flag, unflag, seen, unseen, move, expunge]
+          enum: [archive, trash, spam, not_junk, flag, unflag, seen, unseen, move, expunge, tag, untag]
           x-enum-varnames:
             [OutboxActionArchive, OutboxActionTrash, OutboxActionSpam, OutboxActionNotJunk,
              OutboxActionFlag, OutboxActionUnflag, OutboxActionSeen, OutboxActionUnseen,
-             OutboxActionMove, OutboxActionExpunge]
+             OutboxActionMove, OutboxActionExpunge, OutboxActionTag, OutboxActionUntag]
         destinationFolderId:
           type: string
           description: The destination folder for `move` (an undo sends the source folder back)
+        tagId:
+          type: string
+          description: >
+            The tag for `tag` and `untag`. Tagging is the `$ivy-<slug>` keyword written
+            to the server; `untag` clears it from every live copy of the message.
     OutboxItem:
       type: object
       description: One outbox op, naming a postcondition rather than a command

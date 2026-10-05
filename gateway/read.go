@@ -52,8 +52,25 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 		NeedCount:      page.NeedCount,
 		ReadingWaiting: 0,
 	}
+	keysByAccount := map[string][]string{}
 	for _, m := range page.Items {
-		out.Items = append(out.Items, summaryView(m))
+		keysByAccount[m.AccountID] = append(keysByAccount[m.AccountID], m.ContentKey)
+	}
+	names := map[string]map[string]string{}
+	for accountID, keys := range keysByAccount {
+		byKey, err := s.tagNames(r.Context(), accountID, keys)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		names[accountID] = byKey
+	}
+	for _, m := range page.Items {
+		view := summaryView(m)
+		if name, ok := names[m.AccountID][m.ContentKey]; ok {
+			view.Tag = &name
+		}
+		out.Items = append(out.Items, view)
 	}
 	if page.NextCursor != "" {
 		out.NextCursor = &page.NextCursor
@@ -97,10 +114,19 @@ func (s *Server) handleMessageSummary(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, summaryView(store.MessageSummary{
+	names, err := s.tagNames(r.Context(), m.AccountID, []string{m.ContentKey})
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	view := summaryView(store.MessageSummary{
 		ID: m.ID, AccountID: m.AccountID, From: m.From, Subject: m.Subject,
 		Snippet: m.Snippet, Date: m.Date, Unread: !m.Seen, Needs: needs,
-	}))
+	})
+	if name, ok := names[m.ContentKey]; ok {
+		view.Tag = &name
+	}
+	writeJSON(w, http.StatusOK, view)
 }
 
 // handleMirrorHealth summarizes per-account sync and index state. Search and
@@ -134,6 +160,10 @@ func (s *Server) messageView(r *http.Request, m store.Message) (api.MailMessage,
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return api.MailMessage{}, err
 	}
+	names, err := s.tagNames(r.Context(), m.AccountID, []string{m.ContentKey})
+	if err != nil {
+		return api.MailMessage{}, err
+	}
 	v := api.MailMessage{
 		Id:          m.ID,
 		AccountId:   m.AccountID,
@@ -153,6 +183,9 @@ func (s *Server) messageView(r *http.Request, m store.Message) (api.MailMessage,
 	if m.BodyHTML != "" {
 		htmlBody := m.BodyHTML
 		v.Html = &htmlBody
+	}
+	if name, ok := names[m.ContentKey]; ok {
+		v.Tag = &name
 	}
 	return v, nil
 }

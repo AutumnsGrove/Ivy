@@ -187,11 +187,39 @@ export interface paths {
         /** User tags and placed tags */
         get: operations["listTags"];
         put?: never;
-        post?: never;
+        /**
+         * Create a tag
+         * @description The tag's slug (its IMAP keyword `$ivy-<slug>`) is fixed here; a name that slugs like an existing one gets a numeric suffix.
+         */
+        post: operations["createTag"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/tags/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a tag and clear its keyword from the server
+         * @description Queues one outbox flags op per message copy that carries the keyword, then removes the tag and its memberships. If those ops would not fit in the outbox nothing is deleted (`outbox_full`).
+         */
+        delete: operations["deleteTag"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename or recolour a tag
+         * @description The slug never changes, so the keyword already on the server keeps its meaning.
+         */
+        patch: operations["updateTag"];
         trace?: never;
     };
     "/people": {
@@ -640,6 +668,15 @@ export interface components {
             color: components["schemas"]["TagColor"];
             count: number;
         };
+        TagCreate: {
+            /** @description At most 64 characters */
+            name: string;
+            color?: components["schemas"]["TagColor"];
+        };
+        TagUpdate: {
+            name?: string;
+            color?: components["schemas"]["TagColor"];
+        };
         PlacedTag: {
             id: string;
             name: string;
@@ -718,9 +755,11 @@ export interface components {
             /** @description The mirror row the action applies to */
             messageId: string;
             /** @enum {string} */
-            action: "archive" | "trash" | "spam" | "not_junk" | "flag" | "unflag" | "seen" | "unseen" | "move" | "expunge";
+            action: "archive" | "trash" | "spam" | "not_junk" | "flag" | "unflag" | "seen" | "unseen" | "move" | "expunge" | "tag" | "untag";
             /** @description The destination folder for `move` (an undo sends the source folder back) */
             destinationFolderId?: string;
+            /** @description The tag for `tag` and `untag`. Tagging is the `$ivy-<slug>` keyword written to the server; `untag` clears it from every live copy of the message. */
+            tagId?: string;
         };
         /** @description One outbox op, naming a postcondition rather than a command */
         OutboxItem: {
@@ -1040,6 +1079,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TagsOverview"];
+                };
+            };
+        };
+    };
+    createTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagCreate"];
+            };
+        };
+        responses: {
+            /** @description The new tag */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserTag"];
+                };
+            };
+            /** @description The name is empty or too long, or the colour is not one of the palette */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description There are already too many tags (`too_many_tags`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such tag */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too many keywords to clear at once (`outbox_full`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagUpdate"];
+            };
+        };
+        responses: {
+            /** @description The updated tag */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserTag"];
+                };
+            };
+            /** @description The name or colour is not valid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such tag */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };
