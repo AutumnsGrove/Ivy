@@ -319,6 +319,30 @@ func (e TagColor) Valid() bool {
 	}
 }
 
+// Defines values for ListInboxParamsFolder.
+const (
+	ListInboxParamsFolderArchive ListInboxParamsFolder = "archive"
+	ListInboxParamsFolderInbox   ListInboxParamsFolder = "inbox"
+	ListInboxParamsFolderJunk    ListInboxParamsFolder = "junk"
+	ListInboxParamsFolderTrash   ListInboxParamsFolder = "trash"
+)
+
+// Valid indicates whether the value is a known member of the ListInboxParamsFolder enum.
+func (e ListInboxParamsFolder) Valid() bool {
+	switch e {
+	case ListInboxParamsFolderArchive:
+		return true
+	case ListInboxParamsFolderInbox:
+		return true
+	case ListInboxParamsFolderJunk:
+		return true
+	case ListInboxParamsFolderTrash:
+		return true
+	default:
+		return false
+	}
+}
+
 // Account defines model for Account.
 type Account struct {
 	Address string `json:"address"`
@@ -711,9 +735,13 @@ type NotFound = Error
 
 // ListInboxParams defines parameters for ListInbox.
 type ListInboxParams struct {
-	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
-	Cursor    *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	AccountId *string                `form:"account_id,omitempty" json:"account_id,omitempty"`
+	Folder    *ListInboxParamsFolder `form:"folder,omitempty" json:"folder,omitempty"`
+	Cursor    *string                `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
+
+// ListInboxParamsFolder defines parameters for ListInbox.
+type ListInboxParamsFolder string
 
 // ListOutboxParams defines parameters for ListOutbox.
 type ListOutboxParams struct {

@@ -39,6 +39,14 @@ describe('reader api (gateway backed)', () => {
 		expect(calls[0]).toBe('/api/v1/inbox?account_id=a1');
 	});
 
+	it('asks for a folder view by role', async () => {
+		const calls = route({
+			'/api/v1/inbox?folder=trash': { items: [], needCount: 0, unreadCount: 0, readingWaiting: 0 }
+		});
+		await api.listInbox({ folder: 'trash' });
+		expect(calls[0]).toBe('/api/v1/inbox?folder=trash');
+	});
+
 	it('follows the cursor the server hands back', async () => {
 		route({
 			'/api/v1/inbox': {

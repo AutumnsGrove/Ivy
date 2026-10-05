@@ -3,7 +3,8 @@
 	import { accountAvatar } from '#lib/accounts.js';
 	import { withScenario, type Scenario } from '#lib/api/scenario.js';
 	import { PenLine, Search } from '#lib/icons.js';
-	import type { Account, Inbox } from '#lib/types.js';
+	import { folderTitle } from '#lib/folders.js';
+	import type { Account, FolderView, Inbox } from '#lib/types.js';
 	import { ui } from '#lib/ui.svelte.js';
 	import { outbox } from '#lib/outbox.svelte.js';
 	import Drawer from '../shell/Drawer.svelte';
@@ -14,6 +15,8 @@
 	import LargeHeader from '../ui/LargeHeader.svelte';
 	import AccountButton from './AccountButton.svelte';
 	import EmptyInbox from './EmptyInbox.svelte';
+	import EmptyTrashButton from './EmptyTrashButton.svelte';
+	import FolderEmpty from './FolderEmpty.svelte';
 	import MessageList from './MessageList.svelte';
 	import NavPanel from './NavPanel.svelte';
 
@@ -22,9 +25,10 @@
 		inbox: Inbox;
 		tags: { id: string; name: string }[];
 		accountId: string | null;
+		folder?: FolderView;
 		scenario: Scenario | null;
 	};
-	let { accounts, inbox, tags, accountId, scenario }: Props = $props();
+	let { accounts, inbox, tags, accountId, folder = 'inbox', scenario }: Props = $props();
 
 	const current = $derived(accounts.find((a) => a.id === accountId));
 	const failing = $derived(accounts.find((a) => a.sync === 'auth-failed'));
@@ -48,7 +52,11 @@
 	</div>
 
 	{#if visible.length}
-		<LargeHeader title="Inbox" {subtitle} />
+		<LargeHeader title={folderTitle(folder)} subtitle={folder === 'inbox' ? subtitle : undefined}>
+			{#snippet trailing()}
+				{#if folder === 'trash'}<EmptyTrashButton ids={visible.map((m) => m.id)} />{/if}
+			{/snippet}
+		</LargeHeader>
 	{/if}
 
 	<div class="body">
@@ -68,8 +76,10 @@
 				{accounts}
 				hrefFor={(m) => withScenario(`/m/${m.id}`, scenario)}
 			/>
-		{:else}
+		{:else if folder === 'inbox'}
 			<EmptyInbox readingWaiting={inbox.readingWaiting} />
+		{:else}
+			<FolderEmpty title={folderTitle(folder)} />
 		{/if}
 	</div>
 </Page>
@@ -77,7 +87,7 @@
 <Fab label="Compose" href="/compose"><PenLine /></Fab>
 
 <Drawer bind:open={ui.drawerOpen}>
-	<NavPanel {accounts} selectedId={accountId} {tags} />
+	<NavPanel {accounts} selectedId={accountId} {tags} {folder} />
 </Drawer>
 
 <style>

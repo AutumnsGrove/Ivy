@@ -2,7 +2,7 @@
 // and the Go server cannot drift. Regenerate with `make generate`; never edit
 // the generated schema by hand. `Settings` stays hand-written until the
 // settings contract lands.
-import type { components } from './api/schema';
+import type { components, operations } from './api/schema';
 
 type Schema = components['schemas'];
 
@@ -30,6 +30,8 @@ export type Attachment = Schema['Attachment'];
 export type MailSummary = Schema['MailSummary'];
 export type MailMessage = Schema['MailMessage'];
 export type Inbox = Schema['Inbox'];
+/** The folder views the list serves, by role. */
+export type FolderView = NonNullable<NonNullable<operations['listInbox']['parameters']['query']>['folder']>;
 export type OutboxItem = Schema['OutboxItem'];
 export type OutboxList = Schema['OutboxList'];
 export type OutboxAction = Schema['OutboxAction'];

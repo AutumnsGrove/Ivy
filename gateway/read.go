@@ -31,10 +31,15 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	page, err := s.dbs.ListInbox(r.Context(), store.InboxQuery{
 		AccountID: q.Get("account_id"),
+		Role:      q.Get("folder"),
 		Cursor:    q.Get("cursor"),
 	})
 	if errors.Is(err, store.ErrBadCursor) {
 		writeError(w, http.StatusBadRequest, "bad_request", "That page link is not valid")
+		return
+	}
+	if errors.Is(err, store.ErrBadRole) {
+		writeError(w, http.StatusBadRequest, "bad_request", "That folder is not available")
 		return
 	}
 	if err != nil {

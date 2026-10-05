@@ -79,7 +79,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Inbox summaries, newest first */
+        /**
+         * Inbox summaries, newest first
+         * @description `folder` picks the folder view by role and defaults to the inbox; the Trash view is where the reader's Empty Trash control lives. An unknown role is a 400, never an empty page.
+         */
         get: operations["listInbox"];
         put?: never;
         post?: never;
@@ -870,6 +873,7 @@ export interface operations {
         parameters: {
             query?: {
                 account_id?: string;
+                folder?: "inbox" | "archive" | "trash" | "junk";
                 cursor?: string;
             };
             header?: never;

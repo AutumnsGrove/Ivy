@@ -5,10 +5,13 @@
 	import { LIMITS, panes } from '#lib/panes.svelte.js';
 	import { outbox } from '#lib/outbox.svelte.js';
 	import ResizeHandle from '../ui/ResizeHandle.svelte';
-	import type { Account, Inbox } from '#lib/types.js';
+	import { folderTitle } from '#lib/folders.js';
+	import type { Account, FolderView, Inbox } from '#lib/types.js';
 	import Banner from '../ui/Banner.svelte';
 	import Glass from '../ui/Glass.svelte';
 	import EmptyInbox from './EmptyInbox.svelte';
+	import EmptyTrashButton from './EmptyTrashButton.svelte';
+	import FolderEmpty from './FolderEmpty.svelte';
 	import MessageList from './MessageList.svelte';
 	import NavPanel from './NavPanel.svelte';
 	import ReaderPane from './ReaderPane.svelte';
@@ -18,10 +21,11 @@
 		inbox: Inbox;
 		tags: { id: string; name: string }[];
 		accountId: string | null;
+		folder?: FolderView;
 		scenario: Scenario | null;
 		selectedId?: string;
 	};
-	let { accounts, inbox, tags, accountId, scenario, selectedId }: Props = $props();
+	let { accounts, inbox, tags, accountId, folder = 'inbox', scenario, selectedId }: Props = $props();
 
 	// With nothing chosen yet the first message is open, like a mail client should feel on arrival.
 	// A message with a live move op is hidden until the server confirms (chunk 3d).
@@ -45,7 +49,7 @@
 	style:grid-template-columns="{panes.nav}px var(--handle-w) {panes.list}px var(--handle-w) minmax(0, 1fr)"
 >
 	<Glass radius="panel" as="aside" class="nav" aria-label="Accounts and folders">
-		<NavPanel {accounts} selectedId={accountId} {tags} compose />
+		<NavPanel {accounts} selectedId={accountId} {tags} {folder} compose />
 	</Glass>
 
 	<ResizeHandle
@@ -60,9 +64,10 @@
 	<Glass radius="panel" as="section" class="list" aria-label="Messages">
 		<header class="head">
 			<div class="titles">
-				<h1>Inbox</h1>
-				<p>{subtitle}</p>
+				<h1>{folderTitle(folder)}</h1>
+				{#if folder === 'inbox'}<p>{subtitle}</p>{/if}
 			</div>
+			{#if folder === 'trash' && visible.length}<EmptyTrashButton ids={visible.map((m) => m.id)} />{/if}
 			<a href="/search" class="find"><Search />Search or ask</a>
 		</header>
 		{#if failing}
@@ -78,8 +83,10 @@
 					selectedId={openId}
 					onselect={(m) => goto(withScenario(`/m/${m.id}`, scenario), { reset: false })}
 				/>
-			{:else}
+			{:else if folder === 'inbox'}
 				<EmptyInbox readingWaiting={inbox.readingWaiting} />
+			{:else}
+				<FolderEmpty title={folderTitle(folder)} />
 			{/if}
 		</div>
 	</Glass>

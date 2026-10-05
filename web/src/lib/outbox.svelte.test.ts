@@ -57,3 +57,10 @@ describe('outbox overlay', () => {
 		expect(outbox.flags('m1')).toEqual({ flagged: true });
 	});
 });
+
+describe('outbox overlay for an erasure', () => {
+	it('hides a message while its expunge is live', () => {
+		outbox.remember(op({ kind: 'expunge', state: 'pending' }));
+		expect(outbox.hidden('m1')).toBe(true);
+	});
+});

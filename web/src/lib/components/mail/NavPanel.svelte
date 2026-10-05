@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Archive, Inbox, PenLine, Trash2 } from '#lib/icons.js';
 	import { accountAvatar } from '#lib/accounts.js';
-	import type { Account } from '#lib/types.js';
+	import type { Account, FolderView } from '#lib/types.js';
 	import Avatar from '../ui/Avatar.svelte';
 	import Button from '../ui/Button.svelte';
 	import Dot from '../ui/Dot.svelte';
@@ -15,8 +15,10 @@
 		tags: { id: string; name: string }[];
 		/** Desktop shows Compose at the top of the pane; the phone has a floating button instead. */
 		compose?: boolean;
+		/** The folder view on screen, so its row is marked. */
+		folder?: FolderView;
 	};
-	let { accounts, selectedId, tags, compose = false }: Props = $props();
+	let { accounts, selectedId, tags, compose = false, folder = 'inbox' }: Props = $props();
 
 	const total = $derived(accounts.reduce((n, a) => n + a.unread, 0));
 </script>
@@ -41,15 +43,15 @@
 	{/each}
 
 	<GroupLabel>Folders</GroupLabel>
-	<NavRow href="/">
+	<NavRow href="/" on={folder === 'inbox'}>
 		{#snippet leading()}<Inbox />{/snippet}
 		Inbox
 	</NavRow>
-	<NavRow href="/?folder=archive">
+	<NavRow href="/?folder=archive" on={folder === 'archive'}>
 		{#snippet leading()}<Archive />{/snippet}
 		Archive
 	</NavRow>
-	<NavRow href="/?folder=trash">
+	<NavRow href="/?folder=trash" on={folder === 'trash'}>
 		{#snippet leading()}<Trash2 />{/snippet}
 		Trash
 	</NavRow>

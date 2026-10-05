@@ -82,11 +82,20 @@ paths:
     get:
       operationId: listInbox
       summary: Inbox summaries, newest first
+      description: >
+        `folder` picks the folder view by role and defaults to the inbox; the
+        Trash view is where the reader's Empty Trash control lives. An unknown
+        role is a 400, never an empty page.
       parameters:
         - name: account_id
           in: query
           schema:
             type: string
+        - name: folder
+          in: query
+          schema:
+            type: string
+            enum: [inbox, archive, trash, junk]
         - name: cursor
           in: query
           schema:

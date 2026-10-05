@@ -756,3 +756,25 @@ func TestMessageDatesAreRFC3339InUTC(t *testing.T) {
 		t.Errorf("undated date = %v, want the zero instant", got)
 	}
 }
+
+func TestListInboxFolderTrashAndBadFolder(t *testing.T) {
+	t.Parallel()
+	srv, dbs := newSeededServer(t)
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox})
+	mustFolder(t, dbs, store.Folder{ID: "trash-1", AccountID: "acct-1", Name: "Trash", Role: store.RoleTrash})
+	mustMessage(t, dbs, inboxMessage("keep", "acct-1", "inbox-1", testNow.Add(-time.Hour), false))
+	mustMessage(t, dbs, inboxMessage("bin", "acct-1", "trash-1", testNow.Add(-time.Hour), false))
+
+	var trash api.Inbox
+	if code := getJSON(t, srv.URL+"/api/v1/inbox?folder=trash", &trash); code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", code)
+	}
+	if len(trash.Items) != 1 || trash.Items[0].Id != "bin" {
+		t.Errorf("trash items = %+v, want just bin", trash.Items)
+	}
+	var bad api.Error
+	if code := getJSON(t, srv.URL+"/api/v1/inbox?folder=nonsense", &bad); code != http.StatusBadRequest {
+		t.Errorf("unknown folder status = %d, want 400", code)
+	}
+}

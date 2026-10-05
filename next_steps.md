@@ -81,11 +81,10 @@ outbox worker per account is wired into `ivy run`.
 **Reader entry points are now in too** (`960cea5`): the read API carries a denormalised `flagged`
 column, so the list shows a star and the reader toggles it with no confirmation; the More menu moves
 mail to and from Junk through the same outbox; and `/settings/outbox` lists what is waiting with
-retry and dismiss. **The one 3d leftover is Empty Trash**: the gateway already refuses `expunge`
-outside the Trash role, but the nav's Trash link has no route and there is no folder-role view to
-empty, so the control rides with 3g's reading/folder work. (A one-off `empty-trash` endpoint that
-enqueues an `expunge` per message was sketched and dropped rather than add a second, weaker path to
-erasure.)
+retry and dismiss. **Empty Trash is done too**: `GET /inbox?folder=trash|archive|junk` serves the
+folder views, and the Trash view's confirmed **Empty Trash** button enqueues one `expunge` per
+listed message through the same outbox (no second path to erasure). It empties the page on screen,
+so a Trash larger than one page needs the button pressed again. 3d has no leftovers.
 
 **Next, in order:**
 

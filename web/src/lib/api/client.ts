@@ -11,6 +11,7 @@ import type {
 	CallRecord,
 	Check,
 	CheckDetail,
+	FolderView,
 	HealthOverview,
 	Inbox,
 	MailMessage,
@@ -55,8 +56,8 @@ export const api = {
 	// --- reader: answered by the real gateway over the JSON contract ---------
 	listAccounts: (_o: Opts = {}): Promise<Account[]> => request<Account[]>('/accounts'),
 
-	listInbox: (o: Opts & { accountId?: string } = {}): Promise<Inbox> =>
-		request<Inbox>(apiPath('/inbox', { account_id: o.accountId })),
+	listInbox: (o: Opts & { accountId?: string; folder?: FolderView } = {}): Promise<Inbox> =>
+		request<Inbox>(apiPath('/inbox', { account_id: o.accountId, folder: o.folder })),
 
 	getMessage: (id: string, _o: Opts = {}): Promise<MailMessage> =>
 		request<MailMessage>(`/messages/${encodeURIComponent(id)}`),

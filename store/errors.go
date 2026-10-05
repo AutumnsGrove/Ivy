@@ -11,6 +11,10 @@ var ErrNotFound = errors.New("not found")
 // error, not a server fault.
 var ErrBadCursor = errors.New("bad cursor")
 
+// ErrBadRole reports a folder view the list does not offer. Handlers map it to a
+// 400, so a typo never reads as an empty folder.
+var ErrBadRole = errors.New("bad folder role")
+
 // ErrNotDisabled reports a purge asked for a message that is not hidden. Purge
 // is the one erasure Ivy has, and only mail the server already dropped may reach
 // it, so a live row is refused rather than destroyed (ARCHITECTURE.md 4).

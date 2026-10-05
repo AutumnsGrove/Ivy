@@ -447,11 +447,14 @@ column (mirror migration 11) so the list and reader show a star and toggle it wi
 confirmation; the reader's More menu moves mail to and from Junk through the same outbox; and
 `/settings/outbox` lists live and recent ops with retry and dismiss.
 
-**Still open inside 3d:** the Empty-Trash UI. The gateway already refuses `expunge` outside the
-Trash role, but there is no Trash/folder view to empty (the nav's Trash link has no route), so the
-control waits on the folder view that 3g's reading work brings — a one-off endpoint that enqueues an
-`expunge` per trashed message was sketched and deliberately not shipped rather than add a second,
-weaker path to erasure.
+**Empty Trash (closed after 3d).** `GET /inbox?folder=` takes a role (`inbox` default, `archive`,
+`trash`, `junk`; anything else is a 400, store `ErrBadRole`), so the nav's Trash, Archive and Junk
+views now exist. In the Trash view an **Empty Trash** button confirms once ("Permanently delete N
+messages?", danger tone) and then sends one ordinary `expunge` per listed message through the outbox,
+so there is still exactly one path to erasure (the gateway still refuses `expunge` outside the Trash
+role). It acts only on the messages on screen, stops at the first refusal such as `outbox_full` and
+says how far it got; a live `expunge` hides its message like a move does. Tests: `store/inbox_test.go`,
+`gateway/read_test.go`, `web/src/lib/emptyTrash.test.ts`, `folders.test.ts`, `e2e/outbox.spec.ts`.
 
 ## Other history worth keeping
 

@@ -19,8 +19,8 @@ func TestReadQueriesUseIndexes(t *testing.T) {
 		query string
 		args  []any
 	}{
-		{"inbox", inboxSelect, []any{"", "", "", "", "", 50}},
-		{"inbox counts", inboxCountsSelect, []any{"", ""}},
+		{"inbox", inboxSelect, []any{"inbox", "", "", "", "", "", 50}},
+		{"inbox counts", inboxCountsSelect, []any{"inbox", "", ""}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

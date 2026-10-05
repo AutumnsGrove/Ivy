@@ -203,3 +203,47 @@ func summaryIDs(items []MessageSummary) []string {
 	}
 	return out
 }
+
+// The Trash view lists the Trash role only, so the inbox never shows trashed
+// mail and Empty Trash can only ever name what is in Trash.
+func TestListInboxByRoleSeparatesTrash(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedInbox(t, dbs, "acct-1", "inbox-1")
+	if err := dbs.UpsertFolder(ctx, Folder{ID: "trash-1", AccountID: "acct-1", Name: "Trash", Role: RoleTrash}); err != nil {
+		t.Fatalf("trash folder: %v", err)
+	}
+	base := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	seedMessage(t, dbs, "acct-1", "inbox-1", "keep", base, false)
+	seedMessage(t, dbs, "acct-1", "trash-1", "bin", base, false)
+
+	trash, err := dbs.ListInbox(ctx, InboxQuery{Role: RoleTrash})
+	if err != nil {
+		t.Fatalf("ListInbox trash: %v", err)
+	}
+	if got := summaryIDs(trash.Items); len(got) != 1 || got[0] != "bin" {
+		t.Errorf("trash items = %v, want [bin]", got)
+	}
+	if trash.UnreadCount != 1 {
+		t.Errorf("trash UnreadCount = %d, want 1", trash.UnreadCount)
+	}
+	inbox, err := dbs.ListInbox(ctx, InboxQuery{})
+	if err != nil {
+		t.Fatalf("ListInbox inbox: %v", err)
+	}
+	if got := summaryIDs(inbox.Items); len(got) != 1 || got[0] != "keep" {
+		t.Errorf("inbox items = %v, want [keep]", got)
+	}
+}
+
+// Only the folder views the nav offers are listable; anything else is a client
+// error rather than an empty page that looks like an empty folder.
+func TestListInboxRejectsUnknownRole(t *testing.T) {
+	t.Parallel()
+	dbs := openTemp(t)
+	_, err := dbs.ListInbox(context.Background(), InboxQuery{Role: "drafts'; --"})
+	if !errors.Is(err, ErrBadRole) {
+		t.Fatalf("err = %v, want ErrBadRole", err)
+	}
+}

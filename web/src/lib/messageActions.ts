@@ -106,3 +106,38 @@ export async function markNotJunk(messageId: string): Promise<boolean> {
 	if (!ok) return false;
 	return (await send(messageId, 'not_junk', 'Moved to Inbox', "Couldn't move it")) !== null;
 }
+
+/**
+ * Empty Trash: one confirmation, then an `expunge` per listed message through
+ * the same outbox as every other write (the gateway still refuses an expunge
+ * outside the Trash role). It stops at the first refusal, for example a full
+ * queue, and reports how many it queued; the rest are still in Trash to retry.
+ */
+export async function emptyTrash(messageIds: string[]): Promise<number> {
+	if (messageIds.length === 0) return 0;
+	const n = messageIds.length;
+	const ok = await confirm.ask({
+		title: `Permanently delete ${n} ${n === 1 ? 'message' : 'messages'}?`,
+		body: 'This cannot be undone.',
+		confirmLabel: 'Empty Trash',
+		tone: 'danger'
+	});
+	if (!ok) return 0;
+
+	let queued = 0;
+	for (const messageId of messageIds) {
+		try {
+			await outbox.enqueue({ messageId, action: 'expunge' });
+			queued++;
+		} catch (e) {
+			toasts.push({
+				text: e instanceof ApiError ? e.message : "Couldn't empty Trash",
+				detail: queued > 0 ? `${queued} of ${n} are on their way out.` : undefined,
+				tone: 'danger'
+			});
+			return queued;
+		}
+	}
+	toasts.push({ text: `Deleting ${queued} ${queued === 1 ? 'message' : 'messages'} forever`, tone: 'ok' });
+	return queued;
+}

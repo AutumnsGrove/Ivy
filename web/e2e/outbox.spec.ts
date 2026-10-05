@@ -55,3 +55,27 @@ test('the queue shows an action while it is waiting', async ({ page }) => {
 	await expect(page.getByText('Waiting')).toBeVisible();
 	await expect(page.getByText('Move to another folder')).toBeVisible();
 });
+
+test.describe('Trash', () => {
+	test('lists the trashed mail and empties it only after a confirmation', async ({ page }) => {
+		await page.goto('/?folder=trash');
+		await expect(page.getByRole('heading', { name: 'Trash' })).toBeVisible();
+
+		await page.getByRole('button', { name: 'Empty Trash' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Permanently delete 2 messages?' });
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('button', { name: 'Cancel' }).click();
+		await expect(dialog).toHaveCount(0);
+		await expect(toast(page, 'Deleting 2 messages forever')).toHaveCount(0);
+
+		await page.getByRole('button', { name: 'Empty Trash' }).click();
+		await page.getByRole('dialog', { name: 'Permanently delete 2 messages?' }).getByRole('button', { name: 'Empty Trash' }).click();
+		await expect(toast(page, 'Deleting 2 messages forever')).toBeVisible();
+	});
+
+	test('an empty Archive says so and offers no Empty Trash', async ({ page }) => {
+		await page.goto('/?folder=archive');
+		await expect(page.getByText('Archive is empty.')).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Empty Trash' })).toHaveCount(0);
+	});
+});

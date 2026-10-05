@@ -28,11 +28,23 @@ type MessageSummary struct {
 }
 
 // InboxQuery selects a page of inbox summaries. An empty AccountID means the
-// combined view across every account.
+// combined view across every account. Role picks the folder view (inbox,
+// archive, trash or junk); empty means the inbox.
 type InboxQuery struct {
 	AccountID string
+	Role      string
 	Cursor    string
 	Limit     int
+}
+
+// listableRole reports whether a role has a list view. The role is bound as a
+// parameter, but an unknown one would still read as an empty folder.
+func listableRole(role string) bool {
+	switch role {
+	case RoleInbox, RoleArchive, RoleTrash, RoleJunk:
+		return true
+	}
+	return false
 }
 
 // InboxPage is one page plus the counts for the whole view (not just the page).
@@ -54,8 +66,16 @@ func (d *DBs) ListInbox(ctx context.Context, q InboxQuery) (InboxPage, error) {
 		limit = maxInboxLimit
 	}
 
+	role := q.Role
+	if role == "" {
+		role = RoleInbox
+	}
+	if !listableRole(role) {
+		return InboxPage{}, fmt.Errorf("%w: %q", ErrBadRole, role)
+	}
+
 	page := InboxPage{}
-	if err := d.scanInboxCounts(ctx, q.AccountID, &page); err != nil {
+	if err := d.scanInboxCounts(ctx, role, q.AccountID, &page); err != nil {
 		return InboxPage{}, err
 	}
 
@@ -65,7 +85,7 @@ func (d *DBs) ListInbox(ctx context.Context, q InboxQuery) (InboxPage, error) {
 	}
 
 	rows, err := d.Mirror.Read.QueryContext(ctx, inboxSelect,
-		q.AccountID, q.AccountID, cursorDate, cursorDate, cursorID, limit)
+		role, q.AccountID, q.AccountID, cursorDate, cursorDate, cursorID, limit)
 	if err != nil {
 		return InboxPage{}, fmt.Errorf("list inbox: %w", err)
 	}
@@ -88,9 +108,9 @@ func (d *DBs) ListInbox(ctx context.Context, q InboxQuery) (InboxPage, error) {
 	return page, nil
 }
 
-func (d *DBs) scanInboxCounts(ctx context.Context, accountID string, page *InboxPage) error {
+func (d *DBs) scanInboxCounts(ctx context.Context, role, accountID string, page *InboxPage) error {
 	var seen, need int64
-	err := d.Mirror.Read.QueryRowContext(ctx, inboxCountsSelect, accountID, accountID).
+	err := d.Mirror.Read.QueryRowContext(ctx, inboxCountsSelect, role, accountID, accountID).
 		Scan(&seen, &need)
 	if err != nil {
 		return fmt.Errorf("inbox counts: %w", err)
@@ -112,7 +132,7 @@ const inboxSelect = `
 	JOIN folders f ON f.id = m.folder_id
 	LEFT JOIN needs_me n ON n.account_id = m.account_id
 		AND n.content_key = m.content_key AND n.verdict = 'needs'
-	WHERE f.role = 'inbox'
+	WHERE f.role = ?
 	  AND m.disabled_at IS NULL
 	  AND (? = '' OR m.account_id = ?)
 	  AND (? = '' OR (m.date, m.id) < (?, ?))
@@ -127,7 +147,7 @@ const inboxCountsSelect = `
 	JOIN folders f ON f.id = m.folder_id
 	LEFT JOIN needs_me n ON n.account_id = m.account_id
 		AND n.content_key = m.content_key AND n.verdict = 'needs'
-	WHERE f.role = 'inbox'
+	WHERE f.role = ?
 	  AND m.disabled_at IS NULL
 	  AND (? = '' OR m.account_id = ?)`
 

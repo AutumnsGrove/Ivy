@@ -1205,3 +1205,11 @@ overlay, undo, `ivy run` wiring).
 - **Q: what next?** (operator) **Finish the 3d UI leftovers first**: a flag/junk control in the
   reader (which needs a `flagged` field on the read API, since there is none yet), the Empty-Trash
   UI, and a queue/history screen for the outbox `retry`/`dismiss` endpoints. 3e (tags) starts after.
+
+## Round 49 — Empty Trash and the deepseek review (2026-10-05, operator instruction)
+
+- **Q: finish the unfinished Trash handling.** (operator) Done by giving `/inbox` a `folder` role
+  parameter and an Empty Trash button that reuses the outbox `expunge` (the dropped one-off endpoint
+  stays dropped). See the BUILD-LOG 3d entry.
+- **Q: review the other model's work.** (operator) Run the `review-deepseek` skill from commit
+  `ea78a63` inclusive to the tip on a `review/` branch; findings go in `papercuts.md`.

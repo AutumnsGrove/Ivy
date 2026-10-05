@@ -17,9 +17,9 @@ export const outbox = {
 		return live;
 	},
 
-	/** A live move hides its message from every list until the server confirms. */
+	/** A live move or erasure hides its message from every list until the server confirms. */
 	hidden(id: string): boolean {
-		return live.some((op) => op.messageId === id && op.kind === 'move');
+		return live.some((op) => op.messageId === id && (op.kind === 'move' || op.kind === 'expunge'));
 	},
 
 	/** The flag state a live flag op asks for, or null when none applies. */

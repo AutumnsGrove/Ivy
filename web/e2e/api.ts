@@ -37,7 +37,15 @@ function sniffedImageType(bytes: Uint8Array): string {
 	return '';
 }
 
-function inboxReply(accountId: string | null, scenario: string | null): Reply {
+function inboxReply(accountId: string | null, scenario: string | null, folder: string | null): Reply {
+	if (folder === 'trash') {
+		// Two fixtures stand in for trashed mail; the other folder views are empty.
+		const items = mock.inbox.slice(0, 2);
+		return { body: { items, needCount: 0, unreadCount: 0, readingWaiting: 0 } };
+	}
+	if (folder === 'archive' || folder === 'junk') {
+		return { body: { items: [], needCount: 0, unreadCount: 0, readingWaiting: 0 } };
+	}
 	if (scenario === 'empty') {
 		return { body: { items: [], needCount: 0, unreadCount: 0, readingWaiting: 3 } };
 	}
@@ -135,7 +143,7 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	if (path === '/accounts') {
 		return { body: scenario === 'sync-error' ? state.accounts.map(mock.failingHello) : state.accounts };
 	}
-	if (path === '/inbox') return inboxReply(params.get('account_id'), scenario);
+	if (path === '/inbox') return inboxReply(params.get('account_id'), scenario, params.get('folder'));
 	if (path === '/mirror/health') {
 		return {
 			body: {
