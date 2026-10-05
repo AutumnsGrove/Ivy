@@ -32,9 +32,10 @@ type OutboxWorker struct {
 	idleClose time.Duration
 	onOp      func(store.OutboxOp)
 
-	conn     *session
-	lastBusy time.Time
-	jitter   func(time.Duration) time.Duration
+	conn      *session
+	stopWatch func() bool // detaches conn's close-on-cancel hook
+	lastBusy  time.Time
+	jitter    func(time.Duration) time.Duration
 
 	// afterAck is a test seam: it runs after a command is acknowledged and before
 	// the mirror update, so a test can simulate the process dying in that window
@@ -630,6 +631,12 @@ func (w *OutboxWorker) transient(ctx context.Context, op store.OutboxOp, cause e
 	// it would fail every retry against a healthy server until the op exhausted
 	// its attempts, so the next attempt dials afresh.
 	w.closeConn()
+	// A shutdown that closed the connection under a command is not the op's
+	// failure: it must not cost an attempt, and recovery handles an in-flight op
+	// on the next start.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	attempts := op.Attempts + 1
 	detail := cause.Error()
 	if attempts >= store.MaxOutboxAttempts {
@@ -680,10 +687,14 @@ func (w *OutboxWorker) ensureConn(ctx context.Context) (*session, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The IMAP client's commands take no context, so closing the connection is
+	// the only way to stop one that waits on a silent server (as sync does).
+	w.stopWatch = context.AfterFunc(ctx, func() { _ = c.Close() })
 	if err := func() error {
 		defer c.watch()()
 		return c.Login(w.acct.Username, w.acct.Password).Wait()
 	}(); err != nil {
+		w.stopWatch()
 		_ = c.Close()
 		return nil, fmt.Errorf("outbox account %s: login: %w", w.acct.ID, err)
 	}
@@ -692,6 +703,10 @@ func (w *OutboxWorker) ensureConn(ctx context.Context) (*session, error) {
 }
 
 func (w *OutboxWorker) closeConn() {
+	if w.stopWatch != nil {
+		w.stopWatch()
+		w.stopWatch = nil
+	}
 	if w.conn != nil {
 		_ = w.conn.Close()
 		w.conn = nil

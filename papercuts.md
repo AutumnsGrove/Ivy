@@ -946,3 +946,10 @@ Baseline before any change: `go build`, `go vet`, `staticcheck`, `gofumpt -l`, t
   connection, `Run` with a short jitter): it failed with `failed after 7 attempts ... use of closed
   network connection` before the fix. `transient` now closes the connection so the next attempt dials
   afresh.
+- **#86** · `4d23d76` · `sync/outbox.go` · **bug** · the worker's IMAP commands take no context and the
+  worker, unlike sync and the IDLE worker, never closed the connection on cancellation, so shutdown
+  waited out the 2-minute stall timeout behind a server that had gone quiet. Reproduced with
+  `TestOutboxRunStopsPromptlyWhenCancelledMidCommand` (`Latency{1m}`, cancel after 500 ms): `Run` was
+  still blocked 5 s later before the fix. The connection now has a `context.AfterFunc` close hook from
+  the moment it is dialled, and a failure caused by that cancellation returns the context error instead
+  of costing the op an attempt.
