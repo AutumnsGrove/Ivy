@@ -1272,3 +1272,22 @@ Each follows from a round 51 answer or from the docs; none changes one. The oper
 - The HTTP client read a `204` as an unreadable body, so every successful delete (Dismiss on
   `/settings/outbox`) surfaced `internal_error`. Fixed with a test in `http.test.ts`; the e2e fake
   had hidden it by answering 204 with a body.
+
+## Round 54 — 3f search, the three blocking questions (2026-10-06, operator; three answers)
+
+3f (search: FTS5, tier 0-1 extraction, the `Embedder`, the embeddings gate and ledger, embed-once,
+hybrid RRF, `/search`) was reviewed before coding. Two were escalation-gate calls (T7 new
+dependency, T4 design), one is the operator's money.
+
+- **PDF extraction (T7):** **adopt `github.com/ledongthuc/pdf`.** Spike S6 chose it (pure Go,
+  cgo-free, 5.7 s for 212 pages on the potato, ~15 MiB, ~97% recall); it was never added to
+  `STACK.md`, which is why this was asked. It goes in the `STACK.md` dependency table, every call is
+  wrapped in `recover` plus a timeout, and `dslipak` stays dropped and `pdfium` is not adopted
+  (S6: 31 s start-up, ~300 MiB on the board).
+- **Frontend scope:** **wire `/search` for real** in 3f, with Playwright coverage; it is no longer
+  mock-backed after this stage.
+- **Embeddings monthly cap default:** **$5 per month**, a tunable constant (the operator can change
+  it in settings). The measured rate is $0.15 per 100k messages, so ~3.3M messages of headroom.
+
+Consequences folded into the docs with the work: `STACK.md` gains the PDF dependency and the FTS5
+tokenizer is a measure-first choice recorded in 3f.

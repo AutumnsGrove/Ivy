@@ -223,6 +223,9 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Messages cleared when a tag is deleted | as many as fit in the outbox headroom (`MaxQueuedOps` less what is queued), counted per account | nothing is deleted; 409 `outbox_full` |
 | Tag keywords re-applied to a rebuilt mailbox | as many as fit in the outbox | the rest are logged and skipped; membership is intact, only the server copy is missing |
 | Tag request body (`maxTagBodyBytes`) | 4 KiB | rejected with 400 `bad_request` |
+| Extracted document read for text (`extract.MaxInputBytes`) | 32 MiB | not read; `extracted_text.status = too_large` |
+| Extracted text kept per part (`extract.MaxOutputBytes`) | 1 MiB | truncated on a rune boundary, `status = ok` |
+| PDF pages read (`extract.MaxPages`) | 500 | the first 500 pages only |
 
 ## 5. Frontend standards
 
