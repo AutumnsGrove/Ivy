@@ -91,9 +91,15 @@ export async function flagMessage(messageId: string, on: boolean): Promise<boole
 /**
  * Tag or untag a message. The tag is written to the server as a keyword through
  * the outbox, so the reader sees it once the server has taken it. Nothing moves
- * or erases, so there is no confirmation; Undo sends the opposite action.
+ * or erases, so there is no confirmation; Undo sends the opposite action and
+ * tells `onUndo` what it put back, for a picker that is still open.
  */
-export async function tagMessage(messageId: string, tag: { id: string; name: string }, on: boolean): Promise<boolean> {
+export async function tagMessage(
+	messageId: string,
+	tag: { id: string; name: string },
+	on: boolean,
+	onUndo?: (restored: boolean) => void
+): Promise<boolean> {
 	const act = (action: 'tag' | 'untag') => outbox.enqueue({ messageId, action, tagId: tag.id });
 	try {
 		await act(on ? 'tag' : 'untag');
@@ -105,6 +111,7 @@ export async function tagMessage(messageId: string, tag: { id: string; name: str
 				run: async () => {
 					try {
 						await act(on ? 'untag' : 'tag');
+						onUndo?.(!on);
 						toasts.push({ text: 'Undone', tone: 'ok' });
 					} catch (e) {
 						toasts.push({ text: e instanceof ApiError ? e.message : "Couldn't undo that", tone: 'danger' });

@@ -42,9 +42,23 @@ describe('TagPicker', () => {
 		mocks.tagMessage.mockResolvedValue(true);
 		render(TagPicker, { id: 'm1', open: true });
 		await fireEvent.click(await screen.findByRole('switch', { name: 'Home' }));
-		expect(mocks.tagMessage).toHaveBeenCalledWith('m1', expect.objectContaining({ id: 't2', name: 'Home' }), true);
+		expect(mocks.tagMessage).toHaveBeenCalledWith('m1', expect.objectContaining({ id: 't2', name: 'Home' }), true, expect.any(Function));
 		await fireEvent.click(screen.getByRole('switch', { name: 'Work' }));
-		expect(mocks.tagMessage).toHaveBeenLastCalledWith('m1', expect.objectContaining({ id: 't1' }), false);
+		expect(mocks.tagMessage).toHaveBeenLastCalledWith('m1', expect.objectContaining({ id: 't1' }), false, expect.any(Function));
+	});
+
+	it('follows an Undo made from the toast while it is still open', async () => {
+		let undo: ((restored: boolean) => void) | undefined;
+		mocks.tagMessage.mockImplementation(async (_id, _tag, _on, onUndo) => {
+			undo = onUndo;
+			return true;
+		});
+		render(TagPicker, { id: 'm1', open: true });
+		const home = await screen.findByRole('switch', { name: 'Home' });
+		await fireEvent.click(home);
+		expect(home).toHaveAttribute('aria-checked', 'true');
+		undo?.(false);
+		await waitFor(() => expect(screen.getByRole('switch', { name: 'Home' })).toHaveAttribute('aria-checked', 'false'));
 	});
 
 	it('puts a switch back when the server refused the change', async () => {

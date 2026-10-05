@@ -55,7 +55,10 @@
 
 	async function toggle(tag: UserTag, on: boolean) {
 		chosen[tag.id] = on;
-		if (!(await tagMessage(id, tag, on))) {
+		const applied = await tagMessage(id, tag, on, (restored) => {
+			chosen[tag.id] = restored;
+		});
+		if (!applied) {
 			delete chosen[tag.id];
 			// The switch flipped itself before the refusal; re-render it from state.
 			round++;

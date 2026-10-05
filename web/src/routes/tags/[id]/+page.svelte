@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { api } from '#lib/api/client.js';
 	import { ApiError } from '#lib/api/errors.js';
 	import { removeTag } from '#lib/tagManage.js';
@@ -29,7 +29,8 @@
 		try {
 			await api.updateTag(data.tag.id, { name: name.trim(), color });
 			toasts.push({ text: 'Tag saved', tone: 'ok' });
-			await goto('/tags', { invalidateAll: true });
+			await goto('/tags');
+			await invalidateAll();
 		} catch (e) {
 			toasts.push({ text: e instanceof ApiError ? e.message : "Couldn't save the tag", tone: 'danger' });
 		} finally {
@@ -38,7 +39,9 @@
 	}
 
 	async function remove() {
-		if (await removeTag(data.tag)) await goto('/tags', { invalidateAll: true });
+		if (!(await removeTag(data.tag))) return;
+		await goto('/tags');
+		await invalidateAll();
 	}
 </script>
 

@@ -1,6 +1,6 @@
 import { test as base } from '@playwright/test';
 import * as mock from '../src/lib/api/mock';
-import type { Account, Attachment, MailMessage, MailSummary, OutboxItem } from '../src/lib/types';
+import type { Account, Attachment, MailMessage, MailSummary, OutboxItem, TagsOverview, UserTag } from '../src/lib/types';
 
 // The reader client does real fetches, so the mock E2E suite serves the
 // contract from the same fixtures at the network boundary instead of inside
@@ -26,7 +26,71 @@ export type AccountState = {
 	accounts: Account[];
 	photos: Map<string, { type: string; bytes: Buffer }>;
 	outbox: OutboxItem[];
+	tags: TagsOverview;
+	/** The tags each message is in, by message id, as the gateway's `tagIds` reports them. */
+	tagged: Map<string, string[]>;
 };
+
+const freshState = (): AccountState => ({
+	accounts: structuredClone(mock.accounts),
+	photos: new Map(),
+	outbox: [],
+	tags: structuredClone(mock.tags),
+	tagged: new Map()
+});
+
+const TAG_COLORS = new Set(['sky', 'rose', 'teal', 'coral', 'lilac', 'mint', 'gold', 'sand', 'orchid', 'fern', 'slate', 'berry']);
+const slugOf = (name: string) =>
+	name
+		.toLowerCase()
+		.normalize('NFKD')
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-+|-+$/g, '');
+
+/** The gateway's tag endpoints, over mutable fixtures: create, rename, recolour, delete. */
+function tagReply(state: AccountState, path: string, method: string, raw: Buffer | null): Reply | null {
+	const body = (): Record<string, unknown> | null => {
+		try {
+			const parsed = JSON.parse(raw?.toString('utf8') ?? '');
+			return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+		} catch {
+			return null;
+		}
+	};
+	if (path === '/tags') {
+		if (method === 'GET') return { body: state.tags };
+		if (method !== 'POST') return null;
+		const b = body();
+		const name = typeof b?.name === 'string' ? b.name.trim() : '';
+		const color = typeof b?.color === 'string' ? b.color : 'lilac';
+		if (!name || [...name].length > 64 || !TAG_COLORS.has(color)) return badRequest('That tag is not valid');
+		if (state.tags.mine.length >= 200) return { status: 409, body: { code: 'too_many_tags', message: 'There are too many tags' } };
+		const base = slugOf(name) || 'tag';
+		let slug = base;
+		for (let n = 2; state.tags.mine.some((t) => t.slug === slug); n++) slug = `${base}-${n}`;
+		const tag = { id: `t${Date.now()}${state.tags.mine.length}`, slug, name, color, count: 0 } as UserTag;
+		state.tags.mine = [...state.tags.mine, tag].sort((a, b) => a.name.localeCompare(b.name));
+		return { status: 201, body: tag };
+	}
+	const match = /^\/tags\/([^/]+)$/.exec(path);
+	if (!match) return null;
+	const tag = state.tags.mine.find((t) => t.id === match[1]);
+	if (!tag) return notFound('No such tag');
+	if (method === 'PATCH') {
+		const b = body();
+		if (b?.color !== undefined && (typeof b.color !== 'string' || !TAG_COLORS.has(b.color))) return badRequest('That colour is not available');
+		if (b?.name !== undefined && (typeof b.name !== 'string' || !b.name.trim())) return badRequest('A tag needs a name');
+		if (typeof b?.name === 'string') tag.name = b.name.trim();
+		if (typeof b?.color === 'string') tag.color = b.color as UserTag['color'];
+		return { body: tag };
+	}
+	if (method === 'DELETE') {
+		state.tags.mine = state.tags.mine.filter((t) => t.id !== tag.id);
+		for (const [id, ids] of state.tagged) state.tagged.set(id, ids.filter((x) => x !== tag.id));
+		return { status: 204, body: null };
+	}
+	return null;
+}
 
 /** The known image formats the server accepts; SVG is deliberately absent. */
 function sniffedImageType(bytes: Uint8Array): string {
@@ -60,7 +124,7 @@ function inboxReply(accountId: string | null, scenario: string | null, folder: s
 	};
 }
 
-function messageReply(id: string, scenario: string | null): Reply {
+function messageReply(id: string, scenario: string | null, tagIds: string[]): Reply {
 	const summary = mock.inbox.find((x) => x.id === id);
 	if (!summary) return notFound('No such message');
 	if (scenario === 'fetch-error') {
@@ -72,7 +136,7 @@ function messageReply(id: string, scenario: string | null): Reply {
 			a.id === 'f2' ? ({ ...a, failed: true } as Attachment) : a
 		);
 	}
-	return { body: { ...summary, ...body } satisfies MailMessage };
+	return { body: { ...summary, ...body, ...(tagIds.length > 0 ? { tagIds } : {}) } satisfies MailMessage };
 }
 
 function bodyDocument(id: string): Reply | null {
@@ -117,7 +181,7 @@ const MOVE_DEST: Record<string, string> = {
 };
 
 /** The op the real gateway would build for a reader action, as the mock's reply. */
-function mockOutboxItem(state: AccountState, action: { messageId: string; action: string; destinationFolderId?: string }): OutboxItem {
+function mockOutboxItem(state: AccountState, action: { messageId: string; action: string; destinationFolderId?: string; tagId?: string }): OutboxItem | Reply {
 	const accountId = mock.inbox.find((m) => m.id === action.messageId)?.accountId ?? 'a1';
 	const now = new Date().toISOString();
 	const base = {
@@ -130,6 +194,18 @@ function mockOutboxItem(state: AccountState, action: { messageId: string; action
 		createdAt: now,
 		updatedAt: now
 	};
+	if (action.action === 'tag' || action.action === 'untag') {
+		const tag = state.tags.mine.find((t) => t.id === action.tagId);
+		if (!tag) return { status: 409, body: { code: 'unknown_tag', message: 'That tag no longer exists' } };
+		// The real server records the membership once the keyword lands; the fixture
+		// does it at once, which is what the picker sees on its next open.
+		const ids = new Set(state.tagged.get(action.messageId) ?? []);
+		if (action.action === 'tag') ids.add(tag.id);
+		else ids.delete(tag.id);
+		state.tagged.set(action.messageId, [...ids]);
+		const keyword = [`$ivy-${tag.slug}`];
+		return action.action === 'tag' ? { ...base, kind: 'flags', flagsAdd: keyword } : { ...base, kind: 'flags', flagsClear: keyword };
+	}
 	if (action.action === 'expunge') return { ...base, kind: 'expunge' };
 	if (action.action in MOVE_DEST || action.action === 'move') {
 		return { ...base, kind: 'move', destinationFolderId: action.destinationFolderId ?? MOVE_DEST[action.action] ?? 'archive-1' };
@@ -214,6 +290,7 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 		if (method === 'POST' && raw) {
 			try {
 				const item = mockOutboxItem(state, JSON.parse(raw.toString('utf8')));
+				if (!('kind' in item)) return item;
 				state.outbox = [...state.outbox, item];
 				return { status: 202, body: item };
 			} catch {
@@ -230,22 +307,20 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 		if (!summary) return notFound('No such message');
 		if (kind === '/summary') return { body: summary };
 		if (kind === '/body') return bodyDocument(id);
-		return messageReply(id, scenario);
+		return messageReply(id, scenario, state.tagged.get(id) ?? []);
 	}
-	return null;
+	return tagReply(state, path, method, raw);
 }
 
 /** The fixture's account state, exposed so a spec can assert what it changed. */
-export const state: { current: AccountState } = {
-	current: { accounts: structuredClone(mock.accounts), photos: new Map(), outbox: [] }
-};
+export const state: { current: AccountState } = { current: freshState() };
 
 export const test = base.extend({
 	// An automatic fixture: every mock-suite page answers the reader and
 	// customization endpoints from mutable fixtures, including the designed
 	// ?scenario= edge states.
 	page: async ({ page }, use) => {
-		state.current = { accounts: structuredClone(mock.accounts), photos: new Map(), outbox: [] };
+		state.current = freshState();
 		await page.route('**/api/v1/**', async (route) => {
 			const request = route.request();
 			const scenario = new URL(page.url()).searchParams.get('scenario');

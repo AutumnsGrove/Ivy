@@ -45,6 +45,28 @@ describe('tagMessage', () => {
 		expect(mocks.enqueue).toHaveBeenLastCalledWith({ messageId: 'm1', action: 'untag', tagId: 't1' });
 	});
 
+	it('tells an open picker what an Undo put back, so its switch follows', async () => {
+		mocks.enqueue.mockResolvedValue({});
+		const restored = vi.fn();
+		await tagMessage('m1', work, true, restored);
+		await mocks.push.mock.calls[0][0].action.run();
+		expect(restored).toHaveBeenCalledWith(false);
+
+		mocks.push.mockReset();
+		await tagMessage('m1', work, false, restored);
+		await mocks.push.mock.calls[0][0].action.run();
+		expect(restored).toHaveBeenLastCalledWith(true);
+	});
+
+	it('does not claim an Undo that the server refused', async () => {
+		mocks.enqueue.mockResolvedValueOnce({}).mockRejectedValueOnce(new ApiError('unknown_tag', 'That tag no longer exists'));
+		const restored = vi.fn();
+		await tagMessage('m1', work, true, restored);
+		await mocks.push.mock.calls[0][0].action.run();
+		expect(restored).not.toHaveBeenCalled();
+		expect(mocks.push.mock.calls.at(-1)?.[0]).toMatchObject({ tone: 'danger' });
+	});
+
 	it('says why when the server refuses, and reports the tag as not applied', async () => {
 		mocks.enqueue.mockRejectedValue(new ApiError('unknown_tag', 'That tag no longer exists'));
 		expect(await tagMessage('m1', work, true)).toBe(false);
