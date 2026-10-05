@@ -208,7 +208,7 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | One event-stream write (`eventWriteTimeout`) | 10 s | the stream ends and frees its slot |
 | Idle event stream | 20 s | a `: keepalive` comment is sent; a failed write ends the stream |
 | Account sync error detail (`store.MaxSyncErrorDetail`) | 1024 bytes | refused by `SetSyncState`; the caller shortens it |
-| Outbox attempts per op (`store.MaxOutboxAttempts`) | 8 | the op is `failed` (`retries_exhausted`), visible in the UI |
+| Outbox attempts per op (`store.MaxOutboxAttempts`) | 8, counted only when the server answers NO to the op; a failed dial, login, drop or stall is not counted (the age cap bounds it) | the op is `failed` (`retries_exhausted`), visible in the UI |
 | Outbox op age (`store.MaxOutboxAge`) | 24 h | the op is `failed` (`expired`) |
 | Non-terminal outbox ops per account (`store.MaxQueuedOps`) | 500 | the enqueue is refused (`outbox_full`) |
 | Terminal outbox rows kept (`store.OutboxTerminalRetention`) | 7 days | pruned; the outbox's only deletion, and only of terminal rows |

@@ -112,3 +112,70 @@ func TestOutboxRunStopsPromptlyWhenCancelledMidCommand(t *testing.T) {
 		t.Fatal("Run was still blocked 5s after cancellation; it waits out the stall timeout")
 	}
 }
+
+// An unreachable server is an outage, not a verdict on the op: the attempt cap
+// is for per-op server rejections, so a long outage must leave the op queued
+// and let it finish once the server is back.
+func TestOutboxOutageDoesNotExhaustAttempts(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	w := newWorld(t)
+	acc := w.Account("me@grove.test", "secret")
+	dbs := newStore(t)
+	acct := accountFor(t, w, "acct-1", "me@grove.test", "secret")
+	if err := acc.CreateMailbox("Archive"); err != nil {
+		t.Fatalf("create Archive: %v", err)
+	}
+	acc.Deliver("INBOX", rawFor(1))
+	f := ivysync.NewFetcher(dbs)
+	if _, err := f.Fetch(ctx, acct); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	inbox := mustFolder(t, dbs, "acct-1", "INBOX")
+	archive := mustFolder(t, dbs, "acct-1", "Archive")
+	op, _, err := dbs.EnqueueOutbox(ctx, store.OutboxOp{
+		ID: "op-1", AccountID: "acct-1", Kind: store.OutboxMove,
+		ContentKey: contentKeyFor(1), SourceFolderID: inbox.ID,
+		Expect:    store.OutboxExpect{DestFolderID: archive.ID},
+		CreatedAt: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	w.Fault(mailworld.Unreachable{})
+	worker := ivysync.NewOutboxWorker(f, acct,
+		ivysync.WithOutboxPoll(5*time.Millisecond),
+		ivysync.WithOutboxJitter(func(time.Duration) time.Duration { return 5 * time.Millisecond }))
+	done := make(chan error, 1)
+	go func() { done <- worker.Run(ctx) }()
+
+	// Far more failed dials than MaxOutboxAttempts.
+	time.Sleep(1500 * time.Millisecond)
+	got, err := dbs.GetOutbox(ctx, op.ID)
+	if err != nil {
+		t.Fatalf("get op: %v", err)
+	}
+	if got.State != store.OutboxPending || got.Attempts != 0 {
+		t.Fatalf("during the outage op is %q with %d attempts (%s), want pending with 0",
+			got.State, got.Attempts, got.LastErrorCode)
+	}
+	if got.LastErrorCode == "" {
+		t.Error("the outage left no error code on the op for the queue screen")
+	}
+
+	w.ClearFaults()
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) && got.State != store.OutboxDone {
+		time.Sleep(20 * time.Millisecond)
+		if got, err = dbs.GetOutbox(ctx, op.ID); err != nil {
+			t.Fatalf("get op: %v", err)
+		}
+	}
+	cancel()
+	<-done
+	if got.State != store.OutboxDone {
+		t.Fatalf("after the outage op is %q (%s), want done", got.State, got.LastErrorCode)
+	}
+}

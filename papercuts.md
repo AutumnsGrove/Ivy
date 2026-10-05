@@ -1009,13 +1009,15 @@ Baseline before any change: `go build`, `go vet`, `staticcheck`, `gofumpt -l`, t
   explicit `default` branches with a reason, the builtins were renamed, and `ctx` was removed from the
   five IMAP helpers that never used it (the commands take no context; cancellation closes the connection,
   #86), rather than renamed to `_`.
-- **N31 (open, needs a design decision)** · `4d23d76` · `sync/outbox.go` · a connect or login failure counts
+- **#93 (was N31, decided by the operator 2026-10-05: do not count them)** · `4d23d76` · `sync/outbox.go` · a connect or login failure counts
   as an attempt against the op at the head of the queue (`transient`), so with the 5 s to 15 min backoff
   an outage of roughly 20 minutes ends every queued action as `failed (retries_exhausted)` and the
   operator must retry each by hand. That is what STANDARDS 4a documents, but it treats "the server is
-  unreachable" like "the server rejected this op". Recommendation: do not count dial, login or stall
-  failures as attempts (the 24 h age cap already bounds the op), and keep the attempt cap for per-op
-  server errors. Not changed here because it alters the documented limit's meaning.
+  unreachable" like "the server rejected this op". Reproduced with
+  `TestOutboxOutageDoesNotExhaustAttempts` (`Unreachable` for 1.5 s: op `failed` after 7 attempts). Now
+  only a server NO to the op counts; a failed dial, login, drop or stall leaves the attempt count alone,
+  backs off on its own consecutive-failure counter, and the 24 h age cap still bounds the op. The
+  STANDARDS limits row says so.
 - **N32 (open, unverified here)** · the web e2e could run only on Chromium through a throwaway config
   pointing at the container's older build (WebKit and the real-binary smoke cannot launch in this
   environment: `webkit-2359` and `chromium_headless_shell-1243` are missing). The phone (WebKit)

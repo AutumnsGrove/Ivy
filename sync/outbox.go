@@ -34,6 +34,7 @@ type OutboxWorker struct {
 
 	conn      *session
 	stopWatch func() bool // detaches conn's close-on-cancel hook
+	outage    int         // consecutive connection failures, for the backoff only
 	lastBusy  time.Time
 	jitter    func(time.Duration) time.Duration
 
@@ -607,6 +608,7 @@ func (w *OutboxWorker) afterAckCrash(op store.OutboxOp) error {
 // ---------------------------------------------------------------- outcomes
 
 func (w *OutboxWorker) done(ctx context.Context, op store.OutboxOp) error {
+	w.outage = 0
 	if err := w.fetcher.dbs.SetOutboxDone(ctx, op.ID, w.fetcher.now()); err != nil {
 		return err
 	}
@@ -637,8 +639,21 @@ func (w *OutboxWorker) transient(ctx context.Context, op store.OutboxOp, cause e
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	attempts := op.Attempts + 1
 	detail := cause.Error()
+	// Only a server that answered NO to this op counts against its attempts. A
+	// failed dial, login, drop or stall says nothing about the op, so an outage
+	// must not exhaust every queued action; the 24 h age cap still bounds it.
+	var imapErr *imap.Error
+	if !errors.As(cause, &imapErr) || imapErr.Type != imap.StatusResponseTypeNo {
+		w.outage++
+		next := w.fetcher.now().Add(w.backoff(w.outage))
+		if err := w.fetcher.dbs.SetOutboxPending(ctx, op.ID, op.Attempts, next, outboxErrorCode(cause), detail, w.fetcher.now()); err != nil {
+			return err
+		}
+		w.notify(ctx, op.ID)
+		return nil
+	}
+	attempts := op.Attempts + 1
 	if attempts >= store.MaxOutboxAttempts {
 		return w.fail(ctx, op, "retries_exhausted", detail)
 	}
