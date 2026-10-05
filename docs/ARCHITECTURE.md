@@ -127,10 +127,12 @@ Mirror tables (`mirror.db`, rebuildable from IMAP):
   because the row belongs to one message, so extraction and embeddings key on `content_hash`, never
   on the row id; the reader's public attachment id is the part path (stable, and it survives a
   rebuild).
-- `extracted_text` (content_hash | message_id, tier, text, status)
-- `chunks` / `embeddings` (account_id, content_key (or attachment content hash), chunk_ix, model,
-  dims, vector BLOB; keyed by content, never by folder or UID), plus an FTS5 virtual table over
-  subject/body/attachment text.
+- `extracted_text` (ref, kind[body|attachment], tier, status, text, derived_version): `ref` is
+  the message content key for a body or the attachment content hash, so the same file is read once.
+  Every outcome above is recorded, so nothing is retried forever.
+- `embeddings` (account_id, ref, kind, chunk_ix, model, dims, scale, norm, vector BLOB; keyed by
+  content and model, never by folder or UID), plus the FTS5 `search_index` over
+  subject/body/attachment text with `search_docs` mapping a content key to its rowid.
 
 Locally owned state (`state.db`, not on the server and not rebuildable, so backed up, section 9):
 - `tags` (id, slug, name, color), `message_tags` (account, content_key, tag_id, source: user | rule
@@ -363,6 +365,25 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   proposed action ("archive these") is shown as a button the user must click.
   The old fixed pipeline (retrieve -> `answers_question` filter -> answer) remains as the cheap
   fallback for the one-shot case and as the evaluation baseline.
+- **How 3f built it (rounds 54 and 55).** The index is a standalone FTS5 table `search_index`
+  (subject, body, attachment) with `search_docs` mapping each durable `(account, content key)` to
+  its rowid, so one document covers a copy in two folders and an identical Message-ID (N8). The
+  rowid is `SearchDocID`, a SHA-256 of the identity, so two identical seeds and a full rebuild
+  produce byte-identical databases. Hidden mail is excluded at query time by an `EXISTS` on a live
+  `messages` row, so a disabled message's index entry can stay for a later restore without ever
+  showing (invariant 10). `ReindexContent` rebuilds one key's document after a derivation or an
+  extraction. The tokenizer is **`unicode61 remove_diacritics 2`** (round 55: 402 KB and ~0.65 ms
+  per query for 5000 docs, against 7.3x the index and 12x the time for `trigram`; folding makes
+  `cafe` find `café` and the prefix form works). Tier 0-1 extraction reads an attachment once,
+  bounded by input size, output size, page count and a 20 s timeout, records every outcome
+  (ok/empty/unsupported/failed/too_large) so it is never retried, and runs in the settle pass after
+  derivation, not the fetch. The embeddings gate is `llm.Gate`: the provider clients are unexported,
+  an architecture test fails if any other package names a provider endpoint, and one ledger row per
+  input plus the monthly counter are written in one transaction. The embed-once queue (`search`)
+  keys a vector on `(account, content key or attachment hash, chunk, model, dims)` and sends at most
+  `MaxBatchInputs` through the gate at a time; a move, an archive or a UIDVALIDITY reset cannot
+  re-embed. Search fuses BM25 with brute-force cosine by reciprocal rank fusion, query embedding
+  included, and falls back to keyword-only when the provider is off, capped or down.
 
 ## 7. LLM layer
 
@@ -462,8 +483,9 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   `ivy doctor` and at startup after an unclean exit, periodic WAL checkpoints, backups of locally
   owned state verified by a restore test, and a kill -9 / power-loss test of the outbox and sync
   checkpoints with the fake server.
-- **Search quality:** FTS5 tokenizer choice (`unicode61` with diacritics folding, possibly trigram
-  for CJK/partial matches) decided with a multilingual test corpus.
+- **Search quality:** **settled in 3f (round 55):** `unicode61 remove_diacritics 2`, measured
+  against `trigram` (402 KB / ~0.65 ms vs 2.94 MB / ~7.96 ms for 5000 docs); a trigram index is a
+  later add if CJK becomes a need.
 - **Time:** all timestamps UTC in the DB, local zone at the edge, with DST and bad-`Date`-header
   tests (clock-skewed mail sorts by internal date).
 - **Logs:** journald with size limits so logs don't wear the card; no mail content in logs.

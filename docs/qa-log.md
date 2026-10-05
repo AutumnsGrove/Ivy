@@ -1291,3 +1291,21 @@ dependency, T4 design), one is the operator's money.
 
 Consequences folded into the docs with the work: `STACK.md` gains the PDF dependency and the FTS5
 tokenizer is a measure-first choice recorded in 3f.
+
+## Round 55 — 3f, the FTS5 tokenizer measured (2026-10-06, agent)
+
+The brief leaves the FTS5 tokenizer as a measure-first choice inside 3f. Measured
+`store.BenchmarkFTS5Tokenizers` (synthetic 5000-document corpus, ~60 words each, dev laptop, arm64):
+
+| Tokenizer | Index bytes | Query (`"invoice" "report"`) |
+|---|---|---|
+| `unicode61 remove_diacritics 2` | 402,085 | ~0.65 ms/op |
+| `trigram` | 2,941,903 (7.3x) | ~7.96 ms/op (12x) |
+
+**Chosen: `unicode61 remove_diacritics 2`.** It is far smaller and faster, folds
+diacritics (so `cafe` finds `café`, a real need for multilingual mail) and supports the
+prefix form the UI uses (`renew*`). Trigram's one advantage, matching substrings of three
+or more characters and CJK without word breaks, does not pay for a 7x index and a 12x
+slower query on the operator's mostly-English mail; if CJK becomes a need, a second
+trigram index can be added beside this one without changing the contract. The choice is
+recorded in migration 13 and in `docs/ARCHITECTURE.md` section 6.

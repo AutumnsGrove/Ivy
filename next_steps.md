@@ -5,13 +5,12 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-05 (3e tags both ways is done: the `$ivy-<slug>` keyword writer, server
-read-back, the tag screens and the reader's tag picker are committed. Next is 3f search, or the
-operator's choice of 3h).
+last updated: 2026-10-06 (3f search is done: FTS5 + extraction + the embeddings gate and ledger +
+embed-once + hybrid + `/search` end to end. Next is 3g, the C0 canvas board, or 3h.)
 Chunks 0, 1 and 2a-2h are done except the visual baselines of 2g and 2h (they need the CI harness
 regenerated). 3a and 3b's backend are done, 3c (backups, including the disabled-blob store), 3d (the
-outbox and write path) and 3e (tags) are done; **the C0 canvas board is the one thing blocking the
-3b screens**.
+outbox and write path), 3e (tags) and **3f (search)** are done; **the C0 canvas board is the one
+thing blocking the 3b screens**.
 
 ## How to run a chunk
 
@@ -38,22 +37,25 @@ outbox and write path) and 3e (tags) are done; **the C0 canvas board is the one 
 | 2a-2f Read: store, fetch, parse, render, thread, gateway | done |
 | 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
-| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; **3e done**; 3f next |
+| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; 3e done; **3f done**; 3g next |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | not started |
 | 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | not started |
 
 Frontend: SvelteKit 3 app in `web/`, 32 screens. The reader endpoints (`/accounts`, `/inbox`,
-`/messages/{id}`, `/summary`, `/mirror/health`, account profile and photo) are real behind
-`web/src/lib/api/http.ts`, and so are tags (`/tags`, the `tag`/`untag` outbox actions); search, ask,
-rules, people, checks and reading stay mock-backed until chunks 3 and 5, and the mock E2E suite
-fakes the real requests at the network boundary (`e2e/api.ts`). Archive, delete, flag, junk and tag
-are real writes through the outbox; save rule and send only toast until 3g and chunk 4.
+`/messages/{id}`, `/summary`, `/mirror/health`, account profile and photo), tags (`/tags`, the
+`tag`/`untag` outbox actions) and **search (`/search`)** are real behind
+`web/src/lib/api/http.ts`; ask, rules, people, checks and reading stay mock-backed until chunk 5,
+and the mock E2E suite fakes the real requests at the network boundary (`e2e/api.ts`). Archive,
+delete, flag, junk and tag are real writes through the outbox; save rule and send only toast until
+3g and chunk 4.
 
 Backend: `store/` (two DBs plus the disabled-blob store), `config/`, `sync/` (runner, IDLE,
-QRESYNC deltas), `mime/`, `render/`, `thread/`, `gateway/` (read API, body/inline/attachment
-documents, account profile, hidden-mail restore/purge), `backup/` (snapshot, prune, mirror, restore),
-`internal/*` (mailworld, devstack, compress, asset, blobstore, lockfile), `cmd/` (`ivy`, `ivy-dev`,
-`ivy-assets`). No `Dockerfile` or image-publish workflow yet.
+QRESYNC deltas, derivation, attachment extraction), `mime/`, `render/`, `thread/`,
+`extract/` (tier 0-1 document text), `llm/` (the embeddings gate, providers, vectors; the cost
+ledger), `search/` (chunking, embed-once queue, hybrid ranking), `gateway/` (read API, search,
+body/inline/attachment documents, account profile, hidden-mail restore/purge), `backup/` (snapshot,
+prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blobstore, lockfile),
+`cmd/` (`ivy`, `ivy-dev`, `ivy-assets`). No `Dockerfile` or image-publish workflow yet.
 
 ## ▶ Now
 
@@ -99,10 +101,11 @@ client and one set there arrives in Ivy), and `BenchmarkTagsForMessagesPage` on 
 
 **Next, in order:**
 
-1. **3f Search** (FTS5, extraction tiers, the `Embedder` and the embeddings-only gate and ledger).
+1. **3g Rules + snooze + People + reading** (rules as data through the outbox, snooze, People,
+   `/reading`); it also unlocks the tag filter on the inbox.
 2. **C0 canvas board** for the three 3b screens, whenever the operator is ready; the backend and API
    are already committed.
-3. **3g-3h** per the chunk plan below. 3h (the deploy track) is independent and can run at any point.
+3. **3h** (the deploy track) is independent and can run at any point.
 
 **Deliberately deferred from 3c** (do not re-litigate):
 
@@ -154,8 +157,8 @@ Found by the round 32 audit; each needs a home before its milestone starts.
   IMAP-first writes and undo (chunks 3g, 3h and 4).
 - Tags: a tag on more messages than the outbox headroom (500 per account) cannot be deleted in one
   go (round 52); the follow-up is a soft delete that a sweeper finishes as the queue drains. Tag
-  counts include hidden mail. Keywords that predate a tag's creation are not adopted. A tag filter on
-  the inbox waits for search (3f).
+  counts include hidden mail. Keywords that predate a tag's creation are not adopted. The tag filter
+  on the inbox can now build on `search_index` (3f).
 - Desktop keyboard shortcuts and a help overlay; extend the axe pass beyond the eleven screens;
   day-theme review; font subsetting and preload (fonts are 303 KiB against the 60 KiB target) and
   the CDP-throttled timing budgets; real-iPhone safe areas and `100dvh`; collapse-below-minimum list
@@ -197,6 +200,11 @@ Found by the round 32 audit; each needs a home before its milestone starts.
   Jev real-mail accuracy (needs a labelled corpus), send-as scope, DMARC, iPhone/HEIC behaviour.
 - A stray `.kilo/worktrees/tiny-knot` directory (a copy of the repo from the other model's harness)
   sits in the tree untracked; remove it when the operator confirms nothing in it is wanted.
+- 3f follow-ups: extraction reads at most 32 MiB into memory (one attachment at a time) rather than
+  streaming to a temp file; a changed body under the same content key is not re-embedded (only a
+  model change is); the query embedding uses one selected account's provider/model, so a mixed-model
+  combined search is keyword-only for the rest; the FTS index has no cursor pagination; and
+  `mirror/health` still reports `searchIndex: "Not built yet"` on the mock screen.
 
 ## The chunk plan
 
@@ -285,7 +293,20 @@ when a daily slot was missed, and the go-imap fork is at `v2.0.0-beta.8-ivy.3` (
 
 **Remaining for the operator:** the real-mailbox live check of the daily backup and `ivy restore`,
 and the potato numbers for the snapshot time.
-**3e (tags both ways) is done too**; the next stage is 3f (search).
+**3f is done** (rounds 54-55; `docs/BUILD-LOG.md` has the entry). `extract/` reads tier 0-1 text
+(PDF via `ledongthuc/pdf`, OOXML via stdlib) bounded by size, output, pages and a 20 s timeout and
+records every outcome; mirror migrations 13-14 add `extracted_text`, the FTS5 `search_index`
+(`unicode61 remove_diacritics 2`, chosen by measurement) and `embeddings`; state migration 6 adds the
+`api_calls` ledger and `api_caps` counters. `llm.Gate` is the single chokepoint (unexported
+providers, one ledger row per input with exact cost, an architecture test against a second path),
+`search.EmbedWorker` embeds each content key once behind the configured provider, and
+`gateway.handleSearch` fuses BM25 with cosine by RRF and falls back to keyword-only when the
+provider is off, capped or down. `/search` is real in the web client, embeddings are configurable in
+`ivy.yaml` (`llm.openrouter_base`, `embed_model`, `ollama_url`, `monthly_cap_usd` default $5;
+per-account `embed_provider: openrouter|ollama`), and `make check`, the Go suite and the mock
+Playwright suite (268 passed, 10 skipped) are green. **Left for the operator:** a live hybrid-search
+check against the real mailbox and the embeddings bill, and potato numbers for extraction and the
+vector scan (the real provider needs `OPENROUTER_API_KEY` in `.env`).
 
 ## Operator actions still open
 
