@@ -286,13 +286,17 @@ func TestLLMDefaults(t *testing.T) {
 
 func TestEmbedProviderNeedsOptInForHosted(t *testing.T) {
 	t.Parallel()
-	base := Account{ID: "a", Address: "a@example.com", IMAPHost: "i", IMAPPort: 993,
-		SMTPHost: "s", SMTPPort: 465, Username: "a"}
+	base := Account{
+		ID: "a", Address: "a@example.com", IMAPHost: "i", IMAPPort: 993,
+		SMTPHost: "s", SMTPPort: 465, Username: "a",
+	}
 
 	hosted := base
 	hosted.EmbedProvider = "openrouter"
-	cfg := &Config{Listen: DefaultListen, DataDir: "d", Accounts: []Account{hosted},
-		Backup: Backup{At: DefaultBackupAt}, LLM: LLM{OpenRouterBase: DefaultOpenRouterURL}}
+	cfg := &Config{
+		Listen: DefaultListen, DataDir: "d", Accounts: []Account{hosted},
+		Backup: Backup{At: DefaultBackupAt}, LLM: LLM{OpenRouterBase: DefaultOpenRouterURL},
+	}
 	if err := cfg.validate(); err == nil {
 		t.Error("openrouter embeddings without llm_enabled accepted, want an error")
 	}

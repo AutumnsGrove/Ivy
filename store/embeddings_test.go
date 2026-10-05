@@ -27,8 +27,10 @@ func TestEmbeddingsRoundTripAndPending(t *testing.T) {
 		t.Fatalf("pending = %+v, want ck1", pending)
 	}
 
-	e := Embedding{AccountID: "acct", Ref: "ck1", Kind: ExtractKindBody, ChunkIx: 0,
-		Model: "model-x", Dims: 2, Scale: 0.1, Norm: 1.5, Vector: []byte{2, 3, 4, 5}}
+	e := Embedding{
+		AccountID: "acct", Ref: "ck1", Kind: ExtractKindBody, ChunkIx: 0,
+		Model: "model-x", Dims: 2, Scale: 0.1, Norm: 1.5, Vector: []byte{2, 3, 4, 5},
+	}
 	if err := dbs.UpsertEmbeddings(ctx, []Embedding{e}); err != nil {
 		t.Fatal(err)
 	}
