@@ -79,3 +79,32 @@ func TestPeriodIsUTC(t *testing.T) {
 		t.Fatalf("Period = %q, want 2026-10", got)
 	}
 }
+
+// A refused document is counted by calls, not rows: one failed call for a
+// document with several chunks writes a row per chunk, all sharing the call's id
+// (and, at the ledger's one-second resolution, often its timestamp too).
+func TestCountRejectedCallsCountsCallsNotRows(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	at := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	rec := func(callID, key, outcome string, rows int) {
+		t.Helper()
+		var calls []APICall
+		for range rows {
+			calls = append(calls, APICall{At: at, Provider: "p", Endpoint: "embeddings", AccountID: "a", ContentKey: key, Outcome: outcome, CallID: callID})
+		}
+		if err := dbs.RecordAPICalls(ctx, calls); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rec("c1", "ck1", "rejected", 3) // one call, three chunks
+	rec("c2", "ck1", "rejected", 3) // a second call, in the same second
+	rec("c3", "ck1", "error", 3)    // an outage: not counted
+	rec("c4", "ck2", "rejected", 1) // another document
+
+	n, err := dbs.CountRejectedCalls(ctx, "a", "ck1")
+	if err != nil || n != 2 {
+		t.Fatalf("CountRejectedCalls = %d, %v; want 2", n, err)
+	}
+}

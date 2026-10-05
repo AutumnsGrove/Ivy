@@ -161,3 +161,23 @@ func (d *DBs) RecentAPICalls(ctx context.Context, accountID string, limit int) (
 	}
 	return out, nil
 }
+
+// OutcomeRejected is the ledger outcome of a call the provider refused because of
+// the document it was given (the gate decides which statuses mean that). It lives
+// here because the count below depends on its spelling.
+const OutcomeRejected = "rejected"
+
+// CountRejectedCalls returns how many separate calls the provider has refused for
+// one document. It counts call ids, not rows: a call for a document of several
+// chunks writes a row per chunk, all sharing the call's id.
+func (d *DBs) CountRejectedCalls(ctx context.Context, accountID, contentKey string) (int, error) {
+	var n int
+	err := d.State.Read.QueryRowContext(ctx, `
+		SELECT count(DISTINCT call_id) FROM api_calls
+		WHERE account_id = ? AND content_key = ? AND outcome = ? AND call_id <> ''`,
+		accountID, contentKey, OutcomeRejected).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count rejected calls: %w", err)
+	}
+	return n, nil
+}

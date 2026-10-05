@@ -388,3 +388,40 @@ func TestTokensAreEstimatedWhenTheProviderReportsNone(t *testing.T) {
 		t.Errorf("tokens=%d cost=%v estimated=%v, want 1000 tokens and a non-zero estimate", res.InputTokens, res.CostUSD, res.CostEstimated)
 	}
 }
+
+// A provider that refuses one particular document (400, 413, 422) is saying
+// something about the document; an outage, a rate limit or a bad key is saying
+// something about the provider. The ledger tells them apart so only the first
+// kind can ever count against a document.
+func TestGateRecordsADocumentRefusalDistinctlyFromAnOutage(t *testing.T) {
+	t.Parallel()
+	for status, want := range map[int]string{
+		http.StatusBadRequest:            OutcomeRejected,
+		http.StatusRequestEntityTooLarge: OutcomeRejected,
+		http.StatusUnprocessableEntity:   OutcomeRejected,
+		http.StatusUnauthorized:          OutcomeError,
+		http.StatusForbidden:             OutcomeError,
+		http.StatusTooManyRequests:       OutcomeError,
+		http.StatusServiceUnavailable:    OutcomeError,
+	} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(status)
+			}))
+			t.Cleanup(srv.Close)
+			dbs := openStore(t)
+			_, err := NewGate(dbs).Embed(context.Background(), EmbedRequest{
+				Embedder: NewOpenRouter(srv.URL, "k"), AccountID: "a", Enabled: true,
+				Model: "m", Inputs: []string{"one"}, ContentKeys: []string{"ck1"},
+			})
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			calls, _ := dbs.RecentAPICalls(context.Background(), "a", 10)
+			if len(calls) != 1 || calls[0].Outcome != want {
+				t.Fatalf("status %d: ledger = %+v, want outcome %q", status, calls, want)
+			}
+		})
+	}
+}

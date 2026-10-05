@@ -35,6 +35,18 @@ type Embedder interface {
 	Embed(ctx context.Context, model string, inputs []string) (EmbedResult, error)
 }
 
+// StatusError is a provider's non-200 answer. The gate reads the status to tell a
+// refusal of one input from an outage.
+type StatusError struct {
+	Provider string
+	Status   int
+	Body     string
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("%s status %d: %s", e.Provider, e.Status, e.Body)
+}
+
 // responseLimit bounds a provider's HTTP body, so a hostile or broken endpoint
 // cannot make Ivy allocate without limit (STANDARDS.md 4a).
 const responseLimit = 64 << 20
@@ -83,7 +95,7 @@ func (o *openRouter) Embed(ctx context.Context, model string, inputs []string) (
 		return EmbedResult{}, fmt.Errorf("embeddings response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return EmbedResult{}, fmt.Errorf("embeddings provider status %d: %s", resp.StatusCode, truncateForError(body))
+		return EmbedResult{}, &StatusError{Provider: "embeddings provider", Status: resp.StatusCode, Body: truncateForError(body)}
 	}
 
 	var out struct {
@@ -158,7 +170,7 @@ func (o *ollama) Embed(ctx context.Context, model string, inputs []string) (Embe
 		return EmbedResult{}, fmt.Errorf("ollama response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return EmbedResult{}, fmt.Errorf("ollama status %d: %s", resp.StatusCode, truncateForError(body))
+		return EmbedResult{}, &StatusError{Provider: "ollama", Status: resp.StatusCode, Body: truncateForError(body)}
 	}
 	var out struct {
 		Embeddings [][]float32 `json:"embeddings"`

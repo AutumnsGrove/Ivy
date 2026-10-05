@@ -1355,3 +1355,13 @@ vector scan time over a real mailbox; the update rollback against a real unhealt
   `TestOpenRouterEstimatesTheCostWhenNoneIsReported`, `TestAnUnpricedModelIsEstimatedConservatively` and
   `TestTokensAreEstimatedWhenTheProviderReportsNone` (all $0; failed before the fix). Still worth one look at
   a real response from the potato to see that the provider does report `cost`.
+- **N33 resolved** · `search/search.go`, `llm/gate.go`, `llm/embedder.go`, `store/ledger.go` · a document
+  the provider refuses five separate times is recorded as skipped and leaves the queue. Provider errors are
+  now a typed `llm.StatusError`, and the gate records HTTP 400, 413 and 422 as outcome `rejected`; 401, 403,
+  429, 5xx and network failures stay `error`, so an outage or a bad key can never count against a document
+  (`TestEmbedWorkerNeverGivesUpOnADocumentBecauseOfAnOutage`). Calls are counted by a new per-call id the
+  gate now writes to `api_calls.call_id` (the column existed and was never filled), not by timestamp: the
+  ledger's timestamps are one second wide and my first attempt, counting distinct instants, counted ten
+  passes inside a second as one. Reproduced with `TestEmbedWorkerGivesUpOnADocumentAfterFiveRefusals` (10
+  calls, still queued; failed before the fix), `TestGateRecordsADocumentRefusalDistinctlyFromAnOutage` and
+  `TestCountRejectedCallsCountsCallsNotRows`.

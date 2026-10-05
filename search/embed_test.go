@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -311,5 +312,83 @@ func TestEmbedWorkerSkipsOneRefusedDocument(t *testing.T) {
 	got := embeddedRefs(t, dbs)
 	if !got["ck-ok1"] || !got["ck-ok2"] {
 		t.Fatalf("embedded = %v, want both good messages despite the refused one", got)
+	}
+}
+
+// countingRejecter refuses any input containing the marker the way a provider
+// refuses a document it will not take (422), and counts the calls that carried
+// it.
+type countingRejecter struct {
+	marker string
+	status int
+	calls  *atomic.Int32
+}
+
+func (countingRejecter) Name() string { return "stub" }
+
+func (c countingRejecter) Embed(_ context.Context, _ string, inputs []string) (llm.EmbedResult, error) {
+	res := llm.EmbedResult{InputTokens: len(inputs), CostUSD: 0.0001}
+	for _, in := range inputs {
+		if strings.Contains(in, c.marker) {
+			c.calls.Add(1)
+			return llm.EmbedResult{}, &llm.StatusError{Provider: "stub", Status: c.status, Body: "no"}
+		}
+		res.Vectors = append(res.Vectors, llm.Quantise([]float32{0.5, 0, 0, 0}))
+	}
+	return res, nil
+}
+
+// A document the provider refuses every time used to cost a failed call and a
+// ledger row on every pass, for as long as it existed. After the fifth refusal
+// it is recorded as skipped and leaves the queue.
+func TestEmbedWorkerGivesUpOnADocumentAfterFiveRefusals(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openStore(t)
+	seedDatedAccount(t, dbs)
+	day := func(d int) time.Time { return time.Date(2026, 9, d, 9, 0, 0, 0, time.UTC) }
+	seedDated(t, dbs, "poison", "ck-poison", "Weird", "this one is POISON", day(20))
+	seedDated(t, dbs, "ok1", "ck-ok1", "One", "the first good message", day(10))
+	var calls atomic.Int32
+	worker := NewEmbedWorker(dbs, llm.NewGate(dbs), []AccountConfig{{
+		ID: "acct", Model: "m", Enabled: true, CapUSD: 5,
+		Embedder: countingRejecter{marker: "POISON", status: 422, calls: &calls},
+	}}, WorkerOptions{Batch: 2})
+
+	for range 10 {
+		_, _ = worker.RunOnce(ctx)
+	}
+	if got := calls.Load(); got != maxDocumentRejections {
+		t.Errorf("the provider was asked for the refused document %d times, want %d", got, maxDocumentRejections)
+	}
+	if !embeddedRefs(t, dbs)["ck-ok1"] {
+		t.Error("the good message was not embedded")
+	}
+	pending, err := dbs.PendingBodyRefs(ctx, "acct", "m", 10)
+	if err != nil || len(pending) != 0 {
+		t.Errorf("pending = %v, %v; want the refused document out of the queue", pending, err)
+	}
+}
+
+// An outage (503) is not the document's fault, however long it lasts, so it is
+// never given up on.
+func TestEmbedWorkerNeverGivesUpOnADocumentBecauseOfAnOutage(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openStore(t)
+	seedDatedAccount(t, dbs)
+	seedDated(t, dbs, "m1", "ck1", "Subject", "an ordinary POISON-marked body", time.Date(2026, 9, 1, 9, 0, 0, 0, time.UTC))
+	var calls atomic.Int32
+	worker := NewEmbedWorker(dbs, llm.NewGate(dbs), []AccountConfig{{
+		ID: "acct", Model: "m", Enabled: true, CapUSD: 5,
+		Embedder: countingRejecter{marker: "POISON", status: 503, calls: &calls},
+	}}, WorkerOptions{Batch: 2})
+
+	for range 8 {
+		_, _ = worker.RunOnce(ctx)
+	}
+	pending, _ := dbs.PendingBodyRefs(ctx, "acct", "m", 10)
+	if len(pending) != 1 {
+		t.Fatalf("pending = %v, want the document still queued through an outage", pending)
 	}
 }

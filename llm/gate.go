@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/AutumnsGrove/Ivy/store"
@@ -22,6 +24,9 @@ const (
 	OutcomeOK      = "ok"
 	OutcomeError   = "error"
 	OutcomeRefused = "refused"
+	// OutcomeRejected is a call the provider refused because of the document
+	// itself (400, 413, 422), as opposed to an outage, a rate limit or a bad key.
+	OutcomeRejected = store.OutcomeRejected
 )
 
 // Batch bounds (STANDARDS.md 4a). A caller may submit at most this many inputs,
@@ -46,6 +51,7 @@ var (
 type Gate struct {
 	store *store.DBs
 	now   func() time.Time
+	seq   atomic.Uint64
 }
 
 // GateOption customises a Gate.
@@ -108,11 +114,25 @@ func (g *Gate) Embed(ctx context.Context, req EmbedRequest) ([]Vector, error) {
 	res, err := req.Embedder.Embed(ctx, req.Model, req.Inputs)
 	latency := int(g.now().Sub(started).Milliseconds())
 	if err != nil {
-		g.record(ctx, req, OutcomeError, EmbedResult{}, latency)
+		g.record(ctx, req, failureOutcome(err), EmbedResult{}, latency)
 		return nil, err
 	}
 	g.record(ctx, req, OutcomeOK, res, latency)
 	return res.Vectors, nil
+}
+
+// failureOutcome is "rejected" when the provider answered that it will not take
+// this input, and "error" for everything else, so a document is never blamed
+// for an outage, a rate limit or a bad key.
+func failureOutcome(err error) string {
+	var status *StatusError
+	if errors.As(err, &status) {
+		switch status.Status {
+		case http.StatusBadRequest, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity:
+			return OutcomeRejected
+		}
+	}
+	return OutcomeError
 }
 
 // check bounds the request before any provider call.
@@ -156,6 +176,9 @@ func (g *Gate) record(ctx context.Context, req EmbedRequest, outcome string, res
 	costs := shares(res.CostUSD, weights)
 	tokens := intShares(res.InputTokens, weights)
 	at := g.now()
+	// One id for the whole call, shared by its per-input rows, so a call is
+	// countable as one call whatever its row count or the clock's resolution.
+	callID := fmt.Sprintf("%d-%d", at.UnixNano(), g.seq.Add(1))
 	calls := make([]store.APICall, len(req.Inputs))
 	for i := range req.Inputs {
 		calls[i] = store.APICall{
@@ -171,6 +194,7 @@ func (g *Gate) record(ctx context.Context, req EmbedRequest, outcome string, res
 			CostEstimated: res.CostEstimated,
 			LatencyMS:     latencyMS,
 			Outcome:       outcome,
+			CallID:        callID,
 		}
 	}
 	// The ledger is diagnostics and cap accounting, not the write itself; a

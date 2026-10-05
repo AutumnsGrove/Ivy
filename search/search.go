@@ -199,6 +199,11 @@ func (w *EmbedWorker) Run(ctx context.Context) error {
 // store is down, and hammering it pass after pass helps nobody.
 const maxConsecutiveFailures = 3
 
+// maxDocumentRejections is how many separate calls a provider may refuse for one
+// document (HTTP 400, 413 or 422, recorded as `rejected` in the ledger) before the
+// worker stops offering it. Outages and rate limits never count.
+const maxDocumentRejections = 5
+
 // embedJob is one pending document: a message body (ref is its content key) or
 // an attachment (ref is its content hash) and the chunks to embed.
 type embedJob struct {
@@ -262,12 +267,29 @@ func (w *EmbedWorker) runJobs(ctx context.Context, acct AccountConfig, jobs []em
 			failures++
 			slog.WarnContext(ctx, "embed worker: skipped a document that failed",
 				"account", acct.ID, "kind", job.kind, "ref", job.ref, "error", err)
+			if err := w.giveUpIfRefusedTooOften(ctx, acct, job); err != nil {
+				return embedded, err
+			}
 			if failures >= maxConsecutiveFailures {
 				return embedded, err
 			}
 		}
 	}
 	return embedded, nil
+}
+
+// giveUpIfRefusedTooOften records a document as skipped once the provider has
+// refused it maxDocumentRejections times, so it stops costing a failed call and a
+// ledger row every pass. Only refusals of the document itself are counted (the
+// gate records them as `rejected`); an outage never gives a document up.
+func (w *EmbedWorker) giveUpIfRefusedTooOften(ctx context.Context, acct AccountConfig, job embedJob) error {
+	n, err := w.dbs.CountRejectedCalls(ctx, acct.ID, job.ref)
+	if err != nil || n < maxDocumentRejections {
+		return err
+	}
+	slog.WarnContext(ctx, "embed worker: giving up on a document the provider keeps refusing",
+		"account", acct.ID, "kind", job.kind, "ref", job.ref, "refusals", n)
+	return w.dbs.MarkEmbeddingEmpty(ctx, acct.ID, job.ref, job.kind, acct.Model)
 }
 
 // embedChunks sends one document's chunks through the gate in batches of at
