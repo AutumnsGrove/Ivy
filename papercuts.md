@@ -975,3 +975,12 @@ Baseline before any change: `go build`, `go vet`, `staticcheck`, `gofumpt -l`, t
   `WithClock`) and `TestEnqueueOutboxRequiresATimestamp` (an untimed enqueue succeeded). The gateway now
   has `WithClock` (default `time.Now`, stamped on enqueue and retry) and the store refuses an untimed op.
   Two gateway tests that leaned on the fallback now pass a time.
+
+### `960cea5` Add the reader's flag, junk and outbox queue
+
+- **#90** · `960cea5` · `store/migrations.go` · **bug** · mirror migration 11 backfilled the new `flagged`
+  column with `flags_json LIKE '%Flagged%'`, which also matches a keyword that merely contains the word
+  (`$notflagged`, a tag-style label), so such mail would show a star it never had. Reproduced with
+  `TestFlaggedBackfillMatchesOnlyTheFlaggedFlag` (a v10 database upgraded through `Open`: the keyword row
+  came out `flagged = true`). Migrations are append-only, so v11 is untouched and migration 12 recomputes
+  the column from the parsed flag list (`json_each`, case-insensitive, skipping unparsable JSON).

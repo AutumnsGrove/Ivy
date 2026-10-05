@@ -191,3 +191,50 @@ func rawPool(t *testing.T, path string) *sql.DB {
 	}
 	return db
 }
+
+// The flagged backfill must key on the \Flagged system flag, not on any flag
+// that merely contains the word: a keyword such as $notflagged is not a star.
+func TestFlaggedBackfillMatchesOnlyTheFlaggedFlag(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	db := rawPool(t, filepath.Join(dir, "mirror.db"))
+	if err := migrate(context.Background(), db, mirrorMigrations[:10]); err != nil {
+		t.Fatalf("apply v10: %v", err)
+	}
+	seed := []string{
+		`INSERT INTO accounts (id, address, imap_host, imap_port, smtp_host, smtp_port, username, created_at)
+		 VALUES ('acct-1', 'me@example.test', 'imap.test', 993, 'smtp.test', 465, 'me', '2026-10-02T00:00:00Z')`,
+		`INSERT INTO folders (id, account_id, name, role) VALUES ('folder-1', 'acct-1', 'INBOX', 'inbox')`,
+		`INSERT INTO messages (id, account_id, folder_id, uid, content_key, flags_json)
+		 VALUES ('starred', 'acct-1', 'folder-1', 1, 'ck1', '["\\Seen","\\Flagged"]')`,
+		`INSERT INTO messages (id, account_id, folder_id, uid, content_key, flags_json)
+		 VALUES ('lowercase', 'acct-1', 'folder-1', 2, 'ck2', '["\\flagged"]')`,
+		`INSERT INTO messages (id, account_id, folder_id, uid, content_key, flags_json)
+		 VALUES ('keyword', 'acct-1', 'folder-1', 3, 'ck3', '["$notflagged","\\Seen"]')`,
+	}
+	for _, stmt := range seed {
+		if _, err := db.ExecContext(context.Background(), stmt); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	dbs, err := Open(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("Open upgrade: %v", err)
+	}
+	defer dbs.Close()
+
+	want := map[string]bool{"starred": true, "lowercase": true, "keyword": false}
+	for id, flagged := range want {
+		var got bool
+		if err := dbs.Mirror.Read.QueryRow(`SELECT flagged FROM messages WHERE id = ?`, id).Scan(&got); err != nil {
+			t.Fatalf("read %s: %v", id, err)
+		}
+		if got != flagged {
+			t.Errorf("%s flagged = %v, want %v", id, got, flagged)
+		}
+	}
+}
