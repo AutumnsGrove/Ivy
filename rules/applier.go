@@ -12,7 +12,7 @@ import (
 // applyBatch bounds how many existing messages one on-demand apply reads, and
 // sampleSize how many matched messages the dry-run preview returns.
 const (
-	applyBatch = 500
+	applyBatch = store.MaxRuleApply
 	sampleSize = 20
 )
 

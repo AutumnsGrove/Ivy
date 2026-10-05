@@ -251,7 +251,7 @@ func (d *DBs) ConversationsForAddresses(ctx context.Context, addresses []string,
 	          FROM messages m
 	          WHERE m.disabled_at IS NULL AND (` + strings.Join(where, " OR ") + `)
 	          GROUP BY COALESCE(NULLIF(m.thread_id, ''), m.id)
-	          HAVING m.date = MAX(m.date)
+	          HAVING m.date IS MAX(m.date)
 	          ORDER BY m.date DESC
 	          LIMIT ?`
 	args = append(args, limit)
@@ -291,5 +291,5 @@ const peopleSourceQuery = `
 	FROM messages m
 	WHERE m.account_id = ? AND m.disabled_at IS NULL
 	GROUP BY m.content_key
-	HAVING m.date = MAX(m.date)
+	HAVING m.date IS MAX(m.date)
 	ORDER BY m.date, m.id`

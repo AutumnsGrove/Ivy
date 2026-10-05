@@ -273,6 +273,6 @@ const messagesByKeysSelect = `
 	  AND (? = '' OR m.account_id = ?)
 	  AND m.content_key IN (SELECT value FROM json_each(?))
 	GROUP BY m.content_key
-	HAVING m.date = MAX(m.date)
+	HAVING m.date IS MAX(m.date)
 	ORDER BY m.date DESC, m.id DESC
 	LIMIT ?`

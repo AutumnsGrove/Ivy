@@ -248,3 +248,56 @@ func TestApplyToExistingCountsAndApplies(t *testing.T) {
 		t.Errorf("%d outbox ops after re-apply, want 2", len(ops))
 	}
 }
+
+// STANDARDS.md 4a says an apply reads 500 messages per account. The store used
+// to clamp every caller to the dry-run limit of 200, so the const was dead and
+// an apply silently ignored the older 300 of a 500-message mailbox.
+func TestApplyToExistingReadsItsDocumentedBatch(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := newTestDB(t)
+	seedAccount(t, dbs, "acct-1")
+	seedFolder(t, dbs, "acct-1", "inbox-1")
+	for i := range 300 {
+		seedMessage(t, dbs, "acct-1", "inbox-1", fmt.Sprintf("m%d", i), fmt.Sprintf("ck:%d", i), "bulk@example.test", "Bulk")
+	}
+	now, at := fixedClock()
+	if _, err := dbs.CreateRule(ctx, "r1", store.RuleInput{
+		Conditions: []store.RuleCondition{{Field: store.RuleFieldFrom, Value: "bulk@"}},
+		Actions:    []store.RuleAction{{Type: store.RuleActionSnooze, Snooze: store.SnoozeTomorrow}},
+		Enabled:    true,
+	}, at); err != nil {
+		t.Fatal(err)
+	}
+	applied, err := NewApplier(dbs, now, counterIDs()).ApplyToExisting(ctx, "r1", []string{"acct-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if applied != 300 {
+		t.Fatalf("applied to %d of 300 messages, want all 300 (apply reads %d)", applied, applyBatch)
+	}
+}
+
+// A message with no Date header is stored with a NULL date. The newest-copy
+// filter compared it to itself (NULL = NULL is never true), so such a message
+// was never offered to the rule pass or the dry run.
+func TestRuleMessagesIncludesUndatedMail(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := newTestDB(t)
+	seedAccount(t, dbs, "acct-1")
+	seedFolder(t, dbs, "acct-1", "inbox-1")
+	if err := dbs.UpsertMessage(ctx, store.Message{
+		ID: "m1", AccountID: "acct-1", FolderID: "inbox-1", UID: 1, ContentKey: "ck:1",
+		From: store.Address{Address: "a@example.test"}, Subject: "No date header",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := dbs.RuleMessages(ctx, "acct-1", store.MaxRuleEvalBatch, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("RuleMessages returned %d messages, want the one undated message", len(msgs))
+	}
+}

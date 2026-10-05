@@ -1042,3 +1042,25 @@ a different message's id.
 `go build`, `go vet`, `staticcheck`, `gofumpt -l`, golangci-lint v2.12.1 (CI's pin, 0 issues),
 `CGO_ENABLED=1 go test -race ./...`, arm64 cross-compile, `govulncheck` v1.1.4 on go1.26.8 (none),
 `make drift`, `pnpm check` and `pnpm test` all pass.
+
+## Review of `25a9896..3d26e01` (3f search, 3g rules/People/Reading, 3h update; 2026-10-05)
+
+Baseline before any change: `go build`, `go vet`, `staticcheck`, `gofumpt -l` and
+`CGO_ENABLED=1 go test -race ./...` were green; **golangci-lint v2.12.1 (CI's pin) reported 13 issues**
+that CI would fail on (fixed under the commit that introduced each, see below).
+
+### `e6b76e9` Add the rule engine, store and ingest pass
+
+- **#95** · `e6b76e9` · `store/rules.go`, `rules/applier.go` · **standards** · STANDARDS 4a documents
+  that an apply-to-existing reads 500 messages per account, and `rules.applyBatch` was 500, but
+  `RuleMessages` clamped every caller to `MaxRuleDryRun` (200), so the constant was dead and an apply
+  silently skipped everything older than the newest 200. Reproduced with
+  `TestApplyToExistingReadsItsDocumentedBatch` (300 matching messages: applied 200, failed before the
+  fix). `store.MaxRuleApply` is now the ceiling and `applyBatch` uses it.
+- **#96** · `e6b76e9`, `b6e447d`, `dac8acc` · `store/rules.go`, `store/people.go`, `store/inbox.go` ·
+  **bug** · the "newest copy of each content key" filter `GROUP BY content_key HAVING m.date =
+  MAX(m.date)` is never true for a message whose `date` is NULL (no Date header), so such mail was
+  never offered to the rule pass or the dry run, never counted in People, never listed in a person's
+  conversations, and dropped from `MessagesByContentKeys`. Reproduced with
+  `TestRuleMessagesIncludesUndatedMail` (0 rows, failed before the fix). All four queries now use
+  `HAVING m.date IS MAX(m.date)`.

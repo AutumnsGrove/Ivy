@@ -28,6 +28,9 @@ const (
 	MaxRuleEvalBatch = 200
 	// MaxRuleDryRun is how many recent messages a dry run reads.
 	MaxRuleDryRun = 200
+	// MaxRuleApply is how many recent messages an apply-to-existing reads per
+	// account, and the ceiling RuleMessages allows any caller.
+	MaxRuleApply = 500
 )
 
 // Rule condition fields. This is the closed vocabulary the store validates
@@ -356,9 +359,10 @@ func (d *DBs) MarkRuleEvaluated(ctx context.Context, accountID string, contentKe
 // one row per content key (N8 means a message can sit in two folders). When
 // onlyUnevaluated is true it skips messages the ingest pass already ran over.
 func (d *DBs) RuleMessages(ctx context.Context, accountID string, limit int, onlyUnevaluated bool) ([]RuleMessage, error) {
-	if limit <= 0 || limit > MaxRuleDryRun {
+	if limit <= 0 {
 		limit = MaxRuleDryRun
 	}
+	limit = min(limit, MaxRuleApply)
 	only := 0
 	if onlyUnevaluated {
 		only = 1
@@ -417,7 +421,7 @@ const ruleMessageQuery = `
 	        SELECT 1 FROM rule_eval e
 	        WHERE e.account_id = m.account_id AND e.content_key = m.content_key))
 	GROUP BY m.content_key
-	HAVING m.date = MAX(m.date)
+	HAVING m.date IS MAX(m.date)
 	ORDER BY m.date DESC, m.id DESC
 	LIMIT ?`
 
