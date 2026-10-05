@@ -1006,6 +1006,9 @@ export interface operations {
         parameters: {
             query: {
                 q: string;
+                /** @description Restrict to one account; repeatable for the combined view. */
+                account_id?: string[];
+                limit?: number;
                 cursor?: string;
             };
             header?: never;

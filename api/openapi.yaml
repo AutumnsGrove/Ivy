@@ -158,6 +158,19 @@ paths:
           required: true
           schema:
             type: string
+        - name: account_id
+          in: query
+          description: Restrict to one account; repeatable for the combined view.
+          schema:
+            type: array
+            items:
+              type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
         - name: cursor
           in: query
           schema:

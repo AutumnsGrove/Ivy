@@ -779,8 +779,12 @@ type ListOutboxParams struct {
 
 // SearchParams defines parameters for Search.
 type SearchParams struct {
-	Q      string  `form:"q" json:"q"`
-	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Q string `form:"q" json:"q"`
+
+	// AccountId Restrict to one account; repeatable for the combined view.
+	AccountId *[]string `form:"account_id,omitempty" json:"account_id,omitempty"`
+	Limit     *int      `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor    *string   `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // UpdateAccountProfileJSONRequestBody defines body for UpdateAccountProfile for application/json ContentType.
