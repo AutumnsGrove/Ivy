@@ -1371,3 +1371,30 @@ update signal directory lives inside the bind-mounted data directory (`<data_dir
 so one volume covers it and the host watcher watches the same path. The core logic lands in a new
 `update/` package (already in the `ARCHITECTURE.md` layout) so the CLI and the gateway endpoint share
 one tested path; tests use a fake GHCR and a fake GitHub Actions API per `TESTING.md` 6.
+
+## Round 58 — the 3e-3h review's open decisions (2026-10-05, operator; eight answers)
+
+`papercuts.md` N33-N41 held the findings of the second-opinion review that needed a decision. The
+operator's answers (recommended option unless noted):
+
+- **N37, Reading/Snoozed/tag views are capped at 200 rows with no paging: keyset paging now.** A
+  `cursor` in the Reading and Inbox contract, the same (date, id) scheme the inbox uses, and the
+  screens load more. Done before the potato install.
+- **N34, a missing `usage.cost` is ledgered at $0 so the cap never trips: estimate from tokens.** A
+  small per-model price table; when the provider reports no cost the gate computes one from tokens
+  and marks the row estimated, so the cap still works.
+- **N33, a document the provider always refuses is retried every pass: tombstone after 5 failures.**
+  Failures are counted per document in the ledger; the fifth records the document as skipped.
+- **N36/N38/N40, per-settle full-mailbox passes: measure first, then decide.** A small benchmark at 5k
+  messages for the operator to run on the board (extrapolate; no 100k run), before any change.
+- **N35, the unpaged People list: page it by 100 at a time** (the operator's own wording, not one of
+  the offered options). Keyset paging, 100 per page; the minimum-count filter and the per-address
+  lookup from the recommendation are not part of this answer.
+- **N39, the dev stack never wires search or the embed worker: share one wiring function.** One
+  exported function builds the gate, embedders, query embedder and worker from a `config.Config`, used
+  by both `ivy run` and `ivy-dev`.
+- **N41, a rollback may open a newer schema: refuse a newer database.** `ivy run` exits with a clear
+  message when the database is newer than the binary, and the update result says why.
+- **First-install runbook: yes, `docs/DEPLOY.md`.** Clone, `install.sh`, `ivy.yaml` and `data/.env`
+  templates, `allowed_hosts`, first start, one live update, rollback; linked from the README and the
+  doc map.
