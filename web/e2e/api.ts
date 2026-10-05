@@ -1,6 +1,6 @@
 import { test as base } from '@playwright/test';
 import * as mock from '../src/lib/api/mock';
-import type { Account, Attachment, MailMessage, MailSummary, OutboxItem, TagsOverview, UserTag } from '../src/lib/types';
+import type { Account, Attachment, MailMessage, MailSummary, OutboxItem, TagsOverview, UpdateStatus, UserTag } from '../src/lib/types';
 
 // The reader client does real fetches, so the mock E2E suite serves the
 // contract from the same fixtures at the network boundary instead of inside
@@ -29,6 +29,8 @@ export type AccountState = {
 	tags: TagsOverview;
 	/** The tags each message is in, by message id, as the gateway's `tagIds` reports them. */
 	tagged: Map<string, string[]>;
+	/** The self-update status the settings screen reads. */
+	update: UpdateStatus;
 };
 
 const freshState = (): AccountState => ({
@@ -36,7 +38,8 @@ const freshState = (): AccountState => ({
 	photos: new Map(),
 	outbox: [],
 	tags: structuredClone(mock.tags),
-	tagged: new Map()
+	tagged: new Map(),
+	update: { unavailable: false, running: false, done: true, success: true, target: 'r1.test' }
 });
 
 const TAG_COLORS = new Set(['sky', 'rose', 'teal', 'coral', 'lilac', 'mint', 'gold', 'sand', 'orchid', 'fern', 'slate', 'berry']);
@@ -232,6 +235,14 @@ function mockOutboxItem(state: AccountState, action: { messageId: string; action
 }
 
 function storage(path: string, method: string, params: URLSearchParams, scenario: string | null, state: AccountState, raw: Buffer | null): Reply | null {
+	if (path === '/version') return { body: { version: 'r1.test' } };
+	if (path === '/update') {
+		if (method === 'POST') {
+			state.update = { unavailable: false, running: true, done: false, success: false };
+			return { status: 202, body: state.update };
+		}
+		return { body: state.update };
+	}
 	if (path === '/accounts') {
 		return { body: scenario === 'sync-error' ? state.accounts.map(mock.failingHello) : state.accounts };
 	}

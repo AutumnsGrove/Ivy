@@ -10,7 +10,8 @@ export const EVENT_TYPES = [
 	'folder.changed',
 	'sync.state',
 	'outbox.state',
-	'health.alert'
+	'health.alert',
+	'update.state'
 ] as const;
 
 export type ServerEventType = (typeof EVENT_TYPES)[number];

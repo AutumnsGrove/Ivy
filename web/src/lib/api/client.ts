@@ -35,7 +35,9 @@ import type {
 	TagCreate,
 	TagsOverview,
 	TagUpdate,
-	UserTag
+	UpdateStatus,
+	UserTag,
+	Version
 } from '../types';
 import { pageCalls, summarise } from '../spend';
 import { ApiError, type ErrorCode } from './errors';
@@ -76,6 +78,14 @@ export const api = {
 		request<MailSummary>(`/messages/${encodeURIComponent(id)}/summary`),
 
 	getHealth: (): Promise<HealthOverview> => request<HealthOverview>('/mirror/health'),
+
+	// --- build and self-update (3h): the host watcher does the pull and restart ---
+	getVersion: (): Promise<Version> => request<Version>('/version'),
+
+	getUpdateStatus: (): Promise<UpdateStatus> => request<UpdateStatus>('/update'),
+
+	/** Asks the host watcher to pull and deploy the latest image; returns as soon as it is queued. */
+	requestUpdate: (): Promise<UpdateStatus> => request<UpdateStatus>('/update', { method: 'POST' }),
 
 	// --- outbox: the one write path (chunk 3d) ------------------------------
 	/** The reader's friendly action, resolved to a postcondition server-side. */

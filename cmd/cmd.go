@@ -30,6 +30,7 @@ import (
 	"github.com/AutumnsGrove/Ivy/search"
 	"github.com/AutumnsGrove/Ivy/store"
 	ivysync "github.com/AutumnsGrove/Ivy/sync"
+	"github.com/AutumnsGrove/Ivy/update"
 )
 
 // New builds the root command tree for the given build version.
@@ -44,6 +45,7 @@ func New(version string) *cobra.Command {
 	root.AddCommand(
 		initCmd(&configPath),
 		runCmd(&configPath, version),
+		updateCmd(&configPath),
 		backupCmd(&configPath),
 		restoreCmd(&configPath),
 		doctorCmd(&configPath, version),
@@ -111,18 +113,33 @@ func runCmd(configPath *string, version string) *cobra.Command {
 			// No Read/WriteTimeout: SSE streams and large bodies are long-lived. The
 			// header and idle timeouts still shed slow-loris connections.
 			hub := events.New()
+			api := gateway.New(dbs, version, webui.FS).WithSearch(queryEmbed).WithEvents(hub).WithAllowedHosts(cfg.HostAllowList()).WithBackupTargets(cfg.BackupTargets())
+
+			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+
+			// The self-update path only makes sense in the container, where a host-side
+			// watcher reads the signal file. In dev it would write a file nothing reads
+			// and the UI would spin, so leave the endpoint reporting "unavailable".
+			if inContainer() {
+				api = api.WithUpdate(&update.Client{
+					Repo:      update.DefaultRepo,
+					SignalDir: cfg.UpdateSignalDir(),
+					Token:     cfg.Update.Token,
+				}, ctx)
+			}
+
+			// No Read/WriteTimeout: SSE streams and large bodies are long-lived. The
+			// header and idle timeouts still shed slow-loris connections.
 			srv := &http.Server{
 				Addr:              cfg.Listen,
-				Handler:           gateway.New(dbs, version, webui.FS).WithSearch(queryEmbed).WithEvents(hub).WithAllowedHosts(cfg.HostAllowList()).WithBackupTargets(cfg.BackupTargets()).Handler(),
+				Handler:           api.Handler(),
 				ReadHeaderTimeout: 10 * time.Second,
 				IdleTimeout:       2 * time.Minute,
 			}
 			// An open stream is never idle, so Shutdown would wait on it until its
 			// timeout; closing the hub is what ends the streams.
 			srv.RegisterOnShutdown(hub.Close)
-
-			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
-			defer stop()
 
 			// One owned worker per account: reconcile, then IDLE on INBOX. The defer
 			// order matters: workerStop cancels first, then workers.Wait lets every
@@ -215,6 +232,39 @@ func runCmd(configPath *string, version string) *cobra.Command {
 				}
 				return err
 			}
+		},
+	}
+}
+
+// newUpdateClient builds the self-update client for a config. It is a var so a
+// test can point it at a fake registry and CI API.
+var newUpdateClient = func(cfg *config.Config) *update.Client {
+	return &update.Client{
+		Repo:      update.DefaultRepo,
+		SignalDir: cfg.UpdateSignalDir(),
+		Token:     cfg.Update.Token,
+	}
+}
+
+// updateCmd resolves the published image and asks the host watcher to deploy
+// it. It never pulls or restarts anything in-process: that stays on the host,
+// outside the container (ARCHITECTURE.md 9).
+func updateCmd(configPath *string) *cobra.Command {
+	return &cobra.Command{
+		Use:   "update",
+		Short: "Resolve the latest image and ask the host watcher to deploy it",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := config.Load(*configPath)
+			if err != nil {
+				return err
+			}
+			target, err := newUpdateClient(cfg).Request(cmd.Context())
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "requested %s; the host update watcher will pull and restart Ivy\n", target)
+			return nil
 		},
 	}
 }
@@ -366,6 +416,17 @@ func existingAncestor(path string) string {
 		}
 		path = parent
 	}
+}
+
+// inContainer reports whether Ivy is running inside the deployment container,
+// where a host-side update watcher reads the signal file. IVY_IN_CONTAINER is
+// set by the Dockerfile; /.dockerenv covers a hand-run container.
+func inContainer() bool {
+	if os.Getenv("IVY_IN_CONTAINER") != "" {
+		return true
+	}
+	_, err := os.Stat("/.dockerenv")
+	return err == nil
 }
 
 // syncAccountFor is the connection descriptor a sync worker uses for a

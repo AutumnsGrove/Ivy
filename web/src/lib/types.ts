@@ -57,6 +57,9 @@ export type SnoozePreset = NonNullable<Schema['SnoozeRequest']['preset']>;
 export type Check = Schema['Check'];
 export type CheckDetail = Schema['CheckDetail'];
 export type HealthOverview = Schema['HealthOverview'];
+export type Version = Schema['Version'];
+export type UpdateStatus = Schema['UpdateStatus'];
+export type UpdateWatcherResult = Schema['UpdateWatcherResult'];
 
 /** Behaviour settings (state.db once the backend lands). Look-and-feel stays per device in `prefs`. */
 export type Settings = {

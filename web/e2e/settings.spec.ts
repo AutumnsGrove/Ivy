@@ -26,3 +26,14 @@ test.describe('behaviour settings', () => {
 		await expect(digest).toHaveValue('18:00');
 	});
 });
+
+test.describe('self-update', () => {
+	test('the Update button asks the host watcher and shows progress', async ({ page }) => {
+		await page.goto('/settings');
+		await expect(page.getByText('Version r1.test')).toBeVisible();
+		const update = page.getByRole('button', { name: 'Update' });
+		await expect(update).toBeEnabled();
+		await update.click();
+		await expect(page.getByRole('button', { name: 'Updating…' })).toBeDisabled();
+	});
+});

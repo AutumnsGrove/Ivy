@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { invalidateAll } from '$app/navigation';
 	import { accountAvatar } from '#lib/accounts.js';
 	import { Activity, Archive, ChevronRight, Download, Eye, Plus, RefreshCw } from '#lib/icons.js';
 	import Page from '#lib/components/shell/Page.svelte';
@@ -11,6 +12,7 @@
 	import TopBar from '#lib/components/ui/TopBar.svelte';
 	import { prefs, type Accent } from '#lib/prefs.svelte.js';
 	import { api } from '#lib/api/client.js';
+	import { ApiError } from '#lib/api/errors.js';
 	import Select from '#lib/components/ui/Select.svelte';
 	import { toasts } from '#lib/toast.js';
 	import type { Settings } from '#lib/types.js';
@@ -22,6 +24,24 @@
 	});
 	// svelte-ignore state_referenced_locally
 	let s = $state<Settings>({ ...data.settings });
+
+	// The self-update flow: the host watcher does the pull and restart, so the
+	// button only asks for it and then follows the status the server reports.
+	let requesting = $state(false);
+	const updating = $derived(requesting || data.update.running);
+	async function runUpdate() {
+		requesting = true;
+		try {
+			await api.requestUpdate();
+			toasts.push({ text: 'Looking for a new version\u2026', tone: 'ok' });
+			await invalidateAll();
+		} catch (err) {
+			const running = err instanceof ApiError && err.code === 'update_running';
+			toasts.push({ text: running ? 'An update is already running' : "Ivy can't update right now", tone: 'warn' });
+		} finally {
+			requesting = false;
+		}
+	}
 
 	/** Optimistic: the control already shows the choice; a refusal puts the stored value back. */
 	async function save(patch: Partial<Settings>) {
@@ -228,9 +248,15 @@
 	<Group label="About">
 		<ListRow tall>
 			Ivy
-			<span class="sub">Version [version]</span>
+			<span class="sub">Version {data.version.version}</span>
 			{#snippet trailing()}
-				<Button size="sm" variant="tonal" onclick={() => toasts.push({ text: 'You have the latest version', tone: 'ok' })}><Download />Update</Button>
+				{#if data.update.unavailable}
+					<span class="sub">Updated on the host</span>
+				{:else}
+					<Button size="sm" variant="tonal" disabled={updating} onclick={runUpdate}>
+						<Download /> {updating ? 'Updating\u2026' : 'Update'}
+					</Button>
+				{/if}
 			{/snippet}
 		</ListRow>
 	</Group>

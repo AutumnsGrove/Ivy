@@ -28,7 +28,9 @@ const CODES = new Set<string>([
 	'not_terminal',
 	'unknown_action',
 	'unknown_tag',
-	'too_many_tags'
+	'too_many_tags',
+	'update_unavailable',
+	'update_running'
 ]);
 
 /** Joins a path to its present query values, dropping empty ones. Values are escaped. */

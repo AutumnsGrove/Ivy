@@ -46,6 +46,7 @@ type Config struct {
 	Accounts     []Account `yaml:"accounts"`
 	Backup       Backup    `yaml:"backup"`
 	LLM          LLM       `yaml:"llm"`
+	Update       Update    `yaml:"update"`
 }
 
 // LLM holds the non-secret settings for remote model providers. The API key is
@@ -62,6 +63,26 @@ type LLM struct {
 	OllamaEmbedModel string `yaml:"ollama_embed_model"`
 	// MonthlyCapUSD bounds hosted embedding spend per account and month.
 	MonthlyCapUSD float64 `yaml:"monthly_cap_usd"`
+}
+
+// Update is the self-update path (ARCHITECTURE.md 9). SignalDir is the folder
+// the container writes a requested image digest into and the host-side watcher
+// reads; it defaults to a subfolder of the bind-mounted data directory, so one
+// volume covers it. Token is read only from the environment (GITHUB_TOKEN) and
+// is optional: it raises the Actions API rate limit while waiting out a build.
+type Update struct {
+	SignalDir string `yaml:"signal_dir"`
+	Token     string `yaml:"-"`
+}
+
+// UpdateSignalDir returns the configured signal directory, or the default
+// beneath the data directory so the container and the host watcher agree
+// without extra configuration.
+func (c *Config) UpdateSignalDir() string {
+	if strings.TrimSpace(c.Update.SignalDir) != "" {
+		return c.Update.SignalDir
+	}
+	return filepath.Join(c.DataDir, "update-signal")
 }
 
 // Backup is where the daily state.db snapshot goes and when it runs. Targets
@@ -220,6 +241,11 @@ func applyEnv(cfg *Config) {
 		if v := os.Getenv(PasswordEnv(cfg.Accounts[i].ID)); v != "" {
 			cfg.Accounts[i].Password = v
 		}
+	}
+	// The Actions token is a secret, so it comes only from the environment, the
+	// same rule as the account passwords (ARCHITECTURE.md 8).
+	if v := os.Getenv("GITHUB_TOKEN"); v != "" {
+		cfg.Update.Token = v
 	}
 }
 

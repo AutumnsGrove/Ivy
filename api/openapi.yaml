@@ -827,6 +827,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /update:
+    get:
+      operationId: getUpdateStatus
+      summary: The state of the last self-update attempt
+      description: >
+        Reports whether a pull is running and, once the host watcher has
+        finished, how it went. `unavailable` is true when this deployment has no
+        host-side update watcher, so the UI can say so instead of offering a
+        button that can never work.
+      responses:
+        "200":
+          description: The current update state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateStatus"
+    post:
+      operationId: requestUpdate
+      summary: Ask the host watcher to pull and deploy the latest image
+      description: >
+        Resolves the latest published image digest from GHCR (waiting out an
+        in-progress CI build) and writes the host watcher's signal file. Returns
+        as soon as the request is accepted; the pull, recreate, health check and
+        rollback happen on the host, and the outcome is read from `GET /update`.
+        Only one update may run at a time.
+      responses:
+        "202":
+          description: The update is running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateStatus"
+        "409":
+          description: An update is already running (`update_running`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: This deployment has no update path (`update_unavailable`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   parameters:
     MessageID:
@@ -873,11 +917,11 @@ components:
       properties:
         type:
           type: string
-          enum: [message.changed, folder.changed, sync.state, outbox.state, health.alert]
+          enum: [message.changed, folder.changed, sync.state, outbox.state, health.alert, update.state]
           # Without explicit names the Go constant for sync.state is `SyncState`,
           # which collides with the SyncState type.
           x-enum-varnames:
-            [EventTypeMessageChanged, EventTypeFolderChanged, EventTypeSyncState, EventTypeOutboxState, EventTypeHealthAlert]
+            [EventTypeMessageChanged, EventTypeFolderChanged, EventTypeSyncState, EventTypeOutboxState, EventTypeHealthAlert, EventTypeUpdateState]
         accountId:
           type: string
         folder:
@@ -891,6 +935,38 @@ components:
       properties:
         version:
           type: string
+    UpdateWatcherResult:
+      type: object
+      description: The host watcher's own account of its last attempt.
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, failed, skipped]
+        detail:
+          type: string
+        target:
+          type: string
+        finished_at:
+          type: string
+    UpdateStatus:
+      type: object
+      required: [unavailable, running, done, success]
+      properties:
+        unavailable:
+          type: boolean
+        running:
+          type: boolean
+        done:
+          type: boolean
+        success:
+          type: boolean
+        target:
+          type: string
+        error:
+          type: string
+        watcher:
+          $ref: "#/components/schemas/UpdateWatcherResult"
     Liveness:
       type: object
       required: [status, version, databases]

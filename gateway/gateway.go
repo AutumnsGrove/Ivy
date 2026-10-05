@@ -2,6 +2,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -45,6 +46,13 @@ type Server struct {
 	// queryEmbed turns a search query into a vector for one account, through the
 	// gate. nil means keyword-only.
 	queryEmbed QueryEmbedder
+	// updater requests a self-update through the host-side watcher; nil means
+	// this deployment has no update path.
+	updater Updater
+	// updateCtx owns the resolve goroutine, so it must outlive the request.
+	updateCtx context.Context
+	// update is the single in-process update slot.
+	update updateStatus
 }
 
 // WithSearch enables hybrid ranking. qe may be nil, in which case search stays
@@ -161,6 +169,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/outbox", s.handleListOutbox)
 	api.HandleFunc("POST /api/v1/outbox/{id}/retry", s.handleRetryOutbox)
 	api.HandleFunc("DELETE /api/v1/outbox/{id}", s.handleDismissOutbox)
+	api.HandleFunc("POST /api/v1/update", s.handleUpdate)
+	api.HandleFunc("GET /api/v1/update", s.handleUpdateStatus)
 	if s.events != nil {
 		api.HandleFunc("GET /api/v1/events", s.handleEvents)
 	}

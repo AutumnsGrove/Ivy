@@ -584,6 +584,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The state of the last self-update attempt
+         * @description Reports whether a pull is running and, once the host watcher has finished, how it went. `unavailable` is true when this deployment has no host-side update watcher, so the UI can say so instead of offering a button that can never work.
+         */
+        get: operations["getUpdateStatus"];
+        put?: never;
+        /**
+         * Ask the host watcher to pull and deploy the latest image
+         * @description Resolves the latest published image digest from GHCR (waiting out an in-progress CI build) and writes the host watcher's signal file. Returns as soon as the request is accepted; the pull, recreate, health check and rollback happen on the host, and the outcome is read from `GET /update`. Only one update may run at a time.
+         */
+        post: operations["requestUpdate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -597,7 +621,7 @@ export interface components {
         /** @description One hint on the event stream. It says what changed, never the new value. */
         Event: {
             /** @enum {string} */
-            type: "message.changed" | "folder.changed" | "sync.state" | "outbox.state" | "health.alert";
+            type: "message.changed" | "folder.changed" | "sync.state" | "outbox.state" | "health.alert" | "update.state";
             accountId?: string;
             folder?: string;
             /** @description Stable reason, used by health.alert */
@@ -605,6 +629,23 @@ export interface components {
         };
         Version: {
             version: string;
+        };
+        /** @description The host watcher's own account of its last attempt. */
+        UpdateWatcherResult: {
+            /** @enum {string} */
+            status: "ok" | "failed" | "skipped";
+            detail?: string;
+            target?: string;
+            finished_at?: string;
+        };
+        UpdateStatus: {
+            unavailable: boolean;
+            running: boolean;
+            done: boolean;
+            success: boolean;
+            target?: string;
+            error?: string;
+            watcher?: components["schemas"]["UpdateWatcherResult"];
         };
         Liveness: {
             /** @enum {string} */
@@ -2031,6 +2072,64 @@ export interface operations {
             404: components["responses"]["NotFound"];
             /** @description The op is not failed */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getUpdateStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current update state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateStatus"];
+                };
+            };
+        };
+    };
+    requestUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The update is running */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateStatus"];
+                };
+            };
+            /** @description An update is already running (`update_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description This deployment has no update path (`update_unavailable`) */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

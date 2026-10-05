@@ -22,6 +22,7 @@ const (
 	SyncState      Type = "sync.state"
 	OutboxState    Type = "outbox.state"
 	HealthAlert    Type = "health.alert"
+	UpdateState    Type = "update.state"
 )
 
 // Event is one hint. It is comparable on purpose: an identical hint already

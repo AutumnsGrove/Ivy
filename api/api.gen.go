@@ -119,6 +119,7 @@ const (
 	EventTypeMessageChanged EventType = "message.changed"
 	EventTypeOutboxState    EventType = "outbox.state"
 	EventTypeSyncState      EventType = "sync.state"
+	EventTypeUpdateState    EventType = "update.state"
 )
 
 // Valid indicates whether the value is a known member of the EventType enum.
@@ -133,6 +134,8 @@ func (e EventType) Valid() bool {
 	case EventTypeOutboxState:
 		return true
 	case EventTypeSyncState:
+		return true
+	case EventTypeUpdateState:
 		return true
 	default:
 		return false
@@ -412,6 +415,27 @@ func (e TagColor) Valid() bool {
 	case Slate:
 		return true
 	case Teal:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UpdateWatcherResultStatus.
+const (
+	UpdateWatcherResultStatusFailed  UpdateWatcherResultStatus = "failed"
+	UpdateWatcherResultStatusOk      UpdateWatcherResultStatus = "ok"
+	UpdateWatcherResultStatusSkipped UpdateWatcherResultStatus = "skipped"
+)
+
+// Valid indicates whether the value is a known member of the UpdateWatcherResultStatus enum.
+func (e UpdateWatcherResultStatus) Valid() bool {
+	switch e {
+	case UpdateWatcherResultStatusFailed:
+		return true
+	case UpdateWatcherResultStatusOk:
+		return true
+	case UpdateWatcherResultStatusSkipped:
 		return true
 	default:
 		return false
@@ -919,6 +943,30 @@ type TagsOverview struct {
 	Mine        []UserTag   `json:"mine"`
 	Placed      []PlacedTag `json:"placed"`
 }
+
+// UpdateStatus defines model for UpdateStatus.
+type UpdateStatus struct {
+	Done        bool    `json:"done"`
+	Error       *string `json:"error,omitempty"`
+	Running     bool    `json:"running"`
+	Success     bool    `json:"success"`
+	Target      *string `json:"target,omitempty"`
+	Unavailable bool    `json:"unavailable"`
+
+	// Watcher The host watcher's own account of its last attempt.
+	Watcher *UpdateWatcherResult `json:"watcher,omitempty"`
+}
+
+// UpdateWatcherResult The host watcher's own account of its last attempt.
+type UpdateWatcherResult struct {
+	Detail     *string                   `json:"detail,omitempty"`
+	FinishedAt *string                   `json:"finished_at,omitempty"`
+	Status     UpdateWatcherResultStatus `json:"status"`
+	Target     *string                   `json:"target,omitempty"`
+}
+
+// UpdateWatcherResultStatus defines model for UpdateWatcherResult.Status.
+type UpdateWatcherResultStatus string
 
 // UserTag defines model for UserTag.
 type UserTag struct {

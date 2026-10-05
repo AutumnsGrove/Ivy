@@ -25,7 +25,9 @@ export type ErrorCode =
 	| 'not_terminal'
 	| 'unknown_action'
 	| 'unknown_tag'
-	| 'too_many_tags';
+	| 'too_many_tags'
+	| 'update_unavailable'
+	| 'update_running';
 
 /** Every API failure the UI can branch on; never a bare Error. */
 export class ApiError extends Error {

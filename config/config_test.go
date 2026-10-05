@@ -322,3 +322,55 @@ func TestEmbedProviderNeedsOptInForHosted(t *testing.T) {
 		t.Error("unknown embed_provider accepted, want an error")
 	}
 }
+
+func TestUpdateSignalDirDefaultsBesideTheDataDir(t *testing.T) {
+	t.Parallel()
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := filepath.Join(DefaultDataDir, "update-signal")
+	if got := cfg.UpdateSignalDir(); got != want {
+		t.Errorf("UpdateSignalDir() = %q, want %q", got, want)
+	}
+}
+
+func TestUpdateSignalDirFollowsTheDataDirEnv(t *testing.T) {
+	t.Setenv("IVY_DATA_DIR", "/var/lib/ivy")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got, want := cfg.UpdateSignalDir(), filepath.Join("/var/lib/ivy", "update-signal"); got != want {
+		t.Errorf("UpdateSignalDir() = %q, want %q", got, want)
+	}
+}
+
+func TestUpdateSignalDirConfigOverride(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ivy.yaml")
+	write(t, path, `
+data_dir: /var/lib/ivy
+update:
+  signal_dir: /run/ivy
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.UpdateSignalDir(); got != "/run/ivy" {
+		t.Errorf("UpdateSignalDir() = %q, want /run/ivy", got)
+	}
+}
+
+func TestGitHubTokenComesFromTheEnvironment(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "ghp_example")
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Update.Token != "ghp_example" {
+		t.Errorf("Update.Token = %q, want the environment value", cfg.Update.Token)
+	}
+}
