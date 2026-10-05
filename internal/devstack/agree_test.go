@@ -71,7 +71,12 @@ func dumpTable(t *testing.T, db *sql.DB, table string) []string {
 
 func tableNames(t *testing.T, db *sql.DB) []string {
 	t.Helper()
-	rows, err := db.Query(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '%_fts%' AND name <> 'schema_migrations' ORDER BY name`)
+	// FTS5's internal shadow tables (search_index_data, _idx, _content, …) are
+	// the index's private representation: their segment layout depends on the
+	// order documents were written, which legitimately differs between the full
+	// and fast seeders. The logical search_index table and search_docs are still
+	// compared, so a real divergence in what is indexed is caught.
+	rows, err := db.Query(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '%_fts%' AND name NOT LIKE 'search_index_%' AND name <> 'schema_migrations' ORDER BY name`)
 	if err != nil {
 		t.Fatal(err)
 	}

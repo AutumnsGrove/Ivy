@@ -862,7 +862,7 @@ func (f *Fetcher) fetchBatch(ctx context.Context, c *session, acct Account, fold
 		byUID[meta.UID] = meta
 		switch {
 		case meta.RFC822Size > f.max:
-			if err := f.dbs.UpsertMessage(ctx, f.envelopeOnly(acct, folderID, uidvalidity, meta)); err != nil {
+			if err := f.storeEnvelopeOnly(ctx, acct, folderID, uidvalidity, meta); err != nil {
 				return stored, err
 			}
 			stored++
@@ -946,7 +946,7 @@ func (f *Fetcher) storeInline(ctx context.Context, acct Account, folderID string
 	if err := f.dbs.UpsertMessage(ctx, m); err != nil {
 		return err
 	}
-	return f.dbs.SetMessageDerived(ctx, m.ID, derivedFrom(m.ID, parsed))
+	return f.commitDerived(ctx, m, parsed)
 }
 
 // StoreRaw mirrors one message whose bytes the caller already holds, applying
@@ -960,7 +960,7 @@ func (f *Fetcher) StoreRaw(ctx context.Context, acct Account, folderID string, u
 	// The tiers are chosen on the size FETCH reported, as fetchBatch does.
 	switch {
 	case meta.RFC822Size > f.max:
-		return f.dbs.UpsertMessage(ctx, f.envelopeOnly(acct, folderID, uidvalidity, meta))
+		return f.storeEnvelopeOnly(ctx, acct, folderID, uidvalidity, meta)
 	case meta.RFC822Size > 0 && meta.RFC822Size <= f.inline:
 		return f.storeInline(ctx, acct, folderID, uidvalidity, meta, raw)
 	}
@@ -1011,7 +1011,7 @@ func (f *Fetcher) fetchSpooled(ctx context.Context, c *imapclient.Client, acct A
 	case errors.Is(spoolErr, errSpoolTooLarge):
 		// The server announced a size within the limit and sent more. Treat it as
 		// over the limit rather than trust either number.
-		return true, f.dbs.UpsertMessage(ctx, f.envelopeOnly(acct, folderID, uidvalidity, meta))
+		return true, f.storeEnvelopeOnly(ctx, acct, folderID, uidvalidity, meta)
 	case spoolErr != nil:
 		return false, spoolErr
 	case !got:
@@ -1040,7 +1040,26 @@ func (f *Fetcher) storeSpooled(ctx context.Context, acct Account, folderID strin
 	if err := f.dbs.UpsertMessage(ctx, m); err != nil {
 		return err
 	}
-	return f.dbs.SetMessageDerived(ctx, m.ID, derivedFrom(m.ID, parsed))
+	return f.commitDerived(ctx, m, parsed)
+}
+
+// commitDerived writes a message's derived data and refreshes its search
+// document in one place, so the FTS index never lags the body it indexes.
+func (f *Fetcher) commitDerived(ctx context.Context, m store.Message, parsed mailmime.Parsed) error {
+	if err := f.dbs.SetMessageDerived(ctx, m.ID, derivedFrom(m.ID, parsed)); err != nil {
+		return err
+	}
+	return f.dbs.ReindexContent(ctx, m.AccountID, m.ContentKey)
+}
+
+// storeEnvelopeOnly mirrors the envelope of a message that is never downloaded
+// and indexes its subject, so even an over-limit message is findable by subject.
+func (f *Fetcher) storeEnvelopeOnly(ctx context.Context, acct Account, folderID string, uidvalidity uint32, meta *imapclient.FetchMessageBuffer) error {
+	m := f.envelopeOnly(acct, folderID, uidvalidity, meta)
+	if err := f.dbs.UpsertMessage(ctx, m); err != nil {
+		return err
+	}
+	return f.dbs.ReindexContent(ctx, m.AccountID, m.ContentKey)
 }
 
 // DerivedVersion names the pipeline that turns a raw message into its derived
@@ -1134,7 +1153,7 @@ func (f *Fetcher) Rederive(ctx context.Context, accountID string, limit int) (in
 				slog.WarnContext(ctx, "sync: cannot re-derive message yet", "message", id, "error", err)
 				continue
 			}
-			if err := f.dbs.SetMessageDerived(ctx, id, derivedFrom(id, parsed)); err != nil {
+			if err := f.commitDerived(ctx, m, parsed); err != nil {
 				return healed, fmt.Errorf("rederive %s: %w", accountID, err)
 			}
 			healed++

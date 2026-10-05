@@ -53,6 +53,13 @@ func Prepare(opts Options) (*Stack, error) {
 		_ = w.Close()
 		return nil, err
 	}
+	// The offline stack embeds against mailworld, not the real provider, so a
+	// dev run never spends money (DEV.md section 5).
+	if opts.LLM == LLMFake {
+		cfg.LLM.OpenRouterBase = w.OpenRouterURL()
+		cfg.LLM.EmbedModel = "fake-embed"
+		cfg.LLM.OllamaURL = w.OllamaURL()
+	}
 
 	sock := ControlPath(opts.Root)
 	// A crashed run can leave the socket file behind; binding would then fail.

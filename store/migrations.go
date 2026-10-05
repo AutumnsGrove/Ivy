@@ -421,6 +421,31 @@ var mirrorMigrations = []migration{
 			)`,
 		},
 	},
+	{
+		version: 14,
+		statements: []string{
+			// One vector per chunk of one content key, keyed by the durable
+			// content identity and the model, so a move or a UIDVALIDITY reset
+			// never re-embeds and a model change is detected rather than mixed
+			// (ARCHITECTURE.md 3). Derived and rebuildable, so it lives in the
+			// rebuildable mirror; the int8 values carry the scale and the true
+			// L2 norm needed for cosine.
+			`CREATE TABLE embeddings (
+				account_id TEXT NOT NULL,
+				ref        TEXT NOT NULL,
+				kind       TEXT NOT NULL,
+				chunk_ix   INTEGER NOT NULL,
+				model      TEXT NOT NULL,
+				dims       INTEGER NOT NULL,
+				scale      REAL NOT NULL,
+				norm       REAL NOT NULL,
+				vector     BLOB NOT NULL,
+				created_at TEXT NOT NULL DEFAULT (datetime('now')),
+				PRIMARY KEY (account_id, ref, kind, chunk_ix, model, dims)
+			)`,
+			`CREATE INDEX idx_embeddings_ref ON embeddings(account_id, ref, kind, model)`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.

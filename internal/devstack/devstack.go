@@ -219,10 +219,19 @@ func BuildConfig(imapAddr, smtpAddr string, accounts []mailworld.SeedAccount, op
 		return nil, err
 	}
 
+	cap := opts.LLMCap
+	if cap <= 0 {
+		cap = config.DefaultMonthlyCapUSD
+	}
 	cfg := &config.Config{
 		Listen:  opts.Listen,
 		DataDir: DataDir(opts.Root),
 		Backup:  config.Backup{At: config.DefaultBackupAt},
+		LLM: config.LLM{
+			OpenRouterBase: config.DefaultOpenRouterURL,
+			EmbedModel:     config.DefaultEmbedModel,
+			MonthlyCapUSD:  cap,
+		},
 	}
 	for _, sa := range selected {
 		cfg.Accounts = append(cfg.Accounts, config.Account{
@@ -235,7 +244,9 @@ func BuildConfig(imapAddr, smtpAddr string, accounts []mailworld.SeedAccount, op
 			Username: sa.Address,
 			// On for both providers: the fake exists to serve these features offline.
 			LLMEnabled: true,
-			Password:   sa.Password,
+			// Hosted embeddings through the fake (or real) OpenRouter endpoint.
+			EmbedProvider: "openrouter",
+			Password:      sa.Password,
 			// The fake speaks plaintext on loopback only; ValidateConfig below refuses
 			// any other host.
 			Insecure: true,

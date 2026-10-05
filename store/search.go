@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"strings"
@@ -100,13 +102,14 @@ func (d *DBs) IndexSearchDoc(ctx context.Context, doc SearchDoc) error {
 		doc.AccountID, doc.ContentKey).Scan(&id)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		res, ierr := tx.ExecContext(ctx,
-			`INSERT INTO search_docs (account_id, content_key) VALUES (?, ?)`,
-			doc.AccountID, doc.ContentKey)
-		if ierr != nil {
-			return fmt.Errorf("index search doc %s: %w", doc.ContentKey, ierr)
-		}
-		if id, ierr = res.LastInsertId(); ierr != nil {
+		// A deterministic id, not an autoincrement, so two identical seeding
+		// runs assign the same FTS rowid and can be compared (the agreement
+		// test) and a rebuild is stable. A hash collision would be a PRIMARY KEY
+		// conflict and fail loudly rather than merge two documents.
+		id = SearchDocID(doc.AccountID, doc.ContentKey)
+		if _, ierr := tx.ExecContext(ctx,
+			`INSERT INTO search_docs (id, account_id, content_key) VALUES (?, ?, ?)`,
+			id, doc.AccountID, doc.ContentKey); ierr != nil {
 			return fmt.Errorf("index search doc %s: %w", doc.ContentKey, ierr)
 		}
 	case err != nil:
@@ -125,6 +128,59 @@ func (d *DBs) IndexSearchDoc(ctx context.Context, doc SearchDoc) error {
 		return fmt.Errorf("index search doc %s: %w", doc.ContentKey, err)
 	}
 	return nil
+}
+
+// ReindexContent rebuilds one content key's search document from its live
+// message row and the extracted text of its attachments. It is called after a
+// derivation and after an attachment is extracted, so the FTS row always
+// reflects the latest text. With no live copy it does nothing: the index entry
+// is kept, filtered out at query time, and ready if the message is restored.
+func (d *DBs) ReindexContent(ctx context.Context, accountID, contentKey string) error {
+	var subject, body string
+	err := d.Mirror.Read.QueryRowContext(ctx, `
+		SELECT COALESCE(subject, ''), COALESCE(body_text, '')
+		FROM messages
+		WHERE account_id = ? AND content_key = ? AND disabled_at IS NULL
+		ORDER BY date DESC, id DESC LIMIT 1`,
+		accountID, contentKey).Scan(&subject, &body)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("reindex content %s: %w", contentKey, err)
+	}
+
+	rows, err := d.Mirror.Read.QueryContext(ctx, `
+		SELECT et.text
+		FROM attachments a
+		JOIN messages m ON m.id = a.message_id
+		JOIN extracted_text et ON et.ref = a.content_hash AND et.kind = ?
+		WHERE m.account_id = ? AND m.content_key = ? AND m.disabled_at IS NULL
+		  AND et.status = 'ok' AND et.text <> ''
+		GROUP BY a.content_hash`,
+		ExtractKindAttachment, accountID, contentKey)
+	if err != nil {
+		return fmt.Errorf("reindex content %s: attachments: %w", contentKey, err)
+	}
+	defer func() { _ = rows.Close() }()
+	var attachment strings.Builder
+	for rows.Next() {
+		var text string
+		if err := rows.Scan(&text); err != nil {
+			return fmt.Errorf("reindex content %s: attachments: %w", contentKey, err)
+		}
+		if attachment.Len() > 0 {
+			attachment.WriteByte(' ')
+		}
+		attachment.WriteString(text)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("reindex content %s: attachments: %w", contentKey, err)
+	}
+	return d.IndexSearchDoc(ctx, SearchDoc{
+		AccountID: accountID, ContentKey: contentKey,
+		Subject: subject, Body: body, Attachment: attachment.String(),
+	})
 }
 
 // SearchHit is one full-text result. Rank is the raw FTS5 bm25 score, where a
@@ -181,6 +237,15 @@ func (d *DBs) SearchFTS(ctx context.Context, query string, accountIDs []string, 
 		return nil, fmt.Errorf("search %q: %w", query, err)
 	}
 	return hits, nil
+}
+
+// SearchDocID is the deterministic FTS rowid for a content key: the top 63
+// bits of SHA-256(account + NUL + content key). Determinism matters because the
+// index is rebuilt from scratch on a fresh seed and the full and fast seeders
+// must produce byte-identical databases.
+func SearchDocID(accountID, contentKey string) int64 {
+	sum := sha256.Sum256([]byte(accountID + "\x00" + contentKey))
+	return int64(binary.BigEndian.Uint64(sum[:8]) & 0x7fff_ffff_ffff_ffff)
 }
 
 // placeholders returns "?, ?, ?" for n values.
