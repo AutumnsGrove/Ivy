@@ -1,13 +1,16 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { api } from '#lib/api/client.js';
 	import { withScenario, type Scenario } from '#lib/api/scenario.js';
 	import { Search } from '#lib/icons.js';
+	import { Pager } from '#lib/pager.svelte.js';
 	import { LIMITS, panes } from '#lib/panes.svelte.js';
 	import { outbox } from '#lib/outbox.svelte.js';
 	import ResizeHandle from '../ui/ResizeHandle.svelte';
 	import { folderTitle } from '#lib/folders.js';
 	import type { Account, FolderView, Inbox } from '#lib/types.js';
 	import Banner from '../ui/Banner.svelte';
+	import Button from '../ui/Button.svelte';
 	import Glass from '../ui/Glass.svelte';
 	import EmptyInbox from './EmptyInbox.svelte';
 	import EmptyTrashButton from './EmptyTrashButton.svelte';
@@ -29,7 +32,13 @@
 
 	// With nothing chosen yet the first message is open, like a mail client should feel on arrival.
 	// A message with a live move op is hidden until the server confirms (chunk 3d).
-	const visible = $derived(inbox.items.filter((m) => !outbox.hidden(m.id)));
+	// The route loads the newest page; "Show older" appends the pages after it.
+	const pager = new Pager<Inbox['items'][number]>(
+		(cursor) => api.listInbox({ scenario: scenario ?? undefined, accountId: accountId ?? undefined, folder, cursor }),
+		"Couldn't load older mail"
+	);
+	$effect.pre(() => pager.reset({ items: inbox.items, nextCursor: inbox.nextCursor }));
+	const visible = $derived(pager.items.filter((m) => !outbox.hidden(m.id)));
 	const openId = $derived(selectedId ?? visible[0]?.id);
 	const failing = $derived(accounts.find((a) => a.sync === 'auth-failed'));
 	const subtitle = $derived(`${inbox.needCount} need you · ${inbox.unreadCount} unread`);
@@ -83,6 +92,11 @@
 					selectedId={openId}
 					onselect={(m) => goto(withScenario(`/m/${m.id}`, scenario), { reset: false })}
 				/>
+				{#if pager.cursor}
+					<div class="more">
+						<Button variant="tonal" onclick={() => pager.more()} disabled={pager.busy}>Show older</Button>
+					</div>
+				{/if}
 			{:else if folder === 'inbox'}
 				<EmptyInbox readingWaiting={inbox.readingWaiting} />
 			{:else}
@@ -160,5 +174,10 @@
 		flex-grow: 1;
 		min-height: 0;
 		overflow-y: auto;
+	}
+	.more {
+		display: flex;
+		justify-content: center;
+		padding: var(--sp-10) 0;
 	}
 </style>

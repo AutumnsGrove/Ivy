@@ -1,5 +1,8 @@
 <script lang="ts">
+	import { api } from '#lib/api/client.js';
 	import { Bookmark, BookOpen, Search } from '#lib/icons.js';
+	import { Pager } from '#lib/pager.svelte.js';
+	import type { Issue } from '#lib/types.js';
 	import Page from '#lib/components/shell/Page.svelte';
 	import Button from '#lib/components/ui/Button.svelte';
 	import Glass from '#lib/components/ui/Glass.svelte';
@@ -11,6 +14,15 @@
 
 	let { data } = $props();
 	let range = $state<'today' | 'week' | 'saved'>('today');
+	// The route loads the newest page of the feed; "Show older" appends the rest.
+	const pager = new Pager<Issue>(
+		async (cursor) => {
+			const next = await api.listReading({ cursor });
+			return { items: next.issues, nextCursor: next.nextCursor };
+		},
+		"Couldn't load older issues"
+	);
+	$effect.pre(() => pager.reset({ items: data.feed.issues, nextCursor: data.feed.nextCursor }));
 </script>
 
 <Page>
@@ -34,7 +46,7 @@
 
 	<div class="feed">
 		<SmartChip>{data.feed.digest}</SmartChip>
-		{#each data.feed.issues as issue (issue.id)}
+		{#each pager.items as issue (issue.id)}
 			<Glass radius="group" class="issue {issue.read ? 'read' : ''}">
 				<div class="from">
 					<Avatar initials={issue.initials} color="var(--muted)" size="sm" />
@@ -53,12 +65,21 @@
 				{/if}
 			</Glass>
 		{/each}
+		{#if pager.cursor}
+			<div class="more">
+				<Button variant="tonal" onclick={() => pager.more()} disabled={pager.busy}>Show older</Button>
+			</div>
+		{/if}
 	</div>
 </Page>
 
 <style>
 	.seg {
 		margin-top: var(--sp-14);
+	}
+	.more {
+		display: flex;
+		justify-content: center;
 	}
 	.feed {
 		display: flex;

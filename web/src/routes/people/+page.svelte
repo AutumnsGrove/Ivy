@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { slotColor } from '#lib/accounts.js';
+	import { api } from '#lib/api/client.js';
 	import { Search } from '#lib/icons.js';
+	import { Pager } from '#lib/pager.svelte.js';
 	import { formatMessageTime } from '#lib/time.js';
+	import type { Person } from '#lib/types.js';
 	import Page from '#lib/components/shell/Page.svelte';
 	import Avatar from '#lib/components/ui/Avatar.svelte';
+	import Button from '#lib/components/ui/Button.svelte';
 	import Dot from '#lib/components/ui/Dot.svelte';
 	import Glass from '#lib/components/ui/Glass.svelte';
 	import GroupLabel from '#lib/components/ui/GroupLabel.svelte';
@@ -11,8 +15,11 @@
 
 	let { data } = $props();
 	let q = $state('');
-	const shown = $derived(data.people.filter((p) => `${p.name} ${p.email}`.toLowerCase().includes(q.toLowerCase())));
-	const often = $derived(data.people.slice(0, 5));
+	// The route loads the first 100; "Show more" appends the rest, 100 at a time.
+	const pager = new Pager<Person>((cursor) => api.listPeople({ cursor }), "Couldn't load more people");
+	$effect.pre(() => pager.reset(data.people));
+	const shown = $derived(pager.items.filter((p) => `${p.name} ${p.email}`.toLowerCase().includes(q.toLowerCase())));
+	const often = $derived(pager.items.slice(0, 5));
 </script>
 
 <TopBar title="People" backHref="/tags" />
@@ -45,9 +52,16 @@
 				<span class="t">{formatMessageTime(p.when)}</span>
 			</a>
 		{:else}
-			<p class="none">Nobody matches “{q}”.</p>
+			<p class="none">
+				Nobody matches “{q}”{pager.cursor ? ' among the people shown so far' : ''}.
+			</p>
 		{/each}
 	</Glass>
+	{#if pager.cursor}
+		<div class="more">
+			<Button variant="tonal" onclick={() => pager.more()} disabled={pager.busy}>Show more people</Button>
+		</div>
+	{/if}
 </Page>
 
 <style>
@@ -89,6 +103,11 @@
 	}
 	:global(.all) {
 		padding: var(--sp-3) var(--sp-14);
+	}
+	.more {
+		display: flex;
+		justify-content: center;
+		margin-top: var(--sp-14);
 	}
 	.row {
 		display: flex;

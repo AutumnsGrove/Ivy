@@ -1385,3 +1385,17 @@ vector scan time over a real mailbox; the update rollback against a real unhealt
   person twice or never across a page boundary). Reproduced with `TestPeoplePagesInHundreds` (the endpoint
   returned a bare array; failed before the fix). The contract change is breaking, so the web client moves with
   it.
+- **#119** · `c1`-era inbox wiring (chunk 2/3b) · `web/src/routes/(mail)/+layout.ts`, `PhoneInbox.svelte`,
+  `DesktopInbox.svelte` · **bug** · found while paging: the inbox screens loaded the first page and never
+  followed `nextCursor`, so a real mailbox showed its newest 50 messages and no way to reach the rest except
+  search. (Only the spend log, built later, had a "Show older".) Fixed with the shared `Pager`
+  (`web/src/lib/pager.svelte.ts`, six unit tests, including that a page requested for one folder is dropped
+  when the reader switches to another): the inbox, the Reading feed and People now load the first page in the
+  route and append the rest with a "Show older" / "Show more people" button. The e2e fake serves two pages
+  under `?scenario=paged` and `web/e2e/paging.spec.ts` covers all four lists on phone and desktop. Search is
+  still one page: its handler ignores the `cursor` and `limit` the contract declares (see N42).
+- **N42 (open, needs a decision)** · `d570eeb` · `gateway/search.go`, `api/openapi.yaml` · `GET /search` takes
+  `limit` (default 50, at most 200) and a `cursor`, but the handler ignores the cursor and never returns a
+  `nextCursor`, so a search shows at most the top 200 fused hits. That is probably enough for a person, so it
+  is not changed here; if wanted, an offset cursor over the fused ranking (fetch `offset + limit`, slice) is
+  the cheap way.

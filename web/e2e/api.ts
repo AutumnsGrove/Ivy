@@ -120,7 +120,16 @@ function searchReply(query: string): Reply {
 	return { body: { query, total: shown.length, hits: shown } };
 }
 
-function inboxReply(accountId: string | null, scenario: string | null, folder: string | null): Reply {
+/**
+ * `?scenario=paged` serves a list in two pages the way the gateway does: the first `size` rows with a
+ * `nextCursor`, and the rest when that cursor comes back.
+ */
+function paged<T>(rows: T[], scenario: string | null, cursor: string | null, size: number): { rows: T[]; nextCursor?: string } {
+	if (scenario !== 'paged') return { rows };
+	return cursor ? { rows: rows.slice(size) } : { rows: rows.slice(0, size), nextCursor: 'next-page' };
+}
+
+function inboxReply(accountId: string | null, scenario: string | null, folder: string | null, cursor: string | null): Reply {
 	if (folder === 'trash') {
 		// Two fixtures stand in for trashed mail; the other folder views are empty.
 		const items = mock.inbox.slice(0, 2);
@@ -132,13 +141,15 @@ function inboxReply(accountId: string | null, scenario: string | null, folder: s
 	if (scenario === 'empty') {
 		return { body: { items: [], needCount: 0, unreadCount: 0, readingWaiting: 3 } };
 	}
-	const items = mock.inbox.filter((m) => !accountId || m.accountId === accountId);
+	const all = mock.inbox.filter((m) => !accountId || m.accountId === accountId);
+	const page = paged(all, scenario, cursor, 3);
 	return {
 		body: {
-			items,
-			needCount: items.filter((m) => m.needs).length,
-			unreadCount: items.filter((m) => m.unread).length,
-			readingWaiting: 3
+			items: page.rows,
+			needCount: all.filter((m) => m.needs).length,
+			unreadCount: all.filter((m) => m.unread).length,
+			readingWaiting: 3,
+			nextCursor: page.nextCursor
 		}
 	};
 }
@@ -246,10 +257,16 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	if (path === '/accounts') {
 		return { body: scenario === 'sync-error' ? state.accounts.map(mock.failingHello) : state.accounts };
 	}
-	if (path === '/inbox') return inboxReply(params.get('account_id'), scenario, params.get('folder'));
+	if (path === '/inbox') return inboxReply(params.get('account_id'), scenario, params.get('folder'), params.get('cursor'));
 	if (path === '/search') return searchReply(params.get('q') ?? '');
-	if (path === '/reading') return { body: mock.reading };
-	if (path === '/people' && method === 'GET') return { body: mock.people };
+	if (path === '/reading') {
+		const page = paged(mock.reading.issues, scenario, params.get('cursor'), 2);
+		return { body: { ...mock.reading, issues: page.rows, nextCursor: page.nextCursor } };
+	}
+	if (path === '/people' && method === 'GET') {
+		const page = paged(mock.people, scenario, params.get('cursor'), 4);
+		return { body: { items: page.rows, nextCursor: page.nextCursor } };
+	}
 	if (/^\/people\/[^/]+\/addresses\/[^/]+$/.test(path) && method === 'DELETE') return { status: 204, body: null };
 	if (/^\/people\/[^/]+\/addresses$/.test(path) && method === 'POST') return { status: 204, body: null };
 	const person = /^\/people\/([^/]+)$/.exec(path);

@@ -47,6 +47,7 @@ export type TagsOverview = Schema['TagsOverview'];
 export type TagCreate = Schema['TagCreate'];
 export type TagUpdate = Schema['TagUpdate'];
 export type Person = Schema['Person'];
+export type PeoplePage = Schema['PeoplePage'];
 export type Rule = Schema['Rule'];
 export type RuleInput = Schema['RuleInput'];
 export type RuleCondition = Schema['RuleCondition'];

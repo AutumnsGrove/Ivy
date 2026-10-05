@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { accountAvatar } from '#lib/accounts.js';
+	import { api } from '#lib/api/client.js';
+	import { Pager } from '#lib/pager.svelte.js';
 	import { withScenario, type Scenario } from '#lib/api/scenario.js';
 	import { PenLine, Search } from '#lib/icons.js';
 	import { folderTitle } from '#lib/folders.js';
@@ -10,6 +12,7 @@
 	import Drawer from '../shell/Drawer.svelte';
 	import Page from '../shell/Page.svelte';
 	import Banner from '../ui/Banner.svelte';
+	import Button from '../ui/Button.svelte';
 	import Fab from '../ui/Fab.svelte';
 	import IconButton from '../ui/IconButton.svelte';
 	import LargeHeader from '../ui/LargeHeader.svelte';
@@ -36,7 +39,13 @@
 	const subtitle = $derived(`${inbox.needCount} need you · ${inbox.unreadCount} unread`);
 	// A message with a live move op is hidden until the server confirms, so an
 	// archive or delete disappears at once and returns if the op fails.
-	const visible = $derived(inbox.items.filter((m) => !outbox.hidden(m.id)));
+	// The route loads the newest page; "Show older" appends the pages after it.
+	const pager = new Pager<Inbox['items'][number]>(
+		(cursor) => api.listInbox({ scenario: scenario ?? undefined, accountId: accountId ?? undefined, folder, cursor }),
+		"Couldn't load older mail"
+	);
+	$effect.pre(() => pager.reset({ items: inbox.items, nextCursor: inbox.nextCursor }));
+	const visible = $derived(pager.items.filter((m) => !outbox.hidden(m.id)));
 </script>
 
 <Page>
@@ -76,6 +85,11 @@
 				{accounts}
 				hrefFor={(m) => withScenario(`/m/${m.id}`, scenario)}
 			/>
+			{#if pager.cursor}
+				<div class="more">
+					<Button variant="tonal" onclick={() => pager.more()} disabled={pager.busy}>Show older</Button>
+				</div>
+			{/if}
 		{:else if folder === 'inbox'}
 			<EmptyInbox readingWaiting={inbox.readingWaiting} />
 		{:else}
@@ -99,6 +113,11 @@
 	}
 	.grow {
 		flex-grow: 1;
+	}
+	.more {
+		display: flex;
+		justify-content: center;
+		padding: var(--sp-10) 0;
 	}
 	.body {
 		display: flex;

@@ -19,6 +19,7 @@ import type {
 	OutboxAction,
 	OutboxItem,
 	OutboxList,
+	PeoplePage,
 	Person,
 	ReadingFeed,
 	Rule,
@@ -67,8 +68,8 @@ export const api = {
 	// --- reader: answered by the real gateway over the JSON contract ---------
 	listAccounts: (_o: Opts = {}): Promise<Account[]> => request<Account[]>('/accounts'),
 
-	listInbox: (o: Opts & { accountId?: string; folder?: FolderView; tag?: string } = {}): Promise<Inbox> =>
-		request<Inbox>(apiPath('/inbox', { account_id: o.accountId, folder: o.folder, tag: o.tag })),
+	listInbox: (o: Opts & { accountId?: string; folder?: FolderView; tag?: string; cursor?: string } = {}): Promise<Inbox> =>
+		request<Inbox>(apiPath('/inbox', { account_id: o.accountId, folder: o.folder, tag: o.tag, cursor: o.cursor })),
 
 	getMessage: (id: string, _o: Opts = {}): Promise<MailMessage> =>
 		request<MailMessage>(`/messages/${encodeURIComponent(id)}`),
@@ -169,7 +170,8 @@ export const api = {
 		return pageCalls(await ledgerFor(await api.listAccounts()), o);
 	},
 
-	listReading: (): Promise<ReadingFeed> => request<ReadingFeed>('/reading'),
+	listReading: (o: { cursor?: string } = {}): Promise<ReadingFeed> =>
+		request<ReadingFeed>(apiPath('/reading', { cursor: o.cursor })),
 
 	// --- search: FTS5 plus meaning, answered by the gateway (3f) ------------
 	/** Keyword plus meaning; the account picker narrows it. */
@@ -182,7 +184,9 @@ export const api = {
 		return tick({ ...mock.askAnswer, question });
 	},
 
-	listPeople: (): Promise<Person[]> => request<Person[]>('/people'),
+	/** One page of 100, most correspondence first; pass the previous page's `nextCursor` for the next. */
+	listPeople: (o: { cursor?: string } = {}): Promise<PeoplePage> =>
+		request<PeoplePage>(apiPath('/people', { cursor: o.cursor })),
 
 	getPerson: (id: string): Promise<Person> => request<Person>(`/people/${encodeURIComponent(id)}`),
 
