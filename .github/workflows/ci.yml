@@ -249,7 +249,9 @@ jobs:
           cache: true
       - uses: github/codeql-action/init@1190a975f95ce23525efb6a3fc21ea29567c1b52 # v3
         with:
-          language: ${{ matrix.language }}
+          # `languages` (plural) is the real input; the singular was ignored with a warning, so
+          # every job auto-detected go, javascript and actions and ran Go's autobuilder.
+          languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
       - if: matrix.build-mode == 'manual'
         name: build for CodeQL
