@@ -384,6 +384,43 @@ var mirrorMigrations = []migration{
 			   AND EXISTS (SELECT 1 FROM json_each(messages.flags_json) WHERE lower(value) = '\flagged')`,
 		},
 	},
+	{
+		version: 13,
+		statements: []string{
+			// extracted_text holds the plain text pulled out of a message body or
+			// one attachment, keyed by the durable content identity (the message
+			// content_key for a body, the attachment content_hash otherwise). It is
+			// derived and rebuildable, so it lives in the mirror (ARCHITECTURE.md 3).
+			`CREATE TABLE extracted_text (
+				ref             TEXT NOT NULL,
+				kind            TEXT NOT NULL,
+				tier            INTEGER NOT NULL DEFAULT 0,
+				status          TEXT NOT NULL DEFAULT '',
+				text            TEXT NOT NULL DEFAULT '',
+				derived_version INTEGER NOT NULL DEFAULT 0,
+				updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+				PRIMARY KEY (ref, kind)
+			)`,
+			`CREATE INDEX idx_extracted_text_status ON extracted_text(kind, status)`,
+			// search_docs maps a durable content key to its FTS row, so a document
+			// can be updated by identity without scanning the index. One row per
+			// (account, content key): a message in two folders is one document, and
+			// an identical Message-ID is one document by design (N8).
+			`CREATE TABLE search_docs (
+				id          INTEGER PRIMARY KEY,
+				account_id  TEXT NOT NULL,
+				content_key TEXT NOT NULL,
+				UNIQUE (account_id, content_key)
+			)`,
+			`CREATE INDEX idx_search_docs_content ON search_docs(content_key)`,
+			// The FTS5 index; its rowid mirrors search_docs.id. unicode61 with
+			// diacritics folding is the chosen tokenizer (round 55, next_steps).
+			`CREATE VIRTUAL TABLE search_index USING fts5(
+				subject, body, attachment,
+				tokenize = 'unicode61 remove_diacritics 2'
+			)`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.
@@ -482,6 +519,45 @@ var stateMigrations = []migration{
 			// non-terminal ops.
 			`CREATE UNIQUE INDEX idx_outbox_idempotency ON outbox(idempotency_key) WHERE state IN ('pending','in_flight')`,
 			`CREATE INDEX idx_outbox_account_state_seq ON outbox(account_id, state, seq)`,
+		},
+	},
+	{
+		version: 6,
+		statements: []string{
+			// The cost ledger: one row per remote API call and, for a batched call
+			// such as embeddings, one row per message with the call's exact cost
+			// allocated by token share (ARCHITECTURE.md 3). It is locally owned and
+			// backed up, so only the gate writes it. A blocked or failed call is
+			// recorded at zero cost, so the volume stays visible.
+			`CREATE TABLE api_calls (
+				id            INTEGER PRIMARY KEY,
+				at            TEXT NOT NULL,
+				provider      TEXT NOT NULL DEFAULT '',
+				endpoint      TEXT NOT NULL DEFAULT '',
+				model         TEXT NOT NULL DEFAULT '',
+				feature       TEXT NOT NULL DEFAULT '',
+				account_id    TEXT NOT NULL DEFAULT '',
+				content_key   TEXT NOT NULL DEFAULT '',
+				input_tokens  INTEGER NOT NULL DEFAULT 0,
+				output_tokens INTEGER NOT NULL DEFAULT 0,
+				cost_usd      REAL NOT NULL DEFAULT 0,
+				cost_estimated INTEGER NOT NULL DEFAULT 0,
+				latency_ms    INTEGER NOT NULL DEFAULT 0,
+				outcome       TEXT NOT NULL DEFAULT '',
+				call_id       TEXT NOT NULL DEFAULT ''
+			)`,
+			`CREATE INDEX idx_api_calls_at ON api_calls(at)`,
+			`CREATE INDEX idx_api_calls_account_at ON api_calls(account_id, at)`,
+			// The monthly counters the gate checks before a call: spend and call count
+			// per account, period (YYYY-MM) and endpoint.
+			`CREATE TABLE api_caps (
+				account_id TEXT NOT NULL DEFAULT '',
+				period     TEXT NOT NULL,
+				endpoint   TEXT NOT NULL,
+				spent_usd  REAL NOT NULL DEFAULT 0,
+				calls      INTEGER NOT NULL DEFAULT 0,
+				PRIMARY KEY (account_id, period, endpoint)
+			)`,
 		},
 	},
 }
