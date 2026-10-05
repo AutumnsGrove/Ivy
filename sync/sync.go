@@ -85,6 +85,7 @@ type Fetcher struct {
 	inline int64         // largest message fetched into memory
 	max    int64         // largest message downloaded at all
 	stall  time.Duration // silence from the server that ends a command
+	newID  func() string // op ids for the keywords sync re-applies
 }
 
 // Message size limits (STANDARDS.md 4a). A message up to InlineMessageBytes is
@@ -136,7 +137,7 @@ func WithStallTimeout(d time.Duration) Option {
 
 // NewFetcher builds a Fetcher over the mirror.
 func NewFetcher(dbs *store.DBs, opts ...Option) *Fetcher {
-	f := &Fetcher{dbs: dbs, now: time.Now, batch: defaultBatchSize, inline: InlineMessageBytes, max: MaxMessageBytes, stall: defaultStallTimeout}
+	f := &Fetcher{dbs: dbs, now: time.Now, batch: defaultBatchSize, inline: InlineMessageBytes, max: MaxMessageBytes, stall: defaultStallTimeout, newID: randomOpID}
 	for _, opt := range opts {
 		opt(f)
 	}
@@ -428,6 +429,9 @@ type folderSnapshot struct {
 	Delta         bool
 	Existing      store.Folder
 	Found         bool
+	// KeywordsOK is whether the folder keeps custom keywords (\* in
+	// PERMANENTFLAGS), which decides whether tags can be re-applied to it.
+	KeywordsOK bool
 }
 
 // canUseDelta reports whether a folder has a stored UIDVALIDITY and modseq to
@@ -484,6 +488,7 @@ func (f *Fetcher) snapshotFolder(c *session, acct Account, mb *imap.ListData, ex
 		}
 	}
 	snap.UIDValidity = data.UIDValidity
+	snap.KeywordsOK = slices.Contains(data.PermanentFlags, imap.FlagWildcard)
 	snap.UIDNext = uint32(data.UIDNext)
 	snap.HighestModSeq = data.HighestModSeq
 	if data.NumMessages == 0 {
@@ -538,6 +543,10 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 		return 0, 0, err
 	}
 
+	tags, err := f.loadTagIndex(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
 	refs, err := f.dbs.SyncMessageRefs(ctx, folder.ID)
 	if err != nil {
 		return 0, 0, err
@@ -603,6 +612,11 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 		if deferred(active, folder.ID, ref) {
 			continue
 		}
+		// Before the flags are stored, so a failure here is retried by the next
+		// pass instead of being hidden by flags that now look unchanged.
+		if err := f.readBackChange(ctx, acct.ID, ref, flagStrings(meta.Flags), tags); err != nil {
+			return 0, 0, fmt.Errorf("sync account %s: tags %s/%d: %w", acct.ID, snap.Name, uid, err)
+		}
 		if err := f.dbs.SetMessageFlags(ctx, ref.ID, flagStrings(meta.Flags)); err != nil {
 			return 0, 0, fmt.Errorf("sync account %s: flags %s/%d: %w", acct.ID, snap.Name, uid, err)
 		}
@@ -642,6 +656,11 @@ func (f *Fetcher) reconcileFolder(ctx context.Context, c *session, acct Account,
 		if err != nil {
 			return stored, skipped, err
 		}
+	}
+	// After every body is stored, so the rows it reads exist. A failure is a
+	// state.db error and fails the pass loudly rather than skipping tags quietly.
+	if err := f.readBackNew(ctx, acct, folder.ID, snap, newUIDs, tags); err != nil {
+		return stored, skipped, fmt.Errorf("sync account %s: tags %s: %w", acct.ID, snap.Name, err)
 	}
 	// Every body this folder needed is stored, so the modseq may advance. A
 	// failure above returns before this and leaves the old modseq for the retry.

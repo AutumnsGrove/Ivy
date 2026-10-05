@@ -20,6 +20,9 @@ const (
 	// MaxTagSlugLen is the longest slug in bytes. It bounds the keyword Ivy
 	// writes and, on read-back, the keyword it is willing to consider.
 	MaxTagSlugLen = 48
+	// MaxTagKeywordsPerMessage is how many Ivy keywords sync reads from one
+	// message; another client can set any number, and the rest are ignored.
+	MaxTagKeywordsPerMessage = 32
 )
 
 // KeywordPrefix starts every IMAP keyword Ivy owns for a tag. Keywords are IMAP

@@ -750,3 +750,22 @@ func (d *DBs) GetMessageIncludingHidden(ctx context.Context, id string) (Message
 	}
 	return m, nil
 }
+
+// AnotherRowCarriesKeyword reports whether a live row other than exceptID, of the
+// same account and content key, carries a keyword. Flags are case-insensitive on
+// the server, so the comparison is too; keyword is lower-case.
+func (d *DBs) AnotherRowCarriesKeyword(ctx context.Context, accountID, contentKey, exceptID, keyword string) (bool, error) {
+	var found bool
+	err := d.Mirror.Read.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM messages m
+			WHERE m.account_id = ? AND m.content_key = ? AND m.id <> ? AND m.disabled_at IS NULL
+			  AND EXISTS (
+				SELECT 1 FROM json_each(CASE WHEN json_valid(m.flags_json) THEN m.flags_json ELSE '[]' END)
+				WHERE lower(value) = ?))`,
+		accountID, contentKey, exceptID, strings.ToLower(keyword)).Scan(&found)
+	if err != nil {
+		return false, fmt.Errorf("rows carrying %s for %s: %w", keyword, contentKey, err)
+	}
+	return found, nil
+}
