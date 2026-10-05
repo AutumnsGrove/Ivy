@@ -97,7 +97,7 @@ type updateStatusResponse struct {
 // WithUpdate enables the self-update endpoints. u may be nil. ctx owns the
 // resolve goroutine; it must outlive the request that starts an update, so pass
 // the server's own run context, not r.Context.
-func (s *Server) WithUpdate(u Updater, ctx context.Context) *Server {
+func (s *Server) WithUpdate(ctx context.Context, u Updater) *Server {
 	s.updater = u
 	s.updateCtx = ctx
 	return s
@@ -106,7 +106,7 @@ func (s *Server) WithUpdate(u Updater, ctx context.Context) *Server {
 // handleUpdate claims the slot and starts the resolve in the background, then
 // answers immediately. It cannot block for the CI wait: the frontend's fetch
 // times out after 30 seconds, and a publish can take minutes.
-func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleUpdate(w http.ResponseWriter, _ *http.Request) {
 	if s.updater == nil {
 		writeError(w, http.StatusServiceUnavailable, "update_unavailable", "This Ivy has no update path")
 		return
@@ -120,7 +120,7 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	go s.runUpdate(ctx)
+	go s.runUpdate(ctx) //nolint:contextcheck // the update outlives this request, so it must not inherit r.Context
 	writeJSON(w, http.StatusAccepted, s.updateSnapshot())
 }
 

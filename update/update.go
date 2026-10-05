@@ -308,7 +308,7 @@ func Pending(dir string) bool {
 // ReadResult reads the watcher's last outcome, or nil if none exists or it is
 // not valid JSON (defensive; the script writes atomically).
 func ReadResult(dir string) *Result {
-	body, err := os.ReadFile(filepath.Join(dir, "result"))
+	body, err := os.ReadFile(filepath.Join(dir, "result")) //nolint:gosec // G304: dir is the operator's configured signal directory
 	if err != nil {
 		return nil
 	}

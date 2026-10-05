@@ -182,9 +182,9 @@ func trimSlash(s string) string {
 // truncateForError keeps a provider's error body out of logs beyond a useful
 // size (and never includes mail text, which a provider could echo back).
 func truncateForError(b []byte) string {
-	const max = 512
-	if len(b) > max {
-		return string(b[:max])
+	const limit = 512
+	if len(b) > limit {
+		return string(b[:limit])
 	}
 	return string(b)
 }

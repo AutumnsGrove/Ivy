@@ -275,6 +275,7 @@ func (d *DBs) ConversationsForAddresses(ctx context.Context, addresses []string,
 		where = append(where, `(lower(COALESCE(m.from_json,'')) LIKE ? OR lower(COALESCE(m.to_json,'')) LIKE ? OR lower(COALESCE(m.cc_json,'')) LIKE ?)`)
 		args = append(args, like, like, like)
 	}
+	//nolint:gosec // G202: only fixed "(... LIKE ?)" fragments are joined; every address is a bound argument
 	query := `SELECT m.id, COALESCE(m.thread_id,''), COALESCE(m.subject,''), COALESCE(m.snippet,''),
 	                 COALESCE(m.date,''), m.seen, m.content_key
 	          FROM messages m

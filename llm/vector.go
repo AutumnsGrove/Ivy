@@ -97,7 +97,7 @@ func (v Vector) Encode() []byte {
 	buf := make([]byte, 4+len(v.Values))
 	binary.BigEndian.PutUint32(buf[:4], uint32(v.Dims)) //nolint:gosec // G115: a vector length is far below 2^31
 	for i, x := range v.Values {
-		buf[4+i] = byte(x)
+		buf[4+i] = byte(x) //nolint:gosec // G115: the two's-complement byte of an int8 is the intended encoding
 	}
 	return buf
 }
@@ -115,7 +115,7 @@ func DecodeVector(b []byte, scale, norm float64, dims int) (Vector, bool) {
 	}
 	values := make([]int8, n)
 	for i := range values {
-		values[i] = int8(b[4+i])
+		values[i] = int8(b[4+i]) //nolint:gosec // G115: the inverse of Encode, a byte reinterpreted as the int8 it was
 	}
 	return Vector{Values: values, Scale: scale, Norm: norm, Dims: n}, true
 }

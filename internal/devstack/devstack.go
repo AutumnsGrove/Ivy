@@ -219,9 +219,9 @@ func BuildConfig(imapAddr, smtpAddr string, accounts []mailworld.SeedAccount, op
 		return nil, err
 	}
 
-	cap := opts.LLMCap
-	if cap <= 0 {
-		cap = config.DefaultMonthlyCapUSD
+	monthlyCap := opts.LLMCap
+	if monthlyCap <= 0 {
+		monthlyCap = config.DefaultMonthlyCapUSD
 	}
 	cfg := &config.Config{
 		Listen:  opts.Listen,
@@ -230,7 +230,7 @@ func BuildConfig(imapAddr, smtpAddr string, accounts []mailworld.SeedAccount, op
 		LLM: config.LLM{
 			OpenRouterBase: config.DefaultOpenRouterURL,
 			EmbedModel:     config.DefaultEmbedModel,
-			MonthlyCapUSD:  cap,
+			MonthlyCapUSD:  monthlyCap,
 		},
 	}
 	for _, sa := range selected {

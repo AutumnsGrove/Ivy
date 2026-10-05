@@ -122,11 +122,7 @@ func runCmd(configPath *string, version string) *cobra.Command {
 			// watcher reads the signal file. In dev it would write a file nothing reads
 			// and the UI would spin, so leave the endpoint reporting "unavailable".
 			if inContainer() {
-				api = api.WithUpdate(&update.Client{
-					Repo:      update.DefaultRepo,
-					SignalDir: cfg.UpdateSignalDir(),
-					Token:     cfg.Update.Token,
-				}, ctx)
+				api = api.WithUpdate(ctx, newUpdateClient(cfg))
 			}
 
 			// No Read/WriteTimeout: SSE streams and large bodies are long-lived. The

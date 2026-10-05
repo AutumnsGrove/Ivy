@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -235,7 +236,7 @@ func TestExtractedTextRoundTrip(t *testing.T) {
 	if got, _ := dbs.GetExtractedText(ctx, "hash1", ExtractKindAttachment); got.Text != "revised" {
 		t.Fatalf("update not applied: %+v", got)
 	}
-	if _, err := dbs.GetExtractedText(ctx, "missing", ExtractKindAttachment); err != ErrNotFound {
+	if _, err := dbs.GetExtractedText(ctx, "missing", ExtractKindAttachment); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("missing ref error = %v, want ErrNotFound", err)
 	}
 }

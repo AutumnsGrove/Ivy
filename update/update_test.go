@@ -82,10 +82,10 @@ func withActions(t *testing.T, url string) {
 	t.Cleanup(func() { githubBaseURL = original })
 }
 
-func withTimings(t *testing.T, poll, max time.Duration) {
+func withTimings(t *testing.T, poll, maxWait time.Duration) {
 	t.Helper()
 	origPoll, origMax := ciPollInterval, ciMaxWait
-	ciPollInterval, ciMaxWait = poll, max
+	ciPollInterval, ciMaxWait = poll, maxWait
 	t.Cleanup(func() { ciPollInterval, ciMaxWait = origPoll, origMax })
 }
 

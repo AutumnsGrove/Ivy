@@ -1246,3 +1246,17 @@ on parts and no use of the caller's deadline).
   O(mailbox) work on every sync that stores anything, on the potato. Not changed without a number: time
   one rebuild at 5k messages on the board and extrapolate (do not run the 100k profile). If it matters,
   rebuild only when a pass stored or hid mail, or update the touched addresses incrementally.
+
+### Baseline: golangci-lint
+
+- **#115** · `0ac3c61`, `b6e447d`, `901c0e3`, `b74c0c2` and others · **standards** · the 13 issues
+  golangci-lint v2.12.1 (CI's pin) reported at the start of this review, which would have failed the `go`
+  job. Fixed in one commit because they are one-line each: `errors.Is` for the `io.EOF` and `ErrNotFound`
+  comparisons (`extract`, `store/search_test.go`), `ctx` first in `Server.WithUpdate` (plus `_` for the
+  unused request, and `cmd` now builds the client with the existing `newUpdateClient` hook rather than a
+  second copy), and the builtin names `cap` and `max` no longer shadowed (`devstack`, `llm`,
+  `update_test`). Four gosec findings are deliberate and carry a same-line reason: the int8/byte
+  reinterpretation in the vector codec (G115, two sites), the fixed-fragment `LIKE ?` join in
+  `ConversationsForAddresses` (G202, every value is bound) and the operator-configured signal directory
+  (G304). The gate at the tip is clean: `golangci-lint` 0 issues, `staticcheck`, `go vet`, `gofumpt` and
+  `CGO_ENABLED=1 go test -race ./...` all pass.

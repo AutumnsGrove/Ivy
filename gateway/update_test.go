@@ -68,7 +68,7 @@ func newUpdateServer(t *testing.T, u Updater) (*httptest.Server, *events.Hub, *S
 	}
 	t.Cleanup(func() { dbs.Close() })
 	hub := events.New()
-	srv := New(dbs, "test-version", testStaticFS()).WithEvents(hub).WithUpdate(u, t.Context())
+	srv := New(dbs, "test-version", testStaticFS()).WithEvents(hub).WithUpdate(t.Context(), u)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts, hub, srv
