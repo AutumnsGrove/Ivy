@@ -660,3 +660,28 @@ func canonicalFlagSet(in []string) []string {
 	slices.Sort(out)
 	return slices.Compact(out)
 }
+
+// SettledMoveDestination returns the folder the newest finished move of a
+// message (named by content key and the folder it left) delivered it to, or
+// ErrNotFound. A reader's Undo arrives holding the id of the row the move
+// hid, and this is how it finds where the message went without guessing from
+// the content key alone, which a copy in another folder can share.
+func (d *DBs) SettledMoveDestination(ctx context.Context, accountID, contentKey, sourceFolderID string) (string, error) {
+	var raw string
+	err := d.State.Read.QueryRowContext(ctx, `
+		SELECT expect FROM outbox
+		WHERE account_id = ? AND content_key = ? AND source_folder_id = ? AND kind = ? AND state = ?
+		ORDER BY seq DESC LIMIT 1`,
+		accountID, contentKey, sourceFolderID, OutboxMove, OutboxDone).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("settled move of %s: %w", contentKey, err)
+	}
+	expect, err := decodeExpect(raw)
+	if err != nil {
+		return "", fmt.Errorf("settled move of %s: expect: %w", contentKey, err)
+	}
+	return expect.DestFolderID, nil
+}

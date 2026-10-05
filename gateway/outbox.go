@@ -27,9 +27,14 @@ func (s *Server) handleEnqueueOutbox(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "That action is not valid")
 		return
 	}
-	msg, err := s.dbs.GetMessage(ctx, body.MessageId)
+	msg, err := s.actionTarget(ctx, body.MessageId)
 	if errors.Is(err, store.ErrNotFound) {
 		s.notFound(w, r, "message")
+		return
+	}
+	if errors.Is(err, errNotSynced) {
+		writeError(w, http.StatusConflict, "not_synced",
+			"Ivy has not seen the message in its new folder yet; try again in a moment")
 		return
 	}
 	if err != nil {
@@ -63,6 +68,41 @@ func (s *Server) handleEnqueueOutbox(w http.ResponseWriter, r *http.Request) {
 	}
 	s.hintOutbox(msg.AccountID)
 	writeJSON(w, http.StatusAccepted, s.outboxItem(ctx, stored))
+}
+
+// errNotSynced reports an action on a message the server has moved but sync has
+// not yet mirrored in its new folder, so there is no row to act on.
+var errNotSynced = errors.New("moved message not mirrored yet")
+
+// actionTarget finds the live row an action acts on. A reader's Undo arrives
+// holding the id of the row a finished move hid, so a row hidden as moved is
+// followed to the copy in the folder that move delivered it to (never to a
+// same-Message-ID copy elsewhere, which the content key alone would also match).
+func (s *Server) actionTarget(ctx context.Context, id string) (store.Message, error) {
+	msg, err := s.dbs.GetMessage(ctx, id)
+	if !errors.Is(err, store.ErrNotFound) {
+		return msg, err
+	}
+	hidden, err := s.dbs.GetMessageIncludingHidden(ctx, id)
+	if err != nil || hidden.DisabledReason != store.DisabledMoved {
+		return store.Message{}, store.ErrNotFound
+	}
+	dest, err := s.dbs.SettledMoveDestination(ctx, hidden.AccountID, hidden.ContentKey, hidden.FolderID)
+	if err != nil {
+		return store.Message{}, err
+	}
+	rowID, _, err := s.dbs.MessageRowRef(ctx, hidden.AccountID, hidden.ContentKey, dest)
+	if errors.Is(err, store.ErrNotFound) {
+		return store.Message{}, errNotSynced
+	}
+	if err != nil {
+		return store.Message{}, err
+	}
+	msg, err = s.dbs.GetMessage(ctx, rowID)
+	if errors.Is(err, store.ErrNotFound) {
+		return store.Message{}, errNotSynced
+	}
+	return msg, err
 }
 
 // outboxAction maps a reader action to an op kind and its postcondition. It

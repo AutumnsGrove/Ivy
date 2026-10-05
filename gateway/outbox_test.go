@@ -303,3 +303,68 @@ func TestOutboxTimestampsComeFromTheInjectedClock(t *testing.T) {
 		t.Errorf("UpdatedAt after retry = %s, want the injected %s", retried.UpdatedAt, fixed)
 	}
 }
+
+// archiveAndSettle archives m1 through the API and then plays the worker's
+// part: the server moved it, so the inbox row is hidden as moved and the op is
+// done. It returns the archive folder id.
+func archiveAndSettle(t *testing.T, srv *httptest.Server, dbs *store.DBs) {
+	t.Helper()
+	ctx := context.Background()
+	mustFolder(t, dbs, store.Folder{ID: "archive-1", AccountID: "acct-1", Name: "Archive", Role: store.RoleArchive, UIDValidity: 1, LastSyncAt: testNow})
+	var item api.OutboxItem
+	if code := postJSON(t, srv.URL+"/api/v1/outbox", api.OutboxAction{MessageId: "m1", Action: api.OutboxActionArchive}, &item); code != http.StatusAccepted {
+		t.Fatalf("archive status = %d, want 202", code)
+	}
+	if err := dbs.DisableMessage(ctx, "m1", store.DisabledMoved, testNow, ""); err != nil {
+		t.Fatalf("hide m1: %v", err)
+	}
+	if err := dbs.SetOutboxDone(ctx, item.Id, testNow); err != nil {
+		t.Fatalf("settle op: %v", err)
+	}
+}
+
+// Undo after the server has moved the message is the normal case (the toast
+// outlives the worker's first pass). The reader still holds the old row id, so
+// the gateway must follow that row to the copy in the destination folder, and
+// move that copy back.
+func TestUndoOfASettledMoveActsOnTheCopyInTheDestination(t *testing.T) {
+	t.Parallel()
+	srv, dbs := outboxServer(t)
+	archiveAndSettle(t, srv, dbs)
+	// Sync has since mirrored the arrival under a new row id and UID.
+	arrived := inboxMessage("m1-arrived", "acct-1", "archive-1", testNow, false)
+	arrived.ContentKey = "ck:m1"
+	mustMessage(t, dbs, arrived)
+
+	back := "inbox-1"
+	var undo api.OutboxItem
+	code := postJSON(t, srv.URL+"/api/v1/outbox", api.OutboxAction{
+		MessageId: "m1", Action: api.OutboxActionMove, DestinationFolderId: &back,
+	}, &undo)
+	if code != http.StatusAccepted {
+		t.Fatalf("undo status = %d, want 202", code)
+	}
+	if undo.SourceFolderId == nil || *undo.SourceFolderId != "archive-1" {
+		t.Errorf("undo source = %v, want archive-1 (where the message is now)", undo.SourceFolderId)
+	}
+	if undo.MessageId != "m1-arrived" {
+		t.Errorf("undo acts on %q, want the arrived copy m1-arrived", undo.MessageId)
+	}
+}
+
+// Before sync has seen the arrival there is no row to act on; the answer is a
+// retryable conflict, not "not found".
+func TestUndoBeforeTheArrivalIsMirroredSaysSoPlainly(t *testing.T) {
+	t.Parallel()
+	srv, dbs := outboxServer(t)
+	archiveAndSettle(t, srv, dbs)
+
+	back := "inbox-1"
+	var body api.Error
+	code := postJSON(t, srv.URL+"/api/v1/outbox", api.OutboxAction{
+		MessageId: "m1", Action: api.OutboxActionMove, DestinationFolderId: &back,
+	}, &body)
+	if code != http.StatusConflict || body.Code != "not_synced" {
+		t.Fatalf("status/code = %d/%s, want 409/not_synced", code, body.Code)
+	}
+}

@@ -984,3 +984,20 @@ Baseline before any change: `go build`, `go vet`, `staticcheck`, `gofumpt -l`, t
   `TestFlaggedBackfillMatchesOnlyTheFlaggedFlag` (a v10 database upgraded through `Open`: the keyword row
   came out `flagged = true`). Migrations are append-only, so v11 is untouched and migration 12 recomputes
   the column from the parsed flag list (`json_each`, case-insensitive, skipping unparsable JSON).
+- **#91** · `6b0135f` · `gateway/outbox.go` · **bug** · the reader's Undo toast sends the id of the row it just
+  acted on, but once the worker has moved the message that row is hidden as moved and `GetMessage` filters
+  hidden rows, so Undo answered 404 "not found" in the normal case (the worker drains in about a second,
+  the toast lasts four). The e2e only checks that the Undo button appears. Reproduced with
+  `TestUndoOfASettledMoveActsOnTheCopyInTheDestination` (404, wanted 202) and
+  `TestUndoBeforeTheArrivalIsMirroredSaysSoPlainly` (404, wanted 409 `not_synced`). The gateway now
+  follows a row hidden as moved through the newest *finished move op* for that mail
+  (`store.SettledMoveDestination`) to the copy in the folder it delivered it to, so a same-Message-ID copy
+  in another folder (N8) is never mistaken for it; when sync has not mirrored the arrival yet it answers
+  409 `not_synced`. The web client knows the new code (before it was coerced to `internal_error`).
+- **N30 (open, needs a design decision)** · `6b0135f` · `sync/outbox.go` · Undo of a move can only act once
+  sync has mirrored the arrival in the destination, so within the first few seconds it answers
+  `not_synced`, which is the window the toast is on screen. Options: after a MOVE the worker mirrors the
+  arrival itself (the server's `COPYUID` names the new UID; fetch and upsert that one message), or the
+  worker asks the sync worker for an immediate pass of the destination folder. Recommendation: use
+  `COPYUID`, since it needs no new coupling between the two workers. Not done here because it changes
+  what `finishMove` writes to the mirror.
