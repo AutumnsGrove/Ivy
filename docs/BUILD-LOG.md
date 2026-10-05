@@ -636,10 +636,12 @@ no mail code.
   (`/etc/ivy/watcher-sync-verify.sh`) and its sudoers rule, and prepares the shared directories.
   The happy path, the unhealthy-rollback path and the non-digest refusal were exercised against
   stubbed `docker`/`git`/`systemd` in a sandbox.
-- **Tests.** `update/update_test.go`, `gateway/update_test.go`, `cmd/update_test.go`,
-  `config/config_test.go` (signal dir and token), the new e2e settings spec. Go suite (`-race`),
-  `gofumpt`/`vet`, `pnpm check`, Vitest and the mock Playwright suite are green; the mock suite and
-  `make smoke` for the whole chunk are rerun below.
+- **Tests and results.** `update/update_test.go`, `gateway/update_test.go`, `cmd/update_test.go`,
+  `config/config_test.go` (signal dir and token) and the new e2e settings spec. `make check` green
+  (Go `-race`, gofumpt, vet, staticcheck, svelte-check, 254 Vitest), the mock Playwright suite 270
+  passed / 10 skipped, and `make smoke` 10/10 against the real binary. The image was built and booted
+  locally (arm64) with a healthy healthcheck, and the watcher's happy, unhealthy-rollback and
+  non-digest-refusal paths were exercised against stubbed `docker`/`git`/`systemd` in a sandbox.
 - **Left for the operator.** Publish the image once (so `ghcr.io/autumnsgrove/ivy` exists and, if
   the repo stays private, is reachable by the potato), make the GHCR package visible or
   `docker login` on the board, then run `sudo ./install.sh` and one real `ivy update` end to end.
