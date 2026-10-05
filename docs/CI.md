@@ -145,9 +145,9 @@ summary, and treat a PR run over 10 minutes as a bug to fix.
 - [x] `make check` and CI run the same commands. — CI composes the same `make` targets; `make drift`,
       `web-check`, `e2e` and `smoke` are all available locally.
 - [ ] The image publish workflow works once end to end, and the board pulls and runs the arm64 image.
-      — the `Dockerfile` and `docker-publish.yml` are written and the image builds and boots locally
-      (3h); the first real publish and the board's `sudo ./install.sh` + `ivy update` live check is
-      the operator's next action.
+      — `docker-publish.yml` ran green on the first push (`3d26e01`) and `latest`/the short SHA are
+      anonymously pullable from GHCR. The board's `sudo ./install.sh` + one live `ivy update` is the
+      remaining operator check.
 - [ ] Section 5 rules are in place and verified from a fork (no secrets reachable). — the workflows
       are written to the rules (pinned SHAs, read-only permissions, no fork secrets); the GitHub
       settings and a fork test are the operator's checklist in section 6.

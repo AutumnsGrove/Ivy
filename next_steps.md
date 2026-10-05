@@ -131,9 +131,9 @@ drives the Update button. `compose/watcher/update.sh` (systemd oneshot, unprivil
 exact digest, recreates the service, waits for the image healthcheck and rolls back on failure;
 `install.sh` installs the units, the hash-pinned root unit-re-sync wrapper and its sudoers rule.
 `make check`, the Go `-race` suite and the mock Playwright suite are green; the watcher's happy,
-rollback and bad-digest paths were exercised against stubs. **Left for the operator:** publish the
-image once, make the GHCR package reachable from the potato (or `docker login`), then `sudo
-./install.sh` and one real `ivy update` end to end on the board.
+rollback and bad-digest paths were exercised against stubs. **Left for the operator:** the image is
+published and public (run 37352785674), so what remains is `sudo ./install.sh` on the board and one
+real `ivy update` end to end.
 
 **Next, in order:**
 
@@ -350,11 +350,10 @@ vector scan (the real provider needs `OPENROUTER_API_KEY` in `.env`).
 
 ## Operator actions still open
 
-- Deploy (3h): the repo is public now, so the next push to main publishes
-  `ghcr.io/autumnsgrove/ivy`. Set the GHCR package visibility to public (a package published from a
-  repository still defaults to private), or `docker login` on the potato so it can pull. Then `sudo
-  ./install.sh` in the checkout and one real `ivy update` end to end, recording the result. The
-  update flow is unverified against a real registry+watcher until then.
+- Deploy (3h): **the image is published.** Run 37352785674 (commit `3d26e01`) succeeded and
+  `ghcr.io/autumnsgrove/ivy:latest` resolves anonymously to `sha256:e6fdc57c…`, so the package is
+  public and the potato needs no `docker login`. **Left:** on the board, `sudo ./install.sh` and one
+  real `ivy update` end to end, recording the result.
 - Repo visibility: **public** now (was private). The remaining `docs/CI.md` 6 items (gitleaks over
   full history, branch ruleset + required checks, secret scanning) are the operator's checklist.
 - Bump the local Go toolchain off 1.26.1, which `govulncheck` flags (fixed in 1.26.2+); CI resolves
