@@ -13,6 +13,10 @@ design mockups are in [`docs/`](docs/); start with [`docs/PLAN.md`](docs/PLAN.md
 - Your mail stays yours: the mirror never erases anything, and email is treated as hostile input.
 - Fast on modest hardware, with compression and bounded data from the start.
 
+## Running it
+
+Installing on a Linux board, updating and restoring: [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
 ## Contributing
 
 Read [`CLAUDE.md`](CLAUDE.md) and [`docs/STANDARDS.md`](docs/STANDARDS.md) first. Security issues:

@@ -1385,7 +1385,7 @@ vector scan time over a real mailbox; the update rollback against a real unhealt
   person twice or never across a page boundary). Reproduced with `TestPeoplePagesInHundreds` (the endpoint
   returned a bare array; failed before the fix). The contract change is breaking, so the web client moves with
   it.
-- **#119** · `c1`-era inbox wiring (chunk 2/3b) · `web/src/routes/(mail)/+layout.ts`, `PhoneInbox.svelte`,
+- **#119** · inbox wiring (chunk 2) · `web/src/routes/(mail)/+layout.ts`, `PhoneInbox.svelte`,
   `DesktopInbox.svelte` · **bug** · found while paging: the inbox screens loaded the first page and never
   followed `nextCursor`, so a real mailbox showed its newest 50 messages and no way to reach the rest except
   search. (Only the spend log, built later, had a "Show older".) Fixed with the shared `Pager`
@@ -1420,3 +1420,9 @@ vector scan time over a real mailbox; the update rollback against a real unhealt
   the rule pass 200, so two warm-up settles never drained a 5k mailbox and it was timing real work. It now
   drains first and asserts it did. Run it on the board (see `docs/PERFORMANCE.md` "Settle at rest") and decide
   with those numbers; nothing is changed without them, as agreed.
+- **Runbook written** · `docs/DEPLOY.md` (linked from `README.md` and the `CLAUDE.md` doc map): first install,
+  `ivy.yaml` and `data/.env` templates (Purelymail's IMAP 993 / SMTP 465 from spike S1), `allowed_hosts`, first
+  start, an update and a manual rollback, backup and restore, a troubleshooting table and the live checklist.
+  Writing it turned up one thing to change rather than document: narrowing the published port meant editing the
+  tracked `docker-compose.yml`, which the watcher's `git pull` would then trip over, so the bind address is now
+  `IVY_BIND` in `.env` (default `0.0.0.0`, unchanged behaviour).

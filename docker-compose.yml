@@ -19,7 +19,9 @@ services:
     # installing account's uid/gid.
     user: "${IVY_UID:-1000}:${IVY_GID:-1000}"
     ports:
-      - "${IVY_PORT:-8418}:8418"
+      # IVY_BIND narrows the published address (the board's tailnet IP, say); the
+      # default publishes on every interface, where the host-name check is the guard.
+      - "${IVY_BIND:-0.0.0.0}:${IVY_PORT:-8418}:8418"
     volumes:
       - ./data:/data
       # A separate mount so the signal files stay out of the backed-up data
