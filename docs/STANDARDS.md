@@ -226,6 +226,10 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Extracted document read for text (`extract.MaxInputBytes`) | 32 MiB | not read; `extracted_text.status = too_large` |
 | Extracted text kept per part (`extract.MaxOutputBytes`) | 1 MiB | truncated on a rune boundary, `status = ok` |
 | PDF pages read (`extract.MaxPages`) | 500 | the first 500 pages only |
+| One attachment's extraction time (`extractTimeout`) | 20 s | the attachment's text is dropped; status `failed`, the message is unaffected |
+| Attachments extracted per settle pass (`extractBatch`) | 100 | the rest wait for the next pass |
+| Embedding inputs per gate call (`llm.MaxBatchInputs`) | 64 | the call is refused, zero cost, and the queue retries in smaller batches |
+| One embedding input (`llm.MaxInputBytes`) | 64 KiB | the call is refused at zero cost; a body is chunked below this first |
 
 ## 5. Frontend standards
 

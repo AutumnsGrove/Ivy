@@ -130,6 +130,58 @@ func (d *DBs) IndexSearchDoc(ctx context.Context, doc SearchDoc) error {
 	return nil
 }
 
+// PendingExtraction is one attachment whose text has not been extracted yet.
+// Path is the part path inside the message, as stored in attachments.
+type PendingExtraction struct {
+	MessageID string
+	Hash      string
+	Filename  string
+	MIME      string
+	Path      string
+	Size      int64
+}
+
+// PendingExtractions returns attachments on live messages that have no
+// extracted_text row yet, newest first. Every outcome (ok, unsupported, empty,
+// failed, too_large) is recorded, so an attachment is tried once and not every
+// pass.
+func (d *DBs) PendingExtractions(ctx context.Context, accountID string, limit int) ([]PendingExtraction, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	rows, err := d.Mirror.Read.QueryContext(ctx, `
+		SELECT a.message_id, a.content_hash, COALESCE(a.filename, ''), COALESCE(a.mime, ''),
+		       COALESCE(a.storage_path, ''), COALESCE(a.size, 0)
+		FROM attachments a
+		JOIN messages m ON m.id = a.message_id
+		WHERE m.disabled_at IS NULL
+		  AND COALESCE(a.content_hash, '') <> ''
+		  AND COALESCE(a.storage_path, '') <> ''
+		  AND (m.account_id = ? OR ? = '')
+		  AND NOT EXISTS (
+			SELECT 1 FROM extracted_text et
+			WHERE et.ref = a.content_hash AND et.kind = ?)
+		GROUP BY a.content_hash
+		ORDER BY max(m.date) DESC
+		LIMIT ?`, accountID, accountID, ExtractKindAttachment, limit)
+	if err != nil {
+		return nil, fmt.Errorf("pending extractions: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []PendingExtraction
+	for rows.Next() {
+		var p PendingExtraction
+		if err := rows.Scan(&p.MessageID, &p.Hash, &p.Filename, &p.MIME, &p.Path, &p.Size); err != nil {
+			return nil, fmt.Errorf("pending extractions: %w", err)
+		}
+		out = append(out, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("pending extractions: %w", err)
+	}
+	return out, nil
+}
+
 // SummaryForContent returns the newest live message summary for a content key,
 // across every folder role, so a search hit can render a row. It is ErrNotFound
 // for a key with no live copy (the index entry is kept for a restore, but a

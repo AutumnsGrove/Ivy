@@ -266,6 +266,11 @@ func (f *Fetcher) Settle(ctx context.Context, accountID string) error {
 	// Heal derived data first: it can change has_attachments, and a message
 	// fixed by a newer parser should read correctly from the next screen on.
 	_, rerr := f.Rederive(ctx, accountID, rederiveBatch)
+	// Then read the text out of any attachment not yet extracted, so search and
+	// the meaning index see it. A slow document never stalls the fetch itself.
+	if _, err := f.ExtractTexts(ctx, accountID, extractBatch); err != nil && rerr == nil {
+		rerr = err
+	}
 	// Thread even when healing failed: the rows already mirrored are usable.
 	if terr := f.threadAccount(ctx, accountID); rerr == nil {
 		return terr
