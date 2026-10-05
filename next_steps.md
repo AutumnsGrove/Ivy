@@ -135,6 +135,17 @@ rollback and bad-digest paths were exercised against stubs. **Left for the opera
 published and public (run 37352785674), so what remains is `sudo ./install.sh` on the board and one
 real `ivy update` end to end.
 
+**Second-opinion review of 3e-3h (2026-10-05)** is on branch `review/3e-3h-audit` (21 commits on top of
+`3d26e01`; `papercuts.md` #95-#117 and N33-N41 have the detail). It fixed what the first install would hit:
+the update watcher (invalid failure JSON, a request left behind by any `set -e` death re-running the update
+in a loop, a slow first start rolled back, any image accepted), a stale "ok" result after a request the
+watcher never ran, semantic search that never ran from the app, attachment text and vectors that reached
+only one message, an embed queue that a single blank or refused document could stall, extraction denial of
+service, per-account Snooze/Reading bleed, and an empty search index on any mirror that predated it. **Merge
+it to `main` before `sudo ./install.sh`**: the published `:latest` image predates it. Still the operator's:
+the live checks listed at the end of `papercuts.md`, and the open decisions there, most urgent N37 (Reading,
+Snoozed and tag views are capped at 200 rows with no paging).
+
 **Next, in order:**
 
 1. **C0 canvas board** for the three 3b screens, whenever the operator is ready; the backend and API
