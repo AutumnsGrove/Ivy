@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -279,16 +280,17 @@ func (d *DBs) TagsForMessages(ctx context.Context, accountID string, contentKeys
 	if len(contentKeys) == 0 {
 		return out, nil
 	}
-	args := make([]any, 0, len(contentKeys)+1)
-	args = append(args, accountID)
-	for _, k := range contentKeys {
-		args = append(args, k)
+	// The keys travel as one JSON array parameter, so the statement is constant
+	// and the number of keys never meets SQLite's bound-variable limit.
+	keys, err := json.Marshal(contentKeys)
+	if err != nil {
+		return nil, fmt.Errorf("tags for messages: %w", err)
 	}
 	rows, err := d.State.Read.QueryContext(ctx, `
 		SELECT m.content_key, t.id, t.slug, t.name, t.color
 		FROM message_tags m JOIN tags t ON t.id = m.tag_id
-		WHERE m.account_id = ? AND m.content_key IN (`+strings.TrimSuffix(strings.Repeat("?,", len(contentKeys)), ",")+`)
-		ORDER BY lower(t.name), t.id`, args...)
+		WHERE m.account_id = ? AND m.content_key IN (SELECT value FROM json_each(?))
+		ORDER BY lower(t.name), t.id`, accountID, string(keys))
 	if err != nil {
 		return nil, fmt.Errorf("tags for messages: %w", err)
 	}
