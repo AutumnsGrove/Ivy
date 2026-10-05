@@ -15,7 +15,7 @@ WorkingDirectory=@INSTALL_DIR@
 ExecStart=@INSTALL_DIR@/compose/watcher/update.sh
 
 # Must exceed the sum of update.sh's own timeouts: git pull (60) + unit re-sync
-# (60) + compose pull (300) + up (60) + healthcheck poll (120) = 600s worst
+# (60) + compose pull (300) + up (60) + healthcheck poll (300) = 780s worst
 # case, plus the pull's own retries. 1800s leaves real headroom, so systemd
 # cannot SIGKILL the script before its own timeouts fire and leave the request
 # file in place, looking stuck forever.

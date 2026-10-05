@@ -1078,3 +1078,30 @@ that CI would fail on (fixed under the commit that introduced each, see below).
   `TestWriteSignalDropsTheLastRunsResult` (the old result was still readable after a new request; failed
   before the fix). `WriteSignal` now removes `result` first, so "no result" (already worded for the UI)
   means the watcher has not finished this request.
+
+### `7da4aef` Add the container image and host update watcher
+
+The watcher script had no test at all, so the three defects below were found by driving the real
+`update.sh` with stubbed `docker`, `git`, `timeout`, `flock`, `sudo` and `sleep` (new
+`compose/watcher/watcher_test.go`, which runs on a laptop and in CI alike).
+
+- **#98** · `7da4aef` · `compose/watcher/update.sh` · **bug** · `json_escape` only escaped `\` and `"` and
+  deleted newlines, but docker prints tabs, carriage returns and colour escapes in its errors. Those are
+  illegal raw inside a JSON string, so on exactly the failures the operator needs to read, `result` was
+  invalid JSON, `update.ReadResult` returned nil and the panel said only "the host update watcher
+  reported no result". Reproduced with `TestFailureResultStaysValidJSONWhateverDockerPrints` (result
+  unreadable before the fix). Every control character now becomes a space.
+- **#99** · `7da4aef` · `compose/watcher/update.sh` · **bug** · `requested` was removed by hand on each
+  expected failure path only. Under `set -euo pipefail` any other failing command (`docker compose ps
+  -q`, an unwritable `.env`, a full disk) ended the script with the file still there, and
+  `ivy-update.path` fires whenever that file exists, so the watcher re-ran the whole `git pull`, pull
+  and force-recreate in a loop, restarting Ivy each time. Reproduced with
+  `TestRequestIsClearedEvenWhenTheScriptDies` (`requested` survived; failed before the fix). An `EXIT`
+  trap now always removes the request and, if no result was written, records that the script stopped
+  early.
+- **#100** · `7da4aef` · `compose/watcher/update.sh` · **risk** · the health poll gave a new container
+  120 s (40 x 3 s) and treated anything but `healthy` as a failed update, including `starting`. The
+  first start after an update runs migrations and can be slow on the potato, and the failure path rolls
+  back, discarding a good update. Reproduced with `TestSlowStartingContainerIsNotRolledBack` (60
+  `starting` polls, then healthy: reported `failed` before the fix). The poll is now 300 s and the unit's
+  `TimeoutStartSec` comment arithmetic (780 s of 1800 s) is updated.

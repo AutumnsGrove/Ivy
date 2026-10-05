@@ -30,11 +30,12 @@ CMD_LOG="$SIGNAL_DIR/.last-command.log"
 
 cd "$INSTALL_DIR"
 
-# json_escape backslash-escapes the only two characters that would break a value
-# out of a JSON string. Everything fed to it is program-controlled and
-# newline-free, so it need not handle the full JSON escape table.
+# json_escape makes a value safe inside a JSON string. Backslash and the quote
+# are escaped; every control character (docker prints tabs, carriage returns and
+# colour escapes in its errors) becomes a space, because JSON forbids them raw
+# and an invalid result file shows the operator no failure reason at all.
 json_escape() {
-	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\n'
+	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\000-\037' ' '
 }
 
 # truncate_detail keeps the result readable; docker output can run to dozens of
@@ -48,8 +49,10 @@ truncate_detail() {
 	fi
 }
 
+RESULT_WRITTEN=0
 write_result() {
 	local status="$1" detail="$2"
+	RESULT_WRITTEN=1
 	printf '{"status":"%s","detail":"%s","target":"%s","finished_at":"%s"}\n' \
 		"$(json_escape "$status")" "$(json_escape "$detail")" \
 		"$(json_escape "${TARGET_IMAGE:-}")" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -114,6 +117,20 @@ if ! [[ "$TARGET_IMAGE" =~ ^[A-Za-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; then
 	exit 1
 fi
 
+# From here on the request is ours, and it must not outlive this run on any exit,
+# including a command that fails under `set -e`: ivy-update.path fires whenever
+# the file exists, so a leftover would re-run the whole pull-and-recreate in a
+# loop. If nothing wrote a result, say that the script died rather than leave the
+# settings panel to wait on a result that never comes.
+finish() {
+	local status=$?
+	if [ "$RESULT_WRITTEN" -eq 0 ]; then
+		write_result "failed" "update.sh stopped early (exit $status); see: journalctl -u ivy-update.service" || true
+	fi
+	rm -f "$REQUESTED_FILE"
+}
+trap finish EXIT
+
 PREVIOUS_IMAGE="$(current_pinned_image)"
 echo "updating ivy: $PREVIOUS_IMAGE -> $TARGET_IMAGE"
 
@@ -172,10 +189,13 @@ fi
 # `docker compose up -d` returning success only means the container was told to
 # start, not that it is serving. The image's own HEALTHCHECK is what confirms
 # that, so poll it: a bad image (a config bug, a broken migration, a crash loop)
-# must not report "ok" while the service is unusable.
+# must not report "ok" while the service is unusable. The first start after an
+# update can run migrations over a large mirror on a slow board, and the check
+# reports `starting` until it first passes, so allow five minutes: a slow start
+# is not a failed one, and a rollback throws a good update away.
 CONTAINER_ID="$(docker compose ps -q "$SERVICE")"
 HEALTH="unknown"
-for _ in $(seq 1 40); do
+for _ in $(seq 1 100); do
 	HEALTH="$(docker inspect --format '{{.State.Health.Status}}' "$CONTAINER_ID" 2>/dev/null || echo "unknown")"
 	if [ "$HEALTH" = "healthy" ] || [ "$HEALTH" = "unhealthy" ]; then
 		break
