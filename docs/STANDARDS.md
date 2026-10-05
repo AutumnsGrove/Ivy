@@ -216,6 +216,13 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Outbox retry backoff | 5 s doubling to 15 min, ±20% jitter (`outboxBackoffBase`/`Max`) | the op waits; a not-yet-due op blocks the ones behind it (strict FIFO) |
 | Outbox action request body (`maxOutboxBodyBytes`) | 8 KiB | rejected with 400 `bad_request` |
 | Outbox connection idle before it closes (`defaultOutboxIdleClose`) | 60 s | the connection closes; the next op dials |
+| Tags (`store.MaxTags`) | 200 | creating one more is refused with 409 `too_many_tags` |
+| Tag name (`store.MaxTagNameLen`) | 64 characters, non-empty | rejected with 400 `bad_request` |
+| Tag slug, the `$ivy-<slug>` keyword (`store.MaxTagSlugLen`) | 48 bytes of `[a-z0-9-]`, fixed at creation; a clash gets `-2`, `-3`, … | the base is cut to make room for the suffix; a keyword with a longer or malformed slug is not read back |
+| `$ivy-*` keywords read from one message (`store.MaxTagKeywordsPerMessage`) | 32, taken in slug order | the rest are ignored and left on the server; a slug with no tag creates nothing |
+| Messages cleared when a tag is deleted | as many as fit in the outbox headroom (`MaxQueuedOps` less what is queued), counted per account | nothing is deleted; 409 `outbox_full` |
+| Tag keywords re-applied to a rebuilt mailbox | as many as fit in the outbox | the rest are logged and skipped; membership is intact, only the server copy is missing |
+| Tag request body (`maxTagBodyBytes`) | 4 KiB | rejected with 400 `bad_request` |
 
 ## 5. Frontend standards
 

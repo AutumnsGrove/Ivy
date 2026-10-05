@@ -147,6 +147,20 @@ Locally owned state (`state.db`, not on the server and not rebuildable, so backe
   mailbox is lost or restored, local membership re-applies the keywords. Spike S1 showed Purelymail
   persists custom keywords (`PERMANENTFLAGS \*`); an account whose server does not allow arbitrary
   keywords keeps its tags local-only.
+  **How 3e built it (rounds 51 and 52).** A tag is a `flags` outbox op for the keyword, so it has the
+  idempotency key, the inverse cancellation and crash recovery of every other flag. *The membership
+  follows the server's acknowledgement*: the worker writes it after the keyword is confirmed, never
+  before. On a folder without `\*` in `PERMANENTFLAGS` the keyword is dropped from the op, an op that
+  was only keywords finishes local-only without a failure, and the membership is written anyway.
+  The slug is stored on the tag at creation and never recomputed (a clash gets `-2`, `-3`), so a
+  rename cannot orphan a keyword. Read-back works on *transitions* of a row's keyword set, never on
+  absence: a keyword that appears adds membership (source `server`), one that disappears removes it
+  once no other live copy of the same content key (N8) still carries it, and a slug with no tag, or
+  a malformed one, is ignored and left alone. A row that arrives new for mail the operator already
+  tagged (a rebuilt mailbox, a new UIDVALIDITY) gets its keywords re-applied through the outbox, if
+  the folder keeps them. Deleting a tag queues a keyword clear for every live copy, then removes the
+  tag and its memberships, or refuses with `outbox_full` and changes nothing. Limits are in
+  `STANDARDS.md` 4a.
 - `outbox` (queued IMAP actions with retry state), `send_queue` (composed message, undo deadline):
   unsent work cannot be rebuilt from IMAP, so it lives here.
 - `api_calls`, the **cost ledger (settled, round 30)**: one row per remote API call and, for

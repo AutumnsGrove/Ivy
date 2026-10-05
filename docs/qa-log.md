@@ -1241,3 +1241,34 @@ All four took the recommended option.
   hostile or odd keyword cannot mint tags. Bounds: at most 32 `$ivy-*` keywords considered per
   message and a slug of at most 48 bytes (to be put in the STANDARDS limits table with the code).
 - N8 (identical `Message-ID`s share tags) was already settled in round 37, so it was not re-asked.
+
+## Round 52 — 3e, decisions taken while building (2026-10-05, agent; no operator input)
+
+Each follows from a round 51 answer or from the docs; none changes one. The operator can overturn any.
+
+- **The membership follows the server's acknowledgement.** The worker writes `message_tags` after the
+  keyword is confirmed, not at enqueue, so "IMAP first" holds for tags too and a refused tag leaves
+  nothing behind. On a server without `\*` the op finishes local-only and the membership is written
+  at once. The picker's switch and an outbox overlay cover the wait.
+- **Read-back uses transitions, not absence.** A keyword that is missing is not "removed": a
+  local-only tag, a queued write and an operator's tag on a server that cannot hold it all lack the
+  keyword. Only a keyword that was in the mirrored flags and is gone removes membership, and only when
+  no other live copy of the content key still carries it.
+- **A rebuilt mailbox gets its keywords re-applied** when a row arrives new for mail that is already
+  tagged and the folder keeps keywords, through the outbox, best effort (a full outbox is logged).
+  Adopting keywords that predate a tag's creation is not done.
+- **Untag clears every live copy** that carries the keyword (N8), and always queues the targeted row
+  so a local-only tag still loses its membership.
+- **Delete refuses instead of half-deleting.** If the keyword clears do not fit in the outbox
+  headroom the delete answers 409 `outbox_full` and changes nothing. A tag on more messages than the
+  headroom (500 per account) therefore cannot be deleted in one go; the follow-up if it matters is a
+  soft delete that a sweeper finishes as the queue drains. A tag-add still queued when its tag is
+  deleted is not cancelled: it lands as an unknown slug, which read-back ignores.
+- **The contract carries one tag per message** (`tag`, the first by name) plus `tagIds` on the
+  reader's message for the picker; tag counts are memberships, so they include hidden mail.
+
+## Round 53 — 3e side findings (2026-10-05, agent)
+
+- The HTTP client read a `204` as an unreadable body, so every successful delete (Dismiss on
+  `/settings/outbox`) surfaced `internal_error`. Fixed with a test in `http.test.ts`; the e2e fake
+  had hidden it by answering 204 with a body.

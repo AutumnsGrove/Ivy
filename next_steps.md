@@ -5,12 +5,13 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-04 (3d outbox and write path are done; C4 passed and the rest of the stage —
-HTTP surface, confirm modal, optimistic overlay, undo — is committed. Next is 3e).
+last updated: 2026-10-05 (3e tags both ways is done: the `$ivy-<slug>` keyword writer, server
+read-back, the tag screens and the reader's tag picker are committed. Next is 3f search, or the
+operator's choice of 3h).
 Chunks 0, 1 and 2a-2h are done except the visual baselines of 2g and 2h (they need the CI harness
-regenerated). 3a and 3b's backend are done, 3c (backups, including the disabled-blob store) is done,
-and 3d is done apart from a few UI entry points listed below; **the C0 canvas board is the one thing
-blocking the 3b screens**.
+regenerated). 3a and 3b's backend are done, 3c (backups, including the disabled-blob store), 3d (the
+outbox and write path) and 3e (tags) are done; **the C0 canvas board is the one thing blocking the
+3b screens**.
 
 ## How to run a chunk
 
@@ -37,16 +38,16 @@ blocking the 3b screens**.
 | 2a-2f Read: store, fetch, parse, render, thread, gateway | done |
 | 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
-| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; **3d done** (a few reader entry points remain); 3e next |
+| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; **3e done**; 3f next |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | not started |
 | 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | not started |
 
 Frontend: SvelteKit 3 app in `web/`, 32 screens. The reader endpoints (`/accounts`, `/inbox`,
 `/messages/{id}`, `/summary`, `/mirror/health`, account profile and photo) are real behind
-`web/src/lib/api/http.ts`; search, ask, tags, rules, people, checks and reading stay mock-backed
-until chunks 3 and 5, and the mock E2E suite fakes the real requests at the network boundary
-(`e2e/api.ts`). Mutating actions (archive, delete, tag, save rule, send) only toast until chunks 3
-and 4.
+`web/src/lib/api/http.ts`, and so are tags (`/tags`, the `tag`/`untag` outbox actions); search, ask,
+rules, people, checks and reading stay mock-backed until chunks 3 and 5, and the mock E2E suite
+fakes the real requests at the network boundary (`e2e/api.ts`). Archive, delete, flag, junk and tag
+are real writes through the outbox; save rule and send only toast until 3g and chunk 4.
 
 Backend: `store/` (two DBs plus the disabled-blob store), `config/`, `sync/` (runner, IDLE,
 QRESYNC deltas), `mime/`, `render/`, `thread/`, `gateway/` (read API, body/inline/attachment
@@ -86,12 +87,22 @@ folder views, and the Trash view's confirmed **Empty Trash** button enqueues one
 listed message through the same outbox (no second path to erasure). It empties the page on screen,
 so a Trash larger than one page needs the button pressed again. 3d has no leftovers.
 
+**3e is done** (rounds 51 and 52; `docs/BUILD-LOG.md` has the entry). A tag is a `flags` outbox op
+for `$ivy-<slug>`; the membership follows the server's acknowledgement; a server without `\*`
+keeps the tag local-only; sync reads keyword transitions back (source `server`, unknown and
+hostile slugs ignored, 32 per message) and re-applies keywords to a rebuilt mailbox; deleting a tag
+clears its keyword everywhere first or refuses with `outbox_full`. `/tags` is real, the reader has a
+tag picker, and `make check`, the mock Playwright suite (268 passed), `make smoke` (10/10, with a
+real-binary tag round trip), `golangci-lint` and the race suite are green. Left for the operator: a
+live check against the real Purelymail mailbox (that a keyword written by Ivy shows in another
+client and one set there arrives in Ivy), and `BenchmarkTagsForMessagesPage` on the potato.
+
 **Next, in order:**
 
-1. **3e Tags both ways**: `$ivy-<slug>` keyword writer through the outbox and server read-back.
+1. **3f Search** (FTS5, extraction tiers, the `Embedder` and the embeddings-only gate and ledger).
 2. **C0 canvas board** for the three 3b screens, whenever the operator is ready; the backend and API
    are already committed.
-3. **3f-3h** per the chunk plan below. 3h (the deploy track) is independent and can run at any point.
+3. **3g-3h** per the chunk plan below. 3h (the deploy track) is independent and can run at any point.
 
 **Deliberately deferred from 3c** (do not re-litigate):
 
@@ -139,8 +150,12 @@ Found by the round 32 audit; each needs a home before its milestone starts.
 
 ### Frontend
 
-- Wire the stub actions (archive, delete, tag, save rule, delete tag, Update, "Try on recent mail",
-  send) to real calls with IMAP-first writes and undo (chunks 3 and 4).
+- Wire the stub actions (save rule, Update, "Try on recent mail", send) to real calls with
+  IMAP-first writes and undo (chunks 3g, 3h and 4).
+- Tags: a tag on more messages than the outbox headroom (500 per account) cannot be deleted in one
+  go (round 52); the follow-up is a soft delete that a sweeper finishes as the queue drains. Tag
+  counts include hidden mail. Keywords that predate a tag's creation are not adopted. A tag filter on
+  the inbox waits for search (3f).
 - Desktop keyboard shortcuts and a help overlay; extend the axe pass beyond the eleven screens;
   day-theme review; font subsetting and preload (fonts are 303 KiB against the 60 KiB target) and
   the CDP-throttled timing budgets; real-iPhone safe areas and `100dvh`; collapse-below-minimum list
@@ -270,8 +285,7 @@ when a daily slot was missed, and the go-imap fork is at `v2.0.0-beta.8-ivy.3` (
 
 **Remaining for the operator:** the real-mailbox live check of the daily backup and `ivy restore`,
 and the potato numbers for the snapshot time.
-**Next stage: 3e (tags both ways)**, which writes `$ivy-<slug>` keywords through the outbox built in
-3d.
+**3e (tags both ways) is done too**; the next stage is 3f (search).
 
 ## Operator actions still open
 

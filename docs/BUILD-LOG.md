@@ -456,6 +456,48 @@ role). It acts only on the messages on screen, stops at the first refusal such a
 says how far it got; a live `expunge` hides its message like a move does. Tests: `store/inbox_test.go`,
 `gateway/read_test.go`, `web/src/lib/emptyTrash.test.ts`, `folders.test.ts`, `e2e/outbox.spec.ts`.
 
+## 3e: tags both ways (done 2026-10-05, rounds 51 and 52)
+
+A tag is now kept locally and as the IMAP keyword `$ivy-<slug>`, written through the outbox and
+read back by sync. Design in `ARCHITECTURE.md` 3; limits in `STANDARDS.md` 4a.
+
+- **Fake server.** `mailworld.WithoutKeywords()` omits `\*` from `PERMANENTFLAGS` and refuses a
+  custom keyword with `NO [CANNOT]`, for the local-only fallback. The default world already behaves
+  like Purelymail.
+- **Store.** `TagSlug` (ASCII fold, `[a-z0-9-]`, 48 bytes), `TagKeyword`/`SlugFromKeyword`,
+  `CreateTag` (numeric suffix on a clash, 200 tags, 64-character names), `UpdateTag` (the slug never
+  changes), `ListTags` with counts, `TagsForMessages` (one JSON-array parameter), `TagMembers`,
+  `UntagMessage`, `DeleteTag`, `KeywordRows` and `AnotherRowCarriesKeyword` over the mirror's flags.
+- **Write.** A tag op is a `flags` op (`sync/outbox_tags.go`). The worker records the folder's
+  `\*` support when it selects it, drops the keyword on a folder that lacks it (an op that was only
+  keywords finishes local-only, not failed), and writes the membership only after the server's
+  acknowledgement, in `finishFlags`, so crash recovery re-runs it harmlessly.
+- **Read-back** (`sync/tagsync.go`). Transitions of a row's keyword set, taken before the new flags
+  are stored: an added keyword joins the tag (source `server`), a removed one leaves it once no other
+  live copy of the content key carries it, unknown and malformed slugs are ignored, and at most 32
+  keywords per message are read. A row that arrives new for already-tagged mail gets its keywords
+  re-applied through the outbox when the folder keeps them (the rebuilt-mailbox case); a full outbox
+  is logged and the rest skipped.
+- **HTTP.** `GET`/`POST /tags`, `PATCH`/`DELETE /tags/{id}`, and `tag`/`untag` outbox actions with a
+  `tagId`. `untag` also clears the keyword on every other live copy. `DELETE` queues a clear per live
+  copy first and refuses with 409 `outbox_full`, changing nothing, if they do not fit. Messages carry
+  `tag` (first by name) and, on the reader's message, `tagIds`. Tags carry their `slug`.
+- **Frontend.** The reader's Tag button opens `TagPicker` (a switch per tag; the outbox overlay and
+  an Undo that reaches back into the open picker keep it honest), the new-tag sheet and the edit
+  screen call the API, and delete is confirmed with the count it touches. `outbox.flags()` now merges
+  live flag ops so a tag op cannot mask a star. The HTTP client no longer reads a 204 as an
+  unreadable body, which had made Dismiss report a failure although it worked.
+- **Tests.** `internal/mailworld/keywords_test.go`, `store/tagkeys_test.go`,
+  `store/keywordrows_test.go`, `sync/tags_test.go` (write, local-only, IMAP first, idempotence),
+  `sync/tags_readback_test.go` (add, remove, unknown, bound, new, copies, rebuild, no spurious
+  re-apply), `gateway/tags_test.go`, `web/src/lib/api/tags.test.ts`, `tagActions.test.ts`,
+  `removeTag.test.ts`, `components/tags/TagPicker.test.ts`, `e2e/tags.spec.ts` on phone and desktop,
+  and a real-binary round trip in `e2e/smoke.spec.ts`. Benchmark: `BenchmarkTagsForMessagesPage`
+  (0.5 ms for a 200-message page against 17.6 ms for `ListInbox`, laptop numbers, not the potato).
+- **Process slips.** A Go append (`store/messages.go`) and the smoke spec were extended with
+  `cat >>` against the Edit/Write rule. A few small tests (the outbox overlay's `tags()`, the e2e
+  spec) were not seen failing first: their code arrived in the same step.
+
 ## Other history worth keeping
 
 - Frontend facts: SvelteKit **3** config lives in `vite.config.ts`; aliases are the `#lib/...`
