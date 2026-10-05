@@ -11,6 +11,9 @@ import (
 const (
 	defaultInboxLimit = 50
 	maxInboxLimit     = 200
+	// MaxInboxLimit is the largest page any list view serves, exported so a
+	// local view (snoozed, tag filter) pages the same way.
+	MaxInboxLimit = maxInboxLimit
 )
 
 // MessageSummary is the list-view projection of a message: enough for the
@@ -36,6 +39,10 @@ type InboxQuery struct {
 	Role      string
 	Cursor    string
 	Limit     int
+	// HideContentKeys removes locally hidden mail from the view: snoozed
+	// messages and mail in Reading. Those memberships live in state.db, so the
+	// caller loads them and passes them here rather than joining the databases.
+	HideContentKeys []string
 }
 
 // listableRole reports whether a role has a list view. The role is bound as a
@@ -76,7 +83,7 @@ func (d *DBs) ListInbox(ctx context.Context, q InboxQuery) (InboxPage, error) {
 	}
 
 	page := InboxPage{}
-	if err := d.scanInboxCounts(ctx, role, q.AccountID, &page); err != nil {
+	if err := d.scanInboxCounts(ctx, role, q.AccountID, q.HideContentKeys, &page); err != nil {
 		return InboxPage{}, err
 	}
 
@@ -86,7 +93,7 @@ func (d *DBs) ListInbox(ctx context.Context, q InboxQuery) (InboxPage, error) {
 	}
 
 	rows, err := d.Mirror.Read.QueryContext(ctx, inboxSelect,
-		role, q.AccountID, q.AccountID, cursorDate, cursorDate, cursorID, limit)
+		role, q.AccountID, q.AccountID, jsonKeys(q.HideContentKeys), cursorDate, cursorDate, cursorID, limit)
 	if err != nil {
 		return InboxPage{}, fmt.Errorf("list inbox: %w", err)
 	}
@@ -109,9 +116,9 @@ func (d *DBs) ListInbox(ctx context.Context, q InboxQuery) (InboxPage, error) {
 	return page, nil
 }
 
-func (d *DBs) scanInboxCounts(ctx context.Context, role, accountID string, page *InboxPage) error {
+func (d *DBs) scanInboxCounts(ctx context.Context, role, accountID string, hide []string, page *InboxPage) error {
 	var seen, need int64
-	err := d.Mirror.Read.QueryRowContext(ctx, inboxCountsSelect, role, accountID, accountID).
+	err := d.Mirror.Read.QueryRowContext(ctx, inboxCountsSelect, role, accountID, accountID, jsonKeys(hide)).
 		Scan(&seen, &need)
 	if err != nil {
 		return fmt.Errorf("inbox counts: %w", err)
@@ -136,6 +143,7 @@ const inboxSelect = `
 	WHERE f.role = ?
 	  AND m.disabled_at IS NULL
 	  AND (? = '' OR m.account_id = ?)
+	  AND m.content_key NOT IN (SELECT value FROM json_each(?))
 	  AND (? = '' OR (m.date, m.id) < (?, ?))
 	ORDER BY m.date DESC, m.id DESC
 	LIMIT ?`
@@ -150,7 +158,8 @@ const inboxCountsSelect = `
 		AND n.content_key = m.content_key AND n.verdict = 'needs'
 	WHERE f.role = ?
 	  AND m.disabled_at IS NULL
-	  AND (? = '' OR m.account_id = ?)`
+	  AND (? = '' OR m.account_id = ?)
+	  AND m.content_key NOT IN (SELECT value FROM json_each(?))`
 
 func scanInboxSummary(s scanner) (MessageSummary, error) {
 	var (
@@ -210,3 +219,60 @@ func decodeCursor(cursor string) (string, string, error) {
 	}
 	return c.Date, c.ID, nil
 }
+
+// jsonKeys renders content keys as a JSON array for a json_each membership
+// filter. A nil list is the empty array, which matches nothing.
+func jsonKeys(keys []string) string {
+	if len(keys) == 0 {
+		return "[]"
+	}
+	b, err := json.Marshal(keys)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
+// MessagesByContentKeys returns one summary per content key, newest first, for
+// local views whose membership lives in state.db (the snoozed list). A key that
+// is hidden or unknown is simply absent.
+func (d *DBs) MessagesByContentKeys(ctx context.Context, accountID string, keys []string, limit int) ([]MessageSummary, error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	if limit <= 0 || limit > maxInboxLimit {
+		limit = maxInboxLimit
+	}
+	rows, err := d.Mirror.Read.QueryContext(ctx, messagesByKeysSelect, accountID, accountID, jsonKeys(keys), limit)
+	if err != nil {
+		return nil, fmt.Errorf("messages by content keys: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []MessageSummary
+	for rows.Next() {
+		summary, err := scanInboxSummary(rows)
+		if err != nil {
+			return nil, fmt.Errorf("messages by content keys: %w", err)
+		}
+		out = append(out, summary)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("messages by content keys: %w", err)
+	}
+	return out, nil
+}
+
+const messagesByKeysSelect = `
+	SELECT m.id, m.account_id, COALESCE(m.from_json, ''), COALESCE(m.subject, ''),
+	       COALESCE(m.snippet, ''), COALESCE(m.date, ''), m.seen, m.flagged,
+	       CASE WHEN n.account_id IS NULL THEN 0 ELSE 1 END, m.content_key
+	FROM messages m
+	LEFT JOIN needs_me n ON n.account_id = m.account_id
+		AND n.content_key = m.content_key AND n.verdict = 'needs'
+	WHERE m.disabled_at IS NULL
+	  AND (? = '' OR m.account_id = ?)
+	  AND m.content_key IN (SELECT value FROM json_each(?))
+	GROUP BY m.content_key
+	HAVING m.date = MAX(m.date)
+	ORDER BY m.date DESC, m.id DESC
+	LIMIT ?`

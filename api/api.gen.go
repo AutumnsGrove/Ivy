@@ -255,22 +255,22 @@ func (e OutboxItemState) Valid() bool {
 
 // Defines values for RuleActionSnooze.
 const (
-	LaterToday RuleActionSnooze = "later_today"
-	NextWeek   RuleActionSnooze = "next_week"
-	Tomorrow   RuleActionSnooze = "tomorrow"
-	Weekend    RuleActionSnooze = "weekend"
+	RuleActionSnoozeLaterToday RuleActionSnooze = "later_today"
+	RuleActionSnoozeNextWeek   RuleActionSnooze = "next_week"
+	RuleActionSnoozeTomorrow   RuleActionSnooze = "tomorrow"
+	RuleActionSnoozeWeekend    RuleActionSnooze = "weekend"
 )
 
 // Valid indicates whether the value is a known member of the RuleActionSnooze enum.
 func (e RuleActionSnooze) Valid() bool {
 	switch e {
-	case LaterToday:
+	case RuleActionSnoozeLaterToday:
 		return true
-	case NextWeek:
+	case RuleActionSnoozeNextWeek:
 		return true
-	case Tomorrow:
+	case RuleActionSnoozeTomorrow:
 		return true
-	case Weekend:
+	case RuleActionSnoozeWeekend:
 		return true
 	default:
 		return false
@@ -316,6 +316,30 @@ func (e RuleConditionField) Valid() bool {
 	case RuleConditionFieldHasAttachment:
 		return true
 	case RuleConditionFieldSubject:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SnoozeRequestPreset.
+const (
+	SnoozeRequestPresetLaterToday SnoozeRequestPreset = "later_today"
+	SnoozeRequestPresetNextWeek   SnoozeRequestPreset = "next_week"
+	SnoozeRequestPresetTomorrow   SnoozeRequestPreset = "tomorrow"
+	SnoozeRequestPresetWeekend    SnoozeRequestPreset = "weekend"
+)
+
+// Valid indicates whether the value is a known member of the SnoozeRequestPreset enum.
+func (e SnoozeRequestPreset) Valid() bool {
+	switch e {
+	case SnoozeRequestPresetLaterToday:
+		return true
+	case SnoozeRequestPresetNextWeek:
+		return true
+	case SnoozeRequestPresetTomorrow:
+		return true
+	case SnoozeRequestPresetWeekend:
 		return true
 	default:
 		return false
@@ -399,6 +423,7 @@ const (
 	ListInboxParamsFolderArchive ListInboxParamsFolder = "archive"
 	ListInboxParamsFolderInbox   ListInboxParamsFolder = "inbox"
 	ListInboxParamsFolderJunk    ListInboxParamsFolder = "junk"
+	ListInboxParamsFolderSnoozed ListInboxParamsFolder = "snoozed"
 	ListInboxParamsFolderTrash   ListInboxParamsFolder = "trash"
 )
 
@@ -410,6 +435,8 @@ func (e ListInboxParamsFolder) Valid() bool {
 	case ListInboxParamsFolderInbox:
 		return true
 	case ListInboxParamsFolderJunk:
+		return true
+	case ListInboxParamsFolderSnoozed:
 		return true
 	case ListInboxParamsFolderTrash:
 		return true
@@ -842,6 +869,14 @@ type SearchResults struct {
 	Total      int         `json:"total"`
 }
 
+// SnoozeRequest defines model for SnoozeRequest.
+type SnoozeRequest struct {
+	Preset SnoozeRequestPreset `json:"preset"`
+}
+
+// SnoozeRequestPreset defines model for SnoozeRequest.Preset.
+type SnoozeRequestPreset string
+
 // SyncState defines model for SyncState.
 type SyncState string
 
@@ -899,9 +934,14 @@ type NotFound = Error
 
 // ListInboxParams defines parameters for ListInbox.
 type ListInboxParams struct {
-	AccountId *string                `form:"account_id,omitempty" json:"account_id,omitempty"`
-	Folder    *ListInboxParamsFolder `form:"folder,omitempty" json:"folder,omitempty"`
-	Cursor    *string                `form:"cursor,omitempty" json:"cursor,omitempty"`
+	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
+
+	// Folder A folder role, or `snoozed` for the local hidden-until list. Snoozed and Reading mail is hidden from every other view.
+	Folder *ListInboxParamsFolder `form:"folder,omitempty" json:"folder,omitempty"`
+
+	// Tag Show only mail carrying this tag id
+	Tag    *string `form:"tag,omitempty" json:"tag,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // ListInboxParamsFolder defines parameters for ListInbox.
@@ -927,6 +967,9 @@ type UpdateAccountProfileJSONRequestBody = AccountProfile
 
 // AskJSONRequestBody defines body for Ask for application/json ContentType.
 type AskJSONRequestBody = AskRequest
+
+// SnoozeMessageJSONRequestBody defines body for SnoozeMessage for application/json ContentType.
+type SnoozeMessageJSONRequestBody = SnoozeRequest
 
 // EnqueueOutboxJSONRequestBody defines body for EnqueueOutbox for application/json ContentType.
 type EnqueueOutboxJSONRequestBody = OutboxAction

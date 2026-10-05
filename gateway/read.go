@@ -27,12 +27,30 @@ func (s *Server) handleAccounts(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleInbox serves a page of the combined or per-account inbox, newest first.
+// Snoozed and Reading mail is hidden from every folder view; the explicit
+// `snoozed` view and a `tag` filter are the local views over state.db.
 func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
+	accountID := q.Get("account_id")
+	if q.Get("folder") == "snoozed" {
+		s.handleSnoozedInbox(w, r, accountID)
+		return
+	}
+	if tagID := q.Get("tag"); tagID != "" {
+		s.handleTaggedInbox(w, r, accountID, tagID)
+		return
+	}
+
+	hidden, reading, err := s.hiddenKeys(r.Context(), accountID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	page, err := s.dbs.ListInbox(r.Context(), store.InboxQuery{
-		AccountID: q.Get("account_id"),
-		Role:      q.Get("folder"),
-		Cursor:    q.Get("cursor"),
+		AccountID:       accountID,
+		Role:            q.Get("folder"),
+		Cursor:          q.Get("cursor"),
+		HideContentKeys: hidden,
 	})
 	if errors.Is(err, store.ErrBadCursor) {
 		writeError(w, http.StatusBadRequest, "bad_request", "That page link is not valid")
@@ -46,11 +64,21 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	out, err := s.inboxResponse(r, page, reading)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// inboxResponse projects a page and attaches the first tag name to each row.
+func (s *Server) inboxResponse(r *http.Request, page store.InboxPage, reading int) (api.Inbox, error) {
 	out := api.Inbox{
 		Items:          make([]api.MailSummary, 0, len(page.Items)),
 		UnreadCount:    page.UnreadCount,
 		NeedCount:      page.NeedCount,
-		ReadingWaiting: 0,
+		ReadingWaiting: reading,
 	}
 	keysByAccount := map[string][]string{}
 	for _, m := range page.Items {
@@ -60,8 +88,7 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 	for accountID, keys := range keysByAccount {
 		byKey, err := s.tagNames(r.Context(), accountID, keys)
 		if err != nil {
-			s.serverError(w, r, err)
-			return
+			return api.Inbox{}, err
 		}
 		names[accountID] = byKey
 	}
@@ -75,7 +102,7 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 	if page.NextCursor != "" {
 		out.NextCursor = &page.NextCursor
 	}
-	writeJSON(w, http.StatusOK, out)
+	return out, nil
 }
 
 // handleMessage serves one message with its stored sanitised body.

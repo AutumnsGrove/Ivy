@@ -126,6 +126,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/messages/{id}/snooze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hide a message locally until a preset time
+         * @description A local hide-until: the mail stays on the server and in the mirror, and comes back on its own. Nothing is written to IMAP.
+         */
+        post: operations["snoozeMessage"];
+        /** Wake a snoozed message now */
+        delete: operations["unsnoozeMessage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/reading": {
         parameters: {
             query?: never;
@@ -561,6 +582,10 @@ export interface components {
         };
         /** @enum {string} */
         TagColor: "sky" | "rose" | "teal" | "coral" | "lilac" | "mint" | "gold" | "sand" | "orchid" | "fern" | "slate" | "berry";
+        SnoozeRequest: {
+            /** @enum {string} */
+            preset: "later_today" | "tomorrow" | "weekend" | "next_week";
+        };
         /** @enum {integer} */
         AccountSlot: 1 | 2 | 3 | 4 | 5;
         /** @enum {string} */
@@ -1004,7 +1029,10 @@ export interface operations {
         parameters: {
             query?: {
                 account_id?: string;
-                folder?: "inbox" | "archive" | "trash" | "junk";
+                /** @description A folder role, or `snoozed` for the local hidden-until list. Snoozed and Reading mail is hidden from every other view. */
+                folder?: "inbox" | "archive" | "trash" | "junk" | "snoozed";
+                /** @description Show only mail carrying this tag id */
+                tag?: string;
                 cursor?: string;
             };
             header?: never;
@@ -1066,6 +1094,52 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MailSummary"];
                 };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    snoozeMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnoozeRequest"];
+            };
+        };
+        responses: {
+            /** @description Snoozed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    unsnoozeMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Woken */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             404: components["responses"]["NotFound"];
         };

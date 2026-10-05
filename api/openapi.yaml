@@ -93,9 +93,17 @@ paths:
             type: string
         - name: folder
           in: query
+          description: >
+            A folder role, or `snoozed` for the local hidden-until list. Snoozed
+            and Reading mail is hidden from every other view.
           schema:
             type: string
-            enum: [inbox, archive, trash, junk]
+            enum: [inbox, archive, trash, junk, snoozed]
+        - name: tag
+          in: query
+          description: Show only mail carrying this tag id
+          schema:
+            type: string
         - name: cursor
           in: query
           schema:
@@ -135,6 +143,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MailSummary"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /messages/{id}/snooze:
+    post:
+      operationId: snoozeMessage
+      summary: Hide a message locally until a preset time
+      description: >
+        A local hide-until: the mail stays on the server and in the mirror, and
+        comes back on its own. Nothing is written to IMAP.
+      parameters:
+        - $ref: "#/components/parameters/MessageID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SnoozeRequest"
+      responses:
+        "204":
+          description: Snoozed
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: unsnoozeMessage
+      summary: Wake a snoozed message now
+      parameters:
+        - $ref: "#/components/parameters/MessageID"
+      responses:
+        "204":
+          description: Woken
         "404":
           $ref: "#/components/responses/NotFound"
   /reading:
@@ -824,6 +862,13 @@ components:
     TagColor:
       type: string
       enum: [sky, rose, teal, coral, lilac, mint, gold, sand, orchid, fern, slate, berry]
+    SnoozeRequest:
+      type: object
+      required: [preset]
+      properties:
+        preset:
+          type: string
+          enum: [later_today, tomorrow, weekend, next_week]
     AccountSlot:
       type: integer
       enum: [1, 2, 3, 4, 5]
