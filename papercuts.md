@@ -1296,3 +1296,25 @@ on parts and no use of the caller's deadline).
   account's messages and probe `search_docs` on every settle to prove nothing is missing, so it costs a
   full pass in the steady state, like `RebuildPeople` (N36). Measure both at 5k messages on the potato; if
   they matter, keep a per-account "backfill complete" marker in `state.db` and skip once it is set.
+- **N39 (open, needs a decision)** · `d570eeb` · `cmd/ivy-dev/main.go`, `internal/devstack/stack.go` ·
+  `ivy-dev` builds its gateway without `WithSearch` and never starts the embed worker, so `make dev` and
+  `make dev-fake` search by keyword only and never embed, although `docs/DEV.md` says embeddings follow
+  `--llm` and `stack.go` points the config at the fake embedder (nothing reads it). Production wiring lives
+  in `cmd/cmd.go` and `cmd/embed.go` (unexported, package `cmd`). Recommend one exported function that
+  builds the gate, embedders, query embedder and worker from a `config.Config`, used by both `ivy run` and
+  `ivy-dev`, so the dev stack and the e2e suite exercise the code that ships.
+- **N40 (open, measure first)** · `e6b76e9`, `b6e447d`, `0c7abc0` · every `Settle` now runs three passes
+  that touch the whole account to prove there is little to do: the rule pass (`RuleMessages` over
+  unevaluated mail, `GROUP BY content_key` and a sort), `RebuildPeople` (N36) and the search backfill
+  (N38); the embed worker repeats the same shape once a minute (`PendingBodyRefs`,
+  `PendingAttachmentRefs`). None is a defect at a few thousand messages and all are O(mailbox) per run on
+  the Le Potato. Before the real mailbox syncs: time one `Settle` at 5k messages on the board (do not run the
+  100k profile, extrapolate), then decide whether `Settle` should skip the people/rule/index passes when it
+  stored and hid nothing.
+- **N41 (open, needs a decision)** · `7da4aef` · `store/migrations.go`, `compose/watcher/update.sh` · the
+  watcher rolls back to the previous image when the new one is unhealthy, but the new image may already have
+  applied migrations. `migrate` accepts a database whose `user_version` is newer than the binary knows
+  (it only runs what is missing), so the old image will open the upgraded schema and run on it. That is safe
+  while migrations stay additive (they are append-only), but nothing enforces it. Recommend refusing to open
+  a database newer than the binary in `ivy run` with a clear message, or documenting that a rollback relies
+  on additive migrations and testing the previous image against the new schema before each release.
