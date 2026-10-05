@@ -101,6 +101,22 @@ function sniffedImageType(bytes: Uint8Array): string {
 	return '';
 }
 
+/** The gateway's `/search`: the same fixture filtering the client mock used, now at the network boundary. */
+function searchReply(query: string): Reply {
+	const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+	const hits = words.length
+		? mock.searchCorpus.filter(
+				(h) =>
+					h.semantic ||
+					words.some((w) => `${h.subject} ${h.preview} ${h.from}`.toLowerCase().includes(w))
+			)
+		: [];
+	// A query that only "matches" by meaning is still a miss: nothing contains the words.
+	const real = hits.filter((h) => !h.semantic);
+	const shown = real.length ? hits : [];
+	return { body: { query, total: shown.length, hits: shown } };
+}
+
 function inboxReply(accountId: string | null, scenario: string | null, folder: string | null): Reply {
 	if (folder === 'trash') {
 		// Two fixtures stand in for trashed mail; the other folder views are empty.
@@ -220,6 +236,7 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 		return { body: scenario === 'sync-error' ? state.accounts.map(mock.failingHello) : state.accounts };
 	}
 	if (path === '/inbox') return inboxReply(params.get('account_id'), scenario, params.get('folder'));
+	if (path === '/search') return searchReply(params.get('q') ?? '');
 	if (path === '/mirror/health') {
 		return {
 			body: {

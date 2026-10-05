@@ -26,6 +26,8 @@ const (
 	// DefaultEmbedModel is the operator's choice (round 30): fast, cheap, a 32k
 	// context, and it returns native int8 vectors.
 	DefaultEmbedModel = "perplexity/pplx-embed-v1-0.6b"
+	// DefaultOllamaEmbedModel is the local model name Ollama expects.
+	DefaultOllamaEmbedModel = "nomic-embed-text"
 	// DefaultMonthlyCapUSD bounds hosted embeddings out of the box (round 54).
 	// The measured rate is about $0.15 per 100k messages.
 	DefaultMonthlyCapUSD = 5.0
@@ -56,6 +58,8 @@ type LLM struct {
 	EmbedModel string `yaml:"embed_model"`
 	// OllamaURL is the optional local embeddings endpoint.
 	OllamaURL string `yaml:"ollama_url"`
+	// OllamaEmbedModel is the model Ollama is asked for.
+	OllamaEmbedModel string `yaml:"ollama_embed_model"`
 	// MonthlyCapUSD bounds hosted embedding spend per account and month.
 	MonthlyCapUSD float64 `yaml:"monthly_cap_usd"`
 }
@@ -169,9 +173,10 @@ func Load(path string) (*Config, error) {
 		DataDir: DefaultDataDir,
 		Backup:  Backup{At: DefaultBackupAt},
 		LLM: LLM{
-			OpenRouterBase: DefaultOpenRouterURL,
-			EmbedModel:     DefaultEmbedModel,
-			MonthlyCapUSD:  DefaultMonthlyCapUSD,
+			OpenRouterBase:   DefaultOpenRouterURL,
+			EmbedModel:       DefaultEmbedModel,
+			OllamaEmbedModel: DefaultOllamaEmbedModel,
+			MonthlyCapUSD:    DefaultMonthlyCapUSD,
 		},
 	}
 

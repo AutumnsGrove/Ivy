@@ -16,6 +16,7 @@ import (
 	"github.com/AutumnsGrove/Ivy/events"
 	"github.com/AutumnsGrove/Ivy/internal/asset"
 	"github.com/AutumnsGrove/Ivy/internal/compress"
+	"github.com/AutumnsGrove/Ivy/search"
 	"github.com/AutumnsGrove/Ivy/store"
 )
 
@@ -39,6 +40,19 @@ type Server struct {
 	newID func() string
 	// now is the clock behind every timestamp the handlers write.
 	now func() time.Time
+	// searchService does hybrid ranking; nil means a plain keyword search.
+	searchService *search.Service
+	// queryEmbed turns a search query into a vector for one account, through the
+	// gate. nil means keyword-only.
+	queryEmbed QueryEmbedder
+}
+
+// WithSearch enables hybrid ranking. qe may be nil, in which case search stays
+// keyword-only and never reaches a provider.
+func (s *Server) WithSearch(qe QueryEmbedder) *Server {
+	s.searchService = search.New(s.dbs, nil)
+	s.queryEmbed = qe
+	return s
 }
 
 // WithClock replaces the clock, so a test can assert on the times a handler
@@ -114,6 +128,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("PUT /api/v1/accounts/{id}/photo", s.handleUploadAccountPhoto)
 	api.HandleFunc("DELETE /api/v1/accounts/{id}/photo", s.handleDeleteAccountPhoto)
 	api.HandleFunc("GET /api/v1/inbox", s.handleInbox)
+	api.HandleFunc("GET /api/v1/search", s.handleSearch)
 	api.HandleFunc("GET /api/v1/messages/{id}", s.handleMessage)
 	api.HandleFunc("GET /api/v1/messages/{id}/summary", s.handleMessageSummary)
 	api.HandleFunc("GET /api/v1/messages/{id}/body", s.handleMessageBody)

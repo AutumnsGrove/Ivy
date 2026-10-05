@@ -130,6 +130,28 @@ func (d *DBs) IndexSearchDoc(ctx context.Context, doc SearchDoc) error {
 	return nil
 }
 
+// SummaryForContent returns the newest live message summary for a content key,
+// across every folder role, so a search hit can render a row. It is ErrNotFound
+// for a key with no live copy (the index entry is kept for a restore, but a
+// hidden message never shows).
+func (d *DBs) SummaryForContent(ctx context.Context, accountID, contentKey string) (MessageSummary, error) {
+	row := d.Mirror.Read.QueryRowContext(ctx, `
+		SELECT m.id, m.account_id, COALESCE(m.from_json, ''), COALESCE(m.subject, ''),
+		       COALESCE(m.snippet, ''), COALESCE(m.date, ''), m.seen, m.flagged, 0, m.content_key
+		FROM messages m
+		WHERE m.account_id = ? AND m.content_key = ? AND m.disabled_at IS NULL
+		ORDER BY m.date DESC, m.id DESC
+		LIMIT 1`, accountID, contentKey)
+	summary, err := scanInboxSummary(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return MessageSummary{}, ErrNotFound
+	}
+	if err != nil {
+		return MessageSummary{}, fmt.Errorf("summary for content %s: %w", contentKey, err)
+	}
+	return summary, nil
+}
+
 // ReindexContent rebuilds one content key's search document from its live
 // message row and the extracted text of its attachments. It is called after a
 // derivation and after an attachment is extracted, so the FTS row always

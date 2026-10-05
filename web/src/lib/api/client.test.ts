@@ -86,6 +86,21 @@ describe('reader api (gateway backed)', () => {
 		const health = await api.getHealth();
 		expect(health.storage).toBe('1.8 GB');
 	});
+
+	it('searches the gateway and narrows to an account', async () => {
+		const calls = route({
+			'/api/v1/search?q=domain+renewal': { query: 'domain renewal', total: 1, hits: [mock.searchCorpus[0]] }
+		});
+		const found = await api.search('domain renewal');
+		expect(found.total).toBe(1);
+		expect(calls[0]).toBe('/api/v1/search?q=domain+renewal');
+
+		const scoped = route({
+			'/api/v1/search?q=lunch&account_id=a1': { query: 'lunch', total: 0, hits: [] }
+		});
+		await api.search('lunch', { accountId: 'a1' });
+		expect(scoped[0]).toBe('/api/v1/search?q=lunch&account_id=a1');
+	});
 });
 
 describe('account customization', () => {
@@ -126,16 +141,6 @@ describe('account customization', () => {
 });
 
 describe('still-mocked routes', () => {
-	it('searches case-insensitively and reports a total', async () => {
-		const found = await api.search('DOMAIN renewal');
-		expect(found.total).toBe(found.hits.length);
-		expect(found.hits.length).toBeGreaterThan(0);
-	});
-
-	it('returns no hits for a query nothing matches', async () => {
-		expect(await api.search('xylophone invoice')).toMatchObject({ total: 0, hits: [] });
-	});
-
 	it('resolves an ask with cited sources that exist in the answer', async () => {
 		const a = await api.ask('When does my domain renew?');
 		expect(a.sources.length).toBeGreaterThan(0);

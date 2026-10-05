@@ -155,20 +155,10 @@ export const api = {
 
 	listReading: (): Promise<ReadingFeed> => tick(mock.reading),
 
-	async search(query: string): Promise<SearchResults> {
-		const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-		const hits = words.length
-			? mock.searchCorpus.filter(
-					(h) =>
-						h.semantic ||
-						words.some((w) => `${h.subject} ${h.preview} ${h.from}`.toLowerCase().includes(w))
-				)
-			: [];
-		// A query that only "matches" by meaning is still a miss: nothing contains the words.
-		const real = hits.filter((h) => !h.semantic);
-		const shown = real.length ? hits : [];
-		return tick({ query, total: shown.length, hits: shown });
-	},
+	// --- search: FTS5 plus meaning, answered by the gateway (3f) ------------
+	/** Keyword plus meaning; the account picker narrows it. */
+	search: (query: string, o: Opts & { accountId?: string } = {}): Promise<SearchResults> =>
+		request<SearchResults>(apiPath('/search', { q: query, account_id: o.accountId })),
 
 	async ask(question: string, o: Opts = {}): Promise<AskAnswer> {
 		if (o.scenario === 'limit') throw new ApiError('ask_limit', 'Ivy is resting');
