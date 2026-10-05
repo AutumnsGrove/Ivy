@@ -1318,3 +1318,24 @@ on parts and no use of the caller's deadline).
   while migrations stay additive (they are append-only), but nothing enforces it. Recommend refusing to open
   a database newer than the binary in `ivy run` with a clear message, or documenting that a rollback relies
   on additive migrations and testing the previous image against the new schema before each release.
+
+### Gate at the tip of this review (`25a9896..3d26e01`, 2026-10-05)
+
+`go build`, `go vet`, `staticcheck`, `gofumpt -l`, `golangci-lint` v2.12.1 (CI's pin, **0 issues**, was 13),
+`CGO_ENABLED=1 go test -race ./...` (all packages, and `-count=3 -race` on every package touched),
+arm64 cross-compile, `govulncheck` v1.1.4 on go1.26.8 (none), `make drift`, `shellcheck` on `update.sh`,
+`pnpm check` and `pnpm test` (254), the full Playwright suite (**270 passed, 10 skipped by design**,
+WebKit phone and Chromium desktop, run on the operator's laptop where the pinned browsers exist), and
+`make smoke` (10/10 against the real embedded binary). The image was built from this branch and booted
+with an empty data directory: healthy, `/search` answers, the daily backup ran. The real registry exchange
+(`ghcr.io/token` then the manifest HEAD for `autumnsgrove/ivy:latest`) was run by hand and returns 200
+with a `Docker-Content-Digest`, so the package is public and `ivy update` can resolve it.
+
+**Not verified anywhere in this review (needs the potato or a real account):** `sudo ./install.sh` and
+the systemd path/timer/service on the board; a real `ivy update` end to end (the watcher script is proven
+only against stubs: `compose/watcher/watcher_test.go`); real Purelymail behaviour (MOVE, UIDPLUS, COPYUID,
+expunge against the live Trash, N32); a real OpenRouter embeddings response (does
+`perplexity/pplx-embed-v1-0.6b` report `usage.cost`? N34); timings on the potato (N36, N38, N40) and the
+vector scan time over a real mailbox; the update rollback against a real unhealthy image. The published
+`:latest` image predates this branch, so the potato only gets these fixes after the branch is merged to
+`main` and `docker-publish.yml` has run.
