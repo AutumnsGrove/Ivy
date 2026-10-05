@@ -36,6 +36,7 @@ type World struct {
 	mem        *imapmemserver.Server
 	clock      *Clock
 	condStore  bool
+	noKeywords bool
 
 	mu        sync.Mutex
 	faults    []Fault
@@ -63,13 +64,14 @@ func New(opts ...Option) (*World, error) {
 	w.srv = imapserver.New(&imapserver.Options{
 		NewSession: func(conn *imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
 			sess := w.mem.NewSession()
-			if w.hasFault(AuthFail{}) || w.hasFault(FailFetch{}) || w.hasFault(AckThenDrop{}) {
+			if w.noKeywords || w.hasFault(AuthFail{}) || w.hasFault(FailFetch{}) || w.hasFault(AckThenDrop{}) {
 				sess = faultSession{
-					Session:   sess,
-					conn:      conn.NetConn(),
-					authFail:  w.hasFault(AuthFail{}),
-					fetchFail: w.hasFault(FailFetch{}),
-					ackDrop:   w.hasFault(AckThenDrop{}),
+					Session:    sess,
+					conn:       conn.NetConn(),
+					authFail:   w.hasFault(AuthFail{}),
+					fetchFail:  w.hasFault(FailFetch{}),
+					ackDrop:    w.hasFault(AckThenDrop{}),
+					noKeywords: w.noKeywords,
 				}
 			}
 			return sess, nil, nil
@@ -114,6 +116,13 @@ type Option func(*World)
 // so tests can exercise Ivy's fallback to UID/flags comparison.
 func WithoutCondStore() Option {
 	return func(w *World) { w.condStore = false }
+}
+
+// WithoutKeywords models a server that keeps only the system flags: SELECT
+// leaves \* out of PERMANENTFLAGS and a STORE of a custom keyword is refused,
+// so tests can exercise the local-only fallback for tags (ARCHITECTURE.md 3).
+func WithoutKeywords() Option {
+	return func(w *World) { w.noKeywords = true }
 }
 
 // IMAPAddr is the host:port the fake IMAP server listens on.
@@ -262,6 +271,25 @@ type faultSession struct {
 	authFail  bool
 	fetchFail bool
 	ackDrop   bool
+	// noKeywords refuses custom keywords (WithoutKeywords).
+	noKeywords bool
+}
+
+func (s faultSession) Select(mailbox string, options *imap.SelectOptions) (*imap.SelectData, error) {
+	data, err := s.Session.Select(mailbox, options)
+	if err != nil || !s.noKeywords {
+		return data, err
+	}
+	// Copy before editing: the in-memory server's slice is its own.
+	kept := make([]imap.Flag, 0, len(data.PermanentFlags))
+	for _, f := range data.PermanentFlags {
+		if f != imap.FlagWildcard {
+			kept = append(kept, f)
+		}
+	}
+	out := *data
+	out.PermanentFlags = kept
+	return &out, nil
 }
 
 func (s faultSession) Login(username, password string) error {
@@ -289,6 +317,12 @@ func (s faultSession) Move(w *imapserver.MoveWriter, set imap.NumSet, dest strin
 }
 
 func (s faultSession) Store(w *imapserver.FetchWriter, set imap.NumSet, flags *imap.StoreFlags, options *imap.StoreOptions) error {
+	if s.noKeywords && flags != nil && hasKeyword(flags.Flags) {
+		return &imap.Error{
+			Type: imap.StatusResponseTypeNo, Code: imap.ResponseCodeCannot,
+			Text: "this mailbox does not keep custom keywords",
+		}
+	}
 	err := s.Session.Store(w, set, flags, options)
 	s.ackThenDrop()
 	return err
@@ -298,6 +332,17 @@ func (s faultSession) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) er
 	err := s.Session.Expunge(w, uids)
 	s.ackThenDrop()
 	return err
+}
+
+// hasKeyword reports whether any flag is a custom keyword, which is any flag
+// that is not a backslash system flag.
+func hasKeyword(flags []imap.Flag) bool {
+	for _, f := range flags {
+		if !strings.HasPrefix(string(f), `\`) {
+			return true
+		}
+	}
+	return false
 }
 
 // ackThenDrop closes the connection shortly after the response is written, so
