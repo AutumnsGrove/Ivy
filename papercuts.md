@@ -1347,3 +1347,11 @@ vector scan time over a real mailbox; the update rollback against a real unhealt
   out), for the mirror and the state database alike. A rollback onto a migrated schema now fails loudly and
   the watcher reports the container's log. Reproduced with `TestOpenRefusesADatabaseNewerThanTheBinary`
   (opened without error; failed before the fix).
+- **N34 resolved** · `llm/embedder.go` · a response with no `usage.cost` is now priced from its tokens at the
+  model's listed rate (`perplexity/pplx-embed-v1-0.6b` $0.000000004/token, `-4b` $0.00000003/token, read from
+  OpenRouter's public embeddings model list on 2026-10-05) and flagged `cost_estimated`; a response with no
+  usage has its tokens estimated at 4 bytes each, and a model with no listed price is priced at the dearest
+  listed rate so the cap errs early rather than never. Reproduced with
+  `TestOpenRouterEstimatesTheCostWhenNoneIsReported`, `TestAnUnpricedModelIsEstimatedConservatively` and
+  `TestTokensAreEstimatedWhenTheProviderReportsNone` (all $0; failed before the fix). Still worth one look at
+  a real response from the potato to see that the provider does report `cost`.

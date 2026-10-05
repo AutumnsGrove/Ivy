@@ -3,9 +3,13 @@ package llm
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -315,5 +319,72 @@ func TestGateReportsALedgerWriteFailure(t *testing.T) {
 	}
 	if !strings.Contains(logged.String(), "ledger") {
 		t.Errorf("a failed ledger write was silent; log = %q", logged.String())
+	}
+}
+
+// embeddingsServer answers /embeddings with one vector per input and the given
+// usage object, so a test can control exactly what the provider reports.
+func embeddingsServer(t *testing.T, usage string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Input []string `json:"input"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		var data []string
+		for i := range req.Input {
+			data = append(data, fmt.Sprintf(`{"index":%d,"embedding":[0.5,0,0,0]}`, i))
+		}
+		_, _ = fmt.Fprintf(w, `{"data":[%s],"usage":%s}`, strings.Join(data, ","), usage)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// With no usage.cost the call used to be ledgered at $0, so the monthly cap
+// never saw the spend and could never trip. The cost is now estimated from the
+// tokens and the model's listed price, and flagged as an estimate.
+func TestOpenRouterEstimatesTheCostWhenNoneIsReported(t *testing.T) {
+	t.Parallel()
+	srv := embeddingsServer(t, `{"prompt_tokens":1000000,"total_tokens":1000000}`)
+	e := NewOpenRouter(srv.URL, "k")
+
+	res, err := e.Embed(context.Background(), "perplexity/pplx-embed-v1-0.6b", []string{"a", "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.CostEstimated {
+		t.Error("CostEstimated = false, want true when the provider reported no cost")
+	}
+	if math.Abs(res.CostUSD-0.004) > 1e-9 {
+		t.Errorf("cost = %v for 1M tokens, want $0.004 (the model's listed price)", res.CostUSD)
+	}
+}
+
+// A model with no listed price is estimated high, not at zero: a cap that trips
+// early is an annoyance, a cap that never trips is a bill.
+func TestAnUnpricedModelIsEstimatedConservatively(t *testing.T) {
+	t.Parallel()
+	srv := embeddingsServer(t, `{"prompt_tokens":1000000}`)
+	res, err := NewOpenRouter(srv.URL, "k").Embed(context.Background(), "someone/new-model", []string{"a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.CostUSD < 0.03 {
+		t.Errorf("cost = %v for 1M tokens of an unpriced model, want at least the dearest listed price ($0.03)", res.CostUSD)
+	}
+}
+
+// With no usage at all, the tokens are estimated from the input size the same
+// way chunking sizes them (4 bytes a token), so the cost is still not zero.
+func TestTokensAreEstimatedWhenTheProviderReportsNone(t *testing.T) {
+	t.Parallel()
+	srv := embeddingsServer(t, `{}`)
+	res, err := NewOpenRouter(srv.URL, "k").Embed(context.Background(), "perplexity/pplx-embed-v1-4b", []string{strings.Repeat("x", 4000)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.InputTokens != 1000 || res.CostUSD <= 0 || !res.CostEstimated {
+		t.Errorf("tokens=%d cost=%v estimated=%v, want 1000 tokens and a non-zero estimate", res.InputTokens, res.CostUSD, res.CostEstimated)
 	}
 }

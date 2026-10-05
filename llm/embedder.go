@@ -109,7 +109,12 @@ func (o *openRouter) Embed(ctx context.Context, model string, inputs []string) (
 	if out.Usage.Cost != nil {
 		res.CostUSD = *out.Usage.Cost
 	} else {
+		// No reported cost would be ledgered as $0 and the cap could never trip.
 		res.CostEstimated = true
+		if res.InputTokens == 0 {
+			res.InputTokens = estimateTokens(inputs)
+		}
+		res.CostUSD = estimateCost(model, res.InputTokens)
 	}
 	for _, d := range out.Data {
 		res.Vectors = append(res.Vectors, Quantise(d.Embedding))
@@ -191,3 +196,35 @@ func truncateForError(b []byte) string {
 
 // ErrNoProvider is returned by a gate call that has no embedder configured.
 var ErrNoProvider = errors.New("llm: no embedding provider configured")
+
+// promptUSDPerToken is each hosted embedding model's listed prompt price (from
+// OpenRouter's /api/v1/embeddings/models, 2026-10-05). It is only the fallback
+// for a response that reports no cost, so the monthly cap still sees the spend.
+var promptUSDPerToken = map[string]float64{
+	"perplexity/pplx-embed-v1-0.6b": 0.000000004,
+	"perplexity/pplx-embed-v1-4b":   0.00000003,
+}
+
+// unpricedUSDPerToken is assumed for a model with no listed price: the dearest
+// price above. A cap that trips early is an annoyance; one that never trips is
+// a bill.
+const unpricedUSDPerToken = 0.00000003
+
+// estimateCost prices tokens at the model's listed rate.
+func estimateCost(model string, tokens int) float64 {
+	price, ok := promptUSDPerToken[model]
+	if !ok {
+		price = unpricedUSDPerToken
+	}
+	return float64(tokens) * price
+}
+
+// estimateTokens sizes inputs the way chunking does (4 bytes a token), for a
+// provider that reports no usage.
+func estimateTokens(inputs []string) int {
+	bytes := 0
+	for _, in := range inputs {
+		bytes += len(in)
+	}
+	return (bytes + 3) / 4
+}
