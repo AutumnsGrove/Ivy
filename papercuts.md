@@ -930,3 +930,19 @@ All six are defects in the design document, found before any code existed and fi
 - Also corrected in the doc, not numbered: the `in_flight` definition, sharing the sync connection
   (the outbox owns its own), `MOVE`/`UIDPLUS` requirements instead of emulation, and reusing sync's
   `disableRef` so a hidden row keeps its blob-store copy.
+
+## Second-opinion review of `ea78a63`..`28ed913` (2026-10-05)
+
+Baseline before any change: `go build`, `go vet`, `staticcheck`, `gofumpt -l`, the full suite and
+`-race` on store, sync and gateway were all green.
+
+### `4d23d76` Add the outbox worker and sync deferral
+
+- **#85** · `4d23d76` · `sync/outbox.go` · **bug** · after a failure that killed the connection (a drop
+  mid-command, a stall, BYE) the worker kept its dead `*session`, so every retry wrote to a closed
+  socket and the op exhausted its 8 attempts as `retries_exhausted` against a healthy server. Every
+  existing test used `RunOnce`, which closes the connection, so none could see it. Reproduced with
+  `TestOutboxRetriesOnAFreshConnectionAfterADrop` (`DropConnection{After: 4}` on the worker's first
+  connection, `Run` with a short jitter): it failed with `failed after 7 attempts ... use of closed
+  network connection` before the fix. `transient` now closes the connection so the next attempt dials
+  afresh.

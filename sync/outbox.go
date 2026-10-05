@@ -626,6 +626,10 @@ func (w *OutboxWorker) requeue(ctx context.Context, op store.OutboxOp) error {
 // transient records a retryable failure, or fails the op once the attempt cap is
 // reached. It returns nil because the outcome is on the row, not in a Go error.
 func (w *OutboxWorker) transient(ctx context.Context, op store.OutboxOp, cause error) error {
+	// The failure may have killed the connection (a drop, a stall, BYE). Reusing
+	// it would fail every retry against a healthy server until the op exhausted
+	// its attempts, so the next attempt dials afresh.
+	w.closeConn()
 	attempts := op.Attempts + 1
 	detail := cause.Error()
 	if attempts >= store.MaxOutboxAttempts {
