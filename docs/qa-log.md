@@ -1222,3 +1222,22 @@ overlay, undo, `ivy run` wiring).
 - **Q: should connection failures count against an op's 8-attempt cap (N31)?** (operator) **No.** Only
   a server NO to the op counts; dial, login, drop and stall failures back off separately and the 24 h
   age cap bounds them. The STANDARDS limits row says so.
+
+## Round 51 — 3e tags both ways, design questions (2026-10-05, four operator answers)
+
+All four took the recommended option.
+
+- **Q: how is a tag change represented in the outbox?** (operator) **Reuse the `flags` kind.** A
+  keyword add or remove is a flag in the same STORE, so it inherits the idempotency key, the
+  inverse-cancellation (tag then untag cancels) and crash recovery; there is no new state machine.
+- **Q: two names with the same ASCII slug ("Café", "Cafe")?** (operator) **Numeric suffix** (`cafe-2`).
+  The slug is stored on the tag at creation and never recomputed, so a rename never rewrites keywords
+  on the server.
+- **Q: what does deleting a tag do on the server?** (operator) **Remove the keyword everywhere,
+  behind the confirm modal**: one flags-remove op per tagged message through the outbox, no second
+  path to the server (as for Empty Trash).
+- **Q: read-back of a `$ivy-<slug>` keyword with no matching local tag?** (operator) **Ignore it and
+  leave the keyword on the server.** Only slugs the operator has defined become membership, so a
+  hostile or odd keyword cannot mint tags. Bounds: at most 32 `$ivy-*` keywords considered per
+  message and a slug of at most 48 bytes (to be put in the STANDARDS limits table with the code).
+- N8 (identical `Message-ID`s share tags) was already settled in round 37, so it was not re-asked.
