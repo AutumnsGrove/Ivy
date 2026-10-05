@@ -139,6 +139,15 @@ func formatTime(t time.Time) string {
 	return t.UTC().Format(timeLayout)
 }
 
+// parseOptionalTime reads a column that is NULL (read as "") for a message with
+// no Date header; that is the zero time, not a parse error.
+func parseOptionalTime(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, nil
+	}
+	return parseTime(s)
+}
+
 func parseTime(s string) (time.Time, error) {
 	if t, err := time.Parse(timeLayout, s); err == nil {
 		return t, nil

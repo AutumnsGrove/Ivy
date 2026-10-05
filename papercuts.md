@@ -1063,4 +1063,8 @@ that CI would fail on (fixed under the commit that introduced each, see below).
   never offered to the rule pass or the dry run, never counted in People, never listed in a person's
   conversations, and dropped from `MessagesByContentKeys`. Reproduced with
   `TestRuleMessagesIncludesUndatedMail` (0 rows, failed before the fix). All four queries now use
-  `HAVING m.date IS MAX(m.date)`.
+  `HAVING m.date IS MAX(m.date)`. Letting undated mail through exposed a second fault behind it:
+  `RebuildPeople` and `ConversationsForAddresses` parsed the empty date with `parseTime` and failed
+  (`TestUndatedMailIsListedEverywhere` failed with `parsing time ""`), which would have failed every
+  Settle. They now use `parseOptionalTime`; an undated message is counted but has no place on the
+  first/last-seen timeline.

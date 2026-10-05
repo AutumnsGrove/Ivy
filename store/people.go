@@ -48,7 +48,7 @@ func (d *DBs) RebuildPeople(ctx context.Context, accountID string) error {
 		if err := rows.Scan(&from, &to, &cc, &date, &subject); err != nil {
 			return fmt.Errorf("rebuild people: %w", err)
 		}
-		at, err := parseTime(date)
+		at, err := parseOptionalTime(date)
 		if err != nil {
 			return fmt.Errorf("rebuild people: %w", err)
 		}
@@ -62,13 +62,16 @@ func (d *DBs) RebuildPeople(ctx context.Context, accountID string) error {
 			seen[addr] = true
 			e := people[addr]
 			if e == nil {
-				e = &agg{first: at}
+				e = &agg{}
 				people[addr] = e
 			}
 			if e.name == "" && a.Name != "" {
 				e.name = a.Name
 			}
 			e.count++
+			if at.IsZero() {
+				continue // counted, but an undated message has no place on the timeline
+			}
 			if e.first.IsZero() || at.Before(e.first) {
 				e.first = at
 			}
@@ -271,7 +274,7 @@ func (d *DBs) ConversationsForAddresses(ctx context.Context, addresses []string,
 			return nil, fmt.Errorf("conversations for person: %w", err)
 		}
 		m.Unread = !seen
-		if m.Date, err = parseTime(date); err != nil {
+		if m.Date, err = parseOptionalTime(date); err != nil {
 			return nil, fmt.Errorf("conversations for person: %w", err)
 		}
 		out = append(out, m)
