@@ -280,6 +280,12 @@ func WriteSignal(dir, target string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("update: creating signal directory: %w", err)
 	}
+	// The watcher never clears its result, so the last run's outcome would be
+	// read as this request's if the watcher never ran. Drop it first; the new
+	// result only exists once the watcher has finished this request.
+	if err := os.Remove(filepath.Join(dir, "result")); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("update: clearing the previous result: %w", err)
+	}
 	dest := filepath.Join(dir, "requested")
 	tmp := dest + ".tmp"
 	if err := os.WriteFile(tmp, []byte(target), 0o600); err != nil {

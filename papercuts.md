@@ -1068,3 +1068,13 @@ that CI would fail on (fixed under the commit that introduced each, see below).
   (`TestUndatedMailIsListedEverywhere` failed with `parsing time ""`), which would have failed every
   Settle. They now use `parseOptionalTime`; an undated message is counted but has no place on the
   first/last-seen timeline.
+
+### `901c0e3` Add the self-update resolve, API and UI
+
+- **#97** · `901c0e3` · `update/update.go` · **bug** · the host watcher writes `update-signal/result`
+  once and never clears it, and `WriteSignal` left the previous run's file in place. If the watcher was
+  not installed, stopped or hung past the 15-minute wait, the UI read the last run's `ok` as this
+  request's outcome and reported an update that never happened. Reproduced with
+  `TestWriteSignalDropsTheLastRunsResult` (the old result was still readable after a new request; failed
+  before the fix). `WriteSignal` now removes `result` first, so "no result" (already worded for the UI)
+  means the watcher has not finished this request.

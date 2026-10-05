@@ -286,3 +286,28 @@ func TestValidDigest(t *testing.T) {
 		}
 	}
 }
+
+// The watcher writes `result` once and never clears it, so a request that the
+// watcher never ran (not installed, stopped, or hung past the wait) would read
+// the previous run's "ok" and the UI would report an update that did not
+// happen. A new request has to start with no result.
+func TestWriteSignalDropsTheLastRunsResult(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "update-signal")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old := `{"status":"ok","detail":"updated","target":"ghcr.io/autumnsgrove/ivy@sha256:` + strings.Repeat("a", 64) + `","finished_at":"2026-10-01T00:00:00Z"}`
+	if err := os.WriteFile(filepath.Join(dir, "result"), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if ReadResult(dir) == nil {
+		t.Fatal("setup: the old result should be readable")
+	}
+
+	if err := WriteSignal(dir, "ghcr.io/autumnsgrove/ivy@sha256:"+strings.Repeat("b", 64)); err != nil {
+		t.Fatalf("WriteSignal: %v", err)
+	}
+	if got := ReadResult(dir); got != nil {
+		t.Errorf("ReadResult after a new request = %+v, want nil until the watcher finishes", got)
+	}
+}
