@@ -1410,3 +1410,13 @@ vector scan time over a real mailbox; the update rollback against a real unhealt
   when it talks to the fake, so a real key in the operator's environment never reaches the fake endpoint. The
   existing in-process `up` tests now pass `--llm fake` explicitly: with the stack wired, a real key in a
   developer's environment would otherwise have sent them to the live provider.
+- **N36 / N38 / N40, measured on the laptop, decision pending the potato numbers** · `sync/settle_bench_test.go`
+  (`BenchmarkSettleSteadyState`, 1k and 5k messages, backlogs drained first) on an Apple M2: People 4.7 ms to
+  25.8 ms, rule pass 1.0 ms to 5.1 ms, search backfill 0.9 ms to 4.9 ms, the whole `Settle` 30.6 ms to
+  162.7 ms. Each is linear (5.0-5.5x for 5x the messages), so about 0.7 s of the three together at 100k on the
+  laptop; but they are only about a fifth of a settle, and the remaining ~125 ms at 5k is the older passes (thread
+  rebuild, re-derive, extraction queue). My first run of the benchmark showed 116x growth for the backfill and
+  17x for the rules: that was the benchmark, not the code, because the backfill takes 500 messages a settle and
+  the rule pass 200, so two warm-up settles never drained a 5k mailbox and it was timing real work. It now
+  drains first and asserts it did. Run it on the board (see `docs/PERFORMANCE.md` "Settle at rest") and decide
+  with those numbers; nothing is changed without them, as agreed.

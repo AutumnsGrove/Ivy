@@ -112,6 +112,7 @@ sanity check):
 | FTS5 keyword search | < 100 ms |
 | Hybrid search (FTS + brute-force vectors over 100k) | < 800 ms |
 | Sync apply: 1,000 new messages (headers + flags) | measure; assert no regression > 10% |
+| Settle pass with nothing new (`BenchmarkSettleSteadyState`, 1k and 5k messages, extrapolate to 100k) | measure on the potato; see "Settle at rest" below |
 | Sanitise one 200 KB HTML message | < 20 ms |
 | Resident memory, idle | < 100 MB |
 | Resident memory, during backfill + embedding | < 250 MB |
@@ -130,6 +131,32 @@ Conventions:
   sized for the potato, prepared statement reuse, batched write transactions, a single writer.
 - Profiling is first-class: a `/debug/pprof` handler behind a config flag, and `ivy doctor`
   prints heap, goroutines and DB size.
+
+**Settle at rest.** Every sync that finishes runs `Settle`, and most of them stored nothing, so what a
+settle costs on a mailbox it has nothing to do to is paid on every wake-up. `BenchmarkSettleSteadyState`
+(`sync/settle_bench_test.go`) times it, and each pass on its own, on 1k and 5k messages written straight
+into the store, after draining the search and rule backlogs so it is the steady state. Run it on the board
+(never the 100k profile) and extrapolate:
+
+```
+GOOS=linux GOARCH=arm64 go test -c -o settle.test ./sync     # on the laptop
+./settle.test -test.run XXX -test.bench SettleSteadyState -test.benchtime 5x   # on the board
+```
+
+First numbers, on an Apple M2 (a sanity check, not the budget). Every pass is linear in the mailbox
+(1k to 5k grew 5.0 to 5.5x for each):
+
+| Pass | 1k messages | 5k messages | per 100k, extrapolated |
+|---|---|---|---|
+| People rebuild | 4.7 ms | 25.8 ms | about 0.5 s |
+| Rule pass (nothing unevaluated) | 1.0 ms | 5.1 ms | about 0.1 s |
+| Search backfill (nothing missing) | 0.9 ms | 4.9 ms | about 0.1 s |
+| The whole `Settle` | 30.6 ms | 162.7 ms | about 3.3 s |
+
+So People, rules and the backfill together are about a fifth of a settle; the rest (about 125 ms of the
+163 ms at 5k) is the older passes in the same call: the thread rebuild, re-derive and the extraction
+queue. If the potato shows a settle that is too dear, that is where to look first, and the cheap fix is
+the same for all of them: skip the whole-mailbox passes when the sync stored and hid nothing.
 
 ## 3b. Dev-loop budgets (settled, round 21: both product and loop speed)
 
