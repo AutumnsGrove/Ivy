@@ -47,10 +47,10 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page, err := s.dbs.ListInbox(r.Context(), store.InboxQuery{
-		AccountID:       accountID,
-		Role:            q.Get("folder"),
-		Cursor:          q.Get("cursor"),
-		HideContentKeys: hidden,
+		AccountID: accountID,
+		Role:      q.Get("folder"),
+		Cursor:    q.Get("cursor"),
+		Hide:      hidden,
 	})
 	if errors.Is(err, store.ErrBadCursor) {
 		writeError(w, http.StatusBadRequest, "bad_request", "That page link is not valid")

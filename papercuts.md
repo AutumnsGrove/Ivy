@@ -1260,3 +1260,23 @@ on parts and no use of the caller's deadline).
   `ConversationsForAddresses` (G202, every value is bound) and the operator-configured signal directory
   (G304). The gate at the tip is clean: `golangci-lint` 0 issues, `staticcheck`, `go vet`, `gofumpt` and
   `CGO_ENABLED=1 go test -race ./...` all pass.
+
+### `dac8acc` Hide snoozed and Reading mail, serve both locally
+
+- **#116** · `dac8acc` · `store/inbox.go`, `store/snooze.go`, `store/tags.go`, `gateway/snooze.go` ·
+  **bug** · a content key is the hash of the Message-ID, so a mailing-list post delivered to two of the
+  operator's accounts has the same key in both. Snoozes and Reading membership are stored per account, but
+  the lists of hidden keys passed to the inbox query were bare keys and `ContentKeysForTag` ignored the
+  account, so snoozing or tagging one account's copy hid the other account's copy: in the combined inbox
+  for a snooze, and in the other account's own inbox for Reading (with a wrong "reading waiting" count).
+  Reproduced with `TestSnoozingOneAccountsCopyKeepsTheOthersInTheCombinedInbox` and
+  `TestReadingOneAccountsCopyKeepsTheOthersInItsInbox` (both failed before the fix). The hidden lists are
+  now (account, key) pairs end to end (`ActiveSnoozeRefs`, `ContentRefsForTag`, `MessagesByContentRefs`,
+  `InboxQuery.Hide`), compared as `account || char(31) || key`.
+- **N37 (open, needs a decision)** · `dac8acc` · `gateway/snooze.go` · the Snoozed, Reading and tag views
+  are not paged: each answers with at most `MaxInboxLimit` (200) rows and no cursor, though up to 2000
+  messages may be snoozed or in Reading. A message in Reading or Snoozed is also hidden from the inbox, so
+  past the newest 200 it is listed nowhere (search still finds it). A rule that sends newsletters to
+  Reading makes this reachable in weeks. Fixing it means a cursor in the `Reading` and `Inbox` contract
+  and the screens, so it is not done here. Recommend keyset paging on (date, id) like the inbox, with the
+  Reading feed taking `cursor` and returning `nextCursor`.

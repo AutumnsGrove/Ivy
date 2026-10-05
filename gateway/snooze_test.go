@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/AutumnsGrove/Ivy/api"
@@ -91,5 +92,73 @@ func TestReadingIsReservedTagAndHides(t *testing.T) {
 	var tagged api.Inbox
 	if code := getJSON(t, srv.URL+"/api/v1/inbox?tag="+tag.ID, &tagged); code != http.StatusOK || len(tagged.Items) != 1 || tagged.Items[0].Id != "m2" {
 		t.Errorf("tag filter = %d %v, want [m2]", code, inboxIDs(tagged))
+	}
+}
+
+// A message's content key is the hash of its Message-ID, so a mailing-list post
+// delivered to two of the operator's accounts has the same key in both. Snooze
+// and Reading are per account, but the lists of hidden keys were not, so hiding
+// the copy in one account hid the other account's copy too.
+func twoAccountsSharingAMessage(t *testing.T) (*httptest.Server, *store.DBs) {
+	t.Helper()
+	srv, dbs := rulesServer(t)
+	mustAccount(t, dbs, store.Account{ID: "acct-2", Address: "work@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-2", AccountID: "acct-2", Name: "INBOX", Role: store.RoleInbox, UIDValidity: 1, LastSyncAt: testNow})
+	mustMessage(t, dbs, store.Message{
+		ID: "w2", AccountID: "acct-2", FolderID: "inbox-2", UID: 1,
+		ContentKey: "ck:m2", Subject: "Garden Weekly #3", Snippet: "Snippet w2",
+		From: store.Address{Address: "news@wildflowers.test"}, Date: testNow,
+	})
+	return srv, dbs
+}
+
+func TestSnoozingOneAccountsCopyKeepsTheOthersInTheCombinedInbox(t *testing.T) {
+	t.Parallel()
+	srv, _ := twoAccountsSharingAMessage(t)
+
+	if code := sendJSON(t, http.MethodPost, srv.URL+"/api/v1/messages/m2/snooze", map[string]string{"preset": "tomorrow"}, nil); code != http.StatusNoContent {
+		t.Fatalf("snooze status = %d, want 204", code)
+	}
+	var inbox api.Inbox
+	if code := getJSON(t, srv.URL+"/api/v1/inbox", &inbox); code != http.StatusOK {
+		t.Fatalf("inbox status = %d", code)
+	}
+	var sawSnoozed, sawOther bool
+	for _, id := range inboxIDs(inbox) {
+		sawSnoozed = sawSnoozed || id == "m2"
+		sawOther = sawOther || id == "w2"
+	}
+	if sawSnoozed {
+		t.Errorf("inbox = %v, the snoozed copy still shows", inboxIDs(inbox))
+	}
+	if !sawOther {
+		t.Errorf("inbox = %v, the other account's copy was hidden by someone else's snooze", inboxIDs(inbox))
+	}
+}
+
+func TestReadingOneAccountsCopyKeepsTheOthersInItsInbox(t *testing.T) {
+	t.Parallel()
+	srv, dbs := twoAccountsSharingAMessage(t)
+	tag, err := dbs.EnsureReadingTag(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dbs.TagMessage(context.Background(), "acct-1", "ck:m2", tag.ID, store.TagSourceOperator); err != nil {
+		t.Fatal(err)
+	}
+
+	var inbox api.Inbox
+	if code := getJSON(t, srv.URL+"/api/v1/inbox?account_id=acct-2", &inbox); code != http.StatusOK {
+		t.Fatalf("inbox status = %d", code)
+	}
+	if got := inboxIDs(inbox); len(got) != 1 || got[0] != "w2" {
+		t.Errorf("acct-2 inbox = %v, want its own copy [w2], which was never tagged", got)
+	}
+	if inbox.ReadingWaiting != 0 {
+		t.Errorf("acct-2 readingWaiting = %d, want 0", inbox.ReadingWaiting)
+	}
+	var feed api.ReadingFeed
+	if code := getJSON(t, srv.URL+"/api/v1/reading", &feed); code != http.StatusOK || len(feed.Issues) != 1 {
+		t.Errorf("reading = %d %d issues, want only acct-1's tagged copy", code, len(feed.Issues))
 	}
 }

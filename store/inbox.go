@@ -39,10 +39,13 @@ type InboxQuery struct {
 	Role      string
 	Cursor    string
 	Limit     int
-	// HideContentKeys removes locally hidden mail from the view: snoozed
-	// messages and mail in Reading. Those memberships live in state.db, so the
-	// caller loads them and passes them here rather than joining the databases.
-	HideContentKeys []string
+	// Hide removes locally hidden mail from the view: snoozed messages and mail
+	// in Reading. Those memberships live in state.db, so the caller loads them
+	// and passes them here rather than joining the databases. A content key is
+	// the hash of the Message-ID, so the same post delivered to two accounts
+	// shares one; hiding is by (account, key) so one account's copy never hides
+	// another's.
+	Hide []ContentRef
 }
 
 // listableRole reports whether a role has a list view. The role is bound as a
@@ -83,7 +86,7 @@ func (d *DBs) ListInbox(ctx context.Context, q InboxQuery) (InboxPage, error) {
 	}
 
 	page := InboxPage{}
-	if err := d.scanInboxCounts(ctx, role, q.AccountID, q.HideContentKeys, &page); err != nil {
+	if err := d.scanInboxCounts(ctx, role, q.AccountID, q.Hide, &page); err != nil {
 		return InboxPage{}, err
 	}
 
@@ -93,7 +96,7 @@ func (d *DBs) ListInbox(ctx context.Context, q InboxQuery) (InboxPage, error) {
 	}
 
 	rows, err := d.Mirror.Read.QueryContext(ctx, inboxSelect,
-		role, q.AccountID, q.AccountID, jsonKeys(q.HideContentKeys), cursorDate, cursorDate, cursorID, limit)
+		role, q.AccountID, q.AccountID, jsonRefs(q.Hide), cursorDate, cursorDate, cursorID, limit)
 	if err != nil {
 		return InboxPage{}, fmt.Errorf("list inbox: %w", err)
 	}
@@ -116,9 +119,9 @@ func (d *DBs) ListInbox(ctx context.Context, q InboxQuery) (InboxPage, error) {
 	return page, nil
 }
 
-func (d *DBs) scanInboxCounts(ctx context.Context, role, accountID string, hide []string, page *InboxPage) error {
+func (d *DBs) scanInboxCounts(ctx context.Context, role, accountID string, hide []ContentRef, page *InboxPage) error {
 	var seen, need int64
-	err := d.Mirror.Read.QueryRowContext(ctx, inboxCountsSelect, role, accountID, accountID, jsonKeys(hide)).
+	err := d.Mirror.Read.QueryRowContext(ctx, inboxCountsSelect, role, accountID, accountID, jsonRefs(hide)).
 		Scan(&seen, &need)
 	if err != nil {
 		return fmt.Errorf("inbox counts: %w", err)
@@ -143,7 +146,7 @@ const inboxSelect = `
 	WHERE f.role = ?
 	  AND m.disabled_at IS NULL
 	  AND (? = '' OR m.account_id = ?)
-	  AND m.content_key NOT IN (SELECT value FROM json_each(?))
+	  AND (m.account_id || char(31) || m.content_key) NOT IN (SELECT value FROM json_each(?))
 	  AND (? = '' OR (m.date, m.id) < (?, ?))
 	ORDER BY m.date DESC, m.id DESC
 	LIMIT ?`
@@ -159,7 +162,7 @@ const inboxCountsSelect = `
 	WHERE f.role = ?
 	  AND m.disabled_at IS NULL
 	  AND (? = '' OR m.account_id = ?)
-	  AND m.content_key NOT IN (SELECT value FROM json_each(?))`
+	  AND (m.account_id || char(31) || m.content_key) NOT IN (SELECT value FROM json_each(?))`
 
 func scanInboxSummary(s scanner) (MessageSummary, error) {
 	var (
@@ -220,49 +223,55 @@ func decodeCursor(cursor string) (string, string, error) {
 	return c.Date, c.ID, nil
 }
 
-// jsonKeys renders content keys as a JSON array for a json_each membership
-// filter. A nil list is the empty array, which matches nothing.
-func jsonKeys(keys []string) string {
-	if len(keys) == 0 {
+// jsonRefs renders (account, content key) pairs as a JSON array of
+// "account US key" strings (US is char(31), which neither part contains) for a
+// json_each membership filter. A nil list is the empty array, which matches
+// nothing.
+func jsonRefs(refs []ContentRef) string {
+	if len(refs) == 0 {
 		return "[]"
 	}
-	b, err := json.Marshal(keys)
+	flat := make([]string, len(refs))
+	for i, r := range refs {
+		flat[i] = r.AccountID + "\x1f" + r.ContentKey
+	}
+	b, err := json.Marshal(flat)
 	if err != nil {
 		return "[]"
 	}
 	return string(b)
 }
 
-// MessagesByContentKeys returns one summary per content key, newest first, for
-// local views whose membership lives in state.db (the snoozed list). A key that
-// is hidden or unknown is simply absent.
-func (d *DBs) MessagesByContentKeys(ctx context.Context, accountID string, keys []string, limit int) ([]MessageSummary, error) {
-	if len(keys) == 0 {
+// MessagesByContentRefs returns one summary per (account, content key), newest
+// first, for local views whose membership lives in state.db (snoozed, Reading,
+// a tag). A ref that is hidden or unknown is simply absent.
+func (d *DBs) MessagesByContentRefs(ctx context.Context, accountID string, refs []ContentRef, limit int) ([]MessageSummary, error) {
+	if len(refs) == 0 {
 		return nil, nil
 	}
 	if limit <= 0 || limit > maxInboxLimit {
 		limit = maxInboxLimit
 	}
-	rows, err := d.Mirror.Read.QueryContext(ctx, messagesByKeysSelect, accountID, accountID, jsonKeys(keys), limit)
+	rows, err := d.Mirror.Read.QueryContext(ctx, messagesByRefsSelect, accountID, accountID, jsonRefs(refs), limit)
 	if err != nil {
-		return nil, fmt.Errorf("messages by content keys: %w", err)
+		return nil, fmt.Errorf("messages by content refs: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	var out []MessageSummary
 	for rows.Next() {
 		summary, err := scanInboxSummary(rows)
 		if err != nil {
-			return nil, fmt.Errorf("messages by content keys: %w", err)
+			return nil, fmt.Errorf("messages by content refs: %w", err)
 		}
 		out = append(out, summary)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("messages by content keys: %w", err)
+		return nil, fmt.Errorf("messages by content refs: %w", err)
 	}
 	return out, nil
 }
 
-const messagesByKeysSelect = `
+const messagesByRefsSelect = `
 	SELECT m.id, m.account_id, COALESCE(m.from_json, ''), COALESCE(m.subject, ''),
 	       COALESCE(m.snippet, ''), COALESCE(m.date, ''), m.seen, m.flagged,
 	       CASE WHEN n.account_id IS NULL THEN 0 ELSE 1 END, m.content_key
@@ -271,8 +280,8 @@ const messagesByKeysSelect = `
 		AND n.content_key = m.content_key AND n.verdict = 'needs'
 	WHERE m.disabled_at IS NULL
 	  AND (? = '' OR m.account_id = ?)
-	  AND m.content_key IN (SELECT value FROM json_each(?))
-	GROUP BY m.content_key
+	  AND (m.account_id || char(31) || m.content_key) IN (SELECT value FROM json_each(?))
+	GROUP BY m.account_id, m.content_key
 	HAVING m.date IS MAX(m.date)
 	ORDER BY m.date DESC, m.id DESC
 	LIMIT ?`

@@ -423,29 +423,34 @@ func (d *DBs) EnsureReadingTag(ctx context.Context) (Tag, error) {
 	return d.TagBySlug(ctx, ReadingSlug)
 }
 
-// ContentKeysForTag returns the content keys carrying a tag, newest first is not
-// defined here (membership has no date), so a view that needs ordering joins the
-// mirror itself. Bounded by limit so a filter never loads an unbounded set.
-func (d *DBs) ContentKeysForTag(ctx context.Context, tagID string, limit int) ([]string, error) {
+// ContentRefsForTag returns the messages carrying a tag, optionally for one
+// account (empty means every account). Newest first is not defined here
+// (membership has no date), so a view that needs ordering joins the mirror
+// itself. Bounded by limit so a filter never loads an unbounded set. The
+// account matters: a content key is the hash of the Message-ID, so the same
+// post delivered to two accounts shares one, and a tag on one account's copy
+// says nothing about the other's.
+func (d *DBs) ContentRefsForTag(ctx context.Context, accountID, tagID string, limit int) ([]ContentRef, error) {
 	if limit <= 0 {
 		limit = MaxTagKeywordsPerMessage
 	}
 	rows, err := d.State.Read.QueryContext(ctx,
-		`SELECT content_key FROM message_tags WHERE tag_id = ? LIMIT ?`, tagID, limit)
+		`SELECT account_id, content_key FROM message_tags
+		 WHERE tag_id = ? AND (? = '' OR account_id = ?) LIMIT ?`, tagID, accountID, accountID, limit)
 	if err != nil {
-		return nil, fmt.Errorf("content keys for tag: %w", err)
+		return nil, fmt.Errorf("content refs for tag: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	var out []string
+	var out []ContentRef
 	for rows.Next() {
-		var key string
-		if err := rows.Scan(&key); err != nil {
-			return nil, fmt.Errorf("content keys for tag: %w", err)
+		var ref ContentRef
+		if err := rows.Scan(&ref.AccountID, &ref.ContentKey); err != nil {
+			return nil, fmt.Errorf("content refs for tag: %w", err)
 		}
-		out = append(out, key)
+		out = append(out, ref)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("content keys for tag: %w", err)
+		return nil, fmt.Errorf("content refs for tag: %w", err)
 	}
 	return out, nil
 }

@@ -17,11 +17,13 @@ import (
 // the inbox, which is a bounded, honest degradation (STANDARDS.md 4a).
 const maxHiddenKeys = 2000
 
-// hiddenKeys returns the content keys the inbox hides for one account (or every
+// hiddenKeys returns the messages the inbox hides for one account (or every
 // account when accountID is empty): the active snoozes plus everything in
-// Reading. It also returns how many are in Reading, for the empty-inbox hint.
-func (s *Server) hiddenKeys(ctx context.Context, accountID string) ([]string, int, error) {
-	snoozed, err := s.dbs.ActiveSnoozeKeys(ctx, accountID, s.now())
+// Reading. They are (account, key) pairs, so one account's copy of a post never
+// hides another account's. It also returns how many are in Reading, for the
+// empty-inbox hint.
+func (s *Server) hiddenKeys(ctx context.Context, accountID string) ([]store.ContentRef, int, error) {
+	snoozed, err := s.dbs.ActiveSnoozeRefs(ctx, accountID, s.now())
 	if err != nil {
 		return nil, 0, err
 	}
@@ -32,7 +34,7 @@ func (s *Server) hiddenKeys(ctx context.Context, accountID string) ([]string, in
 	if err != nil {
 		return nil, 0, err
 	}
-	reading, err := s.dbs.ContentKeysForTag(ctx, tag.ID, maxHiddenKeys)
+	reading, err := s.dbs.ContentRefsForTag(ctx, accountID, tag.ID, maxHiddenKeys)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -42,12 +44,12 @@ func (s *Server) hiddenKeys(ctx context.Context, accountID string) ([]string, in
 // handleSnoozedInbox lists the local hidden-until mail, soonest to wake first
 // is not kept, so it reads like any other list (newest first).
 func (s *Server) handleSnoozedInbox(w http.ResponseWriter, r *http.Request, accountID string) {
-	keys, err := s.dbs.ActiveSnoozeKeys(r.Context(), accountID, s.now())
+	refs, err := s.dbs.ActiveSnoozeRefs(r.Context(), accountID, s.now())
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	items, err := s.dbs.MessagesByContentKeys(r.Context(), accountID, keys, store.MaxRuleDryRun)
+	items, err := s.dbs.MessagesByContentRefs(r.Context(), accountID, refs, store.MaxRuleDryRun)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -72,12 +74,12 @@ func (s *Server) handleTaggedInbox(w http.ResponseWriter, r *http.Request, accou
 		s.serverError(w, r, err)
 		return
 	}
-	keys, err := s.dbs.ContentKeysForTag(r.Context(), tag.ID, maxHiddenKeys)
+	refs, err := s.dbs.ContentRefsForTag(r.Context(), accountID, tag.ID, maxHiddenKeys)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	items, err := s.dbs.MessagesByContentKeys(r.Context(), accountID, keys, store.MaxInboxLimit)
+	items, err := s.dbs.MessagesByContentRefs(r.Context(), accountID, refs, store.MaxInboxLimit)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -158,12 +160,12 @@ func (s *Server) handleListReading(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	keys, err := s.dbs.ContentKeysForTag(r.Context(), tag.ID, maxHiddenKeys)
+	refs, err := s.dbs.ContentRefsForTag(r.Context(), "", tag.ID, maxHiddenKeys)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	items, err := s.dbs.MessagesByContentKeys(r.Context(), "", keys, store.MaxInboxLimit)
+	items, err := s.dbs.MessagesByContentRefs(r.Context(), "", refs, store.MaxInboxLimit)
 	if err != nil {
 		s.serverError(w, r, err)
 		return

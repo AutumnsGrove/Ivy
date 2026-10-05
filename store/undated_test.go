@@ -40,9 +40,11 @@ func TestUndatedMailIsListedEverywhere(t *testing.T) {
 		t.Errorf("%d conversations, want 2", len(convs))
 	}
 
-	items, err := dbs.MessagesByContentKeys(ctx, "acct-1", []string{"ck:dated", "ck:undated"}, 10)
+	items, err := dbs.MessagesByContentRefs(ctx, "acct-1", []ContentRef{
+		{AccountID: "acct-1", ContentKey: "ck:dated"}, {AccountID: "acct-1", ContentKey: "ck:undated"},
+	}, 10)
 	if err != nil {
-		t.Fatalf("MessagesByContentKeys: %v", err)
+		t.Fatalf("MessagesByContentRefs: %v", err)
 	}
 	if len(items) != 2 {
 		t.Errorf("%d summaries, want 2", len(items))

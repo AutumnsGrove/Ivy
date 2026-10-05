@@ -64,29 +64,30 @@ func (d *DBs) ClearSnooze(ctx context.Context, accountID, contentKey string) err
 	return nil
 }
 
-// ActiveSnoozeKeys returns the content keys still hidden at now, optionally for
-// one account. The gateway passes them to the inbox query so a snoozed message
-// is excluded without a cross-database join.
-func (d *DBs) ActiveSnoozeKeys(ctx context.Context, accountID string, now time.Time) ([]string, error) {
+// ActiveSnoozeRefs returns the messages still hidden at now, optionally for one
+// account. The gateway passes them to the inbox query so a snoozed message is
+// excluded without a cross-database join. They are (account, content key) pairs
+// because a key alone is shared by every account that received the same post.
+func (d *DBs) ActiveSnoozeRefs(ctx context.Context, accountID string, now time.Time) ([]ContentRef, error) {
 	rows, err := d.State.Read.QueryContext(ctx,
-		`SELECT content_key FROM snoozes
+		`SELECT account_id, content_key FROM snoozes
 		 WHERE until > ? AND (? = '' OR account_id = ?)
 		 ORDER BY until LIMIT ?`,
 		formatTime(now), accountID, accountID, MaxSnoozes)
 	if err != nil {
-		return nil, fmt.Errorf("active snooze keys: %w", err)
+		return nil, fmt.Errorf("active snooze refs: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	var out []string
+	var out []ContentRef
 	for rows.Next() {
-		var key string
-		if err := rows.Scan(&key); err != nil {
-			return nil, fmt.Errorf("active snooze keys: %w", err)
+		var ref ContentRef
+		if err := rows.Scan(&ref.AccountID, &ref.ContentKey); err != nil {
+			return nil, fmt.Errorf("active snooze refs: %w", err)
 		}
-		out = append(out, key)
+		out = append(out, ref)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("active snooze keys: %w", err)
+		return nil, fmt.Errorf("active snooze refs: %w", err)
 	}
 	return out, nil
 }
