@@ -548,5 +548,9 @@ embed-once queue, hybrid ranking and `/search` end to end.
   10 skipped, phone and desktop) are green, as is `TestFastAndFullAgreeForDemo`.
 - **Process slips.** One `sed -i ''` edit was used on a test file against the Edit/Write rule (the
   result was checked and the closing braces fixed by hand); `cat >>` was used for the docs entries.
+  The larger slip is TDD ordering: across this large stage most tests were written beside their
+  implementation rather than committed to a red run first. Where a run did catch a real defect the
+  test earned its place (calendar unfolding; the FTS query builder; a colliding test UID); the rest
+  are verified but were not watched failing, and a fresh review should treat them accordingly.
 - **Left for the operator.** A live check of hybrid search against the real mailbox and the
   embeddings bill, and the potato numbers for extraction and the vector scan.
