@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -211,5 +212,57 @@ func TestSearchByMeaningFindsTheMessageCarryingAnAttachment(t *testing.T) {
 	if len(out.Hits) != 1 || out.Hits[0].Id != "m2" {
 		body, _ := json.Marshal(out)
 		t.Fatalf("hits = %s, want the message that carries the attachment", body)
+	}
+}
+
+// hangingEmbedder is a provider that accepts the request and never answers.
+type hangingEmbedder struct{}
+
+func (hangingEmbedder) EmbedQuery(ctx context.Context, _, _ string) (llm.Vector, string, error) {
+	<-ctx.Done()
+	return llm.Vector{}, "", ctx.Err()
+}
+
+// "A provider outage is not an error; search quietly falls back to keyword" only
+// holds if the fallback arrives in time. With no deadline on the query
+// embedding, a provider that hangs held every search open for the HTTP client's
+// full minute.
+func TestSearchFallsBackQuicklyWhenTheProviderHangs(t *testing.T) {
+	old := semanticTimeout
+	semanticTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { semanticTimeout = old })
+
+	dbs, err := store.Open(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = dbs.Close() })
+	seedSearchMail(t, dbs)
+	srv := httptest.NewServer(New(dbs, "test", testStaticFS()).WithSearch(hangingEmbedder{}).Handler())
+	t.Cleanup(srv.Close)
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(srv.URL + "/api/v1/search?q=invoice")
+	if err != nil {
+		t.Fatalf("search did not answer while the provider hung: %v", err)
+	}
+	defer resp.Body.Close()
+	var out api.SearchResults
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Hits) != 1 || out.Hits[0].Id != "m1" {
+		t.Fatalf("hits = %+v, want the keyword hit", out.Hits)
+	}
+}
+
+// The query is sent to a paid provider verbatim, so it has a documented maximum
+// instead of whatever the URL allows.
+func TestSearchRejectsAnOversizeQuery(t *testing.T) {
+	t.Parallel()
+	srv := newTestServer(t)
+	long := strings.Repeat("a", maxSearchQueryBytes+1)
+	if code := getJSON(t, srv.URL+"/api/v1/search?q="+long, nil); code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 for a %d-byte query", code, len(long))
 	}
 }

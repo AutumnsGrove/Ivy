@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/AutumnsGrove/Ivy/api"
 	"github.com/AutumnsGrove/Ivy/llm"
@@ -17,7 +18,15 @@ import (
 const (
 	defaultSearchLimit = 50
 	maxSearchLimit     = 200
+	// maxSearchQueryBytes bounds the query, which is also sent verbatim to the
+	// embeddings provider.
+	maxSearchQueryBytes = 2048
 )
+
+// semanticTimeout bounds the meaning half of a search (the query embedding and
+// the vector scan), so a slow provider degrades to keyword hits promptly
+// instead of holding the request open. A var so a test does not wait for it.
+var semanticTimeout = 5 * time.Second
 
 // QueryEmbedder embeds a search query for one account through the gate, so the
 // single chokepoint still governs the only paid call search makes. A nil
@@ -33,6 +42,10 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
 		writeError(w, http.StatusBadRequest, "bad_request", "Type something to search for")
+		return
+	}
+	if len(q) > maxSearchQueryBytes {
+		writeError(w, http.StatusBadRequest, "bad_request", "That search is too long")
 		return
 	}
 	accounts := r.URL.Query()["account_id"]
@@ -111,6 +124,8 @@ func (s *Server) semanticHits(ctx context.Context, q string, accounts []string, 
 	if s.queryEmbed == nil || s.searchService == nil {
 		return nil
 	}
+	ctx, cancel := context.WithTimeout(ctx, semanticTimeout)
+	defer cancel()
 	candidates := accounts
 	if len(candidates) == 0 {
 		all, err := s.dbs.ListAccounts(ctx)

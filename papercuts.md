@@ -1187,3 +1187,31 @@ on parts and no use of the caller's deadline).
   every time is skipped but not remembered, so it costs one failed call and one `error` ledger row per
   pass (once a minute) for as long as it exists. Recommend counting failures per ref in the ledger and
   tombstoning after, say, five, once there is a real provider to see what a refusal looks like.
+
+### `0ac3c61` Add the embeddings gate, providers and vectors
+
+- **#110** · `0ac3c61` · `llm/gate.go` · **standards** · `record` discarded the error of
+  `RecordAPICalls` (`_ = ...`). The ledger is the cap's only record of spend, so a failed write meant
+  money left the account with no row and no trace, and the cap could drift below reality in silence.
+  Reproduced with `TestGateReportsALedgerWriteFailure` (state DB write handle closed: the paid-for vector
+  came back and nothing was logged; failed before the fix). The vectors are still returned (the call was
+  paid for); the failure is now logged at error level with provider, endpoint, row count and cost, and no
+  mail content.
+- **N34 (open, needs a decision)** · `0ac3c61` · `llm/embedder.go`, `llm/gate.go` · when OpenRouter
+  returns no `usage.cost` the call is ledgered with `cost_usd = 0` and `cost_estimated = 1`, so the
+  monthly cap (`spent_usd >= cap`) never sees that spend and can never trip. The default provider is
+  expected to report a cost, so this is latent. Recommend computing an estimate from tokens and a
+  per-model price table when the cost is missing, as the ledger comment already promises, and checking a
+  real response from `perplexity/pplx-embed-v1-0.6b` once on the potato to confirm it reports `cost`.
+
+### `d570eeb` Serve /search and wire it into the app
+
+- **#111** · `d570eeb` · `gateway/search.go` · **risk** · the query embedding and vector scan had no
+  deadline beyond the provider client's 60 s, though the design says an outage falls back quietly to
+  keyword search. A provider that hangs held every search open for the full minute. Reproduced with
+  `TestSearchFallsBackQuicklyWhenTheProviderHangs` (no answer within 3 s while the provider hung; failed
+  before the fix). The meaning half now has its own 5 s deadline (`semanticTimeout`) and falls back.
+- **#112** · `d570eeb` · `gateway/search.go` · **standards** · the query had no documented maximum, yet it
+  goes verbatim to a paid provider (and into an FTS expression). Reproduced with
+  `TestSearchRejectsAnOversizeQuery` (a 2049-byte query returned 200; failed before the fix). It is now
+  capped at 2048 bytes with a 400.
