@@ -95,7 +95,11 @@ func TestParseStreamNeverHoldsLargeAttachment(t *testing.T) {
 	if alloc > 32<<20 {
 		t.Errorf("parsing a 100 MiB message allocated %d MiB; it must stream", alloc>>20)
 	}
-	if elapsed > 20*time.Second {
+	// A wall-clock bound measures the machine as much as the parser: under -race on a shared
+	// two-core runner, with other packages' tests running, 100 MiB took 4s on a laptop and over
+	// 20s in CI (36s on one starved core). The memory bound above is the real streaming check; this
+	// only has to catch a parser that stops making progress, so it is far past any loaded run.
+	if elapsed > 2*time.Minute {
 		t.Errorf("parsing took %v", elapsed)
 	}
 	if !strings.Contains(p.Text, "hello there") {

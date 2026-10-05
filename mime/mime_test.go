@@ -444,8 +444,10 @@ func FuzzParse(f *testing.F) {
 		start := time.Now()
 		p := ivymime.Parse(data)
 		// Parse runs on the sync path for every message, so a slow input is a
-		// denial of service even when it returns the right answer.
-		if elapsed := time.Since(start); elapsed > 2*time.Second {
+		// denial of service even when it returns the right answer. The bound is for a parser that
+		// runs away (the nesting seeds once took minutes): a 980-byte seed takes 0.02s normally but
+		// 2s under -race on a loaded CI runner, so a tight bound only measures the runner.
+		if elapsed := time.Since(start); elapsed > 30*time.Second {
 			t.Errorf("Parse took %v on a %d-byte input", elapsed, len(data))
 		}
 		if n := len([]rune(p.Snippet)); n > 200 {
