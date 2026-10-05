@@ -99,3 +99,65 @@ func TestPersonLinksMergeAndUnlink(t *testing.T) {
 		t.Errorf("links after unlink = %+v, want none", links)
 	}
 }
+
+// resolvesTo follows merge links the way the gateway does, with the same bound.
+func resolvesTo(links map[string]string, address string) string {
+	for range 8 {
+		next, ok := links[address]
+		if !ok {
+			return address
+		}
+		address = next
+	}
+	return address
+}
+
+// Merging b into a after a was merged into b is a turn-around, not a second
+// merge. Both links stood, so a and b each resolved to the other: the pair split
+// into two people whose canonical ids were swapped, and the merge the operator
+// just asked for had no effect.
+func TestLinkingAPersonBackNeverMakesACycle(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	at := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+
+	if err := dbs.LinkPerson(ctx, "a@example.com", "b@example.com", at); err != nil {
+		t.Fatal(err)
+	}
+	if err := dbs.LinkPerson(ctx, "b@example.com", "a@example.com", at); err != nil {
+		t.Fatalf("turning the merge around: %v", err)
+	}
+	links, err := dbs.PersonLinks(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ra, rb := resolvesTo(links, "a@example.com"), resolvesTo(links, "b@example.com")
+	if ra != rb {
+		t.Errorf("a resolves to %q and b to %q (links %v), want one person", ra, rb, links)
+	}
+	if _, merged := links[ra]; merged {
+		t.Errorf("canonical %q is itself merged into something (links %v): a cycle", ra, links)
+	}
+}
+
+// A person who is already merged into someone is linked to that person's
+// canonical address, so chains stay short instead of growing past the
+// resolver's bound and silently splitting people.
+func TestLinkingToAMergedPersonFollowsToTheCanonicalAddress(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	at := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+
+	if err := dbs.LinkPerson(ctx, "b@example.com", "c@example.com", at); err != nil {
+		t.Fatal(err)
+	}
+	if err := dbs.LinkPerson(ctx, "a@example.com", "b@example.com", at); err != nil {
+		t.Fatal(err)
+	}
+	links, _ := dbs.PersonLinks(ctx)
+	if links["a@example.com"] != "c@example.com" {
+		t.Errorf("a links to %q, want the canonical c@example.com (links %v)", links["a@example.com"], links)
+	}
+}

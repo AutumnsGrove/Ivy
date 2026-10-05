@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -198,6 +199,31 @@ func (d *DBs) LinkPerson(ctx context.Context, address, personID string, now time
 	if address == "" || personID == "" || address == personID {
 		return ErrBadPerson
 	}
+	// Link to the person's canonical address, so chains stay short and the
+	// resolver's bound never splits anyone. If that address is the one being
+	// merged, the person was merged into it earlier and the operator is turning
+	// the merge around: drop the old link, or the pair would resolve to each other.
+	canonical := personID
+	for range maxLinkHops {
+		var next string
+		err := d.State.Read.QueryRowContext(ctx,
+			`SELECT person_id FROM person_links WHERE address = ?`, canonical).Scan(&next)
+		if errors.Is(err, sql.ErrNoRows) {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("link person: %w", err)
+		}
+		canonical = next
+	}
+	if canonical == address {
+		if _, err := d.State.Write.ExecContext(ctx,
+			`DELETE FROM person_links WHERE address = ?`, personID); err != nil {
+			return fmt.Errorf("link person: %w", err)
+		}
+		canonical = personID
+	}
+	personID = canonical
 	_, err := d.State.Write.ExecContext(ctx,
 		`INSERT INTO person_links (address, person_id, created_at) VALUES (?, ?, ?)
 		 ON CONFLICT (address) DO UPDATE SET person_id = excluded.person_id`,
@@ -284,6 +310,10 @@ func (d *DBs) ConversationsForAddresses(ctx context.Context, addresses []string,
 	}
 	return out, nil
 }
+
+// maxLinkHops is how far LinkPerson follows existing merges, the same bound the
+// gateway's resolver uses when it reads them.
+const maxLinkHops = 8
 
 // ErrBadPerson reports an empty or self-referential person merge.
 var ErrBadPerson = errors.New("bad person link")

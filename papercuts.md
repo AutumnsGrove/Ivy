@@ -1223,3 +1223,26 @@ on parts and no use of the caller's deadline).
   to forget on a fresh install) or `embed_provider: ollama` had no `llm.ollama_url`, so search stayed
   keyword-only and nothing said why. Reproduced with `TestBuildEmbeddersSaysWhyAnAccountIsLeftOut` (empty
   log; failed before the fix). Each case now logs a warning naming the account and the missing setting.
+
+### `b6e447d` Derive People and serve them with merges
+
+- **#114** · `b6e447d` · `store/people.go` · **bug** · `LinkPerson` only refused `address == person`. After
+  a was merged into b, merging b into a stored a second link, so a resolved to b and b to a: the gateway's
+  bounded resolver returned each as the other's canonical id, the pair split into two people with swapped
+  ids, and the merge the operator had just asked for did nothing. Reproduced with
+  `TestLinkingAPersonBackNeverMakesACycle` (a and b resolved to different people; failed before the fix).
+  `LinkPerson` now links to the person's canonical address (also `TestLinkingToAMergedPersonFollows...`, so
+  chains cannot outgrow the resolver's 8 hops) and, when that address is the one being merged, drops the
+  old link first.
+- **N35 (open, needs a decision)** · `b6e447d` · `gateway/people.go` · `GET /people` returns every address
+  ever seen in a From, To or Cc, newsletters and one-off senders included, as one unpaged list, and each
+  person page reloads the whole table to find one person. STANDARDS 4a wants paged lists. Fine for a small
+  mailbox, but a real one has tens of thousands of addresses. Recommend a keyset-paged list sorted by
+  count, a minimum message count, and a lookup by address for the person page; it needs a UI paging
+  decision for the People screen.
+- **N36 (open, measure first)** · `b6e447d` · `sync/sync.go` · `RebuildPeople` runs inside every `Settle`
+  and re-reads every visible message of the account, decodes three header columns, deletes and reinserts
+  every row. `threadAccount` already does a similar full pass, so this matches the existing shape, but it is
+  O(mailbox) work on every sync that stores anything, on the potato. Not changed without a number: time
+  one rebuild at 5k messages on the board and extrapolate (do not run the 100k profile). If it matters,
+  rebuild only when a pass stored or hid mail, or update the touched addresses incrementally.
