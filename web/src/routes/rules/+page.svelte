@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { api } from '#lib/api/client.js';
 	import { Plus } from '#lib/icons.js';
 	import RuleSentence from '#lib/components/rules/RuleSentence.svelte';
 	import Page from '#lib/components/shell/Page.svelte';
@@ -6,12 +7,24 @@
 	import IconButton from '#lib/components/ui/IconButton.svelte';
 	import Toggle from '#lib/components/ui/Toggle.svelte';
 	import TopBar from '#lib/components/ui/TopBar.svelte';
+	import { toasts } from '#lib/toast.js';
 
 	let { data } = $props();
 	let on = $state<Record<string, boolean>>({});
 	$effect.pre(() => {
 		for (const r of data.rules) on[r.id] ??= r.on;
 	});
+
+	// Optimistic: the switch flips at once and rolls back if the server refuses.
+	async function toggle(id: string, next: boolean) {
+		on[id] = next;
+		try {
+			await api.setRuleEnabled(id, next);
+		} catch {
+			on[id] = !next;
+			toasts.push({ text: "That rule couldn't be changed", tone: 'danger' });
+		}
+	}
 </script>
 
 <TopBar title="Rules" backHref="/tags">
@@ -28,7 +41,7 @@
 						<a href="/rules/{r.id}" class="sentence" aria-label="Edit rule: when {r.when} then {r.then} {r.thenToken}">
 							<RuleSentence rule={r} />
 						</a>
-						<Toggle label="Rule on: {r.when}" bind:checked={on[r.id]} />
+						<Toggle label="Rule on: {r.when}" bind:checked={on[r.id]} onchange={(next) => toggle(r.id, next)} />
 					</div>
 					<div class="meta">{on[r.id] ? `Matched ${r.matches} times` : 'Paused'}</div>
 				</Glass>

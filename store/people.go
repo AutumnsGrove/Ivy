@@ -293,4 +293,3 @@ const peopleSourceQuery = `
 	GROUP BY m.content_key
 	HAVING m.date = MAX(m.date)
 	ORDER BY m.date, m.id`
-

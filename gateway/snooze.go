@@ -113,7 +113,12 @@ func (s *Server) handleSnoozeMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := s.now()
-	if err := s.dbs.SnoozeMessage(r.Context(), msg.AccountID, msg.ContentKey, rules.SnoozeUntil(preset, now), now); err != nil {
+	err = s.dbs.SnoozeMessage(r.Context(), msg.AccountID, msg.ContentKey, rules.SnoozeUntil(preset, now), now)
+	if errors.Is(err, store.ErrSnoozeLimit) {
+		writeError(w, http.StatusConflict, "too_many_snoozes", "There are too many snoozed messages; wake one first")
+		return
+	}
+	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}

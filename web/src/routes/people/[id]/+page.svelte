@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { slotColor } from '#lib/accounts.js';
 	import { Ellipsis, PenLine, Search } from '#lib/icons.js';
+	import { formatMessageTime } from '#lib/time.js';
 	import Page from '#lib/components/shell/Page.svelte';
 	import Avatar from '#lib/components/ui/Avatar.svelte';
 	import Button from '#lib/components/ui/Button.svelte';
@@ -25,7 +26,7 @@
 		<Avatar initials={p.initials} {color} size="hero" />
 		<h1>{p.name}</h1>
 		<p class="mail">{p.email}</p>
-		<p class="meta"><Dot {color} />Writes to {p.writesTo} · first message in {p.since}</p>
+		<p class="meta"><Dot {color} />Writes to {p.writesTo} · first message {formatMessageTime(p.since)}</p>
 	</header>
 
 	<div class="acts">
@@ -46,7 +47,7 @@
 				<Glass radius="card" class="convo">
 					<div class="r">
 						<span class="s ell" class:unread={c.unread}>{c.subject}</span>
-						<span class="t">{c.when}</span>
+						<span class="t">{formatMessageTime(c.when)}</span>
 					</div>
 					<div class="p ell">{c.preview}</div>
 				</Glass>

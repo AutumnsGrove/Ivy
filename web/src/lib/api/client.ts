@@ -22,7 +22,13 @@ import type {
 	Person,
 	ReadingFeed,
 	Rule,
+	RuleAction,
+	RuleApplyResult,
+	RuleCondition,
+	RuleDryRunResult,
+	RuleInput,
 	SearchResults,
+	SnoozePreset,
 	Settings,
 	SpendPeriod,
 	SpendSummary,
@@ -59,8 +65,8 @@ export const api = {
 	// --- reader: answered by the real gateway over the JSON contract ---------
 	listAccounts: (_o: Opts = {}): Promise<Account[]> => request<Account[]>('/accounts'),
 
-	listInbox: (o: Opts & { accountId?: string; folder?: FolderView } = {}): Promise<Inbox> =>
-		request<Inbox>(apiPath('/inbox', { account_id: o.accountId, folder: o.folder })),
+	listInbox: (o: Opts & { accountId?: string; folder?: FolderView; tag?: string } = {}): Promise<Inbox> =>
+		request<Inbox>(apiPath('/inbox', { account_id: o.accountId, folder: o.folder, tag: o.tag })),
 
 	getMessage: (id: string, _o: Opts = {}): Promise<MailMessage> =>
 		request<MailMessage>(`/messages/${encodeURIComponent(id)}`),
@@ -153,7 +159,7 @@ export const api = {
 		return pageCalls(await ledgerFor(await api.listAccounts()), o);
 	},
 
-	listReading: (): Promise<ReadingFeed> => tick(mock.reading),
+	listReading: (): Promise<ReadingFeed> => request<ReadingFeed>('/reading'),
 
 	// --- search: FTS5 plus meaning, answered by the gateway (3f) ------------
 	/** Keyword plus meaning; the account picker narrows it. */
@@ -166,21 +172,72 @@ export const api = {
 		return tick({ ...mock.askAnswer, question });
 	},
 
-	listPeople: (): Promise<Person[]> => tick(mock.people),
+	listPeople: (): Promise<Person[]> => request<Person[]>('/people'),
 
-	async getPerson(id: string): Promise<Person> {
-		const p = mock.people.find((x) => x.id === id);
-		if (!p) throw new ApiError('not_found', 'No such person');
-		return tick(p);
-	},
+	getPerson: (id: string): Promise<Person> => request<Person>(`/people/${encodeURIComponent(id)}`),
 
-	listRules: (): Promise<Rule[]> => tick(mock.rules),
+	/** Merge an address into a person; the person id is a canonical address. */
+	linkPersonAddress: (id: string, address: string): Promise<void> =>
+		request<void>(`/people/${encodeURIComponent(id)}/addresses`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ address })
+		}),
 
-	async getRule(id: string): Promise<Rule> {
-		const r = mock.rules.find((x) => x.id === id);
-		if (!r) throw new ApiError('not_found', 'No such rule');
-		return tick(r);
-	},
+	unlinkPersonAddress: (id: string, address: string): Promise<void> =>
+		request<void>(`/people/${encodeURIComponent(id)}/addresses/${encodeURIComponent(address)}`, {
+			method: 'DELETE'
+		}),
+
+	listRules: (): Promise<Rule[]> => request<Rule[]>('/rules'),
+
+	getRule: (id: string): Promise<Rule> => request<Rule>(`/rules/${encodeURIComponent(id)}`),
+
+	createRule: (input: RuleInput): Promise<Rule> =>
+		request<Rule>('/rules', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(input)
+		}),
+
+	updateRule: (id: string, input: RuleInput): Promise<Rule> =>
+		request<Rule>(`/rules/${encodeURIComponent(id)}`, {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(input)
+		}),
+
+	setRuleEnabled: (id: string, enabled: boolean): Promise<Rule> =>
+		request<Rule>(`/rules/${encodeURIComponent(id)}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ enabled })
+		}),
+
+	deleteRule: (id: string): Promise<void> =>
+		request<void>(`/rules/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+	/** A free local preview: counts without writing anything. */
+	dryRunRule: (conditions: RuleCondition[], accountIds?: string[]): Promise<RuleDryRunResult> =>
+		request<RuleDryRunResult>('/rules/dry-run', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ conditions, accountIds })
+		}),
+
+	applyRule: (id: string): Promise<RuleApplyResult> =>
+		request<RuleApplyResult>(`/rules/${encodeURIComponent(id)}/apply`, { method: 'POST' }),
+
+	/** Local hide-until; nothing is written to IMAP. */
+	snoozeMessage: (id: string, preset: SnoozePreset): Promise<void> =>
+		request<void>(`/messages/${encodeURIComponent(id)}/snooze`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ preset })
+		}),
+
+	unsnoozeMessage: (id: string): Promise<void> =>
+		request<void>(`/messages/${encodeURIComponent(id)}/snooze`, { method: 'DELETE' }),
 	listChecks: (): Promise<Check[]> => tick(mock.checks),
 	getCheck: (_id: string): Promise<CheckDetail> => tick(mock.checkDetail)
 };

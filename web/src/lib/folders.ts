@@ -4,7 +4,8 @@ const TITLES: Record<FolderView, string> = {
 	inbox: 'Inbox',
 	archive: 'Archive',
 	trash: 'Trash',
-	junk: 'Junk'
+	junk: 'Junk',
+	snoozed: 'Snoozed'
 };
 
 /** The `?folder=` query value as a folder view; anything unknown is the inbox. */

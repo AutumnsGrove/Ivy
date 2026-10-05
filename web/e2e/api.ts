@@ -237,6 +237,44 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	}
 	if (path === '/inbox') return inboxReply(params.get('account_id'), scenario, params.get('folder'));
 	if (path === '/search') return searchReply(params.get('q') ?? '');
+	if (path === '/reading') return { body: mock.reading };
+	if (path === '/people' && method === 'GET') return { body: mock.people };
+	if (/^\/people\/[^/]+\/addresses\/[^/]+$/.test(path) && method === 'DELETE') return { status: 204, body: null };
+	if (/^\/people\/[^/]+\/addresses$/.test(path) && method === 'POST') return { status: 204, body: null };
+	const person = /^\/people\/([^/]+)$/.exec(path);
+	if (person && method === 'GET') {
+		const found = mock.people.find((p) => p.id === decodeURIComponent(person[1]));
+		return found ? { body: found } : notFound('No such person');
+	}
+	if (path === '/rules' && method === 'GET') return { body: mock.rules };
+	if (path === '/rules' && method === 'POST' && raw) {
+		try {
+			return { status: 201, body: { ...mock.rules[0], ...JSON.parse(raw.toString('utf8')) } };
+		} catch {
+			return badRequest('That rule is not valid');
+		}
+	}
+	if (path === '/rules/dry-run' && method === 'POST') {
+		return { body: { matched: 2, total: 200, sample: mock.inbox.slice(0, 2) } };
+	}
+	const ruleApply = /^\/rules\/([^/]+)\/apply$/.exec(path);
+	if (ruleApply && method === 'POST') return { body: { applied: 2 } };
+	const rule = /^\/rules\/([^/]+)$/.exec(path);
+	if (rule) {
+		const found = mock.rules.find((r) => r.id === rule[1]) ?? mock.rules[0];
+		if (method === 'GET') return { body: found };
+		if ((method === 'PUT' || method === 'PATCH') && raw) {
+			try {
+				return { body: { ...found, ...JSON.parse(raw.toString('utf8')) } };
+			} catch {
+				return badRequest('That rule is not valid');
+			}
+		}
+		if (method === 'DELETE') return { status: 204, body: null };
+	}
+	if (/^\/messages\/[^/]+\/snooze$/.test(path) && (method === 'POST' || method === 'DELETE')) {
+		return { status: 204, body: null };
+	}
 	if (path === '/mirror/health') {
 		return {
 			body: {

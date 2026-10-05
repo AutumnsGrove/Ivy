@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { slotColor } from '#lib/accounts.js';
 	import { Search } from '#lib/icons.js';
+	import { formatMessageTime } from '#lib/time.js';
 	import Page from '#lib/components/shell/Page.svelte';
 	import Avatar from '#lib/components/ui/Avatar.svelte';
 	import Dot from '#lib/components/ui/Dot.svelte';
@@ -41,7 +42,7 @@
 				<Avatar initials={p.initials} color={slotColor(p.slot)} size="lg" />
 				<span class="who"><span class="n">{p.name}</span><span class="ell l">{p.latest}</span></span>
 				<Dot color={slotColor(p.slot)} />
-				<span class="t">{p.when}</span>
+				<span class="t">{formatMessageTime(p.when)}</span>
 			</a>
 		{:else}
 			<p class="none">Nobody matches “{q}”.</p>

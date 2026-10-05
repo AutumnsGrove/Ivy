@@ -45,7 +45,7 @@
 				{#if issue.blurb}<p>{issue.blurb}</p>{/if}
 				{#if !issue.read}
 					<div class="acts">
-						<Button size="sm"><BookOpen />Read</Button>
+						<Button size="sm" href="/m/{issue.id}"><BookOpen />Read</Button>
 						<Button size="sm"><Bookmark />Save</Button>
 						<span class="grow"></span>
 						<Button size="sm" variant="danger-text">Unsubscribe</Button>

@@ -270,4 +270,3 @@ func groupPeople(rows []store.PersonRow, links map[string]string, own map[string
 func personSlot(address string) api.AccountSlot {
 	return api.AccountSlot(int(crc32.ChecksumIEEE([]byte(address))%5) + 1)
 }
-

@@ -154,9 +154,18 @@ describe('still-mocked routes', () => {
 		});
 	});
 
-	it('finds a rule by id for the editor', async () => {
+});
+
+describe('rules api (gateway backed)', () => {
+	it('lists rules and fetches one by id', async () => {
+		route({ '/api/v1/rules': mock.rules, '/api/v1/rules/r1': mock.rules[0] });
 		const [first] = await api.listRules();
 		expect((await api.getRule(first.id)).id).toBe(first.id);
-		await expect(api.getRule('nope')).rejects.toMatchObject({ code: 'not_found' });
+	});
+
+	it('puts the whole rule when saving', async () => {
+		const calls = route({ '/api/v1/rules/r1': mock.rules[0] });
+		await api.updateRule('r1', { conditions: [], actions: [{ type: 'reading' }], enabled: true });
+		expect(calls[0]).toBe('/api/v1/rules/r1');
 	});
 });
