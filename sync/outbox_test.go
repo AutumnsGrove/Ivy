@@ -25,10 +25,10 @@ type outboxFixture struct {
 	work *ivysync.OutboxWorker
 }
 
-func newOutboxFixture(t *testing.T) *outboxFixture {
+func newOutboxFixture(t *testing.T, opts ...mailworld.Option) *outboxFixture {
 	t.Helper()
 	ctx := context.Background()
-	w := newWorld(t)
+	w := newWorld(t, opts...)
 	acc := w.Account("me@grove.test", "secret")
 	dbs := newStore(t)
 	acct := accountFor(t, w, "acct-1", "me@grove.test", "secret")

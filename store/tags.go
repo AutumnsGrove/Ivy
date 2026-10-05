@@ -26,6 +26,14 @@ const (
 // atoms and case-insensitive, so the slug after it is lower-case [a-z0-9-].
 const KeywordPrefix = "$ivy-"
 
+// Who put a message in a tag (message_tags.source).
+const (
+	// TagSourceOperator is a tag the operator applied in Ivy.
+	TagSourceOperator = "operator"
+	// TagSourceServer is a tag learned from a keyword another client set.
+	TagSourceServer = "server"
+)
+
 // ErrTagName reports a tag name that is empty or longer than MaxTagNameLen.
 var ErrTagName = errors.New("bad tag name")
 

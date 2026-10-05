@@ -38,6 +38,10 @@ type OutboxWorker struct {
 	outage    int         // consecutive connection failures, for the backoff only
 	lastBusy  time.Time
 	jitter    func(time.Duration) time.Duration
+	// keywordsOK is whether the folder most recently selected keeps custom
+	// keywords (\* in PERMANENTFLAGS); the worker is one goroutine, so it is
+	// read right after the select that set it.
+	keywordsOK bool
 
 	// afterAck is a test seam: it runs after a command is acknowledged and before
 	// the mirror update, so a test can simulate the process dying in that window
@@ -332,18 +336,22 @@ func (w *OutboxWorker) dispatchFlags(ctx context.Context, c *session, op store.O
 	if !found {
 		return w.fail(ctx, op, "message_gone", "the message is no longer on the server")
 	}
+	server, local := w.serverSide(op)
+	if local {
+		return w.finishLocalTags(ctx, op)
+	}
 	flags, err := w.fetchFlags(c, uid)
 	if err != nil {
 		return w.serverError(ctx, op, err)
 	}
-	if flagsHold(op, flags) {
+	if flagsHold(server, flags) {
 		return w.finishFlags(ctx, op, rowID, flags)
 	}
 	if err := w.fetcher.dbs.SetOutboxInFlight(ctx, op.ID, uidvalidity, uid, w.fetcher.now()); err != nil {
 		return err
 	}
 	w.notify(ctx, op.ID)
-	if err := w.applyFlags(c, uid, op.Expect); err != nil {
+	if err := w.applyFlags(c, uid, server.Expect); err != nil {
 		return w.serverError(ctx, op, err)
 	}
 	flags, err = w.fetchFlags(c, uid)
@@ -521,11 +529,15 @@ func (w *OutboxWorker) recoverFlags(ctx context.Context, c *session, op store.Ou
 	if !found {
 		return w.fail(ctx, op, "message_gone", "the message is no longer on the server")
 	}
+	server, local := w.serverSide(op)
+	if local {
+		return w.finishLocalTags(ctx, op)
+	}
 	flags, err := w.fetchFlags(c, uid)
 	if err != nil {
 		return w.serverError(ctx, op, err)
 	}
-	if flagsHold(op, flags) {
+	if flagsHold(server, flags) {
 		return w.finishFlags(ctx, op, rowID, flags)
 	}
 	return w.requeue(ctx, op)
@@ -608,6 +620,9 @@ func (w *OutboxWorker) finishExpunge(ctx context.Context, op store.OutboxOp, row
 // state, so a missing row (purged mid-op) is not fatal; the op is done.
 func (w *OutboxWorker) finishFlags(ctx context.Context, op store.OutboxOp, rowID string, flags []string) error {
 	if err := w.fetcher.dbs.SetMessageFlags(ctx, rowID, flags); err != nil && !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
+	if err := w.reflectTags(ctx, op); err != nil {
 		return err
 	}
 	return w.done(ctx, op)
@@ -761,6 +776,7 @@ func (w *OutboxWorker) selectFolder(c *session, name string) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
+	w.keywordsOK = slices.Contains(data.PermanentFlags, imap.FlagWildcard)
 	return data.UIDValidity, nil
 }
 

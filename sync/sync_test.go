@@ -26,9 +26,9 @@ func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
 
-func newWorld(t *testing.T) *mailworld.World {
+func newWorld(t *testing.T, opts ...mailworld.Option) *mailworld.World {
 	t.Helper()
-	w, err := mailworld.New()
+	w, err := mailworld.New(opts...)
 	if err != nil {
 		t.Fatalf("new world: %v", err)
 	}
