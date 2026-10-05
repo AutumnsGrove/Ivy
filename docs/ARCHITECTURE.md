@@ -163,6 +163,22 @@ Locally owned state (`state.db`, not on the server and not rebuildable, so backe
   the folder keeps them. Deleting a tag queues a keyword clear for every live copy, then removes the
   tag and its memberships, or refuses with `outbox_full` and changes nothing. Limits are in
   `STANDARDS.md` 4a.
+  **How 3g built rules, snooze, People and Reading (round 56).** A rule is data: `conditions`
+  (`from`, `subject`, `account`, `has_attachment`) and `actions` (`tag`, `reading`, `snooze`) as
+  JSON, validated in Go against that closed vocabulary, so running a rule never calls a model;
+  fuzzy checks arrive with Jev in chunk 5. The ingest pass in `Settle` evaluates the enabled rules
+  scoped to an account over messages it has not seen (`rule_eval`, a rebuildable mirror cache),
+  records each match once in `rule_hits`, and applies the local actions: a tag action is a keyword
+  write through the outbox, and `reading` is the reserved `reading` tag through the same path; a
+  snooze is local state. A rule created after mail arrived reaches it only through the explicit,
+  idempotent apply, after a free local dry run. **Snooze** is a local hide-until (`snoozes`): the
+  message never leaves the server or the mirror, and the inbox view hides it by loading the active
+  keys from state and excluding them in the mirror query. **Reading** is that same reserved tag, so
+  later Jev applies it with no second mechanism; the inbox hides membership the same way, and the
+  Reading screen is the tag's messages. **People** is derived: `people` in the mirror is one row per
+  (address, account) rebuilt from From/To/Cc headers, and the operator's merges of several addresses
+  into one person (`person_links` in state) are applied at read time, so a mirror rebuild keeps them
+  and the result never depends on account order.
 - `outbox` (queued IMAP actions with retry state), `send_queue` (composed message, undo deadline):
   unsent work cannot be rebuilt from IMAP, so it lives here.
 - `api_calls`, the **cost ledger (settled, round 30)**: one row per remote API call and, for
@@ -180,7 +196,9 @@ and a move, archive, trash or flag change never recomputes them):
 - `decisions` (account_id, content_key, question_id, instruction_hash, model, probabilities JSON,
   choice, confidence, cost, created_at), `needs_me` (account_id, content_key, verdict, reason,
   stage2_model, state)
-- `people` (derived view/table from addresses seen), `receipts` (extracted fields, renewal dates)
+- `people` (one row per (address, account) derived from the From/To/Cc headers; the operator's
+  merges live in state.db's `person_links`), `rule_eval` (which messages the ingest rule pass has
+  seen), `receipts` (extracted fields, renewal dates)
 - `schema_migrations` positional `user_version` in each file (never reorder or edit existing entries).
 
 Vectors (spikes S8 and S10): **embed once.** A message is embedded when it first arrives and is

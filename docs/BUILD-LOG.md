@@ -554,3 +554,47 @@ embed-once queue, hybrid ranking and `/search` end to end.
   are verified but were not watched failing, and a fresh review should treat them accordingly.
 - **Left for the operator.** A live check of hybrid search against the real mailbox and the
   embeddings bill, and the potato numbers for extraction and the vector scan.
+
+## Chunk 3g — rules, snooze, People and Reading (2026-10-06)
+
+Delivered header rules as data with a local engine, the ingest pass and an on-demand apply; local
+hide-until snoozes; a derived People view with merges; and Reading as the reserved tag. The
+decisions are round 56.
+
+- **Rules (`rules/`, `store/rules.go`).** Conditions (`from`, `subject`, `account`,
+  `has_attachment`) and actions (`tag`, `reading`, `snooze`) are JSON validated against a closed
+  vocabulary, so running a rule never calls a model. `rules.Match` is a pure case-insensitive
+  substring test; `rules.Applier` is the one place a rule reaches the outbox or the snooze table,
+  shared by the ingest pass, the on-demand apply and the dev seed. `Settle` evaluates the enabled
+  rules scoped to an account over messages the pass has not seen (`rule_eval`, a mirror cache),
+  records each match once in `rule_hits`, and applies the actions. A new rule reaches old mail only
+  through `POST /rules/{id}/apply`, after a free `POST /rules/dry-run`.
+- **Schema.** State migration 7 (`rules`, `rule_hits`), 8 (`snoozes`, `person_links`); mirror
+  migration 15 (`rule_eval`), 16 (`people`). All append-only. A rule's tag action is a `$ivy-<slug>`
+  keyword through the existing outbox, and `reading` is the reserved `reading` tag (`t-reading`),
+  created at startup and undeletable.
+- **Snooze and Reading.** Snooze is local state; the inbox view loads the active snooze keys and the
+  Reading membership from state and excludes them with a `json_each` filter, so the two databases
+  still never join. `folder=snoozed` lists hidden mail and `tag=<id>` filters the inbox.
+  `GET /reading` is the reserved tag's messages; its digest is a plain count, never model text.
+- **People.** `people` is rebuilt per account in `Settle` from the From/To/Cc headers; the
+  operator's own addresses are filtered when read, so account order and mirror rebuilds cannot
+  change the group. Merges are locally owned and applied when reading; `POST/DELETE
+  /people/{id}/addresses` link and split addresses. A person page derives its conversations from the
+  threads its addresses appear in.
+- **Frontend.** The Rules list toggle, the manual rule editor (`/rules/{id}`), the manual builder
+  (`/rules/new`) and the People list and page are real; `/reading` links to the message. The
+  free-form "describe it" compiler stays chunk 5, so `rules/new/review` is now a dead mock route
+  (recorded in `next_steps.md`).
+- **Tests.** `store/rules_test.go`, `store/people_test.go`, `rules/engine_test.go`,
+  `rules/applier_test.go`, `gateway/rules_test.go`, `gateway/snooze_test.go`,
+  `gateway/people_test.go`, the search query-plan test's new arguments, and the dev-seed rules in
+  `TestFastAndFullAgreeForDemo`.
+- **Results.** `make check` green (Go `-race`, gofumpt, vet, staticcheck, svelte-check, 254 Vitest),
+  the mock Playwright suite 268 passed / 10 skipped, and `make smoke` 10/10.
+- **Process slips.** One `python3` in-place edit was used on `gateway/rules_test.go` against the
+  Edit/Write rule (checked by hand afterwards). TDD ordering was followed for the store, engine and
+  applier (tests seen failing first), but the gateway handler tests were largely written beside
+  their implementation; a fresh review should treat them accordingly.
+- **Left for the operator.** A live check against the real mailbox of a rule tagging mail and a
+  snooze waking, and the potato numbers for the rule pass over a large mailbox.

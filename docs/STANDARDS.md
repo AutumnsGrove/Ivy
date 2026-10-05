@@ -230,6 +230,16 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Attachments extracted per settle pass (`extractBatch`) | 100 | the rest wait for the next pass |
 | Embedding inputs per gate call (`llm.MaxBatchInputs`) | 64 | the call is refused, zero cost, and the queue retries in smaller batches |
 | One embedding input (`llm.MaxInputBytes`) | 64 KiB | the call is refused at zero cost; a body is chunked below this first |
+| Rules (`store.MaxRules`) | 100 | creating one more is refused with 409 `too_many_rules` |
+| Conditions on a rule (`store.MaxRuleConditions`) | 16 | rejected with 400 `bad_rule` |
+| Actions on a rule (`store.MaxRuleActions`) | 8 | rejected with 400 `bad_rule` |
+| Rule condition value (`store.MaxRuleValueLen`) | 256 bytes, non-empty | rejected with 400 `bad_rule`; matching is a case-insensitive substring, never a regex |
+| Messages one ingest rule pass evaluates (`store.MaxRuleEvalBatch`) | 200 | the rest wait for the next settle pass |
+| Messages a dry run / apply-to-existing reads (`store.MaxRuleDryRun`, `rules.applyBatch`) | 200 for the dry-run preview, 500 per account for an apply | only the newest are considered; the review says how many were looked at |
+| Rule request body (`maxRuleBodyBytes`) | 64 KiB | rejected with 400 `bad_request` |
+| Snoozes per account (`store.MaxSnoozes`) | 2000 | a new snooze is refused with 409 `too_many_snoozes`; an existing one may be extended |
+| Hidden content keys an inbox view loads (`maxHiddenKeys`) | 2000 | the remainder still shows in the inbox, a bounded degradation |
+| Conversations on a person page (`maxPersonConversations`) | 20 | the rest are omitted |
 
 ## 5. Frontend standards
 

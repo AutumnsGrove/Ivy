@@ -5,8 +5,10 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-06 (3f search is done: FTS5 + extraction + the embeddings gate and ledger +
-embed-once + hybrid + `/search` end to end. Next is 3g, the C0 canvas board, or 3h.)
+last updated: 2026-10-06 (3g is done: rules as data with a local engine and an ingest pass, local
+hide-until snooze, derived People with merges, and Reading as the reserved tag, wired through the
+API and the screens. Next is the C0 canvas board or 3h; 3b's disabled-mail screens still wait on
+C0.)
 Chunks 0, 1 and 2a-2h are done except the visual baselines of 2g and 2h (they need the CI harness
 regenerated). 3a and 3b's backend are done, 3c (backups, including the disabled-blob store), 3d (the
 outbox and write path), 3e (tags) and **3f (search)** are done; **the C0 canvas board is the one
@@ -37,7 +39,7 @@ thing blocking the 3b screens**.
 | 2a-2f Read: store, fetch, parse, render, thread, gateway | done |
 | 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
-| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; 3e done; **3f done**; 3g next |
+| 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, rules, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; 3e done; 3f done; **3g done**; 3h next |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | not started |
 | 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | not started |
 
@@ -99,13 +101,27 @@ real-binary tag round trip), `golangci-lint` and the race suite are green. Left 
 live check against the real Purelymail mailbox (that a keyword written by Ivy shows in another
 client and one set there arrives in Ivy), and `BenchmarkTagsForMessagesPage` on the potato.
 
+**3g is done** (round 56; `docs/BUILD-LOG.md` has the entry). Rules are data (`conditions` and
+`actions` validated against a closed vocabulary; `rules.Match` is a pure substring test), the
+`Settle` pass evaluates the enabled rules scoped to an account over messages it has not seen
+(`rule_eval`) and records each match once (`rule_hits`); a new rule reaches old mail only through an
+explicit apply after a free dry run. Tag and Reading actions are `$ivy-<slug>` keywords through the
+outbox; snooze is local hide-until. Reading is the reserved `reading` tag (created at startup,
+undeletable), and the inbox loads active snooze keys and Reading membership from state and excludes
+them in the mirror query, so the two databases still never join. People is derived per (address,
+account) in `Settle`, with locally owned merges applied when reading; the operator's own addresses
+are filtered at read time. The Rules list, manual editor and builder, People list and page and
+`/reading` are real. `make check`, the mock Playwright suite (268 passed / 10 skipped) and
+`make smoke` (10/10) are green. **Left for the operator:** a live check against the real mailbox of
+a rule tagging mail and a snooze waking, and the potato numbers for the rule pass over a large
+mailbox.
+
 **Next, in order:**
 
-1. **3g Rules + snooze + People + reading** (rules as data through the outbox, snooze, People,
-   `/reading`); it also unlocks the tag filter on the inbox.
-2. **C0 canvas board** for the three 3b screens, whenever the operator is ready; the backend and API
+1. **C0 canvas board** for the three 3b screens, whenever the operator is ready; the backend and API
    are already committed.
-3. **3h** (the deploy track) is independent and can run at any point.
+2. **3h** (the deploy track) is independent and can run at any point.
+3. **Chunk 4 (send)** after that; 3g leaves the free-form rule compiler for chunk 5.
 
 **Deliberately deferred from 3c** (do not re-litigate):
 
@@ -153,8 +169,14 @@ Found by the round 32 audit; each needs a home before its milestone starts.
 
 ### Frontend
 
-- Wire the stub actions (save rule, Update, "Try on recent mail", send) to real calls with
-  IMAP-first writes and undo (chunks 3g, 3h and 4).
+- Wire the remaining stub actions (Update, "Try on recent mail", send) to real calls with
+  IMAP-first writes and undo (chunks 3h and 4).
+- 3g leftovers: the reader has no snooze or show-in-Reading control (rules and the API only); the
+  `folder=snoozed` view and the inbox `tag=` filter are API-only with no screen; `rules/new/review`
+  is now a dead mock route (the free-form compiler is chunk 5); and the rule editor, People and
+  Reading have no Playwright test beyond the screens pass that visits them. A rule action on a
+  message kept in two folders queues the keyword op for the row the pass picked, so read-back can
+  drop the membership if only the other copy remains (the N8 nuance tags already accept).
 - Tags: a tag on more messages than the outbox headroom (500 per account) cannot be deleted in one
   go (round 52); the follow-up is a soft delete that a sweeper finishes as the queue drains. Tag
   counts include hidden mail. Keywords that predate a tag's creation are not adopted. The tag filter
