@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/AutumnsGrove/Ivy/store"
@@ -173,9 +174,13 @@ func (g *Gate) record(ctx context.Context, req EmbedRequest, outcome string, res
 		}
 	}
 	// The ledger is diagnostics and cap accounting, not the write itself; a
-	// failure here must not fail a call whose vectors the caller can use. It is
-	// left to the caller's error path only when the provider itself failed.
-	_ = g.store.RecordAPICalls(ctx, calls)
+	// failure here must not fail a call whose vectors the caller can use. But
+	// it is the cap's only record of spend, so it is never silent.
+	if err := g.store.RecordAPICalls(ctx, calls); err != nil {
+		slog.ErrorContext(ctx, "llm: the cost ledger could not be written; this call is unrecorded",
+			"provider", req.Embedder.Name(), "endpoint", endpoint, "outcome", outcome,
+			"rows", len(calls), "cost_usd", res.CostUSD, "error", err)
+	}
 }
 
 // shares splits total across weights so the parts sum exactly to total. A

@@ -1,9 +1,12 @@
 package llm
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -275,5 +278,42 @@ func TestGateRejectsAnOversizeBatchBeforeCalling(t *testing.T) {
 	}
 	if len(w.Calls()) != 0 {
 		t.Fatal("provider called for an oversize batch")
+	}
+}
+
+type okEmbedder struct{}
+
+func (okEmbedder) Name() string { return "stub" }
+func (okEmbedder) Embed(_ context.Context, _ string, inputs []string) (EmbedResult, error) {
+	res := EmbedResult{InputTokens: len(inputs), CostUSD: 0.0002}
+	for range inputs {
+		res.Vectors = append(res.Vectors, Quantise([]float32{0.5, 0, 0, 0}))
+	}
+	return res, nil
+}
+
+// The ledger is also the cap's only record of spend. A failed ledger write must
+// not throw away vectors that were already paid for, but it must never be
+// silent: money left the account with no row to show for it.
+func TestGateReportsALedgerWriteFailure(t *testing.T) {
+	// Not parallel: it swaps the process-wide default logger.
+	var logged bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	dbs := openStore(t)
+	if err := dbs.State.Write.Close(); err != nil { // the ledger can no longer be written
+		t.Fatal(err)
+	}
+	vecs, err := NewGate(dbs).Embed(context.Background(), EmbedRequest{
+		Embedder: okEmbedder{}, AccountID: "a", Enabled: true, Model: "m", Feature: "search",
+		Inputs: []string{"hello"}, ContentKeys: []string{"k"},
+	})
+	if err != nil || len(vecs) != 1 {
+		t.Fatalf("Embed = %d vectors, %v; want the paid-for vector back", len(vecs), err)
+	}
+	if !strings.Contains(logged.String(), "ledger") {
+		t.Errorf("a failed ledger write was silent; log = %q", logged.String())
 	}
 }
