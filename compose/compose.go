@@ -10,8 +10,12 @@
 package compose
 
 import (
-	"errors"
+	"bytes"
+	"fmt"
+	"strings"
 	"time"
+
+	"github.com/jhillyerd/enmime"
 )
 
 // Address is one mailbox with an optional display name. The name may be
@@ -89,21 +93,59 @@ type ValidationError struct {
 
 func (e *ValidationError) Error() string { return e.Field + ": " + e.Reason }
 
-// errNotImplemented marks the 4a builder as unbuilt. It is removed when the
-// gate G1 tests pass; it exists so those tests compile and fail on behaviour
-// rather than on a compile error (STANDARDS.md section 1).
-var errNotImplemented = errors.New("compose: not implemented")
-
 // Build validates m and renders it to RFC 5322 bytes for transmission, plus the
 // SMTP envelope. It returns a *ValidationError for the first bad field and
 // never writes a partial message.
 func Build(m Message) ([]byte, Envelope, error) {
-	return nil, Envelope{}, errNotImplemented
+	if err := validate(m); err != nil {
+		return nil, Envelope{}, err
+	}
+	env := Envelope{From: m.From.Address, To: recipientList(m)}
+
+	b := enmime.Builder().
+		From(encodeWord(m.From.Name), m.From.Address).
+		ToAddrs(mailAddresses(m.To)).
+		CCAddrs(mailAddresses(m.Cc)).
+		BCCAddrs(mailAddresses(m.Bcc)).
+		ReplyToAddrs(mailAddresses(m.ReplyTo)).
+		Subject(encodeWord(m.Subject)).
+		Date(m.Date).
+		Header("Message-ID", m.MessageID).
+		Text([]byte(m.Text))
+	if m.InReplyTo != "" {
+		b = b.Header("In-Reply-To", m.InReplyTo)
+	}
+	if len(m.References) > 0 {
+		b = b.Header("References", strings.Join(m.References, " "))
+	}
+	if m.Markdown && m.Text != "" {
+		html, err := renderMarkdown(m.Text)
+		if err != nil {
+			return nil, Envelope{}, fmt.Errorf("compose: render markdown: %w", err)
+		}
+		b = b.HTML(html)
+	}
+	// Invariant 7: the wire copy never carries Bcc, so it is added to the
+	// builder's header block only for the Sent copy. BCCAddrs above is what makes
+	// the builder accept a Bcc-only message.
+	if m.KeepBcc && len(m.Bcc) > 0 {
+		b = b.Header("Bcc", joinAddresses(m.Bcc))
+	}
+
+	part, err := b.Build()
+	if err != nil {
+		return nil, Envelope{}, fmt.Errorf("compose: build message: %w", err)
+	}
+	var buf bytes.Buffer
+	if err := part.Encode(&buf); err != nil {
+		return nil, Envelope{}, fmt.Errorf("compose: encode message: %w", err)
+	}
+	return buf.Bytes(), env, nil
 }
 
 // Validate checks m's addresses and header-bound values without rendering it,
 // so a caller can pre-check before it stores or builds anything. It returns the
 // first problem as a *ValidationError.
 func Validate(m Message) error {
-	return errNotImplemented
+	return validate(m)
 }

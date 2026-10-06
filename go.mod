@@ -12,8 +12,10 @@ require (
 	github.com/jhillyerd/enmime v1.3.0
 	github.com/joho/godotenv v1.5.1
 	github.com/klauspost/compress v1.20.1
+	github.com/ledongthuc/pdf v0.0.0-20260907135840-6c8c28e0e8a0
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/spf13/cobra v1.10.2
+	github.com/yuin/goldmark v1.8.6
 	go.uber.org/goleak v1.3.0
 	golang.org/x/net v0.59.0
 	modernc.org/sqlite v1.60.1
@@ -34,7 +36,6 @@ require (
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jaytaylor/html2text v0.0.0-20230321000545-74c2419ad056 // indirect
-	github.com/ledongthuc/pdf v0.0.0-20260907135840-6c8c28e0e8a0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect

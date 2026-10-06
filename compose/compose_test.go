@@ -3,6 +3,7 @@ package compose_test
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"mime"
 	"net/mail"
 	"net/textproto"
@@ -117,7 +118,7 @@ func TestBuildRejectsInjectedHeaders(t *testing.T) {
 		{"too many recipients", "recipients", func(m *compose.Message) {
 			m.To = m.To[:0]
 			for i := range compose.MaxRecipients + 1 {
-				m.To = append(m.To, compose.Address{Address: "u" + string(rune('a'+i%26)) + "@example.test"})
+				m.To = append(m.To, compose.Address{Address: fmt.Sprintf("u%d@example.test", i)})
 			}
 		}},
 		{"body too large", "body", func(m *compose.Message) { m.Text = strings.Repeat("x", compose.MaxBodyBytes+1) }},
@@ -341,9 +342,16 @@ func asValidationError(err error, target **compose.ValidationError) bool {
 
 func parseAddress(t *testing.T, header string) *mail.Address {
 	t.Helper()
-	addr, err := (&mail.AddressParser{WordDecoder: new(mime.WordDecoder)}).Parse(header)
+	addr, err := mail.ParseAddress(header)
 	if err != nil {
 		t.Fatalf("parse address %q: %v", header, err)
+	}
+	// net/mail does not decode an RFC 2047 display name for us here, so decode
+	// it the way a recipient's client would.
+	if addr.Name != "" {
+		if name := decodedHeader(t, addr.Name); name != addr.Name {
+			addr.Name = name
+		}
 	}
 	return addr
 }
