@@ -22,6 +22,11 @@ const (
 	// OutboxAppend copies a body from the send queue into a folder. It names the
 	// send row in Expect.SendID rather than acting on a mirrored message.
 	OutboxAppend = "append"
+	// OutboxDraft files a compose draft version into the Drafts folder and removes
+	// the version it supersedes, all in one op (docs/handoffs/2026-10-06-4d-drafts-design.md).
+	// It names the immutable version row in Expect.DraftVersionID, or, with
+	// Expect.Remove, only removes the copies named in Expect.Supersedes.
+	OutboxDraft = "draft"
 )
 
 // Outbox op states. pending and in_flight are the live ones sync defers to;
@@ -73,6 +78,18 @@ type OutboxExpect struct {
 	// SendID names the send_queue row whose sent_body an append files. It is part
 	// of the idempotency key, so one send files exactly one Sent copy.
 	SendID string `json:"send_id,omitempty"`
+	// DraftID is the stable identity of the draft a draft op acts on.
+	DraftID string `json:"draft_id,omitempty"`
+	// DraftVersionID names the immutable drafts row whose body a draft op files.
+	// Empty with Remove true means an expunge-only op (the draft was sent or
+	// discarded).
+	DraftVersionID string `json:"draft_version_id,omitempty"`
+	// Supersedes are the Message-IDs of draft copies to expunge once the new
+	// version is filed, so a replace leaves exactly one copy on the server.
+	Supersedes []string `json:"supersedes,omitempty"`
+	// Remove is an expunge-only draft op: the draft left the queue because it was
+	// sent or discarded.
+	Remove bool `json:"remove,omitempty"`
 }
 
 // OutboxKey identifies the mail an op acts on. A message is identified by its
@@ -131,6 +148,25 @@ func OutboxIdempotencyKey(op OutboxOp) (string, error) {
 // already pending cancels both (the net change is nothing), returning the new
 // cancelled row with created=true. Beyond MaxQueuedOps it returns ErrOutboxFull.
 func (d *DBs) EnqueueOutbox(ctx context.Context, op OutboxOp) (OutboxOp, bool, error) {
+	tx, err := d.State.Write.BeginTx(ctx, nil)
+	if err != nil {
+		return OutboxOp{}, false, fmt.Errorf("enqueue outbox: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	stored, created, err := enqueueOutboxTx(ctx, tx, op)
+	if err != nil {
+		return OutboxOp{}, false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return OutboxOp{}, false, fmt.Errorf("enqueue outbox: %w", err)
+	}
+	return stored, created, nil
+}
+
+// enqueueOutboxTx is enqueueOutbox's body over a caller-owned transaction, so a
+// package that must commit an op atomically with its own row (a draft save) can.
+// It never commits; the caller does. The caller also owns the rollback.
+func enqueueOutboxTx(ctx context.Context, tx *sql.Tx, op OutboxOp) (OutboxOp, bool, error) {
 	expect, err := canonicalExpectJSON(op.Expect)
 	if err != nil {
 		return OutboxOp{}, false, err
@@ -151,18 +187,12 @@ func (d *DBs) EnqueueOutbox(ctx context.Context, op OutboxOp) (OutboxOp, bool, e
 		return OutboxOp{}, false, errors.New("enqueue outbox: the op carries no timestamp")
 	}
 
-	tx, err := d.State.Write.BeginTx(ctx, nil)
-	if err != nil {
-		return OutboxOp{}, false, fmt.Errorf("enqueue outbox: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
 	// A repeat of a queued action is the same action, so it is answered before
 	// the cap: a double tap on a full queue must not read as "queue full".
 	existing, err := outboxByKey(ctx, tx, key)
 	switch {
 	case err == nil:
-		return existing, false, tx.Commit()
+		return existing, false, nil
 	case !errors.Is(err, ErrNotFound):
 		return OutboxOp{}, false, err
 	}
@@ -204,7 +234,7 @@ func (d *DBs) EnqueueOutbox(ctx context.Context, op OutboxOp) (OutboxOp, bool, e
 			if err := cancelOutboxTx(ctx, tx, inverse.ID, now); err != nil {
 				return OutboxOp{}, false, err
 			}
-			return stored, true, tx.Commit()
+			return stored, true, nil
 		}
 	}
 
@@ -216,9 +246,6 @@ func (d *DBs) EnqueueOutbox(ctx context.Context, op OutboxOp) (OutboxOp, bool, e
 	}
 	if err := insertOutbox(ctx, tx, stored); err != nil {
 		return OutboxOp{}, false, err
-	}
-	if err := tx.Commit(); err != nil {
-		return OutboxOp{}, false, fmt.Errorf("enqueue outbox: %w", err)
 	}
 	return stored, true, nil
 }

@@ -753,6 +753,38 @@ var stateMigrations = []migration{
 			`ALTER TABLE send_queue ADD COLUMN compose_json BLOB`,
 		},
 	},
+	{
+		version: 12,
+		statements: []string{
+			// One immutable row per saved compose version; the head is the highest
+			// live version for a draft_id. The body is committed with the outbox op
+			// that files it, so two racing autosaves can never file each other's
+			// bytes (docs/handoffs/2026-10-06-4d-drafts-design.md). It is locally
+			// owned state and is backed up; the server copy is a mirror of it.
+			`CREATE TABLE drafts (
+				id           TEXT PRIMARY KEY,
+				draft_id     TEXT NOT NULL,
+				account_id   TEXT NOT NULL,
+				version      INTEGER NOT NULL,
+				message_id   TEXT NOT NULL,
+				content_key  TEXT NOT NULL,
+				supersedes   TEXT NOT NULL DEFAULT '',
+				subject      TEXT NOT NULL DEFAULT '',
+				to_addrs     TEXT NOT NULL DEFAULT '[]',
+				dest_folder_id TEXT NOT NULL DEFAULT '',
+				compose_json BLOB,
+				body         BLOB NOT NULL,
+				state        TEXT NOT NULL,
+				created_at   TEXT NOT NULL,
+				updated_at   TEXT NOT NULL
+			)`,
+			// One server copy per version: a version's Message-ID is unique per
+			// account, so a retried save can never file a duplicate.
+			`CREATE UNIQUE INDEX idx_drafts_message ON drafts(account_id, message_id)`,
+			// The head lookup is one account's draft, newest version first.
+			`CREATE INDEX idx_drafts_head ON drafts(account_id, draft_id, version)`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state
