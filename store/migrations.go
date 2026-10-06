@@ -683,6 +683,27 @@ var stateMigrations = []migration{
 			)`,
 		},
 	},
+	{
+		version: 9,
+		statements: []string{
+			// Accounts connected from the app rather than written in ivy.yaml
+			// (round 59). Connection details only: the password is a private file
+			// under data/secrets and has no column here, because this database is
+			// backed up and copied off the board.
+			`CREATE TABLE account_configs (
+				id             TEXT PRIMARY KEY,
+				address        TEXT NOT NULL,
+				username       TEXT NOT NULL,
+				imap_host      TEXT NOT NULL,
+				imap_port      INTEGER NOT NULL,
+				smtp_host      TEXT NOT NULL,
+				smtp_port      INTEGER NOT NULL,
+				llm_enabled    INTEGER NOT NULL DEFAULT 0,
+				embed_provider TEXT NOT NULL DEFAULT '',
+				created_at     TEXT NOT NULL
+			)`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state
