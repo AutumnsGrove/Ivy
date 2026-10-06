@@ -109,6 +109,28 @@ func scanDraft(s scanner) (Draft, error) {
 	return d, nil
 }
 
+// DraftTerminalRetention is how long a sent or discarded version row survives,
+// so a recent history or undo can still resolve it. The queue's own pruning is
+// the only deletion, and only of terminal rows.
+const DraftTerminalRetention = 7 * 24 * time.Hour
+
+// PruneDrafts removes terminal version rows older than the retention. It never
+// touches a live (saving or saved) row, and a pending remove op does not need
+// the row: it carries the Message-ID itself.
+func (d *DBs) PruneDrafts(ctx context.Context, now time.Time) (int, error) {
+	cutoff := formatTime(now.Add(-DraftTerminalRetention))
+	res, err := d.State.Write.ExecContext(ctx,
+		`DELETE FROM drafts WHERE state IN (?, ?) AND updated_at < ?`, DraftSent, DraftDiscarded, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("prune drafts: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("prune drafts: %w", err)
+	}
+	return int(n), nil
+}
+
 // SaveDraft commits a new version and the outbox op that files it in one
 // transaction, so a version is never durable without the op that will reach the
 // server. A stale BaseVersion is ErrDraftConflict carrying the current head.

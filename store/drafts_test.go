@@ -337,3 +337,38 @@ func TestSaveDraftRefusesBeyondTheOutboxCap(t *testing.T) {
 		t.Fatalf("refused save left a row: %v", err)
 	}
 }
+
+// A terminal abandoned draft is pruned after the retention; a live draft is not.
+func TestPruneDraftsRemovesOnlyOldTerminalRows(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	if _, err := dbs.SaveDraft(ctx, newDraftSave("v1", "d1", "<m1@example.test>", 0)); err != nil {
+		t.Fatalf("save v1: %v", err)
+	}
+	if err := dbs.MarkDraftSaved(ctx, "v1", draftNow); err != nil {
+		t.Fatalf("mark saved: %v", err)
+	}
+	if _, err := dbs.DiscardDraft(ctx, "acct-1", "d1", "op-discard", draftNow); err != nil {
+		t.Fatalf("discard: %v", err)
+	}
+	if _, err := dbs.SaveDraft(ctx, newDraftSave("v2", "d2", "<m2@example.test>", 0)); err != nil {
+		t.Fatalf("save v2: %v", err)
+	}
+
+	n, err := dbs.PruneDrafts(ctx, draftNow.Add(DraftTerminalRetention+time.Hour))
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("pruned %d rows, want the one terminal row", n)
+	}
+	rows, err := dbs.draftsForTest(ctx)
+	if err != nil {
+		t.Fatalf("rows: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != "v2" {
+		t.Fatalf("rows = %+v, want only the live v2", rows)
+	}
+}

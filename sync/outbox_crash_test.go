@@ -319,3 +319,98 @@ func TestOutboxMoveAckThenDropConverges(t *testing.T) {
 		})
 	}
 }
+
+// saveDraft commits one version through the real store path.
+func (cw *crashWorld) saveDraft(t *testing.T, id, draftID, msgID string, base int) store.Draft {
+	t.Helper()
+	ctx := context.Background()
+	drafts, err := cw.dbs.GetFolderByName(ctx, "acct-1", "Drafts")
+	if err != nil {
+		t.Fatalf("drafts folder: %v", err)
+	}
+	body := mailworld.Msg().From("me@grove.test").To("you@example.test").
+		Subject("draft").MessageID(msgID).Text("hello").Build()
+	d, err := cw.dbs.SaveDraft(ctx, store.SaveDraftInput{
+		ID: id, DraftID: draftID, AccountID: "acct-1",
+		DestFolderID: drafts.ID, MessageID: msgID,
+		Subject: "draft", To: []string{"you@example.test"},
+		Compose: []byte(`{"subject":"draft"}`), Body: body,
+		BaseVersion: base, OpID: id + "-op", Now: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("save draft %s: %v", id, err)
+	}
+	return d
+}
+
+// A crash between the APPEND's ack and the version mark must recover to exactly
+// one filed copy and a saved version; recovery is a separate worker, like a
+// restart. Repeated so the window is exercised, not just hit once.
+func TestOutboxDraftCrashWindowFilesOnce(t *testing.T) {
+	t.Parallel()
+	for n := 0; n < 8; n++ {
+		t.Run(fmt.Sprintf("draft-%d", n), func(t *testing.T) {
+			ctx := context.Background()
+			cw := newCrashWorld(t, "me@grove.test")
+			if err := cw.acc.CreateMailbox("Drafts"); err != nil {
+				t.Fatalf("create Drafts: %v", err)
+			}
+			cw.fetch(t)
+			msgID := fmt.Sprintf("<draft-crash%d@test>", n)
+			d := cw.saveDraft(t, "v1", "d1", msgID, 0)
+
+			cw.crashOnce(t)
+
+			msgs, err := cw.acc.Messages("Drafts")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(msgs) != 1 || msgs[0].MessageID != msgID {
+				t.Fatalf("Drafts = %+v, want exactly the filed version", msgs)
+			}
+			if op, err := cw.dbs.GetOutbox(ctx, "v1-op"); err != nil || op.State != store.OutboxDone {
+				t.Fatalf("op = %+v, %v, want done", op, err)
+			}
+			if got, err := cw.dbs.DraftVersion(ctx, d.ID); err != nil || got.State != store.DraftSaved {
+				t.Fatalf("version = %+v, %v, want saved", got, err)
+			}
+		})
+	}
+}
+
+// The same crash on a replace must leave exactly one copy: the new one filed,
+// the superseded one removed once recovery finishes the op.
+func TestOutboxDraftReplaceCrashWindowLeavesOneCopy(t *testing.T) {
+	t.Parallel()
+	for n := 0; n < 8; n++ {
+		t.Run(fmt.Sprintf("replace-%d", n), func(t *testing.T) {
+			ctx := context.Background()
+			cw := newCrashWorld(t, "me@grove.test")
+			if err := cw.acc.CreateMailbox("Drafts"); err != nil {
+				t.Fatalf("create Drafts: %v", err)
+			}
+			cw.fetch(t)
+			cw.saveDraft(t, "v1", "d1", fmt.Sprintf("<old%d@test>", n), 0)
+			// File v1 for real so the replace has an old copy to remove.
+			first := NewOutboxWorker(NewFetcher(cw.dbs), cw.acct)
+			if err := first.RunOnce(ctx); err != nil {
+				t.Fatalf("file v1: %v", err)
+			}
+			newID := fmt.Sprintf("<new%d@test>", n)
+			cw.saveDraft(t, "v2", "d1", newID, 1)
+
+			cw.crashOnce(t)
+
+			msgs, err := cw.acc.Messages("Drafts")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(msgs) != 1 || msgs[0].MessageID != newID {
+				t.Fatalf("Drafts = %+v, want only the new version", msgs)
+			}
+			if op, err := cw.dbs.GetOutbox(ctx, "v2-op"); err != nil || op.State != store.OutboxDone {
+				t.Fatalf("op = %+v, %v, want done", op, err)
+			}
+		})
+	}
+}

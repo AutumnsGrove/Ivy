@@ -163,6 +163,9 @@ func (w *OutboxWorker) Run(ctx context.Context) error {
 			if _, err := w.fetcher.dbs.PruneOutbox(ctx, w.fetcher.now()); err != nil {
 				slog.WarnContext(ctx, "outbox: prune failed", "account", w.acct.ID, "error", err)
 			}
+			if _, err := w.fetcher.dbs.PruneDrafts(ctx, w.fetcher.now()); err != nil {
+				slog.WarnContext(ctx, "outbox: draft prune failed", "account", w.acct.ID, "error", err)
+			}
 			lastPrune = w.fetcher.now()
 		}
 		if w.conn != nil && w.fetcher.now().Sub(w.lastBusy) > w.idleClose {
@@ -236,6 +239,11 @@ func (w *OutboxWorker) process(ctx context.Context, op store.OutboxOp) error {
 			return w.recoverAppend(ctx, c, op)
 		}
 		return w.dispatchAppend(ctx, c, op)
+	case store.OutboxDraft:
+		if op.State == store.OutboxInFlight {
+			return w.recoverDraft(ctx, c, op)
+		}
+		return w.dispatchDraft(ctx, c, op)
 	default:
 		return w.fail(ctx, op, "unknown_kind", fmt.Sprintf("unknown op kind %q", op.Kind))
 	}
@@ -479,6 +487,164 @@ func (w *OutboxWorker) recoverAppend(ctx context.Context, c *session, op store.O
 		return w.done(ctx, op)
 	}
 	return w.requeue(ctx, op)
+}
+
+// dispatchDraft files one immutable compose version into the Drafts folder and
+// removes the version it supersedes, all in one op. A Remove op only clears the
+// copies named in Supersedes (the draft was sent or discarded). A version is
+// never filed twice: its Message-ID is searched before the APPEND, and a fresh
+// Message-ID is minted for every save (docs/handoffs/2026-10-06-4d-drafts-design.md).
+func (w *OutboxWorker) dispatchDraft(ctx context.Context, c *session, op store.OutboxOp) error {
+	dst, ok, err := w.draftFolder(ctx, op)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	if _, err := w.selectFolder(c, dst.Name); err != nil {
+		return w.serverError(ctx, op, err)
+	}
+	if op.Expect.Remove {
+		if err := w.expungeDraftCopies(ctx, c, op); err != nil {
+			return err
+		}
+		return w.done(ctx, op)
+	}
+	ref, err := w.fetcher.dbs.DraftBodyForOp(ctx, op.Expect.DraftVersionID)
+	if errors.Is(err, store.ErrNotFound) {
+		return w.fail(ctx, op, "draft_gone", "the draft version is gone")
+	}
+	if err != nil {
+		return err
+	}
+	_, found, err := w.searchMessageID(c, ref.MessageID)
+	if err != nil {
+		return w.serverError(ctx, op, err)
+	}
+	if !found {
+		// In-flight before the APPEND: a crash is then recovered by the search in
+		// recoverDraft, where finding the Message-ID proves the append applied.
+		if err := w.fetcher.dbs.SetOutboxInFlight(ctx, op.ID, 0, 0, w.fetcher.now()); err != nil {
+			return err
+		}
+		w.notify(ctx, op.ID)
+		if err := w.appendMessage(c, dst.Name, ref.Body, op.Expect.FlagsAdd); err != nil {
+			return w.serverError(ctx, op, err)
+		}
+		if err := w.afterAckCrash(op); err != nil {
+			return err
+		}
+	}
+	if err := w.expungeDraftCopies(ctx, c, op); err != nil {
+		return err
+	}
+	if err := w.markDraftSaved(ctx, op); err != nil {
+		return err
+	}
+	return w.done(ctx, op)
+}
+
+// recoverDraft decides a possibly-applied draft save. The new Message-ID is the
+// evidence: present means the append applied (finish it), absent means it never
+// landed and is safe to re-issue.
+func (w *OutboxWorker) recoverDraft(ctx context.Context, c *session, op store.OutboxOp) error {
+	dst, ok, err := w.draftFolder(ctx, op)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	if _, err := w.selectFolder(c, dst.Name); err != nil {
+		return w.serverError(ctx, op, err)
+	}
+	if op.Expect.Remove {
+		if err := w.expungeDraftCopies(ctx, c, op); err != nil {
+			return err
+		}
+		return w.done(ctx, op)
+	}
+	ref, err := w.fetcher.dbs.DraftBodyForOp(ctx, op.Expect.DraftVersionID)
+	if errors.Is(err, store.ErrNotFound) {
+		return w.fail(ctx, op, "draft_gone", "the draft version is gone")
+	}
+	if err != nil {
+		return err
+	}
+	_, found, err := w.searchMessageID(c, ref.MessageID)
+	if err != nil {
+		return w.serverError(ctx, op, err)
+	}
+	if !found {
+		return w.requeue(ctx, op)
+	}
+	if err := w.expungeDraftCopies(ctx, c, op); err != nil {
+		return err
+	}
+	if err := w.markDraftSaved(ctx, op); err != nil {
+		return err
+	}
+	return w.done(ctx, op)
+}
+
+// draftFolder resolves and guards the Drafts folder a draft op names. ok=false
+// means the op was already failed.
+func (w *OutboxWorker) draftFolder(ctx context.Context, op store.OutboxOp) (store.Folder, bool, error) {
+	dst, ok, err := w.folder(ctx, op.Expect.DestFolderID)
+	if err != nil {
+		return store.Folder{}, false, err
+	}
+	if !ok {
+		return store.Folder{}, false, w.fail(ctx, op, "message_gone", "the drafts folder is gone")
+	}
+	if dst.Role != store.RoleDrafts {
+		return store.Folder{}, false, w.fail(ctx, op, "not_drafts", "a draft may only be filed in the drafts folder")
+	}
+	return dst, true, nil
+}
+
+// draftCapability requires UIDPLUS before any superseded copy is expunged, so
+// the removal is precise; it never falls back to a bare EXPUNGE.
+func (w *OutboxWorker) draftCapability(ctx context.Context, c *session, op store.OutboxOp) error {
+	return w.requireCapability(ctx, c, imap.CapUIDPlus, op, "UIDPLUS")
+}
+
+// expungeDraftCopies removes the copies a draft op names by Message-ID. A copy
+// that is already gone is fine: an earlier attempt may have removed it.
+func (w *OutboxWorker) expungeDraftCopies(ctx context.Context, c *session, op store.OutboxOp) error {
+	if len(op.Expect.Supersedes) == 0 {
+		return nil
+	}
+	if err := w.draftCapability(ctx, c, op); err != nil {
+		return err
+	}
+	for _, msgID := range op.Expect.Supersedes {
+		if msgID == "" {
+			continue
+		}
+		uid, found, err := w.searchMessageID(c, msgID)
+		if err != nil {
+			return w.serverError(ctx, op, err)
+		}
+		if !found {
+			continue
+		}
+		if err := w.expungeMessage(c, uid); err != nil {
+			return w.serverError(ctx, op, err)
+		}
+	}
+	return nil
+}
+
+// markDraftSaved records that the version is on the server. A version already
+// saved (a crash between the mark and the op's done) is not an error.
+func (w *OutboxWorker) markDraftSaved(ctx context.Context, op store.OutboxOp) error {
+	err := w.fetcher.dbs.MarkDraftSaved(ctx, op.Expect.DraftVersionID, w.fetcher.now())
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
+	return nil
 }
 
 func (w *OutboxWorker) appendMessage(c *session, folder string, body []byte, flags []string) error {
