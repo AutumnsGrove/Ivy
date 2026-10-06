@@ -465,3 +465,39 @@ func TestSendsByAccountClampsTheLimit(t *testing.T) {
 		t.Errorf("no limit returned %d rows, want the default %d", len(got), DefaultSendListLimit)
 	}
 }
+
+// A send records the draft version it came from, and the removal op that clears
+// that copy once the message is accepted.
+func TestSendCarriesTheDraftItCameFrom(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	m := newSend("send-1", "<m1@example.test>")
+	m.DraftMessageID = "<draft@example.test>"
+	stored, _, err := dbs.EnqueueSend(ctx, m)
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if stored.DraftMessageID != "<draft@example.test>" {
+		t.Fatalf("stored draft message id = %q, want the draft version", stored.DraftMessageID)
+	}
+	got, err := dbs.GetSend(ctx, "send-1")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.DraftMessageID != "<draft@example.test>" {
+		t.Fatalf("round-tripped draft message id = %q", got.DraftMessageID)
+	}
+
+	if err := dbs.SetSendDraftRemoveID(ctx, "send-1", "op-remove", sendNow); err != nil {
+		t.Fatalf("set remove id: %v", err)
+	}
+	got, err = dbs.GetSend(ctx, "send-1")
+	if err != nil {
+		t.Fatalf("get after remove: %v", err)
+	}
+	if got.DraftRemoveID != "op-remove" {
+		t.Fatalf("draft remove id = %q, want op-remove", got.DraftRemoveID)
+	}
+}

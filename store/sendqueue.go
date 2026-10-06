@@ -95,14 +95,20 @@ type SendMessage struct {
 	LastErrorDetail string
 	UndoDeadline    time.Time
 	SentAppendID    string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	CompletedAt     time.Time
+	// DraftMessageID is the draft version the send came from, and DraftRemoveID
+	// is the outbox op that removes that server copy once the 250 arrives. A
+	// message that was never accepted keeps its draft.
+	DraftMessageID string
+	DraftRemoveID  string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	CompletedAt    time.Time
 }
 
 const sendSelect = `SELECT id, account_id, seq, message_id, content_key, envelope_from,
 	recipients, wire_body, sent_body, compose_json, state, attempts, next_attempt_at,
 	last_error_code, last_error_detail, undo_deadline, sent_append_id,
+	draft_message_id, draft_remove_id,
 	created_at, updated_at, completed_at FROM send_queue`
 
 func scanSend(s scanner) (SendMessage, error) {
@@ -119,6 +125,7 @@ func scanSend(s scanner) (SendMessage, error) {
 		&m.ID, &m.AccountID, &m.Seq, &m.MessageID, &m.ContentKey, &m.EnvelopeFrom,
 		&recipients, &m.WireBody, &m.SentBody, &m.Draft, &m.State, &m.Attempts, &next,
 		&m.LastErrorCode, &m.LastErrorDetail, &undo, &m.SentAppendID,
+		&m.DraftMessageID, &m.DraftRemoveID,
 		&created, &updated, &completed,
 	); err != nil {
 		return SendMessage{}, err
@@ -227,11 +234,13 @@ func (d *DBs) EnqueueSend(ctx context.Context, m SendMessage) (SendMessage, bool
 		INSERT INTO send_queue (
 			id, account_id, seq, message_id, content_key, envelope_from, recipients,
 			wire_body, sent_body, compose_json, state, attempts, next_attempt_at, last_error_code,
-			last_error_detail, undo_deadline, sent_append_id, created_at, updated_at, completed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			last_error_detail, undo_deadline, sent_append_id, draft_message_id, draft_remove_id,
+			created_at, updated_at, completed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.ID, m.AccountID, m.Seq, m.MessageID, m.ContentKey, m.EnvelopeFrom, string(recipients),
 		m.WireBody, m.SentBody, m.Draft, m.State, m.Attempts, nullableTime(m.NextAttemptAt),
 		m.LastErrorCode, m.LastErrorDetail, nullableTime(m.UndoDeadline), m.SentAppendID,
+		m.DraftMessageID, m.DraftRemoveID,
 		formatTime(m.CreatedAt), formatTime(m.UpdatedAt), nullableTime(m.CompletedAt)); err != nil {
 		return SendMessage{}, false, fmt.Errorf("enqueue send %s: %w", m.ID, err)
 	}
@@ -354,6 +363,15 @@ func (d *DBs) SetSendAppendID(ctx context.Context, id, appendID string, now time
 	return d.updateSend(ctx, `
 		UPDATE send_queue SET sent_append_id = ?, updated_at = ? WHERE id = ? AND state = ?`,
 		appendID, formatTime(now), id, SendSubmitted)
+}
+
+// SetSendDraftRemoveID records the outbox op that removes a sent draft's copy.
+// It has no state guard: the removal is independent of the Sent copy's progress,
+// and the op is idempotent.
+func (d *DBs) SetSendDraftRemoveID(ctx context.Context, id, removeID string, now time.Time) error {
+	return d.updateSend(ctx, `
+		UPDATE send_queue SET draft_remove_id = ?, updated_at = ? WHERE id = ?`,
+		removeID, formatTime(now), id)
 }
 
 // RetrySend returns a transiently failed row to queued, counting the attempt and

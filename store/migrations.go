@@ -785,6 +785,17 @@ var stateMigrations = []migration{
 			`CREATE INDEX idx_drafts_head ON drafts(account_id, draft_id, version)`,
 		},
 	},
+	{
+		version: 13,
+		statements: []string{
+			// The draft version a send came from, so a sent message leaves Drafts
+			// (CHUNK4-BRIEF section 4, 4d). It is the exact server copy to remove, so
+			// a newer edit in another tab is never touched, and the outbox op that
+			// removes it travels through the same durable queue as the Sent copy.
+			`ALTER TABLE send_queue ADD COLUMN draft_message_id TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE send_queue ADD COLUMN draft_remove_id TEXT NOT NULL DEFAULT ''`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state

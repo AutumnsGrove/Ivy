@@ -224,7 +224,53 @@ func (w *Worker) submitted(ctx context.Context, m store.SendMessage) error {
 		// submitting, so recovery marks it unconfirmed; never resend from here.
 		return err
 	}
+	// The draft removal is queued first, while the row is still `submitted`: a
+	// missing Sent folder can settle the row terminal below.
+	if err := w.ensureDraftRemoval(ctx, m); err != nil {
+		return err
+	}
 	return w.ensureAppend(ctx, m)
+}
+
+// ensureDraftRemoval queues the outbox op that removes a sent message's draft
+// copy, once. It runs only after the 250, so a message that was never accepted
+// keeps its draft; a missing Drafts folder or a full outbox leaves it for a
+// later pass. The removal is independent of the Sent copy and never blocks it.
+func (w *Worker) ensureDraftRemoval(ctx context.Context, m store.SendMessage) error {
+	if m.DraftMessageID == "" || m.DraftRemoveID != "" {
+		return nil
+	}
+	drafts, err := w.dbs.FolderByRole(ctx, w.acct.ID, store.RoleDrafts)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	op, _, err := w.dbs.EnqueueOutbox(ctx, store.OutboxOp{
+		ID: w.newID(), AccountID: w.acct.ID, Kind: store.OutboxDraft,
+		ContentKey: store.ContentKey(m.DraftMessageID, nil), SourceFolderID: drafts.ID,
+		Expect: store.OutboxExpect{
+			DestFolderID: drafts.ID,
+			Supersedes:   []string{m.DraftMessageID},
+			Remove:       true,
+		},
+		CreatedAt: w.now(),
+	})
+	if errors.Is(err, store.ErrOutboxFull) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if err := w.dbs.SetSendDraftRemoveID(ctx, m.ID, op.ID, w.now()); err != nil {
+		return err
+	}
+	if err := w.dbs.MarkDraftSent(ctx, w.acct.ID, m.DraftMessageID, w.now()); err != nil && !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
+	w.notify(ctx, m.ID)
+	return nil
 }
 
 // ensureAppend enqueues the Sent append op once. No Sent folder means nothing to
@@ -272,6 +318,11 @@ func (w *Worker) trackOneAppend(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 	if err != nil {
+		return false, err
+	}
+	// A crash between the 250 and the removal being queued is healed here, before
+	// the Sent copy settles the row terminal.
+	if err := w.ensureDraftRemoval(ctx, m); err != nil {
 		return false, err
 	}
 	if m.SentAppendID == "" {

@@ -396,3 +396,110 @@ func TestSendShutdownAfterTheServerAcceptsStillRecordsIt(t *testing.T) {
 		t.Fatalf("state = %q, append id %q, want submitted with its Sent copy queued", row.State, row.SentAppendID)
 	}
 }
+
+// draftInto files one draft version through the real store path and the outbox,
+// so the worker sees the same server copy a compose save would create.
+func (fx *fixture) draftInto(t *testing.T, id, msgID string) store.Draft {
+	t.Helper()
+	drafts, err := fx.dbs.FolderByRole(fx.ctx, "acct-1", store.RoleDrafts)
+	if err != nil {
+		t.Fatalf("drafts folder: %v", err)
+	}
+	body := mailworld.Msg().From("me@grove.test").To("you@example.test").
+		Subject("draft").MessageID(msgID).Text("hello").Build()
+	d, err := fx.dbs.SaveDraft(fx.ctx, store.SaveDraftInput{
+		ID: id, DraftID: "d-" + id, AccountID: "acct-1",
+		DestFolderID: drafts.ID, MessageID: msgID,
+		Subject: "draft", To: []string{"you@example.test"},
+		Compose: []byte(`{"subject":"draft"}`), Body: body,
+		BaseVersion: 0, OpID: id + "-op", Now: fx.now,
+	})
+	if err != nil {
+		t.Fatalf("save draft: %v", err)
+	}
+	fx.runOutbox(t)
+	return d
+}
+
+// draftWorld adds a Drafts folder and re-syncs so its role is mirrored.
+func draftWorld(t *testing.T, fx *fixture) {
+	t.Helper()
+	if err := fx.acc.CreateMailbox("Drafts"); err != nil {
+		t.Fatalf("create Drafts: %v", err)
+	}
+	if _, err := ivysync.NewFetcher(fx.dbs).Fetch(fx.ctx, fx.syncAcct); err != nil {
+		t.Fatalf("re-sync: %v", err)
+	}
+}
+
+func (fx *fixture) enqueueNamed(t *testing.T, id, draftMessageID string) store.SendMessage {
+	t.Helper()
+	msgID := "<" + id + "@example.test>"
+	body := mailworld.Msg().From("me@grove.test").To("you@example.test").
+		Subject("hi").MessageID(msgID).Text("hello").Build()
+	m, _, err := fx.dbs.EnqueueSend(fx.ctx, store.SendMessage{
+		ID: id, AccountID: "acct-1", MessageID: msgID,
+		ContentKey: store.ContentKey(msgID, nil), EnvelopeFrom: "me@grove.test",
+		Recipients: []string{"you@example.test"}, WireBody: body, SentBody: body,
+		DraftMessageID: draftMessageID, CreatedAt: fx.now, UpdatedAt: fx.now,
+	})
+	if err != nil {
+		t.Fatalf("enqueue %s: %v", id, err)
+	}
+	return m
+}
+
+// A sent message leaves Drafts: after the 250 the worker queues the draft's
+// removal, the outbox expunges the copy, and the version is marked sent.
+func TestSendRemovesTheDraftItCameFrom(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t, true)
+	draftWorld(t, fx)
+	d := fx.draftInto(t, "v1", "<draft-1@example.test>")
+	if got := sentSubjects(t, fx.acc, "Drafts"); len(got) != 1 {
+		t.Fatalf("Drafts holds %d copies, want the filed one", len(got))
+	}
+
+	fx.enqueueNamed(t, "send-1", d.MessageID)
+	fx.runSend(t)
+	if fx.row(t, "send-1").DraftRemoveID == "" {
+		t.Fatal("the draft removal was not queued with the submit")
+	}
+	fx.runOutbox(t)
+
+	if got := sentSubjects(t, fx.acc, "Drafts"); len(got) != 0 {
+		t.Errorf("Drafts holds %d copies after the send, want 0", len(got))
+	}
+	if got, err := fx.dbs.DraftVersion(fx.ctx, d.ID); err != nil || got.State != store.DraftSent {
+		t.Errorf("draft version = %+v, %v, want sent", got, err)
+	}
+}
+
+// A crash after the 250 but before the removal is queued is healed on the next
+// pass, so a sent draft still leaves Drafts after a restart.
+func TestSendRecoversTheDraftRemovalAfterARestart(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t, true)
+	draftWorld(t, fx)
+	d := fx.draftInto(t, "v1", "<draft-1@example.test>")
+
+	m := fx.enqueueNamed(t, "send-1", d.MessageID)
+	if err := fx.dbs.SetSendSubmitting(fx.ctx, m.ID, fx.now); err != nil {
+		t.Fatalf("set submitting: %v", err)
+	}
+	if err := fx.dbs.MarkSendSubmitted(fx.ctx, m.ID, fx.now); err != nil {
+		t.Fatalf("mark submitted: %v", err)
+	}
+	if fx.row(t, m.ID).DraftRemoveID != "" {
+		t.Fatal("precondition: the removal is already queued")
+	}
+
+	fx.runSend(t)
+	fx.runOutbox(t)
+	if got := sentSubjects(t, fx.acc, "Drafts"); len(got) != 0 {
+		t.Errorf("Drafts holds %d copies after recovery, want 0", len(got))
+	}
+	if got, err := fx.dbs.DraftVersion(fx.ctx, d.ID); err != nil || got.State != store.DraftSent {
+		t.Errorf("draft version = %+v, %v, want sent", got, err)
+	}
+}
