@@ -14,9 +14,11 @@ import (
 )
 
 func storedRow(id, address string) store.AccountConfig {
-	return store.AccountConfig{ID: id, Address: address, Username: address,
+	return store.AccountConfig{
+		ID: id, Address: address, Username: address,
 		IMAPHost: "imap.example.test", IMAPPort: 993, SMTPHost: "smtp.example.test", SMTPPort: 465,
-		LLMEnabled: true, EmbedProvider: "openrouter", CreatedAt: time.Now()}
+		LLMEnabled: true, EmbedProvider: "openrouter", CreatedAt: time.Now(),
+	}
 }
 
 // After a restart the account typed into the app must come back with its

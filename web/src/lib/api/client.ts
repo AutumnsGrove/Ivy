@@ -128,6 +128,29 @@ export const api = {
 	/** Clears the keyword from the server through the outbox, then removes the tag. */
 	deleteTag: (id: string): Promise<void> => request<void>(`/tags/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
+	/**
+	 * Connect a mailbox. The server tests the login first and stores nothing unless
+	 * it works, so a failure here (auth_failed, unreachable) leaves nothing behind.
+	 * The password travels in the body only and is never returned.
+	 */
+	connectAccount: (address: string, password: string, smart: boolean): Promise<{ id: string }> =>
+		request<{ id: string }>('/accounts', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ address, password, smart }),
+			// The login test may take as long as the server's own 30 s bound.
+			signal: AbortSignal.timeout(45_000)
+		}),
+
+	/** Replace an account's password; the server keeps the old one if the new one fails. */
+	updateAccountPassword: (id: string, password: string): Promise<void> =>
+		request<void>(`/accounts/${encodeURIComponent(id)}/password`, {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ password }),
+			signal: AbortSignal.timeout(45_000)
+		}),
+
 	/** Rename an account or choose its icon; omitted fields keep their value. */
 	updateAccountProfile: (id: string, profile: { displayName?: string; icon?: string }): Promise<Account> =>
 		request<Account>(`/accounts/${encodeURIComponent(id)}`, {

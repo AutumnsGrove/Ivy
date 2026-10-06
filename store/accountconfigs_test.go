@@ -43,8 +43,10 @@ func TestSaveAccountConfigKeepsTheOriginalCreatedAt(t *testing.T) {
 
 	first := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	later := first.Add(48 * time.Hour)
-	base := AccountConfig{ID: "purelymail", Address: "a@example.test", Username: "a@example.test",
-		IMAPHost: "imap.example.test", IMAPPort: 993, SMTPHost: "smtp.example.test", SMTPPort: 465}
+	base := AccountConfig{
+		ID: "purelymail", Address: "a@example.test", Username: "a@example.test",
+		IMAPHost: "imap.example.test", IMAPPort: 993, SMTPHost: "smtp.example.test", SMTPPort: 465,
+	}
 
 	base.CreatedAt = first
 	if err := dbs.SaveAccountConfig(ctx, base); err != nil {
@@ -109,9 +111,11 @@ func TestSaveAccountConfigRejectsAnIncompleteAccount(t *testing.T) {
 		"bad port":    func(a *AccountConfig) { a.IMAPPort = 0 },
 		"no smtp":     func(a *AccountConfig) { a.SMTPHost = "" },
 	} {
-		a := AccountConfig{ID: "purelymail", Address: "me@example.test", Username: "me@example.test",
+		a := AccountConfig{
+			ID: "purelymail", Address: "me@example.test", Username: "me@example.test",
 			IMAPHost: "imap.example.test", IMAPPort: 993, SMTPHost: "smtp.example.test", SMTPPort: 465,
-			CreatedAt: time.Now()}
+			CreatedAt: time.Now(),
+		}
 		mutate(&a)
 		if err := dbs.SaveAccountConfig(ctx, a); err == nil {
 			t.Errorf("%s: SaveAccountConfig accepted it", name)

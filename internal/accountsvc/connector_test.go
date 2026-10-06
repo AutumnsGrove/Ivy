@@ -216,8 +216,10 @@ func TestUpdatePasswordWorksForAnIvyYAMLAccount(t *testing.T) {
 	t.Parallel()
 	r := newRig(t)
 	p := provider(t, r.w)
-	r.existing = []config.Account{{ID: "autumn", Address: "me@grove.test", Username: "me@grove.test",
-		IMAPHost: p.IMAPHost, IMAPPort: p.IMAPPort, SMTPHost: p.SMTPHost, SMTPPort: p.SMTPPort, Insecure: true}}
+	r.existing = []config.Account{{
+		ID: "autumn", Address: "me@grove.test", Username: "me@grove.test",
+		IMAPHost: p.IMAPHost, IMAPPort: p.IMAPPort, SMTPHost: p.SMTPHost, SMTPPort: p.SMTPPort, Insecure: true,
+	}}
 
 	if err := r.c.UpdatePassword(context.Background(), "autumn", "secret"); err != nil {
 		t.Fatalf("UpdatePassword: %v", err)

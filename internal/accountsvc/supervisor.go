@@ -69,10 +69,10 @@ func (s *Supervisor) Start(acct ivysync.Account) {
 
 // Wait returns once every worker has stopped. Cancel the context first.
 func (s *Supervisor) Wait() {
-	// A Start in flight finishes before this returns the lock, and a later one
-	// sees the ended context, so wg.Add never races the Wait below.
+	// Held through the wait so a Start racing shutdown cannot wg.Add while the
+	// count is draining; it blocks, then sees the ended context and returns.
 	s.mu.Lock()
-	s.mu.Unlock() //nolint:staticcheck // SA2001: the empty section is the barrier
+	defer s.mu.Unlock()
 	s.wg.Wait()
 }
 

@@ -6,9 +6,11 @@
 		placeholder?: string;
 		/** Help text, tied to the input for screen readers. */
 		hint?: string;
+		/** Tells the browser and password manager what this is (`username`, `current-password`). */
+		autocomplete?: 'username' | 'email' | 'current-password' | 'new-password' | 'off';
 		oninput?: (value: string) => void;
 	};
-	let { label, value = $bindable(''), type = 'text', placeholder, hint, oninput }: Props = $props();
+	let { label, value = $bindable(''), type = 'text', placeholder, hint, autocomplete, oninput }: Props = $props();
 
 	const id = $props.id();
 </script>
@@ -19,6 +21,7 @@
 		{id}
 		{type}
 		{placeholder}
+		{autocomplete}
 		bind:value
 		aria-describedby={hint ? `${id}-hint` : undefined}
 		oninput={() => oninput?.(value)}

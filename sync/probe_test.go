@@ -56,8 +56,10 @@ func TestProbeSaysUnreachableForAHostThatRefuses(t *testing.T) {
 	}
 	port := l.Addr().(*net.TCPAddr).Port
 	_ = l.Close()
-	acct := ivysync.Account{ID: "purelymail", Address: "me@grove.test", Username: "me@grove.test",
-		Password: "secret", IMAPHost: "127.0.0.1", IMAPPort: port, Insecure: true}
+	acct := ivysync.Account{
+		ID: "purelymail", Address: "me@grove.test", Username: "me@grove.test",
+		Password: "secret", IMAPHost: "127.0.0.1", IMAPPort: port, Insecure: true,
+	}
 
 	err = ivysync.NewFetcher(newStore(t)).Probe(context.Background(), acct)
 	if code := probeCode(t, err); code != "unreachable" {
@@ -84,8 +86,10 @@ func TestProbeGivesUpOnASilentPeer(t *testing.T) {
 		}
 	}()
 	port := l.Addr().(*net.TCPAddr).Port
-	acct := ivysync.Account{ID: "purelymail", Address: "me@grove.test", Username: "me@grove.test",
-		Password: "secret", IMAPHost: "127.0.0.1", IMAPPort: port, Insecure: true}
+	acct := ivysync.Account{
+		ID: "purelymail", Address: "me@grove.test", Username: "me@grove.test",
+		Password: "secret", IMAPHost: "127.0.0.1", IMAPPort: port, Insecure: true,
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
@@ -104,8 +108,10 @@ func TestProbeGivesUpOnASilentPeer(t *testing.T) {
 
 func TestProbeRefusesToDialABadPort(t *testing.T) {
 	t.Parallel()
-	acct := ivysync.Account{ID: "purelymail", Username: "me@grove.test", Password: "secret",
-		IMAPHost: "127.0.0.1", IMAPPort: 0, Insecure: true}
+	acct := ivysync.Account{
+		ID: "purelymail", Username: "me@grove.test", Password: "secret",
+		IMAPHost: "127.0.0.1", IMAPPort: 0, Insecure: true,
+	}
 	if err := ivysync.NewFetcher(newStore(t)).Probe(context.Background(), acct); err == nil {
 		t.Fatal("Probe accepted port 0 (" + strconv.Itoa(acct.IMAPPort) + ")")
 	}

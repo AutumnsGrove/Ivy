@@ -30,7 +30,7 @@
 					{#if a.sync === 'auth-failed'}
 						<p class="why">The mail server didn't accept the saved password. Your mail on the server is untouched.</p>
 						<div class="acts">
-							<Button size="sm" variant="tonal" href="/welcome/account">Update password</Button>
+							<Button size="sm" variant="tonal" href="/welcome/account?update={a.id}">Update password</Button>
 							<Button size="sm" onclick={() => toasts.push({ text: 'Trying again…', tone: 'info' })}>Try again</Button>
 							<span class="grow"></span><span class="log">View log</span>
 						</div>

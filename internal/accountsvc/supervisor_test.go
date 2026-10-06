@@ -53,8 +53,10 @@ func provider(t *testing.T, w *mailworld.World) accountsvc.Provider {
 func syncAccount(t *testing.T, w *mailworld.World, id, address, password string) ivysync.Account {
 	t.Helper()
 	p := provider(t, w)
-	return ivysync.Account{ID: id, Address: address, Username: address, Password: password,
-		IMAPHost: p.IMAPHost, IMAPPort: p.IMAPPort, SMTPHost: p.SMTPHost, SMTPPort: p.SMTPPort, Insecure: true}
+	return ivysync.Account{
+		ID: id, Address: address, Username: address, Password: password,
+		IMAPHost: p.IMAPHost, IMAPPort: p.IMAPPort, SMTPHost: p.SMTPHost, SMTPPort: p.SMTPPort, Insecure: true,
+	}
 }
 
 // eventually polls because a worker runs on its own goroutine; the deadline is

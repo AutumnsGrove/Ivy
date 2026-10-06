@@ -27,7 +27,12 @@ const STATUS = {
 	unknown_tag: 409,
 	too_many_tags: 409,
 	update_unavailable: 503,
-	update_running: 409
+	update_running: 409,
+	auth_failed: 422,
+	unreachable: 502,
+	connect_failed: 502,
+	already_connected: 409,
+	connect_unavailable: 503
 } as const satisfies Record<ApiError['code'], number>;
 
 /**

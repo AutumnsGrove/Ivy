@@ -27,7 +27,12 @@ export type ErrorCode =
 	| 'unknown_tag'
 	| 'too_many_tags'
 	| 'update_unavailable'
-	| 'update_running';
+	| 'update_running'
+	| 'auth_failed'
+	| 'unreachable'
+	| 'connect_failed'
+	| 'already_connected'
+	| 'connect_unavailable';
 
 /** Every API failure the UI can branch on; never a bare Error. */
 export class ApiError extends Error {

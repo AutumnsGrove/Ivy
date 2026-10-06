@@ -245,6 +245,51 @@ function mockOutboxItem(state: AccountState, action: { messageId: string; action
 	return { ...base, kind: 'flags', flagsAdd: add, flagsClear: clear };
 }
 
+const authFailed: Reply = { status: 422, body: { code: 'auth_failed', message: 'Your provider refused that email address and password' } };
+const unreachable: Reply = { status: 502, body: { code: 'unreachable', message: 'Ivy could not reach your mail provider' } };
+
+function jsonBody(raw: Buffer | null): Record<string, unknown> | null {
+	try {
+		const parsed = JSON.parse(raw?.toString('utf8') ?? '');
+		return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * The gateway's connect endpoint over the fixtures. Two passwords stand in for the
+ * provider's answers so a spec can reach every outcome: `wrong` is refused and `down`
+ * never answers. Any other password connects, and the new account then appears in
+ * the account list, as it does once the first sync has started.
+ */
+function connectReply(state: AccountState, raw: Buffer | null): Reply {
+	const b = jsonBody(raw);
+	const address = typeof b?.address === 'string' ? b.address.trim() : '';
+	const password = typeof b?.password === 'string' ? b.password : '';
+	if (!address.includes('@') || !password) return badRequest('Enter your email address and password');
+	if (state.accounts.some((a) => a.address.toLowerCase() === address.toLowerCase())) {
+		return { status: 409, body: { code: 'already_connected', message: 'That address is already connected' } };
+	}
+	if (password === 'wrong') return authFailed;
+	if (password === 'down') return unreachable;
+	const id = 'purelymail';
+	state.accounts = [
+		...state.accounts,
+		{ ...structuredClone(mock.accounts[0]), id, address, short: `${address.split('@')[0]}@`, initial: address[0].toUpperCase(), smart: b?.smart === true, slot: 3, unread: 0 }
+	];
+	return { status: 201, body: { id } };
+}
+
+function passwordReply(state: AccountState, id: string, raw: Buffer | null): Reply {
+	if (!state.accounts.some((a) => a.id === id)) return notFound('No such account');
+	const password = jsonBody(raw)?.password;
+	if (typeof password !== 'string' || !password) return badRequest('Enter your password');
+	if (password === 'wrong') return authFailed;
+	if (password === 'down') return unreachable;
+	return { status: 204, body: null };
+}
+
 function storage(path: string, method: string, params: URLSearchParams, scenario: string | null, state: AccountState, raw: Buffer | null): Reply | null {
 	if (path === '/version') return { body: { version: 'r1.test' } };
 	if (path === '/update') {
@@ -254,6 +299,9 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 		}
 		return { body: state.update };
 	}
+	if (path === '/accounts' && method === 'POST') return connectReply(state, raw);
+	const passwordPath = /^\/accounts\/([^/]+)\/password$/.exec(path);
+	if (passwordPath && method === 'PUT') return passwordReply(state, passwordPath[1], raw);
 	if (path === '/accounts') {
 		return { body: scenario === 'sync-error' ? state.accounts.map(mock.failingHello) : state.accounts };
 	}
