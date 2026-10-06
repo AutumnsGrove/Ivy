@@ -1454,3 +1454,12 @@ Baseline at `839bf05`: `go build`, `go vet`, `staticcheck`, `gofumpt -l` clean a
   then failed with enmime's bare "no recipients" error instead of a `*ValidationError`, so a caller that maps
   validation errors to a refusal would see a server fault. Reproduced with `TestNoRecipientsIsAValidationError`
   (failed for both `Validate` and `Build` before the fix); `validate` now refuses it with field `recipients`.
+
+### `54913ce` Submit mail over implicit TLS in smtp
+
+- **#123** · `54913ce` · `smtp/smtp.go` · **bug** · every failure at `RCPT` became `KindRecipientRefused`, which is
+  permanent: a 4xx (greylisting, "try again") and a dropped connection or timeout during RCPT failed the send
+  for good, though nothing had been accepted and a retry was safe. Reproduced with
+  `TestSubmitTransientRecipientRefusalIsRetryable` (a 451 at RCPT via `SMTPRejectRcpt`; failed: kind
+  `recipient_refused`, not transient). Only a 5xx is a recipient verdict now; anything else goes through
+  `classify` with `Recipient` set.
