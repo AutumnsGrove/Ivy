@@ -180,6 +180,92 @@ paths:
                 $ref: "#/components/schemas/Account"
         "404":
           $ref: "#/components/responses/NotFound"
+  /accounts/{id}/identities:
+    get:
+      operationId: listIdentities
+      summary: The addresses this account may send as
+      description: >
+        The stored identities plus the account's own address as a synthetic,
+        non-deletable primary row.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The identities
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityList"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: saveIdentity
+      summary: Add an identity or edit one in place
+      description: >
+        Keyed by address within the account; editing the primary identity is the
+        same call as adding an alias. The address must be a bare ASCII addr-spec.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdentityInput"
+      responses:
+        "200":
+          description: The stored identity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Identity"
+        "400":
+          description: The address, name or signature is not valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The account already has the maximum number of identities
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /accounts/{id}/identities/{identityId}:
+    delete:
+      operationId: deleteIdentity
+      summary: Remove a stored identity
+      description: The account's own address is always primary and cannot be removed.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: identityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Removed
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The account's primary address cannot be removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /inbox:
     get:
       operationId: listInbox
@@ -245,6 +331,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MailSummary"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /messages/{id}/reply:
+    get:
+      operationId: replyToMessage
+      summary: A reply prefill for a message
+      description: >
+        The recipients, subject, threading headers and body a reply or reply-all
+        starts from, plus the identity to send as. `all=true` adds the original
+        To and Cc minus the operator's own addresses.
+      parameters:
+        - $ref: "#/components/parameters/MessageID"
+        - name: all
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: The prefill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComposePrefill"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /messages/{id}/forward:
+    get:
+      operationId: forwardMessage
+      summary: A forward prefill for a message
+      parameters:
+        - $ref: "#/components/parameters/MessageID"
+      responses:
+        "200":
+          description: The prefill
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComposePrefill"
         "404":
           $ref: "#/components/responses/NotFound"
   /messages/{id}/snooze:
@@ -1373,6 +1498,47 @@ components:
         icon:
           type: string
           maxLength: 16
+    Identity:
+      type: object
+      required: [id, accountId, address, name, signature, primary]
+      properties:
+        id:
+          type: string
+          description: The row id; empty for the synthetic primary before it is first edited
+        accountId:
+          type: string
+        address:
+          type: string
+        name:
+          type: string
+          description: The display name the recipient sees, RFC 2047 encoded by the builder
+        signature:
+          type: string
+          description: Plain text appended behind the -- separator when composing
+        primary:
+          type: boolean
+          description: The account's own address; never deletable
+    IdentityInput:
+      type: object
+      required: [address]
+      properties:
+        address:
+          type: string
+          maxLength: 320
+        name:
+          type: string
+          maxLength: 120
+        signature:
+          type: string
+          maxLength: 8192
+    IdentityList:
+      type: object
+      required: [identities]
+      properties:
+        identities:
+          type: array
+          items:
+            $ref: "#/components/schemas/Identity"
     ConnectAccount:
       type: object
       required: [address, password]
@@ -1510,6 +1676,47 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Attachment"
+    ComposePrefill:
+      type: object
+      description: >
+        A ready-to-edit compose state computed from an incoming message: the
+        recipients, subject, body and threading headers, plus the identity to
+        send as. The compose screen may change any of it before sending.
+      required: [from, to, cc, subject, text, references]
+      properties:
+        from:
+          type: string
+          description: The chosen identity's address
+        fromName:
+          type: string
+          description: The chosen identity's display name, empty when it has none
+        to:
+          type: array
+          items:
+            type: string
+        cc:
+          type: array
+          items:
+            type: string
+        subject:
+          type: string
+        text:
+          type: string
+          description: The starting body, with the identity's signature already applied
+        inReplyTo:
+          type: string
+        references:
+          type: array
+          items:
+            type: string
+        replyTarget:
+          type: string
+          description: The direct recipient, for the reader's "Replying to …" note
+        missingIdentity:
+          type: string
+          description: >
+            A Delivered-To address with no configured identity, so the screen
+            can offer to add it. Empty when nothing is missing.
     Inbox:
       type: object
       required: [items, needCount, unreadCount, readingWaiting]

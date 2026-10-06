@@ -100,10 +100,20 @@ func (s *Server) handleSaveDraft(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	// Send-as is 4e: a draft may only be written as this account's own address.
-	if !strings.EqualFold(req.From, acct.Address) {
+	// Send-as is 4e: a draft may only be written as the account's own address or
+	// one of its configured identities.
+	fromRef, ok, err := s.identityForFrom(ctx, acct, req.From)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if !ok {
 		writeError(w, http.StatusBadRequest, "bad_from", "That address is not this account's")
 		return
+	}
+	fromName := stringOr(req.FromName, "")
+	if fromName == "" {
+		fromName = fromRef.DisplayName
 	}
 	draftsFolder, err := s.dbs.FolderByRole(ctx, acct.ID, store.RoleDrafts)
 	if errors.Is(err, store.ErrNotFound) {
@@ -120,7 +130,7 @@ func (s *Server) handleSaveDraft(w http.ResponseWriter, r *http.Request) {
 	// A draft keeps Bcc so it round-trips through the server copy; the wire copy
 	// built at send time is the one that strips it.
 	raw, _, err := compose.Build(compose.Message{
-		From:       compose.Address{Name: stringOr(req.FromName, ""), Address: req.From},
+		From:       compose.Address{Name: fromName, Address: req.From},
 		To:         composeAddresses(req.To),
 		Cc:         composeAddresses(stringsOr(req.Cc)),
 		Bcc:        composeAddresses(stringsOr(req.Bcc)),

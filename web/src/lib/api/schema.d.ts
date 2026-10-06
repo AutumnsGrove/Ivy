@@ -96,6 +96,50 @@ export interface paths {
         patch: operations["updateAccountProfile"];
         trace?: never;
     };
+    "/accounts/{id}/identities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The addresses this account may send as
+         * @description The stored identities plus the account's own address as a synthetic, non-deletable primary row.
+         */
+        get: operations["listIdentities"];
+        /**
+         * Add an identity or edit one in place
+         * @description Keyed by address within the account; editing the primary identity is the same call as adding an alias. The address must be a bare ASCII addr-spec.
+         */
+        put: operations["saveIdentity"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{id}/identities/{identityId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a stored identity
+         * @description The account's own address is always primary and cannot be removed.
+         */
+        delete: operations["deleteIdentity"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/inbox": {
         parameters: {
             query?: never;
@@ -142,6 +186,43 @@ export interface paths {
         };
         /** The header alone, for a failed body */
         get: operations["getMessageSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/messages/{id}/reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A reply prefill for a message
+         * @description The recipients, subject, threading headers and body a reply or reply-all starts from, plus the identity to send as. `all=true` adds the original To and Cc minus the operator's own addresses.
+         */
+        get: operations["replyToMessage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/messages/{id}/forward": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A forward prefill for a message */
+        get: operations["forwardMessage"];
         put?: never;
         post?: never;
         delete?: never;
@@ -819,6 +900,26 @@ export interface components {
             displayName?: string;
             icon?: string;
         };
+        Identity: {
+            /** @description The row id; empty for the synthetic primary before it is first edited */
+            id: string;
+            accountId: string;
+            address: string;
+            /** @description The display name the recipient sees, RFC 2047 encoded by the builder */
+            name: string;
+            /** @description Plain text appended behind the -- separator when composing */
+            signature: string;
+            /** @description The account's own address; never deletable */
+            primary: boolean;
+        };
+        IdentityInput: {
+            address: string;
+            name?: string;
+            signature?: string;
+        };
+        IdentityList: {
+            identities: components["schemas"]["Identity"][];
+        };
         ConnectAccount: {
             address: string;
             /** @description An app password if the provider offers one. Never stored in a database and never returned. */
@@ -887,6 +988,24 @@ export interface components {
             html?: string;
             paragraphs: string[];
             attachments: components["schemas"]["Attachment"][];
+        };
+        /** @description A ready-to-edit compose state computed from an incoming message: the recipients, subject, body and threading headers, plus the identity to send as. The compose screen may change any of it before sending. */
+        ComposePrefill: {
+            /** @description The chosen identity's address */
+            from: string;
+            /** @description The chosen identity's display name, empty when it has none */
+            fromName?: string;
+            to: string[];
+            cc: string[];
+            subject: string;
+            /** @description The starting body, with the identity's signature already applied */
+            text: string;
+            inReplyTo?: string;
+            references: string[];
+            /** @description The direct recipient, for the reader's "Replying to …" note */
+            replyTarget?: string;
+            /** @description A Delivered-To address with no configured identity, so the screen can offer to add it. Empty when nothing is missing. */
+            missingIdentity?: string;
         };
         Inbox: {
             items: components["schemas"]["MailSummary"][];
@@ -1502,6 +1621,104 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    listIdentities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The identities */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    saveIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdentityInput"];
+            };
+        };
+        responses: {
+            /** @description The stored identity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Identity"];
+                };
+            };
+            /** @description The address, name or signature is not valid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account already has the maximum number of identities */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                identityId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description The account's primary address cannot be removed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     listInbox: {
         parameters: {
             query?: {
@@ -1570,6 +1787,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MailSummary"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    replyToMessage: {
+        parameters: {
+            query?: {
+                all?: boolean;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The prefill */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComposePrefill"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    forwardMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The prefill */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComposePrefill"];
                 };
             };
             404: components["responses"]["NotFound"];

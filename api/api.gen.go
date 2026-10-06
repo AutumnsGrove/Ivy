@@ -637,6 +637,30 @@ type CheckDetail struct {
 // CheckDetailSureness defines model for CheckDetail.Sureness.
 type CheckDetailSureness string
 
+// ComposePrefill A ready-to-edit compose state computed from an incoming message: the recipients, subject, body and threading headers, plus the identity to send as. The compose screen may change any of it before sending.
+type ComposePrefill struct {
+	Cc []string `json:"cc"`
+
+	// From The chosen identity's address
+	From string `json:"from"`
+
+	// FromName The chosen identity's display name, empty when it has none
+	FromName  *string `json:"fromName,omitempty"`
+	InReplyTo *string `json:"inReplyTo,omitempty"`
+
+	// MissingIdentity A Delivered-To address with no configured identity, so the screen can offer to add it. Empty when nothing is missing.
+	MissingIdentity *string  `json:"missingIdentity,omitempty"`
+	References      []string `json:"references"`
+
+	// ReplyTarget The direct recipient, for the reader's "Replying to …" note
+	ReplyTarget *string `json:"replyTarget,omitempty"`
+	Subject     string  `json:"subject"`
+
+	// Text The starting body, with the identity's signature already applied
+	Text string   `json:"text"`
+	To   []string `json:"to"`
+}
+
 // ConnectAccount defines model for ConnectAccount.
 type ConnectAccount struct {
 	Address string `json:"address"`
@@ -782,6 +806,36 @@ type HiddenMail struct {
 	// Removed Hidden because the server no longer holds the message
 	Removed int `json:"removed"`
 	Total   int `json:"total"`
+}
+
+// Identity defines model for Identity.
+type Identity struct {
+	AccountId string `json:"accountId"`
+	Address   string `json:"address"`
+
+	// Id The row id; empty for the synthetic primary before it is first edited
+	Id string `json:"id"`
+
+	// Name The display name the recipient sees, RFC 2047 encoded by the builder
+	Name string `json:"name"`
+
+	// Primary The account's own address; never deletable
+	Primary bool `json:"primary"`
+
+	// Signature Plain text appended behind the -- separator when composing
+	Signature string `json:"signature"`
+}
+
+// IdentityInput defines model for IdentityInput.
+type IdentityInput struct {
+	Address   string  `json:"address"`
+	Name      *string `json:"name,omitempty"`
+	Signature *string `json:"signature,omitempty"`
+}
+
+// IdentityList defines model for IdentityList.
+type IdentityList struct {
+	Identities []Identity `json:"identities"`
 }
 
 // Inbox defines model for Inbox.
@@ -1253,6 +1307,11 @@ type ListInboxParams struct {
 // ListInboxParamsFolder defines parameters for ListInbox.
 type ListInboxParamsFolder string
 
+// ReplyToMessageParams defines parameters for ReplyToMessage.
+type ReplyToMessageParams struct {
+	All *bool `form:"all,omitempty" json:"all,omitempty"`
+}
+
 // ListOutboxParams defines parameters for ListOutbox.
 type ListOutboxParams struct {
 	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
@@ -1291,6 +1350,9 @@ type ConnectAccountJSONRequestBody = ConnectAccount
 
 // UpdateAccountProfileJSONRequestBody defines body for UpdateAccountProfile for application/json ContentType.
 type UpdateAccountProfileJSONRequestBody = AccountProfile
+
+// SaveIdentityJSONRequestBody defines body for SaveIdentity for application/json ContentType.
+type SaveIdentityJSONRequestBody = IdentityInput
 
 // UpdateAccountPasswordJSONRequestBody defines body for UpdateAccountPassword for application/json ContentType.
 type UpdateAccountPasswordJSONRequestBody = UpdatePassword

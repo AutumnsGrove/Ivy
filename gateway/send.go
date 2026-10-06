@@ -76,17 +76,26 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Send-as is stage 4e: for now the From must be this account's own address,
-	// so nothing can be sent as an arbitrary address.
-	if !strings.EqualFold(req.From, acct.Address) {
+	// Send-as is 4e: the From must be the account's own address or one of its
+	// configured identities, so nothing can be sent as an arbitrary address.
+	fromRef, ok, err := s.identityForFrom(ctx, acct, req.From)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if !ok {
 		writeError(w, http.StatusBadRequest, "bad_from", "That address is not this account's")
 		return
+	}
+	fromName := stringOr(req.FromName, "")
+	if fromName == "" {
+		fromName = fromRef.DisplayName
 	}
 
 	now := s.now().UTC()
 	msgID := s.newMessageID(req.From)
 	msg := compose.Message{
-		From:       compose.Address{Name: stringOr(req.FromName, ""), Address: req.From},
+		From:       compose.Address{Name: fromName, Address: req.From},
 		To:         composeAddresses(req.To),
 		Cc:         composeAddresses(stringsOr(req.Cc)),
 		Bcc:        composeAddresses(stringsOr(req.Bcc)),
