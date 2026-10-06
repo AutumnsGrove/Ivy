@@ -1436,6 +1436,9 @@ it is visible which stages DeepSeek can handle.
   `unconfirmed` and the operator decides. SMTP cannot be asked what happened, unlike IMAP, and a
   duplicate email to a real person costs more than a retry tap.
 - **Markdown renders to HTML at send time** as `multipart/alternative` with a plain-text part. The
-  library is chosen by measurement in 4a and goes in `STACK.md` before it is imported.
+  library is **goldmark, pre-approved by the operator** (asked after the split, so DeepSeek would not
+  stall on the dependency rule) and entered in `STACK.md`; raw HTML passthrough stays off.
+- **The operator will run DeepSeek through 4a-4h in order,** so the planned hand-backs are exactly the
+  gates G1-G5 (and any T-trigger); between them 4c-4f should flow without stopping.
 - **The undo window is a column on the queue row,** enforced server-side, so a closed tab or a restart
   neither sends early nor loses the message.

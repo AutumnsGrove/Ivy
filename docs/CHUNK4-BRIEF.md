@@ -59,9 +59,10 @@ one it depends on is finished and its checkpoint (below) is cleared.
 - **Crash after SMTP accepts is never auto-resent** (invariant 2). The row becomes `unconfirmed`; the
   operator decides. A duplicate email to a real person costs more than a retry tap.
 - **Markdown renders to HTML at send time** and goes out as `multipart/alternative` with a plain-text
-  part. The markdown library is chosen in 4a by measurement and **must be in `docs/STACK.md` before
-  it is imported** (gate T7). The renderer's output is for recipients' mail clients, so it uses a
-  safe configuration: no raw HTML passthrough, no `javascript:` links.
+  part. **The library is goldmark, pre-approved (round 60) and already in `docs/STACK.md`**, so
+  importing it is not a T7 stop. Use its default safe configuration: never `html.WithUnsafe()`, and
+  link targets limited to `http`, `https` and `mailto`. Its output is for recipients' mail clients,
+  never the reader. `go get` it in 4a; record the version in the BUILD-LOG entry.
 - **Undo-send is a setting**, `compose.undo_delay_seconds`, default 10, 0 = off, with an upper bound,
   global and per account (ARCHITECTURE 8).
 - **Drafts live in the server's Drafts folder** (visible in Apple Mail): `APPEND` with `\Draft`, and a
