@@ -5,12 +5,11 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-06. **4a, 4b and 4c are done** (`compose/` + `smtp/`, the `send_queue` +
+last updated: 2026-10-06. **4a, 4b, 4c and 4d are done** (`compose/` + `smtp/`, the `send_queue` +
 Sent copy, then the send API and undo). `POST /send` builds both copies and queues with a server-side
-undo deadline; `POST /send/{id}/undo` cancels before it and hands the draft back. **4d (drafts) is in
-progress: its outbox-invariant design is committed at the 4d gate
-(`docs/handoffs/2026-10-06-4d-drafts-design.md`, round 62), and the state machine is being built.** 4e
-(identities) is next. **In-app account
+undo deadline; `POST /send/{id}/undo` cancels before it and hands the draft back. **4d (drafts) is
+done** and 4e (identities) is next: the design is at the 4d gate
+(`docs/handoffs/2026-10-06-4d-drafts-design.md`, round 62). **In-app account
 setup is built (round 59)**, the last thing before the first install: an account is typed into
 `/welcome/account`, tested against Purelymail, stored as a private password file plus a `state.db`
 row, and started without a restart; what is left is `sudo ./install.sh` on the board and the live
@@ -79,14 +78,18 @@ idempotent. `POST /send/{id}/undo` cancels a queued row before the server-side d
 the draft; at or after it the answer is 409 `too_late`. `GET /send` and `GET /send/{id}` expose the
 state, and every change publishes a `send.state` hint. The From must be the account's own address
 until 4e brings identities. State migration 11 adds the draft column and the `cancelled` state. See
-`docs/BUILD-LOG.md`. **Next: 4d drafts and 4e identities.**
+`docs/BUILD-LOG.md`. **Next: 4e identities.**
 
-**4d is underway** (2026-10-06). The outbox-invariant design was settled with the operator and is
-committed at the 4d gate (`docs/handoffs/2026-10-06-4d-drafts-design.md`, qa-log round 62): a
-dedicated `draft` outbox op replaces a draft (append the new version, then expunge the superseded
-one, located by `Message-ID`), the list merges the mirror's Drafts folder with local not-yet-synced
-drafts, saves are optimistic-versioned (a stale save is `409 draft_conflict`), and a sent draft is
-removed from Drafts after the `250`. The store state machine is being built now.
+**4d is done** (2026-10-06; design at the 4d gate in `docs/handoffs/2026-10-06-4d-drafts-design.md`,
+qa-log round 62). State migration 12 adds `drafts`, one immutable row per saved version, committed
+with its outbox op; migration 13 adds `send_queue.draft_message_id`/`draft_remove_id`. A dedicated
+`draft` outbox op appends the new version and expunges the one it supersedes by `Message-ID` (the
+existing `expunge` stays Trash-only), so a replace needs no mirror row and two quick autosaves are
+still correct. The list merges the local heads with the account's mirrored Drafts folder, saves are
+optimistic-versioned (a stale save is `409 draft_conflict` carrying the newer content), resume
+returns the stored compose request or parses a server-only draft, and a send records the version it
+came from so its copy leaves Drafts after the `250` (an undo or a permanent failure keeps it).
+`GET/POST /drafts` and `GET/DELETE /drafts/{id}` are real. `make check` green. **Next: 4e identities.**
 
 **4b is done** (2026-10-06; gates G2 and G3 in `docs/handoffs/2026-10-06-G2-send-queue-design.md`
 and `2026-10-06-G3-send-crash.md`). State migration 10 adds `send_queue`: the whole message (wire and
@@ -433,8 +436,8 @@ T11-T13 on top of chunk 3's T1-T10) are in `docs/CHUNK4-BRIEF.md`; read it after
 
 Checkpoints: **G1** (4a, injection corpus failing before the builder), **G2** (4b, design before code),
 **G3** (4b, crash tests pass), **G4** (4g, before any image dependency), **G5** (end of chunk, Claude's
-Review). **4a, 4b and 4c are done**: `compose/`/`smtp/`, the `send_queue` with the Sent copy, and the
-send API with undo are implemented and green. **4d** (drafts) and **4e** (identities) are next, then
+Review). **4a, 4b, 4c and 4d are done**: `compose/`/`smtp/`, the `send_queue` with the Sent copy, the
+send API with undo, and the server Drafts folder. **4e** (identities) is next, then
 4f wires the compose screen.
 
 ## Operator actions still open
@@ -450,6 +453,10 @@ send API with undo are implemented and green. **4d** (drafts) and **4e** (identi
   `ghcr.io/autumnsgrove/ivy:latest` resolves anonymously to `sha256:e6fdc57c…`, so the package is
   public and the potato needs no `docker login`. **Left:** on the board, `sudo ./install.sh` and one
   real `ivy update` end to end, recording the result.
+- Send and drafts (4a-4d): the API is real but the compose screen is wired in 4f, so the live check
+  waits on it. Then, against a mailbox the operator owns: send to self and see the Sent copy in
+  Apple Mail; save a draft and see it in Apple Mail; edit it there and resume it in Ivy; confirm a
+  sent draft leaves Drafts; and, with 4e, send-as per address.
 - Repo visibility: **public** now (was private). The remaining `docs/CI.md` 6 items (gitleaks over
   full history, branch ruleset + required checks, secret scanning) are the operator's checklist.
 - Bump the local Go toolchain off 1.26.1, which `govulncheck` flags (fixed in 1.26.2+); CI resolves

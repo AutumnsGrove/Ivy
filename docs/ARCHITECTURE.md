@@ -360,7 +360,16 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   /send` builds both copies and commits the row with the undo deadline, `POST /send/{id}/undo`
   cancels a queued row before its server-side deadline and returns the draft, and every change is a
   `send.state` hint. The window is `compose.undo_delay_seconds` (default 10, 0 = off, per account over
-  global); the From must be the account's own address until 4e brings identities.
+  global); the From must be the account's own address until 4e brings identities. **4d** added drafts:
+  each autosave is an immutable version row in `state.db` whose built MIME and outbox op commit
+  together (so a retried or racing save cannot file the wrong bytes), and a dedicated `draft` op
+  appends the new version and expunges the one it supersedes by `Message-ID`. The existing `expunge`
+  op stays Trash-only and the op needs no mirror row, so two quick autosaves before a sync pass are
+  still correct. `draftId` plus `baseVersion` make a save optimistic-versioned; a stale one is `409
+  draft_conflict` carrying the newer content. The list merges the local heads with the account's
+  mirrored Drafts folder (an Apple Mail draft appears), resume returns the exact compose request for
+  a local draft or parses the stored message for a server copy, and a send records the version it
+  came from so its copy leaves Drafts after the `250` (an undo or a permanent failure keeps it).
 - **Auth results:** parse `Authentication-Results` (SPF/DKIM/DMARC) into a trust signal used by
   the phishing question and the spoofed-sender discount. Only the **topmost** header whose
   `authserv-id` is in the account's `trusted_authserv_ids` is believed, and **only that one

@@ -753,5 +753,44 @@ The queue that makes sending durable and never duplicates a message. Designed at
   deadline from the database). `make check` green.
 - **Next.** 4d drafts and 4e identities, then 4f wires the compose screen to these endpoints.
 
+## 4d Drafts (round 62, 2026-10-06)
+
+The server Drafts folder, reached through the outbox. Designed at the 4d gate
+(`docs/handoffs/2026-10-06-4d-drafts-design.md`) before any code, because the existing `expunge`
+op is Trash-only and the `append` op dedupes by Message-ID, so a replace could not reuse either.
+
+- **State (migration 12).** `drafts` holds one immutable row per saved version; the head is the
+  highest live version. `SaveDraft` commits the version and its outbox op in one transaction,
+  checks `baseVersion` against the head (`ErrDraftConflict` carries the newer head), and prunes
+  superseded terminal rows. `LiveDraftHeads`, `DraftHead`, `DraftVersion`, `DraftBodyForOp`,
+  `MarkDraftSaved`, `MarkDraftSent`, `DiscardDraft`, `DraftsInFolder`, `PruneDrafts`.
+- **The op.** A new `draft` outbox kind appends the new version and expunges the one it supersedes
+  by `Message-ID`, in one op, with no mirror dependence; `Remove` is the expunge-only form. Recovery
+  asks the folder: the new Message-ID present means the append applied, absent means a safe
+  re-append. A crash between the append and the expunge is healed on the next pass, and the
+  per-version Message-ID means a retried save files nothing twice.
+- **Sent leaves Drafts (migration 13).** `send_queue.draft_message_id` records the version a send
+  came from and `draft_remove_id` its outbox op; the send worker queues the removal only after the
+  `250`, so an undo, a cancel or a permanent failure keeps the draft. A crash after the `250` is
+  healed by `trackOneAppend` on the next pass.
+- **API and web.** `GET/POST /api/v1/drafts`, `GET/DELETE /api/v1/drafts/{id}`, with `DraftRequest`,
+  `DraftSummary`, `DraftResume`, `DraftList`, `DraftSource` in `openapi.yaml` and both generated
+  outputs. The list merges the local heads with the mirror's Drafts-role messages (an Apple Mail
+  draft appears); a stale save answers `409 draft_conflict` with the newer compose content; resume
+  returns the exact stored request for a local draft, or parses the mirrored message back into
+  To/Cc/Subject/text without the inbound sanitiser for a server-only one.
+- **Tests.** `store/drafts_test.go` (versions, idempotency, conflict, pruning, the body-for-op
+  lookup, list, discard, the cap and the retention), `sync/drafts_outbox_test.go` and the new cases
+  in `sync/outbox_crash_test.go` (files once, replace leaves one copy, skip-when-already-filed,
+  in-flight recovery, remove, the role guard, and eight repetitions of the crash windows for save
+  and replace), `send/worker_test.go` (a send removes its draft; a restart heals the removal) and
+  `gateway/drafts_test.go` (save, idempotency, replace and conflict, the merged list, local and
+  server resume, discard, foreign From, oversize). `make check` green.
+- **Process note.** The store and outbox work followed TDD (each test was seen failing for the
+  missing behaviour); the gateway handler tests were written alongside the handlers, so a fresh
+  review should treat them accordingly.
+- **Left for the operator.** The live check on the board: a draft saved from the app visible in
+  Apple Mail, edited there, and resumed in Ivy; `next_steps.md` carries it.
+
 
 

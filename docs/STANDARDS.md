@@ -270,6 +270,14 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Sends listed by `GET /send` (`store.MaxSendListLimit`) | 200, default 50 | a larger `limit` is clamped |
 | A client's send id (`maxSendIDBytes`) | 128 bytes | rejected with 400 `bad_request`; it is the row's primary key |
 | A compose request body (`maxSendBodyBytes`) | `compose.MaxBodyBytes` + 64 KiB | rejected with 400 `bad_request` |
+| A draft save request body (`maxDraftBodyBytes`) | `compose.MaxBodyBytes` + 64 KiB | rejected with 400 `bad_request` |
+| A client's draft or version id (`maxDraftIDBytes`) | 128 bytes | rejected with 400 `bad_request` |
+| Live version rows for one draft | the head plus any `saving`; a superseded terminal row is pruned on the next save | the pruned row's bytes are no longer needed: its op is terminal |
+| Terminal draft rows kept (`store.DraftTerminalRetention`) | 7 days | pruned; the drafts table's only deletion, and only of terminal rows |
+| Drafts listed (`store.MaxDraftListLimit`) | 200, default 50 | a larger `limit` is clamped; a local head and its mirrored copy count once |
+| Raw read to resume a server-only draft (`maxDraftResumeBytes`) | 2 MiB | refused with 409 `draft_too_large` |
+| Removing a superseded draft copy (a `draft` op) | UIDPLUS | the op fails `unsupported`; it never falls back to a bare `EXPUNGE` |
+| Drafts per `POST /drafts` save | one immutable version, committed with its op | a full outbox rolls the whole save back (`outbox_full`) |
 
 ## 5. Frontend standards
 
