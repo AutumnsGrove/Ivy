@@ -7,8 +7,10 @@ it in the same stage as the work**, so the next session can resume after a conte
 
 last updated: 2026-10-06. **4a, 4b and 4c are done** (`compose/` + `smtp/`, the `send_queue` +
 Sent copy, then the send API and undo). `POST /send` builds both copies and queues with a server-side
-undo deadline; `POST /send/{id}/undo` cancels before it and hands the draft back. 4d (drafts) and 4e
-(identities) are next. **In-app account
+undo deadline; `POST /send/{id}/undo` cancels before it and hands the draft back. **4d (drafts) is in
+progress: its outbox-invariant design is committed at the 4d gate
+(`docs/handoffs/2026-10-06-4d-drafts-design.md`, round 62), and the state machine is being built.** 4e
+(identities) is next. **In-app account
 setup is built (round 59)**, the last thing before the first install: an account is typed into
 `/welcome/account`, tested against Purelymail, stored as a private password file plus a `state.db`
 row, and started without a restart; what is left is `sudo ./install.sh` on the board and the live
@@ -78,6 +80,13 @@ the draft; at or after it the answer is 409 `too_late`. `GET /send` and `GET /se
 state, and every change publishes a `send.state` hint. The From must be the account's own address
 until 4e brings identities. State migration 11 adds the draft column and the `cancelled` state. See
 `docs/BUILD-LOG.md`. **Next: 4d drafts and 4e identities.**
+
+**4d is underway** (2026-10-06). The outbox-invariant design was settled with the operator and is
+committed at the 4d gate (`docs/handoffs/2026-10-06-4d-drafts-design.md`, qa-log round 62): a
+dedicated `draft` outbox op replaces a draft (append the new version, then expunge the superseded
+one, located by `Message-ID`), the list merges the mirror's Drafts folder with local not-yet-synced
+drafts, saves are optimistic-versioned (a stale save is `409 draft_conflict`), and a sent draft is
+removed from Drafts after the `250`. The store state machine is being built now.
 
 **4b is done** (2026-10-06; gates G2 and G3 in `docs/handoffs/2026-10-06-G2-send-queue-design.md`
 and `2026-10-06-G3-send-crash.md`). State migration 10 adds `send_queue`: the whole message (wire and

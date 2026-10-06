@@ -1477,3 +1477,29 @@ are frozen into the 4a tests at gate G1.
   button into "Connect another account". With no account it is unchanged. The lookup is a
   convenience, so a failed `/accounts` call falls back to the first-run view instead of an error page.
   The reported "accounts vanished" issue was a bookmark of `/welcome`, not lost data.
+
+## Round 62 — 4d drafts design gate (2026-10-06, agent; four answers)
+
+Before coding 4d (which touches the outbox), the four choices the docs left open were put to the
+operator. They are settled into `docs/handoffs/2026-10-06-4d-drafts-design.md`.
+
+- **A draft replace is one dedicated outbox op kind, `draft`.** It appends the new version, then
+  expunges the superseded one, in one op. The existing `expunge` op stays Trash-only (widening it
+  would let a single tap erase mail); the `append` op cannot be reused because it dedupes by
+  Message-ID and would silently skip a reused id. The op locates both copies by `Message-ID`, so it
+  needs no mirror row and two autosaves before a sync pass are still correct. UIDPLUS is required to
+  expunge precisely.
+- **The drafts list merges the mirror's Drafts folder with local not-yet-synced drafts.** The mirror
+  is server truth (drafts made in Apple Mail appear); the local head gives immediate feedback for an
+  autosave.
+- **Two tabs: optimistic version, last write wins.** A save carries the version it began from; the
+  later save wins and bumps the version; a stale save is refused `409 draft_conflict` with the newer
+  content, so the loser is told.
+- **The sent-draft linkage is in 4d, not 4f.** `send_queue` gains the sent draft version's
+  Message-ID, and the send worker enqueues its removal from Drafts after the `250`. An undo, a
+  cancel or a permanent failure keeps the draft.
+
+Related choices settled in the design file rather than asked: one immutable `drafts` row per saved
+version (the head is the highest live version); a fresh injected Message-ID per save; `\Draft` and
+no `\Seen`; a missing Drafts folder is a clear error (no auto-create in 4d); resume parses a
+server-only draft's stored MIME back into To/Cc/Subject/text without the inbound sanitiser.
