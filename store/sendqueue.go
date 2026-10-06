@@ -50,6 +50,10 @@ const (
 	MaxSendTerminalRetention = 7 * 24 * time.Hour
 	// MaxSendErrorDetail bounds the stored error text.
 	MaxSendErrorDetail = 500
+	// DefaultSendListLimit is the page of sends listed when no limit is given.
+	DefaultSendListLimit = 50
+	// MaxSendListLimit caps a caller-supplied limit on the send list.
+	MaxSendListLimit = 200
 )
 
 // Undo send (CHUNK4-BRIEF 1.3). The window is a setting, global and per account.
@@ -303,8 +307,9 @@ func (d *DBs) NextSubmittedSend(ctx context.Context, accountID string) (SendMess
 // returns every account's.
 func (d *DBs) SendsByAccount(ctx context.Context, accountID string, limit int) ([]SendMessage, error) {
 	if limit <= 0 {
-		limit = 50
+		limit = DefaultSendListLimit
 	}
+	limit = min(limit, MaxSendListLimit)
 	rows, err := d.State.Read.QueryContext(ctx, sendSelect+`
 		WHERE (? = '' OR account_id = ?)
 		ORDER BY (state IN (?, ?, ?)) DESC, seq DESC LIMIT ?`,

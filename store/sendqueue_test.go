@@ -432,3 +432,28 @@ func TestSendStateWritesNeverReviveATerminalRow(t *testing.T) {
 		t.Errorf("state = %q, want cancelled to stay cancelled", got.State)
 	}
 }
+
+// The send list is bounded: a caller-supplied limit above the cap is clamped
+// (STANDARDS 4a, no unbounded reads), and a missing one means the default.
+func TestSendsByAccountClampsTheLimit(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	for i := range MaxSendListLimit + 5 {
+		n := strconv.Itoa(i)
+		m := newSend("send-"+n, "<m"+n+"@example.test>")
+		if _, _, err := dbs.EnqueueSend(ctx, m); err != nil {
+			t.Fatalf("enqueue %d: %v", i, err)
+		}
+	}
+	got, err := dbs.SendsByAccount(ctx, "acct-1", 1_000_000)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got) != MaxSendListLimit {
+		t.Errorf("a limit of a million returned %d rows, want the cap of %d", len(got), MaxSendListLimit)
+	}
+	if got, _ := dbs.SendsByAccount(ctx, "acct-1", 0); len(got) != DefaultSendListLimit {
+		t.Errorf("no limit returned %d rows, want the default %d", len(got), DefaultSendListLimit)
+	}
+}

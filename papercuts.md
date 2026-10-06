@@ -1502,3 +1502,20 @@ Baseline at `839bf05`: `go build`, `go vet`, `staticcheck`, `gofumpt -l` clean a
   `TestSendShutdownAfterTheServerAcceptsStillRecordsIt` (the clock hook cancels at the first read after the fake
   records the message; failed: state `submitting`, no append id). `submitted` now runs under
   `context.WithoutCancel` bounded by a 10 s `settleTimeout`.
+
+### `839bf05` Add the send API and undo send
+
+- **#128** · `839bf05` · `store/sendqueue.go`, `gateway/send.go` · **standards** · `GET /send?limit=` passed the
+  caller's number straight into `LIMIT`, so `limit=1000000` read every send row with both message bodies and the
+  stored draft (STANDARDS 4a: no unbounded reads). Reproduced with `TestSendsByAccountClampsTheLimit` (a limit of a
+  million returned 205 rows; failed). `SendsByAccount` now clamps to `store.MaxSendListLimit` (200, default 50);
+  the row is in the STANDARDS limits table.
+- **#129** · `839bf05` · `docs/STANDARDS.md` · **standards** · the 4a limits table said a refused outgoing field is
+  "400 `bad_request`"; the handler answers 400 `invalid_message` (and `bad_request` only for a malformed or
+  oversized request). The five compose rows now say `invalid_message`.
+- **N44 (open, measure first)** · `839bf05` · `store/sendqueue.go` · every read of a send row (`GET /send`, `GET
+  /send/{id}`, the worker's `notify`) selects `wire_body`, `sent_body` and `compose_json`, three copies of the
+  message, though the list and status need none of the first two. Today that is at most about 3 MiB a row and 200
+  rows; with attachments (4g) the bodies grow to tens of MiB and the "stream sender-sized data through disk" rule
+  applies. Not changed without a number from the potato: when 4g lands, split the metadata read from the body
+  read (and keep bodies out of the row), then benchmark `GET /send`.
