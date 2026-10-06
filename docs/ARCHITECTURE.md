@@ -445,7 +445,10 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   and contrast respected. Calm and quiet visual language.
 - **Config split (settled):** `ivy.yaml` + `.env` for secrets (credentials, API keys); behavior
   settings in the in-app panel (SQLite) with per-account overrides; non-secret file settings
-  hot-reload. Delayed send (undo send) is a setting (`compose.undo_delay_seconds`; default 10,
+  hot-reload. **An account can also be connected from the app (round 59):** its connection details
+  go in `state.db` (`account_configs`) and its password in a private file, `data/secrets/<id>` (mode
+  0600, outside every backup), read after the environment and `.env`. A restored `state.db` therefore
+  brings the accounts back without their passwords, and each shows "Update password". Delayed send (undo send) is a setting (`compose.undo_delay_seconds`; default 10,
   0 = off, with an upper bound), editable globally and per account.
 
 ## 9. Deployment, update, backup

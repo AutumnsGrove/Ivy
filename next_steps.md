@@ -5,7 +5,10 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-06 (3g and 3h are done. 3g: rules as data with a local engine and an ingest
+last updated: 2026-10-06 (**in-app account setup is built (round 59), the last thing before the first
+install: an account is typed into `/welcome/account`, tested against Purelymail, stored as a private
+password file plus a `state.db` row, and started without a restart; what is left is `sudo ./install.sh`
+on the board and the live connect**. 3g and 3h are done. 3g: rules as data with a local engine and an ingest
 pass, local hide-until snooze, derived People with merges, and Reading as the reserved tag, wired
 through the API and the screens. 3h: the container image, the GHCR publish workflow, the host-side
 update watcher and `ivy update` (CLI and in-app) with SSE progress. Next is the C0 canvas board;
@@ -366,6 +369,13 @@ vector scan (the real provider needs `OPENROUTER_API_KEY` in `.env`).
 
 ## Operator actions still open
 
+- First install (round 59): the image is published and **the mailbox is now connected from the app**,
+  so `data/` needs only `ivy.yaml` with `allowed_hosts` (and `OPENROUTER_API_KEY` in `.env` for Smart
+  features). Follow `docs/DEPLOY.md`; record the live connect, a restart that keeps the account, and one
+  real `ivy update` here. Follow-ups, deliberately not built: other providers as plain host fields behind
+  the SSRF guard; Smart features taking effect without a restart (the embed pipeline is built at
+  startup); removing an account from the app; `ivy doctor` checking `data/secrets` modes; the connect
+  endpoint is open to the tailnet by the operator's choice, so revisit it when auth lands.
 - Deploy (3h): **the image is published.** Run 37352785674 (commit `3d26e01`) succeeded and
   `ghcr.io/autumnsgrove/ivy:latest` resolves anonymously to `sha256:e6fdc57c…`, so the package is
   public and the potato needs no `docker login`. **Left:** on the board, `sudo ./install.sh` and one

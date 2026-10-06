@@ -43,26 +43,15 @@ It does **not** write your configuration or start Ivy.
 
 Two files, both in `data/` (the container sees them as `/data/...`).
 
-`data/ivy.yaml`, the non-secret settings. Unknown keys are an error on purpose:
+`data/ivy.yaml`, the non-secret settings. Unknown keys are an error on purpose. **You do not put your
+mailbox in it**: you type the address and password into the app in step 3, and the password never goes
+through a shell, an SSH session or a config file you wrote.
 
 ```yaml
 # Names a browser may use to reach Ivy, with no scheme and no port. Without your tailnet name here
 # every request from the phone is refused (loopback is always allowed, for the health check).
 allowed_hosts:
   - potato.your-tailnet.ts.net
-
-accounts:
-  - id: purelymail            # also names the password variable: IVY_PURELYMAIL_PASSWORD
-    address: you@yourdomain.com
-    imap_host: imap.purelymail.com
-    imap_port: 993            # implicit TLS
-    smtp_host: smtp.purelymail.com
-    smtp_port: 465            # implicit TLS
-    username: you@yourdomain.com
-    # Hosted embeddings send message text to OpenRouter, so they need both lines and a key.
-    # Leave them out to run on keyword search alone.
-    # llm_enabled: true
-    # embed_provider: openrouter
 
 # llm:
 #   monthly_cap_usd: 5        # the default; embeddings stop at the cap
@@ -71,16 +60,21 @@ backup:
   at: "03:00"                 # local time; the snapshot goes to /data/backups unless you add targets
 ```
 
-`data/.env`, the secrets (`chmod 600 data/.env`):
+`data/.env`, the secrets that are not a mailbox password (`chmod 600 data/.env`). Only needed for
+meaning-based search:
 
 ```
-IVY_PURELYMAIL_PASSWORD=the-mailbox-password
-OPENROUTER_API_KEY=sk-or-...        # only if embed_provider: openrouter
+OPENROUTER_API_KEY=sk-or-...        # only if you turn on Smart features for an account
 # GITHUB_TOKEN=...                  # optional: raises the GitHub API rate limit while an update waits on CI
 ```
 
-If `ivy.yaml` is missing Ivy starts with defaults and **no accounts**, which looks like an empty app,
-so check the log in the next step.
+If `ivy.yaml` is missing Ivy starts with defaults, so the phone's host name is refused: check the log
+in the next step.
+
+**Prefer a file to the app?** An account can still be declared in `ivy.yaml` (`accounts:` with `id`,
+`address`, `imap_host`, `imap_port`, `smtp_host`, `smtp_port`, `username`, and optionally `llm_enabled: true`
+and `embed_provider: openrouter`) with `IVY_<ID>_PASSWORD` in `data/.env`. The dev stack works this way.
+An environment password always beats the app's stored one.
 
 ## 3. Start
 
@@ -92,12 +86,25 @@ curl -s http://127.0.0.1:8418/api/v1/health
 docker compose ps                   # the image's own healthcheck should say "healthy"
 ```
 
-Then open `http://potato.your-tailnet.ts.net:8418` on the phone. The first sync backfills the mailbox
-in the background; mail appears newest first as it arrives. Watch for these lines in the log:
+Then open `http://potato.your-tailnet.ts.net:8418` on the phone. With no account yet it opens on the
+welcome screen: tap **Connect your first account**, enter your address and an app password, and tap
+**Test and connect**. Ivy tries the login against Purelymail first (up to 30 seconds) and stores
+nothing unless it works, so a typo leaves nothing behind and you can just try again. For now Ivy
+connects to Purelymail only; the server fixes the hosts, so there are no server fields to fill in.
+
+Where the password goes: `data/secrets/<account id>`, one private file (mode 600) on the board's disk.
+It is in no database and in no backup, so a restored `state.db` brings your accounts back with an
+**Update password** prompt on each (Settings, Mirror health).
+
+The first sync backfills the mailbox in the background; mail appears newest first as it arrives.
+**Smart features** (hosted embeddings) need `OPENROUTER_API_KEY` in `data/.env` and begin the next time
+Ivy starts (`docker compose restart ivy`), because the embedding pipeline is built at startup. Watch for
+these lines in the log:
 
 - `embeddings are off for this account: ...`: the provider is chosen but its key or address is
   missing; the message names the setting.
-- `sync worker stopped` or an account banner saying it can't sign in: wrong password or host.
+- `sync worker stopped` or an account banner saying it can't sign in: wrong password or host. Use
+  **Update password**; it tests the new one first and keeps the old one if that fails.
 
 The port is published on all of the host's interfaces, and the host-name check is what keeps a request
 from another network name out. If the board is on a LAN you don't trust, publish it on the tailnet
@@ -162,8 +169,10 @@ docker compose up -d
 | Symptom | Likely cause |
 |---|---|
 | The phone gets a refusal or a blank page | `allowed_hosts` is missing the name the browser used (no port, no scheme). `docker compose exec ivy /app/ivy doctor --config /data/ivy.yaml` prints what it allows. |
-| Empty app, no accounts | `data/ivy.yaml` missing or not where the container sees it (`/data/ivy.yaml`). |
-| `can't sign in` banner | Wrong password or host. The password variable is `IVY_<ID>_PASSWORD` with the account id upper-cased and punctuation turned into `_`. |
+| Welcome screen on every visit | No account is connected yet; connect one. If you did, check the log for `cannot read the stored password` and that `data/` is the same directory the container sees as `/data`. |
+| `can't sign in` banner | Wrong password. Settings, Mirror health, **Update password**. For a YAML account the variable is `IVY_<ID>_PASSWORD` with the id upper-cased and punctuation turned into `_`, and it beats the stored one. |
+| Connect says "Couldn't reach Purelymail" | The board cannot reach `imap.purelymail.com:993` (DNS or outbound firewall). Nothing was saved; fix the network and try again. |
+| Connect says "isn't available" (503) | Ivy was started by something other than `ivy run`; the connector is only wired there. |
 | Update says `ghcr token request failed (status 403)` | The package is private. In GitHub, Packages, ivy, set it public. |
 | Update says `... did not report a result` | The watcher isn't running: `systemctl status ivy-update.path`, and was `install.sh` run with `sudo` from your own account? |
 | Update `failed`: "not a ghcr.io/autumnsgrove/ivy digest" | Something other than Ivy wrote `update-signal/requested`; the watcher refuses any other image. |
@@ -171,6 +180,10 @@ docker compose up -d
 
 ## 7. Things to check once, live
 
+- [ ] Connect the real mailbox from the phone, then `docker compose restart ivy` and confirm the
+      account comes back without asking again (the stored password and the `account_configs` row).
+- [ ] On purpose, enter a wrong password once: it should say Purelymail didn't accept it and leave
+      `data/secrets/` empty. (`ls -la data/secrets` should show one `-rw-------` file after a good connect.)
 - [ ] A real update, end to end, and its result on the Settings screen.
 - [ ] Archive, undo and empty Trash against the real mailbox (section 3).
 - [ ] If embeddings are on: after the first pass, the spend screen shows calls with a cost (a row

@@ -646,3 +646,32 @@ no mail code.
   the repo stays private, is reachable by the potato), make the GHCR package visible or
   `docker login` on the board, then run `sudo ./install.sh` and one real `ivy update` end to end.
   A live check on the potato of the pull, healthcheck and rollback is the point of this stage.
+
+## In-app account setup (round 59, 2026-10-06)
+
+Built before the first install, because the operator would not copy a mailbox password to the board.
+Seven stages, each test-first and committed on main.
+
+- **Credential store.** `internal/secrets` keeps one password per account in `data/secrets/<id>`,
+  mode 0600, written atomically (private temp file, sync, rename). `config.Load` reads it after the
+  environment and `.env`, and refuses a file others can read. It is never in a database or a backup.
+- **Account rows.** State migration 9 adds `account_configs` (connection details only, no secret
+  column; a test asserts that). `accountsvc.StoredAccounts` merges them with `ivy.yaml` at startup,
+  before the embedding pipeline reads the account list.
+- **Login probe.** `sync.Fetcher.Probe` dials and logs in through the workers' own code, bounded by 30 s
+  and the caller's context, and answers `auth_failed`, `unreachable` or `error`.
+- **API.** `POST /accounts` (probe, then password file, then row, then start) and
+  `PUT /accounts/{id}/password` (probe first; the old password stays on failure). Purelymail's hosts are
+  fixed server-side, so the browser names no host. The password is `writeOnly` in the contract.
+- **Supervisor.** `accountsvc.Supervisor` owns each account's sync and outbox workers and replaces them
+  on a second `Start`, so adding an account or fixing a password needs no restart.
+- **Screens.** `/welcome/account` connects (or, with `?update=<id>`, replaces a password), Mirror health's
+  Update password opens that mode, and a fresh install with no account opens on `/welcome`.
+- **Known limit.** The embedding pipeline is built once at startup, so "Smart features" on an account
+  connected from the app begins at the next start; the screen says so.
+- **Tests.** `internal/secrets`, `internal/accountsvc` (against the fake mail world), `sync/probe_test.go`,
+  `gateway/connect_test.go` (including a foreign `Origin` refused and no response echoing the password),
+  `cmd` (a real `ivy run` with no accounts, connected over HTTP), 9 Vitest cases and 12 Playwright flows on
+  phone and desktop. `make check` green and the mock Playwright suite 302 passed / 10 skipped.
+- **Left for the operator.** The live connect against the real Purelymail on the board, and a restart to
+  confirm the account comes back.
