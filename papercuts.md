@@ -1450,3 +1450,7 @@ Baseline at `839bf05`: `go build`, `go vet`, `staticcheck`, `gofumpt -l` clean a
   byte 237; the long line check is behind it). New `wireText` normalises to CRLF and breaks any line over 900
   bytes at a space (plain text also hard-cuts at a rune boundary when a line has none; HTML only breaks at spaces,
   so a tag is never split). The markdown test now compares the text part line-ending-insensitively.
+- **#122** · `d08120d` · `compose/header.go` · **bug** · `Validate` accepted a message with no recipients, and `Build`
+  then failed with enmime's bare "no recipients" error instead of a `*ValidationError`, so a caller that maps
+  validation errors to a refusal would see a server fault. Reproduced with `TestNoRecipientsIsAValidationError`
+  (failed for both `Validate` and `Build` before the fix); `validate` now refuses it with field `recipients`.

@@ -459,3 +459,21 @@ func TestBuildBodyLinesAreWireSafe(t *testing.T) {
 		})
 	}
 }
+
+// TestNoRecipientsIsAValidationError: a message with nobody to send to must be
+// the same typed refusal as any other bad field, from Validate and from Build,
+// not a bare builder error the send API cannot tell from a server fault.
+func TestNoRecipientsIsAValidationError(t *testing.T) {
+	t.Parallel()
+	m := base()
+	m.To = nil
+	for name, err := range map[string]error{
+		"Validate": compose.Validate(m),
+		"Build":    func() error { _, _, err := compose.Build(m); return err }(),
+	} {
+		var ve *compose.ValidationError
+		if !errors.As(err, &ve) || ve.Field != "recipients" {
+			t.Errorf("%s with no recipients = %v, want a *ValidationError for recipients", name, err)
+		}
+	}
+}

@@ -54,7 +54,9 @@ func validate(m Message) error {
 			return err
 		}
 	}
-	if n := len(recipientList(m)); n > MaxRecipients {
+	if n := len(recipientList(m)); n == 0 {
+		return invalid("recipients", "no recipient in to, cc or bcc")
+	} else if n > MaxRecipients {
 		return invalid("recipients", fmt.Sprintf("%d recipients after de-duplication, the maximum is %d", n, MaxRecipients))
 	}
 	if hasBadBytes(m.Subject) {
