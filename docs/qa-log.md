@@ -1442,3 +1442,22 @@ it is visible which stages DeepSeek can handle.
   gates G1-G5 (and any T-trigger); between them 4c-4f should flow without stopping.
 - **The undo window is a column on the queue row,** enforced server-side, so a closed tab or a restart
   neither sends early nor loses the message.
+
+## Round 61 — 4a pre-flight, three open design questions (2026-10-06, agent; three answers)
+
+Before writing any code in 4a, three questions the docs did not answer were put to the operator. They
+are frozen into the 4a tests at gate G1.
+
+- **A recipient refused among several aborts the whole send.** If the SMTP server refuses one `RCPT`
+  (for example a 550 for a mistyped address), Ivy issues `RSET` and reports the refused address; no
+  recipient receives the message. Partial delivery is never silent and never surprising: the operator
+  fixes the address and sends again. This is the `recipient_refused` outcome in `smtp/`.
+- **The `text/plain` part is the operator's markdown exactly as typed.** `multipart/alternative`
+  carries the raw compose text as `text/plain` and goldmark's rendering as `text/html`. There is one
+  renderer (goldmark, HTML only); a plain-text-only reader sees the markdown source. A stripped plain
+  text rendering is deferred.
+- **The implicit-TLS SMTP client lives in a new thin `smtp/` package.** `compose/` stays a pure
+  builder (`Validate`, `Build`, `Envelope`, easy table tests); `smtp/` owns dial, `AUTH PLAIN`, the
+  `EHLO` `SIZE` read, `RCPT`/`DATA` and the deadlines, matching `STACK.md`'s "thin wrapper at the
+  boundary". The 4b send queue and the 4a tests both call `smtp.Submit`; `ARCHITECTURE.md` section 2's
+  proposed `compose/`-only layout is updated when the package lands.

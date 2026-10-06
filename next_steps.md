@@ -5,14 +5,17 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-06 (**in-app account setup is built (round 59), the last thing before the first
-install: an account is typed into `/welcome/account`, tested against Purelymail, stored as a private
-password file plus a `state.db` row, and started without a restart; what is left is `sudo ./install.sh`
-on the board and the live connect**. 3g and 3h are done. 3g: rules as data with a local engine and an ingest
-pass, local hide-until snooze, derived People with merges, and Reading as the reserved tag, wired
-through the API and the screens. 3h: the container image, the GHCR publish workflow, the host-side
-update watcher and `ivy update` (CLI and in-app) with SSE progress. Next is the C0 canvas board;
-3b's disabled-mail screens still wait on it, and chunk 4 (send) is next after that.)
+last updated: 2026-10-06. **4a is at gate G1**: the header-injection corpus and the SMTP failure
+tests are written and red for the right reason, waiting for an explicit "go"; see
+`docs/handoffs/2026-10-06-G1-compose-smtp-tests.md`. Everything below is unchanged. **In-app account
+setup is built (round 59)**, the last thing before the first install: an account is typed into
+`/welcome/account`, tested against Purelymail, stored as a private password file plus a `state.db`
+row, and started without a restart; what is left is `sudo ./install.sh` on the board and the live
+connect. 3g and 3h are done. 3g: rules as data with a local engine and an ingest pass, local
+hide-until snooze, derived People with merges, and Reading as the reserved tag, wired through the
+API and the screens. 3h: the container image, the GHCR publish workflow, the host-side update watcher
+and `ivy update` (CLI and in-app) with SSE progress. Next is the C0 canvas board; 3b's disabled-mail
+screens still wait on it, and chunk 4 (send) is next after that.
 Chunks 0, 1 and 2a-2h are done except the visual baselines of 2g and 2h (they need the CI harness
 regenerated). 3a and 3b's backend are done, 3c (backups, including the disabled-blob store), 3d (the
 outbox and write path), 3e (tags), **3f (search)**, **3g (rules, snooze, People, Reading)** and
@@ -65,6 +68,15 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 `cmd/` (`ivy`, `ivy-dev`, `ivy-assets`). No `Dockerfile` or image-publish workflow yet.
 
 ## ▶ Now
+
+**4a is waiting at gate G1** (2026-10-06; `docs/handoffs/2026-10-06-G1-compose-smtp-tests.md`). The
+header-injection corpus (`compose/compose_test.go`) and the SMTP failure tests (`smtp/smtp_test.go`)
+are written and red for the right reason; `compose.Build` and `smtp.Submit` are stubs. The fake mail
+world gained `SIZE`, `SMTPStall` and `SMTPRejectRcpt` first, with their own green tests. Round 61
+recorded the operator's three answers (a refused recipient aborts the whole send; the `text/plain`
+part is the raw markdown as typed; the SMTP client is a new `smtp/` package). On "go", implement the
+builder and the transport, make both suites green, fold the decisions into the docs and update this
+file. No API or `ivy run` wiring in 4a.
 
 **3c is done** (round 43). `internal/blobstore` is a content-addressed, de-duplicated, append-only
 store under `data/blobs`; `sync` copies a hidden message's bytes there at disable time (mirror
@@ -391,7 +403,9 @@ T11-T13 on top of chunk 3's T1-T10) are in `docs/CHUNK4-BRIEF.md`; read it after
 
 Checkpoints: **G1** (4a, injection corpus failing before the builder), **G2** (4b, design before code),
 **G3** (4b, crash tests pass), **G4** (4g, before any image dependency), **G5** (end of chunk, Claude's
-review). Nothing has started: the first action is 4a, and the first stop is G1.
+review). 4a has started: its tests are written and red at G1
+(`docs/handoffs/2026-10-06-G1-compose-smtp-tests.md`); the builder and the transport are not written
+yet.
 
 ## Operator actions still open
 

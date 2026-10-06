@@ -42,7 +42,8 @@ ivy/
   jev/               Jev client (/systemone), question registry, thresholds, cache
   llm/               chat/vision client + THE gate (opt-in, isolation, caps, ledger)
   triage/            needs-me cascade, categories, receipts/ledger, newsletter feed/digest, rules
-  compose/           MIME build (enmime builder), identities, signatures, undo-send queue
+  compose/           outbound MIME build (enmime builder), identities, signatures
+  smtp/              thin go-smtp wrapper: implicit-TLS dial, AUTH PLAIN, EHLO SIZE, RCPT/DATA, deadlines
   events/            the SSE hub: typed hints, bounded per-client queues (no dependency on sync or gateway,
                      so sync can publish and gateway can serve)
   gateway/           HTTP handlers, the /events stream, stats, settings, update endpoints

@@ -2,10 +2,28 @@ package mailworld
 
 import (
 	"io"
+	"net"
+	"sync"
 
 	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
 )
+
+// DefaultSMTPSize is the message size the fake SMTP server advertises in its
+// EHLO SIZE line and enforces on DATA. It sits near Purelymail's live limit
+// (about 48.8 MiB, spike S1) so tests inherit a real-sized server rather than
+// an unlimited one; a test that wants the too-large path passes a small value
+// with WithSMTPSize.
+const DefaultSMTPSize = 48 << 20
+
+// WithSMTPSize sets the SIZE the fake SMTP server advertises and enforces.
+func WithSMTPSize(bytes int64) Option {
+	return func(w *World) {
+		if bytes > 0 {
+			w.smtpMaxBytes = bytes
+		}
+	}
+}
 
 // SentCopy models whether the provider files a copy of an outgoing message in
 // the sender's Sent mailbox itself (auto) or leaves it to the client (client),
@@ -36,6 +54,17 @@ type SMTPReject struct {
 
 func (SMTPReject) isFault() {}
 
+// SMTPRejectRcpt refuses one named recipient at RCPT with the given code, so a
+// test can model one bad address among several. It is spent once, when that
+// address is tried.
+type SMTPRejectRcpt struct {
+	Address string
+	Code    int
+	Message string
+}
+
+func (SMTPRejectRcpt) isFault() {}
+
 // SMTPAuthFail makes every SMTP AUTH fail.
 type SMTPAuthFail struct{}
 
@@ -43,6 +72,67 @@ func (SMTPAuthFail) isFault() {}
 
 // SMTPAddr is the host:port the fake SMTP server listens on.
 func (w *World) SMTPAddr() string { return w.smtpAddr }
+
+// SMTPMaxBytes is the SIZE the fake SMTP server advertises and enforces.
+func (w *World) SMTPMaxBytes() int64 { return w.smtpMaxBytes }
+
+// SMTPStallPhase is where an SMTPStall fault parks the server's side of the
+// conversation.
+type SMTPStallPhase int
+
+const (
+	// SMTPStallGreeting accepts the connection and then never sends the
+	// greeting, so every command deadline fires.
+	SMTPStallGreeting SMTPStallPhase = iota
+	// SMTPStallData answers DATA with 354 and then never reads the body or sends
+	// the final reply, so the submission deadline fires.
+	SMTPStallData
+)
+
+// SMTPStall models a peer that accepts the TCP connection and then stops
+// responding. It lasts until the faults are cleared, like Unreachable; the
+// parked server goroutine is released when the world closes.
+type SMTPStall struct{ Phase SMTPStallPhase }
+
+func (SMTPStall) isFault() {}
+
+// smtpFaultListener wraps the SMTP listener so an armed greeting stall parks a
+// connection before the server writes anything.
+type smtpFaultListener struct {
+	net.Listener
+	w *World
+}
+
+func (l *smtpFaultListener) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	if l.w.hasFault(SMTPStall{Phase: SMTPStallGreeting}) {
+		return &stallConn{Conn: c, released: make(chan struct{})}, nil
+	}
+	return c, nil
+}
+
+// stallConn blocks every write until it is closed, so the peer sees a
+// connection that was accepted and then went silent. Close releases the blocked
+// writer, which is what go-smtp's Server.Close does for every live connection.
+type stallConn struct {
+	net.Conn
+
+	once     sync.Once
+	released chan struct{}
+}
+
+func (c *stallConn) Write([]byte) (int, error) {
+	<-c.released
+	return 0, net.ErrClosed
+}
+
+func (c *stallConn) Close() error {
+	c.once.Do(func() { close(c.released) })
+	return c.Conn.Close()
+}
 
 // Sent returns every message the SMTP server accepted, newest last. It is a
 // copy, so callers cannot mutate the world's record.
@@ -118,11 +208,21 @@ func (s *smtpSession) Mail(from string, _ *smtp.MailOptions) error {
 }
 
 func (s *smtpSession) Rcpt(to string, _ *smtp.RcptOptions) error {
+	if rej, ok := s.w.takeSMTPRejectRcpt(to); ok {
+		return &smtp.SMTPError{Code: rej.Code, Message: rej.Message}
+	}
 	s.rcpts = append(s.rcpts, to)
 	return nil
 }
 
 func (s *smtpSession) Data(r io.Reader) error {
+	// A data stall parks the server after 354: the client's body write completes
+	// into the socket buffer, its submission deadline fires, and no message is
+	// recorded. The goroutine ends when the world closes.
+	if s.w.hasFault(SMTPStall{Phase: SMTPStallData}) {
+		<-s.w.done
+		return &smtp.SMTPError{Code: 421, Message: "mailworld closed"}
+	}
 	raw, err := io.ReadAll(r)
 	if err != nil {
 		return err

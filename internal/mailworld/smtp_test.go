@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-sasl"
@@ -247,5 +248,141 @@ func TestSMTPWrongPasswordFails(t *testing.T) {
 	c := smtp.NewClient(conn)
 	if err := c.Auth(sasl.NewPlainClient("", "a@grove.test", "wrong")); err == nil {
 		t.Fatalf("auth succeeded with a wrong password")
+	}
+}
+
+// TestSMTPAdvertisesAndEnforcesSize is the fake's half of the 4a SIZE tests: the
+// EHLO line carries the limit and DATA above it is refused with 552, so the real
+// client's pre-check and the server's rejection can both be driven.
+func TestSMTPAdvertisesAndEnforcesSize(t *testing.T) {
+	t.Parallel()
+	w, err := mailworld.New(mailworld.WithSMTPSize(1024))
+	if err != nil {
+		t.Fatalf("new world: %v", err)
+	}
+	t.Cleanup(func() { _ = w.Close() })
+	w.Account("a@grove.test", "secret")
+
+	conn, err := net.Dial("tcp", w.SMTPAddr())
+	if err != nil {
+		t.Fatalf("dial smtp: %v", err)
+	}
+	defer conn.Close()
+	c := smtp.NewClient(conn)
+	size, ok := c.MaxMessageSize()
+	if !ok || size != 1024 {
+		t.Fatalf("MaxMessageSize = %d, %v; want 1024, true", size, ok)
+	}
+	if err := c.Auth(sasl.NewPlainClient("", "a@grove.test", "secret")); err != nil {
+		t.Fatalf("auth: %v", err)
+	}
+
+	// Many short CRLF-terminated lines, so the 552 comes from the size limit and
+	// not the line-length limit; the fake must refuse the former like a real
+	// provider. 13 and 10 are CR and LF.
+	line := append(bytes.Repeat([]byte("x"), 60), 13, 10)
+	oversize := bytes.Repeat(line, 40)
+	err = c.SendMail("a@grove.test", []string{"b@example.com"}, bytes.NewReader(oversize))
+	var smtpErr *smtp.SMTPError
+	if !errors.As(err, &smtpErr) || smtpErr.Code != 552 {
+		t.Fatalf("oversize send error = %v, want an SMTP 552", err)
+	}
+	if got := len(w.Sent()); got != 0 {
+		t.Errorf("recorded %d messages after an oversize send, want 0", got)
+	}
+}
+
+// TestSMTPRejectRcptRefusesOneAddressAmongSeveral is the fake's half of the
+// refused-recipient test: the named address fails at RCPT, the transaction is
+// left without a DATA, and nothing is recorded.
+func TestSMTPRejectRcptRefusesOneAddressAmongSeveral(t *testing.T) {
+	t.Parallel()
+	w, err := mailworld.New()
+	if err != nil {
+		t.Fatalf("new world: %v", err)
+	}
+	t.Cleanup(func() { _ = w.Close() })
+	w.Account("a@grove.test", "secret")
+	w.Fault(mailworld.SMTPRejectRcpt{Address: "bad@example.test", Code: 550, Message: "no such user"})
+
+	c := dialSMTP(t, w, "a@grove.test", "secret")
+	raw := mailworld.Msg().From("a@grove.test").To("bad@example.test").Subject("x").Build()
+	err = c.SendMail("a@grove.test", []string{"good@example.test", "bad@example.test"}, bytes.NewReader(raw))
+	var smtpErr *smtp.SMTPError
+	if !errors.As(err, &smtpErr) || smtpErr.Code != 550 {
+		t.Fatalf("send error = %v, want SMTP 550 for the bad recipient", err)
+	}
+	if got := len(w.Sent()); got != 0 {
+		t.Errorf("recorded %d messages after a refused recipient, want 0", got)
+	}
+}
+
+// TestSMTPStallGreetingTimesOut is the fake's stalled-peer fault: the connection
+// is accepted and then nothing is written, so the client's command deadline fires.
+// Clearing the fault lets the next connection through, which is what a real
+// outage-then-recovery test needs.
+func TestSMTPStallGreetingTimesOut(t *testing.T) {
+	t.Parallel()
+	w, err := mailworld.New()
+	if err != nil {
+		t.Fatalf("new world: %v", err)
+	}
+	t.Cleanup(func() { _ = w.Close() })
+	w.Account("a@grove.test", "secret")
+	w.Fault(mailworld.SMTPStall{Phase: mailworld.SMTPStallGreeting})
+
+	conn, err := net.Dial("tcp", w.SMTPAddr())
+	if err != nil {
+		t.Fatalf("dial smtp: %v", err)
+	}
+	defer conn.Close()
+	c := smtp.NewClient(conn)
+	c.CommandTimeout = 250 * time.Millisecond
+	if err := c.Auth(sasl.NewPlainClient("", "a@grove.test", "secret")); err == nil {
+		t.Fatalf("auth against a stalled peer succeeded, want a deadline error")
+	}
+
+	w.ClearFaults()
+	c2 := dialSMTP(t, w, "a@grove.test", "secret")
+	raw := mailworld.Msg().From("a@grove.test").To("b@example.com").Subject("after").Build()
+	if err := c2.SendMail("a@grove.test", []string{"b@example.com"}, bytes.NewReader(raw)); err != nil {
+		t.Fatalf("send after clearing the stall: %v", err)
+	}
+	if got := len(w.Sent()); got != 1 {
+		t.Errorf("recorded %d messages after recovery, want 1", got)
+	}
+}
+
+// TestSMTPStallDataTimesOutWithoutRecording parks the server after 354, so the
+// client's submission deadline fires and no message is recorded: the fake's
+// model of the dangerous window where the client cannot know what happened.
+func TestSMTPStallDataTimesOutWithoutRecording(t *testing.T) {
+	t.Parallel()
+	w, err := mailworld.New()
+	if err != nil {
+		t.Fatalf("new world: %v", err)
+	}
+	t.Cleanup(func() { _ = w.Close() })
+	w.Account("a@grove.test", "secret")
+	w.Account("b@grove.test", "secret")
+	w.Fault(mailworld.SMTPStall{Phase: mailworld.SMTPStallData})
+
+	conn, err := net.Dial("tcp", w.SMTPAddr())
+	if err != nil {
+		t.Fatalf("dial smtp: %v", err)
+	}
+	defer conn.Close()
+	c := smtp.NewClient(conn)
+	c.CommandTimeout = 250 * time.Millisecond
+	c.SubmissionTimeout = 350 * time.Millisecond
+	if err := c.Auth(sasl.NewPlainClient("", "a@grove.test", "secret")); err != nil {
+		t.Fatalf("auth: %v", err)
+	}
+	raw := mailworld.Msg().From("a@grove.test").To("b@grove.test").Subject("lost").Build()
+	if err := c.SendMail("a@grove.test", []string{"b@grove.test"}, bytes.NewReader(raw)); err == nil {
+		t.Fatalf("send against a data stall succeeded, want a deadline error")
+	}
+	if got := len(w.Sent()); got != 0 {
+		t.Errorf("recorded %d messages after a data stall, want 0", got)
 	}
 }

@@ -46,16 +46,27 @@ type World struct {
 	chatQueue []string
 	jevQueue  []map[string]JevAnswer
 	embedDims int
+
+	// smtpMaxBytes is what the fake SMTP server advertises in its EHLO SIZE
+	// line and enforces on DATA (go-smtp replies 552 above it). It defaults near
+	// Purelymail's live limit so tests do not inherit an unlimited server.
+	smtpMaxBytes int64
+	// done is closed by Close, releasing any session goroutine a stall fault
+	// parked on it (a stalled peer does not notice its client hanging up).
+	done     chan struct{}
+	doneOnce sync.Once
 }
 
 // New starts the fake IMAP, SMTP and LLM provider servers on random loopback
 // ports. Close releases them.
 func New(opts ...Option) (*World, error) {
 	w := &World{
-		mem:       imapmemserver.New(),
-		clock:     newClock(),
-		condStore: true,
-		accounts:  make(map[string]*Account),
+		mem:          imapmemserver.New(),
+		clock:        newClock(),
+		condStore:    true,
+		accounts:     make(map[string]*Account),
+		smtpMaxBytes: DefaultSMTPSize,
+		done:         make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(w)
@@ -94,14 +105,17 @@ func New(opts ...Option) (*World, error) {
 	w.smtpSrv.Domain = "mailworld"
 	w.smtpSrv.AllowInsecureAuth = true
 	w.smtpSrv.ErrorLog = log.New(io.Discard, "", 0)
+	// Advertise and enforce the provider's SIZE, so the client's pre-check and
+	// the server's own rejection are both exercised (CHUNK4-BRIEF 4a).
+	w.smtpSrv.MaxMessageBytes = w.smtpMaxBytes
 	smtpLn, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		_ = w.srv.Close()
 		return nil, err
 	}
 	w.smtpAddr = smtpLn.Addr().String()
-	w.smtpLn = smtpLn
-	go func() { _ = w.smtpSrv.Serve(smtpLn) }()
+	w.smtpLn = &smtpFaultListener{Listener: smtpLn, w: w}
+	go func() { _ = w.smtpSrv.Serve(w.smtpLn) }()
 
 	w.embedDims = DefaultEmbeddingDims
 	w.openRouter = httptest.NewServer(w.openRouterMux())
@@ -130,6 +144,7 @@ func (w *World) IMAPAddr() string { return w.imapAddr }
 
 // Close stops every listener and connection.
 func (w *World) Close() error {
+	w.doneOnce.Do(func() { close(w.done) })
 	w.openRouter.Close()
 	w.ollama.Close()
 	_ = w.smtpSrv.Close()
@@ -209,6 +224,20 @@ func (w *World) takeSMTPReject() (SMTPReject, bool) {
 		}
 	}
 	return SMTPReject{}, false
+}
+
+// takeSMTPRejectRcpt removes and returns the first SMTPRejectRcpt fault naming
+// addr. A fault for another address is left armed.
+func (w *World) takeSMTPRejectRcpt(addr string) (SMTPRejectRcpt, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for i, f := range w.faults {
+		if rej, ok := f.(SMTPRejectRcpt); ok && strings.EqualFold(rej.Address, addr) {
+			w.faults = append(w.faults[:i], w.faults[i+1:]...)
+			return rej, true
+		}
+	}
+	return SMTPRejectRcpt{}, false
 }
 
 // accountByAddress returns the account for a local address, or nil when the
