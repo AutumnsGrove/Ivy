@@ -45,7 +45,7 @@ screens**.
 | 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
 | 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, rules, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; 3e done; 3f done; 3g done; **3h done** |
-| 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | not started |
+| 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | **planned, split into 4a-4h** (round 60; see "Chunk 4 stages" and `docs/CHUNK4-BRIEF.md`); nothing built yet |
 | 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | not started |
 
 Frontend: SvelteKit 3 app in `web/`, 32 screens. The reader endpoints (`/accounts`, `/inbox`,
@@ -158,7 +158,10 @@ proved against stubs.
 
 1. **C0 canvas board** for the three 3b screens, whenever the operator is ready; the backend and API
    are already committed.
-2. **Chunk 4 (send)** next; 3g leaves the free-form rule compiler for chunk 5.
+2. **Chunk 4 (send)**, in the stages below, starting with 4a; 3g leaves the free-form rule compiler
+   for chunk 5. **The live-use issues #7-#15 wait until chunk 4 is done** (operator, 2026-10-06): file
+   new feedback, do not fix it first. The one to raise anyway if chunk 4 touches the outbox is #10 (a
+   move failing with `message_gone`).
 
 **Deliberately deferred from 3c** (do not re-litigate):
 
@@ -366,6 +369,29 @@ per-account `embed_provider: openrouter|ollama`), and `make check`, the Go suite
 Playwright suite (268 passed, 10 skipped) are green. **Left for the operator:** a live hybrid-search
 check against the real mailbox and the embeddings bill, and potato numbers for extraction and the
 vector scan (the real provider needs `OPENROUTER_API_KEY` in `.env`).
+
+### Chunk 4 stages (split in round 60)
+
+Approved by the operator on 2026-10-06. Cut the way chunk 3 was: execution order is 4a, 4b, 4c, then 4d
+and 4e in either order, then 4f, 4g, 4h. **The smallest set that can replace Apple Mail is 4a-4f.** The
+standing instructions, invariants, traps, per-stage bounds and escalation gates (G1-G5, triggers
+T11-T13 on top of chunk 3's T1-T10) are in `docs/CHUNK4-BRIEF.md`; read it after `CLAUDE.md` and
+`docs/STANDARDS.md`. The owner column is a suggestion by risk, so the gates show what DeepSeek can do.
+
+| Stage | Scope | Depends | Size | Risk | Suggested owner |
+|---|---|---|---|---|---|
+| **4a Builder and submit** | `compose/`: build the RFC 5322 message with enmime (injected `Message-ID`/`Date`, reply headers, `Bcc` only on the envelope, plain text plus markdown HTML); implicit-TLS SMTP submit with `SIZE`, 4xx/5xx, deadlines; header-injection corpus first | none | M | Medium | DeepSeek, tests reviewed at G1 |
+| **4b Send queue and Sent copy** | `send_queue` migration; queued, submitting, submitted, appended, done, failed, `unconfirmed`; the `APPEND` to Sent (`\Seen`), retried without resending; crash-window tests; extend `mailworld` SMTP with accept-then-drop | 4a | L | **High** | Claude designs (G2), DeepSeek implements, Claude reviews (G3) |
+| **4c Undo send and send API** | `POST /send`, undo, status, `send.state` SSE, `compose.undo_delay_seconds`; the deadline server-side | 4b | M | Medium | DeepSeek |
+| **4d Drafts** | Autosave to the server's Drafts folder through the outbox (append, then expunge the old), list, resume | 3d | M | Medium | DeepSeek, with a gate on the outbox invariants |
+| **4e Identities and reply logic** | Per-address identities and signatures in `state.db`; reply and reply-all recipient logic, `Reply-To`; forward; live send-as check per address | none | M | Low | DeepSeek, solo |
+| **4f Compose screen** | Wire the existing mock: markdown editor, People autocomplete, From picker, reply and forward, the Sending, Undo, Not-sent and `unconfirmed` states | 4c, 4d, 4e | L | Low-Medium | DeepSeek |
+| **4g Outgoing attachments and images** | Streamed uploads, size and type limits, EXIF strip, downscale, HEIC, inline `cid:`, "From your mail" copy; any new dependency is gate G4 | 4f | L | **High** | Claude leads decoders and dependencies, DeepSeek the UI |
+| **4h Rich-text editor** | The second editor after markdown; same builder and sanitiser; must work on iOS Safari. Deferrable | 4f | M | Medium | DeepSeek, later |
+
+Checkpoints: **G1** (4a, injection corpus failing before the builder), **G2** (4b, design before code),
+**G3** (4b, crash tests pass), **G4** (4g, before any image dependency), **G5** (end of chunk, Claude's
+review). Nothing has started: the first action is 4a, and the first stop is G1.
 
 ## Operator actions still open
 

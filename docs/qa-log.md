@@ -1417,3 +1417,25 @@ created an account or stored a secret. The first install waits on building it. A
 - **The connect endpoint is always open (operator's choice over the recommended first-run-only).**
   Anyone on the tailnet can add an account or replace a password. The tailnet is the access control,
   as for every other endpoint; revisit when auth lands.
+
+## Round 60 — chunk 4 (send) split into stages (2026-10-06, operator; two answers plus three recorded decisions)
+
+After the first install the operator chose to finish the core build-out, chunk 4 at the least, before
+touching the live-use issues (#7-#15), and to cut chunk 4 into sub-chunks the way 1, 2 and 3 were, so
+it is visible which stages DeepSeek can handle.
+
+- **Split approved as proposed:** eight stages 4a-4h (builder and submit, send queue and Sent copy,
+  undo send and the send API, drafts, identities and reply logic, the compose screen, outgoing
+  attachments, rich text). The smallest set that can replace Apple Mail is 4a-4f. The stage table is in
+  `next_steps.md`; the standing instructions, invariants and gates are `docs/CHUNK4-BRIEF.md`.
+- **Suggested owners, by risk rather than by skill:** 4e solo (pure logic); 4a, 4c, 4f with a review of
+  the tests; 4d with a gate (it touches the outbox); 4b designed by Claude first and reviewed after
+  (gate G2, G3); 4g led by Claude for decoders and dependencies (gate G4). The gates exist so the
+  outcome shows what the model can do.
+- **A crash after SMTP accepts is never auto-resent (recommended, accepted).** The row becomes
+  `unconfirmed` and the operator decides. SMTP cannot be asked what happened, unlike IMAP, and a
+  duplicate email to a real person costs more than a retry tap.
+- **Markdown renders to HTML at send time** as `multipart/alternative` with a plain-text part. The
+  library is chosen by measurement in 4a and goes in `STACK.md` before it is imported.
+- **The undo window is a column on the queue row,** enforced server-side, so a closed tab or a restart
+  neither sends early nor loses the message.
