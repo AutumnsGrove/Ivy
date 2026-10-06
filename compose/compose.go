@@ -37,8 +37,9 @@ type Message struct {
 	ReplyTo []Address
 	Subject string
 
-	// Text is the operator's message exactly as typed. It is always the
-	// text/plain part (round 61). When Markdown is set, goldmark also renders
+	// Text is the operator's message as typed, bar CRLF line breaks and a break
+	// in any line over 900 bytes (wireText). It is always the text/plain part
+	// (round 61). When Markdown is set, goldmark also renders
 	// it to the text/html part of a multipart/alternative.
 	Text     string
 	Markdown bool
@@ -103,7 +104,7 @@ func Build(m Message) ([]byte, Envelope, error) {
 	env := Envelope{From: m.From.Address, To: recipientList(m)}
 
 	b := enmime.Builder().
-		From(encodeWord(m.From.Name), m.From.Address).
+		From(m.From.Name, m.From.Address).
 		ToAddrs(mailAddresses(m.To)).
 		CCAddrs(mailAddresses(m.Cc)).
 		BCCAddrs(mailAddresses(m.Bcc)).
@@ -111,7 +112,7 @@ func Build(m Message) ([]byte, Envelope, error) {
 		Subject(encodeWord(m.Subject)).
 		Date(m.Date).
 		Header("Message-ID", m.MessageID).
-		Text([]byte(m.Text))
+		Text([]byte(wireText(m.Text, true)))
 	if m.InReplyTo != "" {
 		b = b.Header("In-Reply-To", m.InReplyTo)
 	}
@@ -123,7 +124,7 @@ func Build(m Message) ([]byte, Envelope, error) {
 		if err != nil {
 			return nil, Envelope{}, fmt.Errorf("compose: render markdown: %w", err)
 		}
-		b = b.HTML(html)
+		b = b.HTML([]byte(wireText(string(html), false)))
 	}
 	// Invariant 7: the wire copy never carries Bcc, so it is added to the
 	// builder's header block only for the Sent copy. BCCAddrs above is what makes
@@ -135,6 +136,14 @@ func Build(m Message) ([]byte, Envelope, error) {
 	part, err := b.Build()
 	if err != nil {
 		return nil, Envelope{}, fmt.Errorf("compose: build message: %w", err)
+	}
+	// The builder quotes an encoded display name, which RFC 2047 forbids, so the
+	// address headers are rewritten with compose's own formatting.
+	part.Header.Set("From", formatAddress(m.From))
+	for name, list := range map[string][]Address{"To": m.To, "Cc": m.Cc, "Reply-To": m.ReplyTo} {
+		if len(list) > 0 {
+			part.Header.Set(name, joinAddresses(list))
+		}
 	}
 	var buf bytes.Buffer
 	if err := part.Encode(&buf); err != nil {

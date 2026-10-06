@@ -58,7 +58,8 @@ const (
 	KindCanceled Kind = "canceled"
 	// KindAuthFailed is AUTH rejected. Permanent until the password changes.
 	KindAuthFailed Kind = "auth_failed"
-	// KindRecipientRefused is one RCPT refused. Permanent; Recipient names it.
+	// KindRecipientRefused is one RCPT refused with a 5xx. Permanent; Recipient
+	// names it. A 4xx at RCPT is KindTransient with Recipient set.
 	KindRecipientRefused Kind = "recipient_refused"
 	// KindTooLarge is the message over the provider's advertised SIZE. Permanent.
 	KindTooLarge Kind = "too_large"
@@ -212,10 +213,14 @@ func (s *Submitter) Submit(ctx context.Context, acct Account, env Envelope, body
 				return classify(ctx, err)
 			}
 			var smtpErr *gosmtp.SMTPError
-			if errors.As(err, &smtpErr) {
+			if errors.As(err, &smtpErr) && smtpErr.Code >= 500 {
 				return &SendError{Kind: KindRecipientRefused, Recipient: rcpt, Code: smtpErr.Code, Err: err}
 			}
-			return &SendError{Kind: KindRecipientRefused, Recipient: rcpt, Err: err}
+			// A 4xx, a timeout or a dropped connection is not a verdict on the
+			// address: nothing was accepted, so it is the ordinary transient failure.
+			se := classify(ctx, err)
+			se.Recipient = rcpt
+			return se
 		}
 	}
 	// The durable point before DATA. Everything before it is safe to retry.

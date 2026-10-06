@@ -365,3 +365,34 @@ func TestSendSentCopyFailureIsNotASendFailure(t *testing.T) {
 		t.Errorf("SMTP recorded %d messages, want 1", got)
 	}
 }
+
+// A shutdown that lands just after the server's 250 must not lose the fact that
+// the message was accepted: the bookkeeping that follows is not allowed to die
+// with the worker's context, or the row stays `submitting` and the next start
+// calls an accepted, filed-nowhere message unconfirmed.
+func TestSendShutdownAfterTheServerAcceptsStillRecordsIt(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t, true)
+	fx.enqueue(t, "send-1")
+
+	ctx, cancel := context.WithCancel(fx.ctx)
+	defer cancel()
+	// The fake records the message before it answers 250, so the first clock read
+	// after that is the worker recording the accept: cancel exactly there.
+	worker := send.NewWorker(fx.dbs, fx.acct, smtp.New(smtp.WithTimeout(2*time.Second, 2*time.Second, 2*time.Second)),
+		send.WithClock(func() time.Time {
+			if len(fx.w.Sent()) > 0 {
+				cancel()
+			}
+			return fx.now
+		}), send.WithPoll(time.Millisecond))
+	_ = worker.RunOnce(ctx)
+
+	if got := len(fx.w.Sent()); got != 1 {
+		t.Fatalf("SMTP recorded %d messages, want 1", got)
+	}
+	row := fx.row(t, "send-1")
+	if row.State != store.SendSubmitted || row.SentAppendID == "" {
+		t.Fatalf("state = %q, append id %q, want submitted with its Sent copy queued", row.State, row.SentAppendID)
+	}
+}

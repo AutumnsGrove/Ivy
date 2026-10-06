@@ -247,12 +247,12 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Snoozes per account (`store.MaxSnoozes`) | 2000 | a new snooze is refused with 409 `too_many_snoozes`; an existing one may be extended |
 | Hidden content keys an inbox view loads (`maxHiddenKeys`) | 2000 | the remainder still shows in the inbox, a bounded degradation |
 | Conversations on a person page (`maxPersonConversations`) | 20 | the rest are omitted |
-| Recipients on an outgoing message, To+Cc+Bcc after de-duplication (`compose.MaxRecipients`) | 100 | refused with 400 `bad_request` before anything is built |
-| Outgoing subject (`compose.MaxSubjectBytes`) | 998 bytes | refused with 400 `bad_request`; a value that looks like an RFC 2047 word is force-encoded, never read as one |
-| Outgoing plain-text body (`compose.MaxBodyBytes`) | 1 MiB | refused with 400 `bad_request` |
-| `References` ids on an outgoing message (`compose.MaxReferences`) | 20 | refused with 400 `bad_request` |
-| One outgoing `<message-id>` (`compose.MaxMessageIDBytes`) | 320 bytes | refused with 400 `bad_request`; a CR, LF or NUL in any header value is refused, never stripped |
-| Outgoing addr-specs | ASCII only (no `SMTPUTF8`) | refused with 400 `bad_request`; a non-ASCII display name is RFC 2047 encoded |
+| Recipients on an outgoing message, To+Cc+Bcc after de-duplication (`compose.MaxRecipients`) | 100 | refused with 400 `invalid_message` before anything is built |
+| Outgoing subject (`compose.MaxSubjectBytes`) | 998 bytes | refused with 400 `invalid_message`; a value that looks like an RFC 2047 word is force-encoded, never read as one |
+| Outgoing plain-text body (`compose.MaxBodyBytes`) | 1 MiB | refused with 400 `invalid_message` |
+| `References` ids on an outgoing message (`compose.MaxReferences`) | 20 | refused with 400 `invalid_message` |
+| One outgoing `<message-id>` (`compose.MaxMessageIDBytes`) | 320 bytes | refused with 400 `invalid_message`; a CR, LF or NUL in any header value is refused, never stripped |
+| Outgoing addr-specs | ASCII only (no `SMTPUTF8`) | refused with 400 `invalid_message`; a non-ASCII display name is RFC 2047 encoded |
 | SMTP dial and implicit-TLS handshake (`smtp.DefaultDialTimeout`) | 15 s | `SendError` `unreachable`, transient |
 | One SMTP command reply (`smtp.DefaultCommandTimeout`) | 30 s | `SendError` `timeout`, transient |
 | SMTP DATA, body and final reply (`smtp.DefaultDataTimeout`) | 2 min | `SendError` `timeout`, transient |
@@ -264,8 +264,11 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Terminal send rows kept (`store.MaxSendTerminalRetention`) | 7 days | pruned; the send queue's only deletion, and only of terminal rows |
 | Send error detail (`store.MaxSendErrorDetail`) | 500 bytes | truncated on the rune boundary |
 | An ambiguous send (`smtp.SendError.Ambiguous`) | one message | the row is `unconfirmed`, never auto-resent; the operator sends again explicitly |
-| Send retry backoff | 5 s doubling to 15 min, ±20% jitter | the send waits; a not-yet-due send blocks the ones behind it (strict FIFO) |
+| Send retry backoff | 5 s doubling to 15 min, ±20% jitter | the send waits; a not-yet-due send (backoff or undo window) is skipped, so it never blocks a due one behind it; due sends go lowest sequence first |
 | Undo send window (`store.UndoSendDelay`) | `compose.undo_delay_seconds`, 0-120 s, default 10, per account over global | a queued send is not submitted until the deadline; undo before it cancels the row; 0 disables undo, and a hand-edited value is clamped on read |
+| A line in a built outgoing body (`compose.maxWireLine`) | 900 bytes | broken at a space (plain text also at a rune boundary when there is none); enmime sends all-ASCII text as 7bit, so this is what keeps a line under RFC 5322's 998 |
+| Sends listed by `GET /send` (`store.MaxSendListLimit`) | 200, default 50 | a larger `limit` is clamped |
+| A client's send id (`maxSendIDBytes`) | 128 bytes | rejected with 400 `bad_request`; it is the row's primary key |
 | A compose request body (`maxSendBodyBytes`) | `compose.MaxBodyBytes` + 64 KiB | rejected with 400 `bad_request` |
 
 ## 5. Frontend standards

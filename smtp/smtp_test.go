@@ -428,3 +428,25 @@ func TestSubmitAllErrorsAreSendErrors(t *testing.T) {
 		t.Errorf("SendError has no Kind")
 	}
 }
+
+// TestSubmitTransientRecipientRefusalIsRetryable: a 4xx at RCPT (greylisting, a
+// busy server) proves nothing was accepted and says try again, so it is a
+// transient failure. Reporting it as a permanent refusal fails the send for good.
+func TestSubmitTransientRecipientRefusalIsRetryable(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, 0)
+	w.Account("autumn@grove.test", "secret")
+	w.Fault(mailworld.SMTPRejectRcpt{Address: "slow@example.test", Code: 451, Message: "greylisted, try later"})
+	acct := accountFor(t, w, "autumn@grove.test")
+	raw := rawMessage("<smtp-grey-rcpt@example.test>", "slow@example.test")
+	env := smtp.Envelope{From: "autumn@grove.test", To: []string{"slow@example.test"}}
+
+	err := testSubmitter().Submit(t.Context(), acct, env, bytes.NewReader(raw), int64(len(raw)))
+	se := assertKind(t, err, smtp.KindTransient, true)
+	if se.Code != 451 || se.Recipient != "slow@example.test" {
+		t.Errorf("Code, Recipient = %d, %q, want 451 and the address", se.Code, se.Recipient)
+	}
+	if se.Ambiguous {
+		t.Errorf("a refusal before DATA is never ambiguous")
+	}
+}

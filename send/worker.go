@@ -102,6 +102,9 @@ func WithStateFunc(fn func(store.SendMessage)) Option {
 	return func(w *Worker) { w.onState = fn }
 }
 
+// settleTimeout bounds the writes that record an accepted message.
+const settleTimeout = 10 * time.Second
+
 const (
 	defaultSendPoll       = time.Second
 	defaultSendBackoff    = 5 * time.Second
@@ -212,6 +215,10 @@ func (w *Worker) attempt(ctx context.Context, m store.SendMessage) error {
 
 // submitted records the server's 250, then makes sure the Sent copy is queued.
 func (w *Worker) submitted(ctx context.Context, m store.SendMessage) error {
+	// The server has the message, so this bookkeeping must outlive a shutdown that
+	// lands in the window after the 250; it is bounded, not tied to ctx.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), settleTimeout)
+	defer cancel()
 	if err := w.dbs.MarkSendSubmitted(ctx, m.ID, w.now()); err != nil {
 		// The server accepted but the DB write was lost. The row is still
 		// submitting, so recovery marks it unconfirmed; never resend from here.

@@ -124,6 +124,7 @@ func (c *Connector) Connect(ctx context.Context, address, password string, smart
 	if err := c.opts.DBs.SaveAccountConfig(ctx, row); err != nil {
 		return "", err
 	}
+	//nolint:contextcheck // the supervisor owns its workers' lifetime, not this request's context
 	c.opts.Supervisor.Start(acct)
 	return row.ID, nil
 }
@@ -145,6 +146,7 @@ func (c *Connector) UpdatePassword(ctx context.Context, id, password string) err
 	if err := secrets.Write(c.opts.SecretsDir, id, password); err != nil {
 		return fmt.Errorf("store password: %w", err)
 	}
+	//nolint:contextcheck // the supervisor owns its workers' lifetime, not this request's context
 	c.opts.Supervisor.Start(acct)
 	return nil
 }

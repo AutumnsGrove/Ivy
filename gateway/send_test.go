@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -184,7 +185,7 @@ func TestUndoSendBoundary(t *testing.T) {
 	if undone.Draft == nil || !strings.Contains(*undone.Draft, `"subject":"hello"`) {
 		t.Errorf("draft = %v, want the stored request back", undone.Draft)
 	}
-	if _, err := dbs.NextQueuedSend(context.Background(), "acct-1", *now); err != store.ErrNotFound {
+	if _, err := dbs.NextQueuedSend(context.Background(), "acct-1", *now); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("a cancelled send is still queued: %v", err)
 	}
 
@@ -267,5 +268,27 @@ func TestSendListGetAndHint(t *testing.T) {
 	}
 	if one.State != api.SendStateQueued {
 		t.Errorf("state = %q, want queued", one.State)
+	}
+}
+
+// The client id becomes the row's primary key and a URL segment, so it has a
+// documented maximum like every other input (STANDARDS 4a).
+func TestSendRefusesAnOversizedClientID(t *testing.T) {
+	t.Parallel()
+	srv, dbs, _, _ := sendServer(t)
+	long := strings.Repeat("x", maxSendIDBytes+1)
+	var e api.Error
+	if code := postJSON(t, srv.URL+"/api/v1/send", sendRequest(long), &e); code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", code)
+	}
+	if e.Code != "bad_request" {
+		t.Errorf("code = %q, want bad_request", e.Code)
+	}
+	if rows, _ := dbs.SendsByAccount(context.Background(), "", 0); len(rows) != 0 {
+		t.Errorf("%d rows queued for a refused id, want none", len(rows))
+	}
+	ok := strings.Repeat("x", maxSendIDBytes)
+	if code := postJSON(t, srv.URL+"/api/v1/send", sendRequest(ok), nil); code != http.StatusAccepted {
+		t.Errorf("an id at the limit = %d, want 202", code)
 	}
 }

@@ -349,7 +349,8 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   only transport. Every header-bound value is validated (a CR, LF or NUL is rejected, never
   stripped), an outgoing addr-spec must be ASCII because Purelymail has no `SMTPUTF8`, and a display
   name or subject that could be read as an RFC 2047 word is force-encoded. The operator's markdown
-  is the `text/plain` part exactly as typed and goldmark renders the `text/html` part of a
+  is the `text/plain` part as typed (CRLF line breaks, and a line over 900 bytes broken at a
+  space, so a phone-typed paragraph stays under RFC 5322's 998) and goldmark renders the `text/html` part of a
   `multipart/alternative` (raw HTML stays off; links are narrowed to `http`/`https`/`mailto`). `Bcc`
   is an envelope recipient on the wire and a header only on the Sent copy. `smtp.Submit` opens one
   implicit-TLS connection per call, reads `SIZE` from `EHLO`, and returns a `*SendError` whose `Kind`

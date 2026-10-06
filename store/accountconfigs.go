@@ -60,7 +60,7 @@ func (d *DBs) AccountConfigs(ctx context.Context) ([]AccountConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list account configs: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []AccountConfig
 	for rows.Next() {
 		var a AccountConfig

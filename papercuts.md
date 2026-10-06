@@ -1426,3 +1426,120 @@ vector scan time over a real mailbox; the update rollback against a real unhealt
   Writing it turned up one thing to change rather than document: narrowing the published port meant editing the
   tracked `docker-compose.yml`, which the watcher's `git pull` would then trip over, so the bind address is now
   `IVY_BIND` in `.env` (default `0.0.0.0`, unchanged behaviour).
+
+## Review of `d703629..839bf05` (chunk 4a-4c: compose, SMTP, send queue, send API; 2026-10-06)
+
+Baseline at `839bf05`: `go build`, `go vet`, `staticcheck`, `gofumpt -l` clean and `go test -race ./...` green
+(CGO on); nothing was broken before the review began.
+
+### `d08120d` Build outgoing messages in compose
+
+- **#120** · `d08120d` · `compose/header.go`, `compose/compose.go` · **bug** · display names that needed RFC 2047
+  encoding (any non-ASCII name, or an ASCII one that looks like an encoded word) were encoded and then handed to
+  net/mail, which wrapped the encoded words in a quoted-string: `From: "=?utf-8?B?Wm/Dqw==?=" <a@b>`. RFC 2047
+  section 5 forbids an encoded word inside a quoted-string, so a compliant client shows the raw `=?utf-8?B?...`
+  text. The existing test passed because its `parseAddress` helper decodes a quoted name itself, a lenient
+  oracle. Reproduced with `TestBuildEncodedDisplayNamesAreNotQuoted` (net/mail's own parser, no extra decoding;
+  failed before the fix for From, To and Bcc, three names). `compose` now writes From, To, Cc, Reply-To and the
+  Sent copy's Bcc itself (`formatAddress`): ASCII names still go through net/mail, anything else is bare
+  encoded words.
+- **#121** · `d08120d` · `compose/wire.go`, `compose/compose.go` · **bug** · an all-ASCII body is sent by enmime as
+  7bit exactly as given, so the operator's lone LF or CR and any line over 998 bytes reached the wire (a paragraph
+  typed on a phone is one long line) and the Sent copy was written with bare LFs. Non-ASCII bodies were fine
+  (quoted-printable). Reproduced with `TestBuildBodyLinesAreWireSafe`, plain and markdown (failed: bare LF at
+  byte 237; the long line check is behind it). New `wireText` normalises to CRLF and breaks any line over 900
+  bytes at a space (plain text also hard-cuts at a rune boundary when a line has none; HTML only breaks at spaces,
+  so a tag is never split). The markdown test now compares the text part line-ending-insensitively.
+- **#122** · `d08120d` · `compose/header.go` · **bug** · `Validate` accepted a message with no recipients, and `Build`
+  then failed with enmime's bare "no recipients" error instead of a `*ValidationError`, so a caller that maps
+  validation errors to a refusal would see a server fault. Reproduced with `TestNoRecipientsIsAValidationError`
+  (failed for both `Validate` and `Build` before the fix); `validate` now refuses it with field `recipients`.
+
+### `54913ce` Submit mail over implicit TLS in smtp
+
+- **#123** · `54913ce` · `smtp/smtp.go` · **bug** · every failure at `RCPT` became `KindRecipientRefused`, which is
+  permanent: a 4xx (greylisting, "try again") and a dropped connection or timeout during RCPT failed the send
+  for good, though nothing had been accepted and a retry was safe. Reproduced with
+  `TestSubmitTransientRecipientRefusalIsRetryable` (a 451 at RCPT via `SMTPRejectRcpt`; failed: kind
+  `recipient_refused`, not transient). Only a 5xx is a recipient verdict now; anything else goes through
+  `classify` with `Recipient` set.
+- **#124** · `a12971f` · `docs/ARCHITECTURE.md`, `docs/STANDARDS.md` · **standards** · the 4a docs said the text part
+  goes out "exactly as typed" and the 4a limits table had no row for line length; both now describe `wireText`
+  (CRLF, 900-byte lines). `docs/qa-log.md` round 61 keeps its original wording, as a record of the answer.
+
+### `56660d6` Store the send queue in state.db
+
+- **#125** · `56660d6` · `store/sendqueue.go` · **bug** · `EnqueueSend` was idempotent on `(account, message_id)`, but the
+  send handler mints a new Message-ID for every request, so a double tap carrying the same client id never
+  matched and the second insert failed on the primary key: the operator got a 500 for a message that was queued.
+  Reproduced with `TestEnqueueSendIsIdempotentOnTheRowID` (failed with `UNIQUE constraint failed:
+  send_queue.id`). A repeat of the same row id now returns the existing row (`created=false`); an id owned by
+  another account is refused rather than handed back across accounts.
+- **#126** · `56660d6` · `store/sendqueue.go` · **risk** · `RetrySend`, `FailSend`, `MarkSendUnconfirmed`,
+  `MarkSendAppended`, `MarkSendDone` and `SetSendAppendID` updated by id alone, so a late write could move any
+  row anywhere, including reviving a terminal one: a worker that had chosen a row just before the operator undid
+  it would, on its `beforeData` refusal, call `RetrySend` and put the **cancelled** row back to `queued`, and the
+  message the operator took back would be sent (CHUNK4-BRIEF T11). It cannot happen while one clock orders the
+  worker and the undo, but a clock step is enough. Reproduced with `TestSendStateWritesNeverReviveATerminalRow`
+  (all five writes succeeded on a cancelled row, which ended `done`). Every transition now names the states it may
+  leave (`queued`/`submitting` for retry and fail, `submitting` for unconfirmed, `submitted` for appended, done and
+  the append id) and a wrong-state write is `ErrNotFound`. `TestPruneSendQueueRemovesOnlyOldTerminalRows` took a
+  `queued` row straight to `done`; it now walks the real path.
+- **N43 (open, latent)** · `56660d6` · `store/migrations.go` · the partial unique index
+  `idx_send_queue_live_message` (migration 10) excludes `appended`, `done`, `failed` and `unconfirmed` but not
+  `cancelled`, which the code treats as terminal everywhere else. A cancelled row therefore still blocks a new row
+  with the same Message-ID with a constraint error. Nothing reaches it today (every request mints a fresh
+  Message-ID and the client-id repeat is answered earlier), so no migration is added; if stage 4d reuses the
+  Message-ID when a draft is resent after an undo, add migration 12 that recreates the index with `'cancelled'`
+  (migrations are append-only).
+
+### `677fe49` Drain the send queue and file Sent copies
+
+- **#127** · `677fe49` · `send/worker.go` · **risk** · the writes that record an accepted message (`submitting` to
+  `submitted`, the Sent append op) ran under the worker's own context, so a shutdown landing in the few
+  milliseconds after the server's 250 made them fail and left the row `submitting`; the next start then called a
+  message that had in fact been accepted `unconfirmed` and never filed its Sent copy. Reproduced with
+  `TestSendShutdownAfterTheServerAcceptsStillRecordsIt` (the clock hook cancels at the first read after the fake
+  records the message; failed: state `submitting`, no append id). `submitted` now runs under
+  `context.WithoutCancel` bounded by a 10 s `settleTimeout`.
+
+### `839bf05` Add the send API and undo send
+
+- **#128** · `839bf05` · `store/sendqueue.go`, `gateway/send.go` · **standards** · `GET /send?limit=` passed the
+  caller's number straight into `LIMIT`, so `limit=1000000` read every send row with both message bodies and the
+  stored draft (STANDARDS 4a: no unbounded reads). Reproduced with `TestSendsByAccountClampsTheLimit` (a limit of a
+  million returned 205 rows; failed). `SendsByAccount` now clamps to `store.MaxSendListLimit` (200, default 50);
+  the row is in the STANDARDS limits table.
+- **#129** · `839bf05` · `docs/STANDARDS.md` · **standards** · the 4a limits table said a refused outgoing field is
+  "400 `bad_request`"; the handler answers 400 `invalid_message` (and `bad_request` only for a malformed or
+  oversized request). The five compose rows now say `invalid_message`.
+- **N44 (open, measure first)** · `839bf05` · `store/sendqueue.go` · every read of a send row (`GET /send`, `GET
+  /send/{id}`, the worker's `notify`) selects `wire_body`, `sent_body` and `compose_json`, three copies of the
+  message, though the list and status need none of the first two. Today that is at most about 3 MiB a row and 200
+  rows; with attachments (4g) the bodies grow to tens of MiB and the "stream sender-sized data through disk" rule
+  applies. Not changed without a number from the potato: when 4g lands, split the metadata read from the body
+  read (and keep bodies out of the row), then benchmark `GET /send`.
+- **#130** · `839bf05` · `gateway/send.go` · **standards** · the client's idempotency `id`, which becomes the row's
+  primary key and a URL segment, had no maximum (only the 1 MiB body bound it). Reproduced with
+  `TestSendRefusesAnOversizedClientID` (a 129-byte id was accepted with 202; failed). It is now refused with 400
+  `bad_request` above 128 bytes (`maxSendIDBytes`, in the limits table).
+
+### Lint at the CI-pinned version (golangci-lint v2.12.1, `.golangci.yml`)
+
+- **#131** · `839bf05` · `gateway/send_test.go` · **nit** · `err != store.ErrNotFound` (errorlint); now `errors.Is`.
+- **N45 (open, outside this range)** · `84533c5`, `40d5779`, `128e582` · `internal/accountsvc/connector.go:127,148`,
+  `internal/secrets/secrets.go:95`, `store/accountconfigs.go:63` · the pinned linter reports four more findings on
+  `main`, all from commits before `d703629`: `contextcheck` on `Supervisor.Start(acct)` (twice, the supervisor
+  deliberately owns its own context), and `errcheck` on `defer f.Close()` / `defer rows.Close()` (the config
+  excludes `io.Closer` interface calls but not these concrete ones). Decide whether CI is meant to be clean at the
+  pin; the cheap fix is `//nolint:contextcheck // reason` on the two calls and `_ = rows.Close()` style closes.
+- **#132** · `56660d6` · `store/sendqueue.go` · **risk** (operator decision) · `NextQueuedSend` took the lowest-sequence
+  queued row and returned "none" if it was not yet due, so one message in a retry backoff (a greylisted
+  recipient: 5 s doubling to 15 min over up to 8 tries) held every later send for hours. The operator chose
+  independent rows. `TestNextQueuedSendRespectsUndoAndBackoff` was rewritten for the new rule and failed before
+  the change (send-2 was held behind send-1's window); the query now filters on `undo_deadline` and
+  `next_attempt_at` and orders the due rows by sequence. STANDARDS row updated.
+- **N45 resolved** (operator asked for it) · `internal/accountsvc/connector.go`, `internal/secrets/secrets.go`,
+  `store/accountconfigs.go` · the four findings above are fixed: `//nolint:contextcheck` with the reason on both
+  `Supervisor.Start` calls, and explicit discarded closes on the two read-only defers. `golangci-lint run` at
+  v2.12.1 now reports 0 issues.

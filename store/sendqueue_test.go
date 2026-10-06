@@ -99,22 +99,30 @@ func TestNextQueuedSendRespectsUndoAndBackoff(t *testing.T) {
 		t.Fatalf("enqueue second: %v", err)
 	}
 
-	if _, err := dbs.NextQueuedSend(ctx, "acct-1", sendNow); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("next while the undo window is open = %v, want ErrNotFound", err)
+	// A row inside its undo window is not due, but it does not hold back a due row
+	// behind it: one greylisted message must not stall the rest of the outbox.
+	got, err := dbs.NextQueuedSend(ctx, "acct-1", sendNow)
+	if err != nil || got.ID != "send-2" {
+		t.Fatalf("next while send-1's window is open = %+v, %v, want send-2", got.ID, err)
 	}
-	got, err := dbs.NextQueuedSend(ctx, "acct-1", sendNow.Add(11*time.Second))
-	if err != nil {
-		t.Fatalf("next after the window: %v", err)
-	}
-	if got.ID != "send-1" {
-		t.Errorf("next = %s, want send-1 (strict FIFO)", got.ID)
+	// Among due rows the lowest sequence goes first.
+	got, err = dbs.NextQueuedSend(ctx, "acct-1", sendNow.Add(11*time.Second))
+	if err != nil || got.ID != "send-1" {
+		t.Fatalf("next after the window = %+v, %v, want send-1 first", got.ID, err)
 	}
 
 	if err := dbs.RetrySend(ctx, "send-1", "transient", "later", sendNow.Add(time.Minute), sendNow); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
+	got, err = dbs.NextQueuedSend(ctx, "acct-1", sendNow.Add(11*time.Second))
+	if err != nil || got.ID != "send-2" {
+		t.Fatalf("next during send-1's backoff = %+v, %v, want send-2", got.ID, err)
+	}
+	if err := dbs.FailSend(ctx, "send-2", "rejected", "no", sendNow); err != nil {
+		t.Fatalf("fail send-2: %v", err)
+	}
 	if _, err := dbs.NextQueuedSend(ctx, "acct-1", sendNow.Add(11*time.Second)); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("next during the backoff = %v, want ErrNotFound", err)
+		t.Fatalf("next with only a backed-off row = %v, want ErrNotFound", err)
 	}
 }
 
@@ -199,7 +207,14 @@ func TestPruneSendQueueRemovesOnlyOldTerminalRows(t *testing.T) {
 	if _, _, err := dbs.EnqueueSend(ctx, newSend("send-2", "<m2@example.test>")); err != nil {
 		t.Fatalf("enqueue done: %v", err)
 	}
-	if err := dbs.MarkSendDone(ctx, "send-2", "", "", sendNow.Add(-MaxSendTerminalRetention-time.Hour)); err != nil {
+	old := sendNow.Add(-MaxSendTerminalRetention - time.Hour)
+	if err := dbs.SetSendSubmitting(ctx, "send-2", old); err != nil {
+		t.Fatalf("submitting: %v", err)
+	}
+	if err := dbs.MarkSendSubmitted(ctx, "send-2", old); err != nil {
+		t.Fatalf("submitted: %v", err)
+	}
+	if err := dbs.MarkSendDone(ctx, "send-2", "", "", old); err != nil {
 		t.Fatalf("done: %v", err)
 	}
 
@@ -357,5 +372,96 @@ func TestAppendOutboxOpIsIdempotentPerSend(t *testing.T) {
 	}
 	if !created || third.ID != "append-3" {
 		t.Errorf("other send = %+v created=%v, want a new op", third, created)
+	}
+}
+
+// A double tap carries the same client id but the handler mints a new Message-ID
+// for each request, so the repeat must be answered by the row id too. Without
+// that the second enqueue hits the primary key and the operator sees an error
+// for a message that is in fact queued.
+func TestEnqueueSendIsIdempotentOnTheRowID(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	first, _, err := dbs.EnqueueSend(ctx, newSend("send-1", "<m1@example.test>"))
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	again, created, err := dbs.EnqueueSend(ctx, newSend("send-1", "<m2@example.test>"))
+	if err != nil {
+		t.Fatalf("repeat with the same row id = %v, want the existing row", err)
+	}
+	if created || again.MessageID != first.MessageID {
+		t.Errorf("repeat = %+v created=%v, want the first row unchanged", again, created)
+	}
+
+	// The same id on another account is a different send and must not be handed
+	// back across accounts.
+	other := newSend("send-1", "<m3@example.test>")
+	other.AccountID = "acct-2"
+	if _, _, err := dbs.EnqueueSend(ctx, other); err == nil {
+		t.Errorf("a row id used by another account was accepted")
+	}
+}
+
+// The state machine only moves forward: a write that arrives late (a worker that
+// chose a row before the operator undid it) must not revive a terminal row,
+// least of all an undone one, which would send mail the operator took back.
+func TestSendStateWritesNeverReviveATerminalRow(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	undo := newSend("send-1", "<m1@example.test>")
+	undo.UndoDeadline = sendNow.Add(10 * time.Second)
+	if _, _, err := dbs.EnqueueSend(ctx, undo); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if _, err := dbs.CancelSend(ctx, "send-1", sendNow); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	late := sendNow.Add(time.Minute)
+	for name, err := range map[string]error{
+		"retry":       dbs.RetrySend(ctx, "send-1", "timeout", "late", late, late),
+		"fail":        dbs.FailSend(ctx, "send-1", "rejected", "late", late),
+		"unconfirmed": dbs.MarkSendUnconfirmed(ctx, "send-1", "late", late),
+		"appended":    dbs.MarkSendAppended(ctx, "send-1", late),
+		"done":        dbs.MarkSendDone(ctx, "send-1", "", "", late),
+	} {
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("%s on a cancelled row = %v, want ErrNotFound", name, err)
+		}
+	}
+	got, err := dbs.GetSend(ctx, "send-1")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.State != SendCancelled {
+		t.Errorf("state = %q, want cancelled to stay cancelled", got.State)
+	}
+}
+
+// The send list is bounded: a caller-supplied limit above the cap is clamped
+// (STANDARDS 4a, no unbounded reads), and a missing one means the default.
+func TestSendsByAccountClampsTheLimit(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	for i := range MaxSendListLimit + 5 {
+		n := strconv.Itoa(i)
+		m := newSend("send-"+n, "<m"+n+"@example.test>")
+		if _, _, err := dbs.EnqueueSend(ctx, m); err != nil {
+			t.Fatalf("enqueue %d: %v", i, err)
+		}
+	}
+	got, err := dbs.SendsByAccount(ctx, "acct-1", 1_000_000)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got) != MaxSendListLimit {
+		t.Errorf("a limit of a million returned %d rows, want the cap of %d", len(got), MaxSendListLimit)
+	}
+	if got, _ := dbs.SendsByAccount(ctx, "acct-1", 0); len(got) != DefaultSendListLimit {
+		t.Errorf("no limit returned %d rows, want the default %d", len(got), DefaultSendListLimit)
 	}
 }
