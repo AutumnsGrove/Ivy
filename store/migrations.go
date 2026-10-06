@@ -796,6 +796,28 @@ var stateMigrations = []migration{
 			`ALTER TABLE send_queue ADD COLUMN draft_remove_id TEXT NOT NULL DEFAULT ''`,
 		},
 	},
+	{
+		version: 14,
+		statements: []string{
+			// One address an account may send as, with its display name and
+			// signature (4e). It is locally owned state (CLAUDE.md rule 5), so it is
+			// backed up and survives a mirror rebuild; the account's own address is
+			// merged on read as a synthetic primary rather than seeded here, because
+			// accounts live in the rebuildable mirror. The address is unique per
+			// account case-insensitively, so re-adding it in another case edits the
+			// same identity (identities.go).
+			`CREATE TABLE identities (
+				id           TEXT PRIMARY KEY,
+				account_id   TEXT NOT NULL,
+				address      TEXT NOT NULL,
+				display_name TEXT NOT NULL DEFAULT '',
+				signature    TEXT NOT NULL DEFAULT '',
+				created_at   TEXT NOT NULL,
+				updated_at   TEXT NOT NULL
+			)`,
+			`CREATE UNIQUE INDEX idx_identities_account_address ON identities(account_id, address COLLATE NOCASE)`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state
