@@ -11,8 +11,12 @@ import type {
 	CallRecord,
 	Check,
 	CheckDetail,
+	ComposePrefill,
 	FolderView,
 	HealthOverview,
+	Identity,
+	IdentityInput,
+	IdentityList,
 	Inbox,
 	MailMessage,
 	MailSummary,
@@ -170,6 +174,32 @@ export const api = {
 
 	clearAccountPhoto: (id: string): Promise<Account> =>
 		request<Account>(`/accounts/${encodeURIComponent(id)}/photo`, { method: 'DELETE' }),
+
+	// --- send identities (4e): the addresses an account may send as ----------
+	/** The stored identities plus the account's own address as a synthetic primary. */
+	listIdentities: (accountId: string): Promise<IdentityList> =>
+		request<IdentityList>(`/accounts/${encodeURIComponent(accountId)}/identities`),
+
+	/** Create or edit an identity by address; editing the primary is the same call. */
+	saveIdentity: (accountId: string, identity: IdentityInput): Promise<Identity> =>
+		request<Identity>(`/accounts/${encodeURIComponent(accountId)}/identities`, {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(identity)
+		}),
+
+	deleteIdentity: (accountId: string, identityId: string): Promise<void> =>
+		request<void>(`/accounts/${encodeURIComponent(accountId)}/identities/${encodeURIComponent(identityId)}`, {
+			method: 'DELETE'
+		}),
+
+	/** The recipients, subject and body a reply starts from, computed server-side. */
+	replyPrefill: (id: string, all = false): Promise<ComposePrefill> =>
+		request<ComposePrefill>(apiPath(`/messages/${encodeURIComponent(id)}/reply`, all ? { all: 'true' } : {})),
+
+	/** The recipients, subject and body a forward starts from. */
+	forwardPrefill: (id: string): Promise<ComposePrefill> =>
+		request<ComposePrefill>(`/messages/${encodeURIComponent(id)}/forward`),
 
 	// --- still mock-backed until their chunks land ---------------------------
 	getSettings: (): Promise<Settings> => Promise.resolve(readSettings()),

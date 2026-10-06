@@ -67,3 +67,37 @@ test.describe('account customization', () => {
 		expect(puts).toBe(0);
 	});
 });
+
+test.describe('send identities', () => {
+	test('the account address is primary and cannot be removed', async ({ page }) => {
+		await page.goto('/settings/account/a1');
+		const row = page.locator('.row', { hasText: 'me@example.com' });
+		await expect(row.getByText('Primary')).toBeVisible();
+		await expect(row.getByRole('button', { name: /^Remove/ })).toHaveCount(0);
+	});
+
+	test('an alias with a signature is added, edited and removed', async ({ page }) => {
+		await page.goto('/settings/account/a1');
+		await page.getByRole('button', { name: 'Add an address' }).click();
+		const add = page.getByRole('group', { name: 'Add an address' });
+		await add.getByLabel('Address', { exact: true }).fill('hello@example.com');
+		await add.getByLabel('Name').fill('Autumn Grove');
+		await add.getByLabel('Signature').fill('— Autumn');
+		await page.getByRole('button', { name: 'Save address' }).click();
+		await expect(toast(page, 'Address saved')).toBeVisible();
+
+		const row = page.locator('.row', { hasText: 'hello@example.com' });
+		await expect(row).toBeVisible();
+		await expect(row.getByText('Autumn Grove')).toBeVisible();
+
+		await row.getByRole('button', { name: 'Edit' }).click();
+		const edit = page.getByRole('group', { name: 'Edit address' });
+		await edit.getByLabel('Name').fill('Mara keeps this');
+		await page.getByRole('button', { name: 'Save address' }).click();
+		await expect(row.getByText('Mara keeps this')).toBeVisible();
+
+		await row.getByRole('button', { name: 'Remove hello@example.com' }).click();
+		await expect(toast(page, 'Address removed')).toBeVisible();
+		await expect(page.locator('.row', { hasText: 'hello@example.com' })).toHaveCount(0);
+	});
+});

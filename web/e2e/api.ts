@@ -1,6 +1,6 @@
 import { test as base } from '@playwright/test';
 import * as mock from '../src/lib/api/mock';
-import type { Account, Attachment, MailMessage, MailSummary, OutboxItem, TagsOverview, UpdateStatus, UserTag } from '../src/lib/types';
+import type { Account, Attachment, Identity, MailMessage, MailSummary, OutboxItem, TagsOverview, UpdateStatus, UserTag } from '../src/lib/types';
 
 // The reader client does real fetches, so the mock E2E suite serves the
 // contract from the same fixtures at the network boundary instead of inside
@@ -27,6 +27,8 @@ export type AccountState = {
 	photos: Map<string, { type: string; bytes: Buffer }>;
 	outbox: OutboxItem[];
 	tags: TagsOverview;
+	/** The send identities each account may use, beyond the synthetic primary. */
+	identities: Identity[];
 	/** The tags each message is in, by message id, as the gateway's `tagIds` reports them. */
 	tagged: Map<string, string[]>;
 	/** The self-update status the settings screen reads. */
@@ -38,6 +40,7 @@ const freshState = (): AccountState => ({
 	photos: new Map(),
 	outbox: [],
 	tags: structuredClone(mock.tags),
+	identities: [],
 	tagged: new Map(),
 	update: { unavailable: false, running: false, done: true, success: true, target: 'r1.test' }
 });
@@ -201,6 +204,66 @@ function updateProfile(state: AccountState, id: string, body: { displayName?: st
 		account.icon = body.icon.trim();
 	}
 	return { body: account };
+}
+
+/** The gateway's identities endpoints over mutable fixtures: list, upsert, delete. */
+function identityReply(state: AccountState, path: string, method: string, raw: Buffer | null): Reply | null {
+	const list = /^\/accounts\/([^/]+)\/identities$/.exec(path);
+	if (list) {
+		const account = state.accounts.find((a) => a.id === list[1]);
+		if (!account) return notFound('No such account');
+		if (method === 'GET') {
+			const stored = state.identities.filter((i) => i.accountId === account.id);
+			const primary = stored.some((i) => i.address.toLowerCase() === account.address.toLowerCase());
+			const merged = primary
+				? stored
+				: [
+						{ id: '', accountId: account.id, address: account.address, name: account.name, signature: '', primary: true } as Identity,
+						...stored
+					];
+			return { body: { identities: merged } };
+		}
+		if (method !== 'PUT' || !raw) return null;
+		const b = jsonBody(raw);
+		const address = typeof b?.address === 'string' ? b.address.trim() : '';
+		if (!address || !address.includes('@') || /[\s\r\n\x00]/.test(address)) {
+			return badRequest('That is not a plain email address Ivy can send as');
+		}
+		const name = typeof b?.name === 'string' ? b.name.trim() : '';
+		const signature = typeof b?.signature === 'string' ? b.signature : '';
+		const existing = state.identities.find(
+			(i) => i.accountId === account.id && i.address.toLowerCase() === address.toLowerCase()
+		);
+		if (existing) {
+			existing.address = address;
+			existing.name = name;
+			existing.signature = signature;
+			return { body: existing };
+		}
+		const created = {
+			id: `id${state.identities.length + 1}`,
+			accountId: account.id,
+			address,
+			name,
+			signature,
+			primary: address.toLowerCase() === account.address.toLowerCase()
+		} as Identity;
+		state.identities = [...state.identities, created];
+		return { body: created };
+	}
+	const del = /^\/accounts\/([^/]+)\/identities\/([^/]+)$/.exec(path);
+	if (del && method === 'DELETE') {
+		const account = state.accounts.find((a) => a.id === del[1]);
+		if (!account) return notFound('No such account');
+		const item = state.identities.find((i) => i.id === del[2] && i.accountId === account.id);
+		if (!item) return notFound('No such identity');
+		if (item.address.toLowerCase() === account.address.toLowerCase()) {
+			return { status: 409, body: { code: 'primary_identity', message: "The account's own address cannot be removed" } };
+		}
+		state.identities = state.identities.filter((i) => i !== item);
+		return { status: 204, body: null };
+	}
+	return null;
 }
 
 const MOVE_DEST: Record<string, string> = {
@@ -399,6 +462,9 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 			return badRequest('That request is not valid');
 		}
 	}
+
+	const identities = identityReply(state, path, method, raw);
+	if (identities) return identities;
 
 	const outboxMatch = /^\/outbox\/([^/]+)(\/retry)?$/.exec(path);
 	if (outboxMatch) {

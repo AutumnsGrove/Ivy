@@ -9,10 +9,12 @@
 	import Field from '#lib/components/ui/Field.svelte';
 	import Glass from '#lib/components/ui/Glass.svelte';
 	import Group from '#lib/components/ui/Group.svelte';
+	import IconButton from '#lib/components/ui/IconButton.svelte';
 	import ListRow from '#lib/components/ui/ListRow.svelte';
 	import TopBar from '#lib/components/ui/TopBar.svelte';
 	import { PhotoError, squarePhoto } from '#lib/photo.js';
 	import { toasts } from '#lib/toast.js';
+	import type { Identity } from '#lib/types.js';
 
 	let { data } = $props();
 
@@ -25,6 +27,10 @@
 		icon = data.account.icon;
 	});
 	let busy = $state(false);
+	// The identity form: null closed, otherwise the draft being edited. `existing`
+	// locks the address, because the store keys an identity by its address.
+	type IdentityDraft = { address: string; name: string; signature: string; existing: boolean };
+	let editing = $state<IdentityDraft | null>(null);
 	// The photo URL is stable, so a bump forces the preview past its cached bytes.
 	let photoNonce = $state(0);
 	// The server bounds the icon at 16 runes; these are all one grapheme.
@@ -77,6 +83,51 @@
 			await invalidateAll();
 		} catch (err) {
 			report(err, 'Could not remove the photo');
+		} finally {
+			busy = false;
+		}
+	}
+
+	function startAdd() {
+		editing = { address: '', name: '', signature: '', existing: false };
+	}
+
+	function startEdit(id: Identity) {
+		editing = { address: id.address, name: id.name, signature: id.signature, existing: true };
+	}
+
+	async function saveIdentity() {
+		if (!editing) return;
+		const address = editing.address.trim();
+		if (!address) {
+			toasts.push({ text: 'An address is needed', tone: 'danger' });
+			return;
+		}
+		busy = true;
+		try {
+			await api.saveIdentity(data.account.id, {
+				address,
+				name: editing.name.trim() || undefined,
+				signature: editing.signature || undefined
+			});
+			editing = null;
+			toasts.push({ text: 'Address saved', tone: 'ok' });
+			await invalidateAll();
+		} catch (err) {
+			report(err, 'Could not save that address');
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function removeIdentity(id: Identity) {
+		busy = true;
+		try {
+			await api.deleteIdentity(data.account.id, id.id);
+			toasts.push({ text: 'Address removed', tone: 'ok' });
+			await invalidateAll();
+		} catch (err) {
+			report(err, 'Could not remove that address');
 		} finally {
 			busy = false;
 		}
@@ -137,6 +188,54 @@
 			{/snippet}
 		</ListRow>
 	</Group>
+
+	<Group label="Send as" note="Every address this account can send from; each has its own name and signature.">
+		{#each data.identities as id (id.address)}
+			<ListRow tall>
+				<span class="idrow">
+					<span class="idadr">{id.address}{#if id.primary}<span class="badge">Primary</span>{/if}</span>
+					{#if id.name}<span class="idsub">{id.name}</span>{/if}
+					{#if id.signature}<span class="idsig">{id.signature}</span>{/if}
+				</span>
+				{#snippet trailing()}
+					<div class="idacts">
+						<Button size="sm" variant="tonal" onclick={() => startEdit(id)}>Edit</Button>
+						{#if !id.primary}
+							<IconButton label="Remove {id.address}" onclick={() => removeIdentity(id)}><Trash2 /></IconButton>
+						{/if}
+					</div>
+				{/snippet}
+			</ListRow>
+		{/each}
+		{#if !editing}
+			<div class="idadd">
+				<Button size="sm" onclick={startAdd}>Add an address</Button>
+			</div>
+		{/if}
+	</Group>
+
+	{#if editing}
+		<Group label={editing.existing ? 'Edit address' : 'Add an address'}>
+			{#if editing.existing}
+				<div class="idfixed">{editing.address}</div>
+			{:else}
+				<div class="f">
+					<Field label="Address" bind:value={editing.address} type="email" placeholder="hello@example.com" />
+				</div>
+			{/if}
+			<div class="f">
+				<Field label="Name" bind:value={editing.name} placeholder={editing.address || 'Your name'} />
+			</div>
+			<div class="sigfield">
+				<label for="idsig">Signature</label>
+				<textarea id="idsig" bind:value={editing.signature} placeholder="— Autumn"></textarea>
+			</div>
+			<div class="idactions">
+				<Button variant="primary" disabled={busy} onclick={saveIdentity}><Check />Save address</Button>
+				<Button variant="tonal" onclick={() => (editing = null)}>Cancel</Button>
+			</div>
+		</Group>
+	{/if}
 
 	<div class="cta">
 		<Button variant="primary" size="xl" block disabled={busy} onclick={save}><Check />Save changes</Button>
@@ -218,6 +317,72 @@
 	}
 	.cta {
 		margin-top: var(--sp-24);
+	}
+	.idrow {
+		display: flex;
+		flex-direction: column;
+		gap: var(--sp-3);
+		min-width: 0;
+	}
+	.idadr {
+		font-weight: 500;
+		overflow-wrap: anywhere;
+	}
+	.badge {
+		margin-left: var(--sp-8);
+		padding: 0 var(--sp-8);
+		border-radius: var(--sp-10);
+		border: 1px solid var(--glass-border);
+		font-size: var(--fs-note);
+		color: var(--muted);
+	}
+	.idsub {
+		font-size: var(--fs-small);
+		color: var(--muted);
+	}
+	.idsig {
+		font-size: var(--fs-note);
+		color: var(--faint);
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+	.idacts {
+		display: flex;
+		align-items: center;
+		gap: var(--sp-8);
+	}
+	.idadd {
+		padding: var(--sp-12) 0;
+	}
+	.idfixed {
+		padding: var(--sp-8) 0;
+		color: var(--muted);
+		overflow-wrap: anywhere;
+	}
+	.sigfield {
+		margin: var(--sp-16) 0;
+	}
+	.sigfield label {
+		display: block;
+		margin: 0 var(--sp-4) var(--sp-6);
+		font: 500 var(--fs-note) var(--font-ui);
+		color: var(--muted);
+	}
+	.sigfield textarea {
+		width: 100%;
+		min-height: var(--sp-84);
+		padding: var(--sp-12) var(--sp-16);
+		border-radius: var(--sp-16);
+		border: 1px solid var(--glass-border);
+		background: var(--glass);
+		color: var(--text);
+		font: 400 var(--fs-input) var(--font-ui);
+		resize: vertical;
+	}
+	.idactions {
+		display: flex;
+		gap: var(--sp-8);
+		padding-bottom: var(--sp-8);
 	}
 	.end {
 		height: var(--sp-40);
