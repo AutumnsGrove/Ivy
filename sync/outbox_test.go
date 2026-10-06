@@ -2,6 +2,7 @@ package sync_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -386,5 +387,132 @@ func TestSyncDefersToAPendingFlag(t *testing.T) {
 	m := mustMessage(t, fx.dbs, inbox.ID, 1)
 	if hasStringFlag(m.Flags, `\Flagged`) {
 		t.Errorf("sync overwrote a row owned by a pending flag op: flags = %v", m.Flags)
+	}
+}
+
+// appendFixture adds a Sent folder and a send row an append op targets.
+type appendFixture struct {
+	*outboxFixture
+	sent store.Folder
+	send store.SendMessage
+	op   store.OutboxOp
+}
+
+func newAppendFixture(t *testing.T) *appendFixture {
+	t.Helper()
+	fx := newOutboxFixture(t)
+	if err := fx.acc.CreateMailbox("Sent"); err != nil {
+		t.Fatalf("create Sent: %v", err)
+	}
+	fx.fetch(t)
+	sent := mustFolder(t, fx.dbs, fx.acct.ID, "Sent")
+	if sent.Role != store.RoleSent {
+		t.Fatalf("Sent role = %q, want sent", sent.Role)
+	}
+	return &appendFixture{outboxFixture: fx, sent: sent}
+}
+
+// queue enqueues one send and its Sent append op, both keyed on the same content
+// key and Message-ID.
+func (a *appendFixture) queue(t *testing.T, id string) {
+	t.Helper()
+	msgID := "<sent-" + id + "@example.test>"
+	body := mailworld.Msg().From("me@grove.test").To("you@example.test").
+		Subject("hi").MessageID(msgID).Text("hello").Build()
+	send, _, err := a.dbs.EnqueueSend(a.ctx, store.SendMessage{
+		ID: id, AccountID: a.acct.ID, MessageID: msgID,
+		ContentKey: store.ContentKey(msgID, nil), EnvelopeFrom: "me@grove.test",
+		Recipients: []string{"you@example.test"}, WireBody: body, SentBody: body,
+		CreatedAt: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("enqueue send: %v", err)
+	}
+	a.send = send
+	a.op = a.enqueue(t, store.OutboxOp{
+		ID: id + "-append", Kind: store.OutboxAppend,
+		ContentKey: send.ContentKey,
+		Expect:     store.OutboxExpect{DestFolderID: a.sent.ID, FlagsAdd: []string{`\Seen`}, SendID: send.ID},
+	})
+}
+
+// TestOutboxAppendFilesTheSentCopyOnce is the Sent copy path: the body from the
+// send queue is APPENDed with \Seen, the op is done, and a second pass files
+// nothing more.
+func TestOutboxAppendFilesTheSentCopyOnce(t *testing.T) {
+	t.Parallel()
+	af := newAppendFixture(t)
+	af.queue(t, "send-1")
+	af.run(t)
+
+	got, err := af.dbs.GetOutbox(af.ctx, af.op.ID)
+	if err != nil {
+		t.Fatalf("get op: %v", err)
+	}
+	if got.State != store.OutboxDone {
+		t.Fatalf("op state = %q, want done", got.State)
+	}
+	msgs, err := af.acc.Messages("Sent")
+	if err != nil {
+		t.Fatalf("read Sent: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("Sent has %d messages, want 1", len(msgs))
+	}
+	if msgs[0].MessageID != af.send.MessageID {
+		t.Errorf("filed Message-ID = %q, want %q", msgs[0].MessageID, af.send.MessageID)
+	}
+	if !slices.Contains(msgs[0].Flags, imap.FlagSeen) {
+		t.Errorf("filed copy flags = %v, want \\Seen", msgs[0].Flags)
+	}
+
+	af.run(t)
+	msgs, _ = af.acc.Messages("Sent")
+	if len(msgs) != 1 {
+		t.Errorf("a second pass filed a duplicate: %d messages in Sent", len(msgs))
+	}
+}
+
+// TestOutboxAppendSkipsWhenAlreadyFiled is the lost-acknowledgement case: a copy
+// is already in Sent, so the op finishes without a second APPEND.
+func TestOutboxAppendSkipsWhenAlreadyFiled(t *testing.T) {
+	t.Parallel()
+	af := newAppendFixture(t)
+	af.queue(t, "send-1")
+	if _, err := af.acc.Append("Sent", mailworld.Msg().From("me@grove.test").To("you@example.test").
+		Subject("hi").MessageID(af.send.MessageID).Text("hello").Build()); err != nil {
+		t.Fatalf("pre-file: %v", err)
+	}
+
+	af.run(t)
+	msgs, _ := af.acc.Messages("Sent")
+	if len(msgs) != 1 {
+		t.Errorf("Sent has %d messages, want the pre-filed one only", len(msgs))
+	}
+	if got, _ := af.dbs.GetOutbox(af.ctx, af.op.ID); got.State != store.OutboxDone {
+		t.Errorf("op state = %q, want done", got.State)
+	}
+}
+
+// TestOutboxAppendRecoversAfterInFlight proves a crash mid-APPEND is decided by
+// asking the folder: absent means requeue-and-append, and the copy lands once.
+func TestOutboxAppendRecoversAfterInFlight(t *testing.T) {
+	t.Parallel()
+	af := newAppendFixture(t)
+	af.queue(t, "send-1")
+	if err := af.dbs.SetOutboxInFlight(af.ctx, af.op.ID, 0, 0, time.Now()); err != nil {
+		t.Fatalf("set in flight: %v", err)
+	}
+
+	af.run(t)
+	msgs, err := af.acc.Messages("Sent")
+	if err != nil {
+		t.Fatalf("read Sent: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("Sent has %d messages after recovery, want 1", len(msgs))
+	}
+	if got, _ := af.dbs.GetOutbox(af.ctx, af.op.ID); got.State != store.OutboxDone {
+		t.Errorf("op state = %q, want done", got.State)
 	}
 }

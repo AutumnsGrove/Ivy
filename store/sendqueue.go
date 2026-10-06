@@ -401,6 +401,30 @@ func (d *DBs) PruneSendQueue(ctx context.Context, now time.Time) (int, error) {
 	return int(n), nil
 }
 
+// SendBody is the material an append op files: the account, the Message-ID the
+// idempotency search uses, and the bytes (the Sent copy, Bcc kept).
+type SendBody struct {
+	AccountID string
+	MessageID string
+	Body      []byte
+}
+
+// SendBodyForAppend returns the copy a send's append op should file. A missing
+// row is ErrNotFound; the op then fails rather than appending nothing.
+func (d *DBs) SendBodyForAppend(ctx context.Context, sendID string) (SendBody, error) {
+	var b SendBody
+	err := d.State.Read.QueryRowContext(ctx,
+		`SELECT account_id, message_id, sent_body FROM send_queue WHERE id = ?`, sendID).
+		Scan(&b.AccountID, &b.MessageID, &b.Body)
+	if errors.Is(err, sql.ErrNoRows) {
+		return SendBody{}, ErrNotFound
+	}
+	if err != nil {
+		return SendBody{}, fmt.Errorf("send body for append %s: %w", sendID, err)
+	}
+	return b, nil
+}
+
 // updateSend runs a fixed single-row UPDATE and reports an unknown or
 // wrong-state id as ErrNotFound.
 func (d *DBs) updateSend(ctx context.Context, query string, args ...any) error {

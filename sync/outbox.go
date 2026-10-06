@@ -231,6 +231,11 @@ func (w *OutboxWorker) process(ctx context.Context, op store.OutboxOp) error {
 			return w.recoverExpunge(ctx, c, op)
 		}
 		return w.dispatchExpunge(ctx, c, op)
+	case store.OutboxAppend:
+		if op.State == store.OutboxInFlight {
+			return w.recoverAppend(ctx, c, op)
+		}
+		return w.dispatchAppend(ctx, c, op)
 	default:
 		return w.fail(ctx, op, "unknown_kind", fmt.Sprintf("unknown op kind %q", op.Kind))
 	}
@@ -404,6 +409,90 @@ func (w *OutboxWorker) dispatchExpunge(ctx context.Context, c *session, op store
 		return err
 	}
 	return w.finishExpunge(ctx, op, rowID)
+}
+
+// dispatchAppend files a copy from the send queue into a folder (the Sent copy).
+// It never files twice: the destination is searched by Message-ID first, so a
+// retried enqueue or a lost acknowledgement cannot create a duplicate. Unlike
+// the mail ops it has no source message; the send row is its payload.
+func (w *OutboxWorker) dispatchAppend(ctx context.Context, c *session, op store.OutboxOp) error {
+	dst, ok, err := w.folder(ctx, op.Expect.DestFolderID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return w.fail(ctx, op, "message_gone", "the destination folder is gone")
+	}
+	ref, err := w.fetcher.dbs.SendBodyForAppend(ctx, op.Expect.SendID)
+	if errors.Is(err, store.ErrNotFound) {
+		return w.fail(ctx, op, "send_gone", "the unsent message is gone")
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := w.selectFolder(c, dst.Name); err != nil {
+		return w.serverError(ctx, op, err)
+	}
+	if _, found, err := w.searchMessageID(c, ref.MessageID); err != nil {
+		return w.serverError(ctx, op, err)
+	} else if found {
+		return w.done(ctx, op)
+	}
+	// In-flight before the APPEND: a crash is then recovered by the search above,
+	// where finding the Message-ID proves the append applied.
+	if err := w.fetcher.dbs.SetOutboxInFlight(ctx, op.ID, 0, 0, w.fetcher.now()); err != nil {
+		return err
+	}
+	w.notify(ctx, op.ID)
+	if err := w.appendMessage(c, dst.Name, ref.Body, op.Expect.FlagsAdd); err != nil {
+		return w.serverError(ctx, op, err)
+	}
+	if err := w.afterAckCrash(op); err != nil {
+		return err
+	}
+	return w.done(ctx, op)
+}
+
+// recoverAppend decides whether a possibly-sent APPEND applied. It cannot know
+// from the wire, so it asks the folder: present means done, absent means the
+// append never landed and is safe to re-issue.
+func (w *OutboxWorker) recoverAppend(ctx context.Context, c *session, op store.OutboxOp) error {
+	dst, ok, err := w.folder(ctx, op.Expect.DestFolderID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return w.fail(ctx, op, "message_gone", "the destination folder is gone")
+	}
+	ref, err := w.fetcher.dbs.SendBodyForAppend(ctx, op.Expect.SendID)
+	if errors.Is(err, store.ErrNotFound) {
+		return w.fail(ctx, op, "send_gone", "the unsent message is gone")
+	}
+	if err != nil {
+		return err
+	}
+	found, err := w.folderHasMessageID(c, dst.Name, ref.MessageID)
+	if err != nil {
+		return w.serverError(ctx, op, err)
+	}
+	if found {
+		return w.done(ctx, op)
+	}
+	return w.requeue(ctx, op)
+}
+
+func (w *OutboxWorker) appendMessage(c *session, folder string, body []byte, flags []string) error {
+	defer c.watch()()
+	cmd := c.Append(folder, int64(len(body)), &imap.AppendOptions{Flags: imapFlags(flags)})
+	if _, err := cmd.Write(body); err != nil {
+		_ = cmd.Close()
+		return err
+	}
+	if err := cmd.Close(); err != nil {
+		return err
+	}
+	_, err := cmd.Wait()
+	return err
 }
 
 // locate resolves the UID an op acts on. For a pending op it searches the
