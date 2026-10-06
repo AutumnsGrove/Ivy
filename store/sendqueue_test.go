@@ -199,7 +199,14 @@ func TestPruneSendQueueRemovesOnlyOldTerminalRows(t *testing.T) {
 	if _, _, err := dbs.EnqueueSend(ctx, newSend("send-2", "<m2@example.test>")); err != nil {
 		t.Fatalf("enqueue done: %v", err)
 	}
-	if err := dbs.MarkSendDone(ctx, "send-2", "", "", sendNow.Add(-MaxSendTerminalRetention-time.Hour)); err != nil {
+	old := sendNow.Add(-MaxSendTerminalRetention - time.Hour)
+	if err := dbs.SetSendSubmitting(ctx, "send-2", old); err != nil {
+		t.Fatalf("submitting: %v", err)
+	}
+	if err := dbs.MarkSendSubmitted(ctx, "send-2", old); err != nil {
+		t.Fatalf("submitted: %v", err)
+	}
+	if err := dbs.MarkSendDone(ctx, "send-2", "", "", old); err != nil {
 		t.Fatalf("done: %v", err)
 	}
 
@@ -357,5 +364,71 @@ func TestAppendOutboxOpIsIdempotentPerSend(t *testing.T) {
 	}
 	if !created || third.ID != "append-3" {
 		t.Errorf("other send = %+v created=%v, want a new op", third, created)
+	}
+}
+
+// A double tap carries the same client id but the handler mints a new Message-ID
+// for each request, so the repeat must be answered by the row id too. Without
+// that the second enqueue hits the primary key and the operator sees an error
+// for a message that is in fact queued.
+func TestEnqueueSendIsIdempotentOnTheRowID(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	first, _, err := dbs.EnqueueSend(ctx, newSend("send-1", "<m1@example.test>"))
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	again, created, err := dbs.EnqueueSend(ctx, newSend("send-1", "<m2@example.test>"))
+	if err != nil {
+		t.Fatalf("repeat with the same row id = %v, want the existing row", err)
+	}
+	if created || again.MessageID != first.MessageID {
+		t.Errorf("repeat = %+v created=%v, want the first row unchanged", again, created)
+	}
+
+	// The same id on another account is a different send and must not be handed
+	// back across accounts.
+	other := newSend("send-1", "<m3@example.test>")
+	other.AccountID = "acct-2"
+	if _, _, err := dbs.EnqueueSend(ctx, other); err == nil {
+		t.Errorf("a row id used by another account was accepted")
+	}
+}
+
+// The state machine only moves forward: a write that arrives late (a worker that
+// chose a row before the operator undid it) must not revive a terminal row,
+// least of all an undone one, which would send mail the operator took back.
+func TestSendStateWritesNeverReviveATerminalRow(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	undo := newSend("send-1", "<m1@example.test>")
+	undo.UndoDeadline = sendNow.Add(10 * time.Second)
+	if _, _, err := dbs.EnqueueSend(ctx, undo); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if _, err := dbs.CancelSend(ctx, "send-1", sendNow); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	late := sendNow.Add(time.Minute)
+	for name, err := range map[string]error{
+		"retry":       dbs.RetrySend(ctx, "send-1", "timeout", "late", late, late),
+		"fail":        dbs.FailSend(ctx, "send-1", "rejected", "late", late),
+		"unconfirmed": dbs.MarkSendUnconfirmed(ctx, "send-1", "late", late),
+		"appended":    dbs.MarkSendAppended(ctx, "send-1", late),
+		"done":        dbs.MarkSendDone(ctx, "send-1", "", "", late),
+	} {
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("%s on a cancelled row = %v, want ErrNotFound", name, err)
+		}
+	}
+	got, err := dbs.GetSend(ctx, "send-1")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.State != SendCancelled {
+		t.Errorf("state = %q, want cancelled to stay cancelled", got.State)
 	}
 }

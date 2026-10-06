@@ -1466,3 +1466,29 @@ Baseline at `839bf05`: `go build`, `go vet`, `staticcheck`, `gofumpt -l` clean a
 - **#124** · `a12971f` · `docs/ARCHITECTURE.md`, `docs/STANDARDS.md` · **standards** · the 4a docs said the text part
   goes out "exactly as typed" and the 4a limits table had no row for line length; both now describe `wireText`
   (CRLF, 900-byte lines). `docs/qa-log.md` round 61 keeps its original wording, as a record of the answer.
+
+### `56660d6` Store the send queue in state.db
+
+- **#125** · `56660d6` · `store/sendqueue.go` · **bug** · `EnqueueSend` was idempotent on `(account, message_id)`, but the
+  send handler mints a new Message-ID for every request, so a double tap carrying the same client id never
+  matched and the second insert failed on the primary key: the operator got a 500 for a message that was queued.
+  Reproduced with `TestEnqueueSendIsIdempotentOnTheRowID` (failed with `UNIQUE constraint failed:
+  send_queue.id`). A repeat of the same row id now returns the existing row (`created=false`); an id owned by
+  another account is refused rather than handed back across accounts.
+- **#126** · `56660d6` · `store/sendqueue.go` · **risk** · `RetrySend`, `FailSend`, `MarkSendUnconfirmed`,
+  `MarkSendAppended`, `MarkSendDone` and `SetSendAppendID` updated by id alone, so a late write could move any
+  row anywhere, including reviving a terminal one: a worker that had chosen a row just before the operator undid
+  it would, on its `beforeData` refusal, call `RetrySend` and put the **cancelled** row back to `queued`, and the
+  message the operator took back would be sent (CHUNK4-BRIEF T11). It cannot happen while one clock orders the
+  worker and the undo, but a clock step is enough. Reproduced with `TestSendStateWritesNeverReviveATerminalRow`
+  (all five writes succeeded on a cancelled row, which ended `done`). Every transition now names the states it may
+  leave (`queued`/`submitting` for retry and fail, `submitting` for unconfirmed, `submitted` for appended, done and
+  the append id) and a wrong-state write is `ErrNotFound`. `TestPruneSendQueueRemovesOnlyOldTerminalRows` took a
+  `queued` row straight to `done`; it now walks the real path.
+- **N43 (open, latent)** · `56660d6` · `store/migrations.go` · the partial unique index
+  `idx_send_queue_live_message` (migration 10) excludes `appended`, `done`, `failed` and `unconfirmed` but not
+  `cancelled`, which the code treats as terminal everywhere else. A cancelled row therefore still blocks a new row
+  with the same Message-ID with a constraint error. Nothing reaches it today (every request mints a fresh
+  Message-ID and the client-id repeat is answered earlier), so no migration is added; if stage 4d reuses the
+  Message-ID when a draft is resent after an undo, add migration 12 that recreates the index with `'cancelled'`
+  (migrations are append-only).

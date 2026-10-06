@@ -177,6 +177,19 @@ func (d *DBs) EnqueueSend(ctx context.Context, m SendMessage) (SendMessage, bool
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// A repeat of the same row id is the same send: the handler mints a new
+	// Message-ID for every request, so the id is what a double tap shares.
+	byID, err := scanSend(tx.QueryRowContext(ctx, sendSelect+` WHERE id = ?`, m.ID))
+	switch {
+	case err == nil:
+		if byID.AccountID != m.AccountID {
+			return SendMessage{}, false, fmt.Errorf("enqueue send: id %s belongs to another account", m.ID)
+		}
+		return byID, false, tx.Commit()
+	case !errors.Is(err, sql.ErrNoRows):
+		return SendMessage{}, false, fmt.Errorf("enqueue send: %w", err)
+	}
+
 	// A repeat of a live send is the same send, answered before the cap so a
 	// double tap never reads as "queue full".
 	existing, err := liveSendByMessage(ctx, tx, m.AccountID, m.MessageID)
@@ -334,8 +347,8 @@ func (d *DBs) MarkSendSubmitted(ctx context.Context, id string, now time.Time) e
 // and this write is healed by recovery, which enqueues the idempotent append op.
 func (d *DBs) SetSendAppendID(ctx context.Context, id, appendID string, now time.Time) error {
 	return d.updateSend(ctx, `
-		UPDATE send_queue SET sent_append_id = ?, updated_at = ? WHERE id = ?`,
-		appendID, formatTime(now), id)
+		UPDATE send_queue SET sent_append_id = ?, updated_at = ? WHERE id = ? AND state = ?`,
+		appendID, formatTime(now), id, SendSubmitted)
 }
 
 // RetrySend returns a transiently failed row to queued, counting the attempt and
@@ -344,8 +357,9 @@ func (d *DBs) RetrySend(ctx context.Context, id, code, detail string, next, now 
 	return d.updateSend(ctx, `
 		UPDATE send_queue SET state = ?, attempts = attempts + 1, next_attempt_at = ?,
 			last_error_code = ?, last_error_detail = ?, updated_at = ?, completed_at = NULL
-		WHERE id = ?`,
-		SendQueued, nullableTime(next), code, truncateSendDetail(detail), formatTime(now), id)
+		WHERE id = ? AND state IN (?, ?)`,
+		SendQueued, nullableTime(next), code, truncateSendDetail(detail), formatTime(now), id,
+		SendQueued, SendSubmitting)
 }
 
 // FailSend marks a permanent failure: the message was not sent.
@@ -353,8 +367,9 @@ func (d *DBs) FailSend(ctx context.Context, id, code, detail string, now time.Ti
 	return d.updateSend(ctx, `
 		UPDATE send_queue SET state = ?, last_error_code = ?, last_error_detail = ?,
 			updated_at = ?, completed_at = ?
-		WHERE id = ?`,
-		SendFailed, code, truncateSendDetail(detail), formatTime(now), formatTime(now), id)
+		WHERE id = ? AND state IN (?, ?)`,
+		SendFailed, code, truncateSendDetail(detail), formatTime(now), formatTime(now), id,
+		SendQueued, SendSubmitting)
 }
 
 // MarkSendUnconfirmed records the unknown outcome after a crash or drop at or
@@ -363,15 +378,16 @@ func (d *DBs) MarkSendUnconfirmed(ctx context.Context, id, detail string, now ti
 	return d.updateSend(ctx, `
 		UPDATE send_queue SET state = ?, last_error_code = ?, last_error_detail = ?,
 			updated_at = ?, completed_at = ?
-		WHERE id = ?`,
-		SendUnconfirmed, "unconfirmed", truncateSendDetail(detail), formatTime(now), formatTime(now), id)
+		WHERE id = ? AND state = ?`,
+		SendUnconfirmed, "unconfirmed", truncateSendDetail(detail), formatTime(now), formatTime(now), id,
+		SendSubmitting)
 }
 
 // MarkSendAppended records that the Sent copy exists. Terminal success.
 func (d *DBs) MarkSendAppended(ctx context.Context, id string, now time.Time) error {
 	return d.updateSend(ctx, `
-		UPDATE send_queue SET state = ?, updated_at = ?, completed_at = ? WHERE id = ?`,
-		SendAppended, formatTime(now), formatTime(now), id)
+		UPDATE send_queue SET state = ?, updated_at = ?, completed_at = ? WHERE id = ? AND state = ?`,
+		SendAppended, formatTime(now), formatTime(now), id, SendSubmitted)
 }
 
 // MarkSendDone records a terminal success when no Sent copy was needed, or when
@@ -379,8 +395,8 @@ func (d *DBs) MarkSendAppended(ctx context.Context, id string, now time.Time) er
 func (d *DBs) MarkSendDone(ctx context.Context, id, code, detail string, now time.Time) error {
 	return d.updateSend(ctx, `
 		UPDATE send_queue SET state = ?, last_error_code = ?, last_error_detail = ?,
-			updated_at = ?, completed_at = ? WHERE id = ?`,
-		SendDone, code, truncateSendDetail(detail), formatTime(now), formatTime(now), id)
+			updated_at = ?, completed_at = ? WHERE id = ? AND state = ?`,
+		SendDone, code, truncateSendDetail(detail), formatTime(now), formatTime(now), id, SendSubmitted)
 }
 
 // CancelSend undoes a queued send before its deadline. It returns the cancelled
