@@ -1492,3 +1492,13 @@ Baseline at `839bf05`: `go build`, `go vet`, `staticcheck`, `gofumpt -l` clean a
   Message-ID and the client-id repeat is answered earlier), so no migration is added; if stage 4d reuses the
   Message-ID when a draft is resent after an undo, add migration 12 that recreates the index with `'cancelled'`
   (migrations are append-only).
+
+### `677fe49` Drain the send queue and file Sent copies
+
+- **#127** · `677fe49` · `send/worker.go` · **risk** · the writes that record an accepted message (`submitting` to
+  `submitted`, the Sent append op) ran under the worker's own context, so a shutdown landing in the few
+  milliseconds after the server's 250 made them fail and left the row `submitting`; the next start then called a
+  message that had in fact been accepted `unconfirmed` and never filed its Sent copy. Reproduced with
+  `TestSendShutdownAfterTheServerAcceptsStillRecordsIt` (the clock hook cancels at the first read after the fake
+  records the message; failed: state `submitting`, no append id). `submitted` now runs under
+  `context.WithoutCancel` bounded by a 10 s `settleTimeout`.
