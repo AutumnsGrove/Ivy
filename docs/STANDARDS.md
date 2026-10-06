@@ -268,6 +268,7 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Undo send window (`store.UndoSendDelay`) | `compose.undo_delay_seconds`, 0-120 s, default 10, per account over global | a queued send is not submitted until the deadline; undo before it cancels the row; 0 disables undo, and a hand-edited value is clamped on read |
 | A line in a built outgoing body (`compose.maxWireLine`) | 900 bytes | broken at a space (plain text also at a rune boundary when there is none); enmime sends all-ASCII text as 7bit, so this is what keeps a line under RFC 5322's 998 |
 | Sends listed by `GET /send` (`store.MaxSendListLimit`) | 200, default 50 | a larger `limit` is clamped |
+| A client's send id (`maxSendIDBytes`) | 128 bytes | rejected with 400 `bad_request`; it is the row's primary key |
 | A compose request body (`maxSendBodyBytes`) | `compose.MaxBodyBytes` + 64 KiB | rejected with 400 `bad_request` |
 
 ## 5. Frontend standards

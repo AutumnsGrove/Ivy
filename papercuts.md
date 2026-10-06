@@ -1519,3 +1519,7 @@ Baseline at `839bf05`: `go build`, `go vet`, `staticcheck`, `gofumpt -l` clean a
   rows; with attachments (4g) the bodies grow to tens of MiB and the "stream sender-sized data through disk" rule
   applies. Not changed without a number from the potato: when 4g lands, split the metadata read from the body
   read (and keep bodies out of the row), then benchmark `GET /send`.
+- **#130** · `839bf05` · `gateway/send.go` · **standards** · the client's idempotency `id`, which becomes the row's
+  primary key and a URL segment, had no maximum (only the 1 MiB body bound it). Reproduced with
+  `TestSendRefusesAnOversizedClientID` (a 129-byte id was accepted with 202; failed). It is now refused with 400
+  `bad_request` above 128 bytes (`maxSendIDBytes`, in the limits table).

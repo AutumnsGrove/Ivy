@@ -19,6 +19,10 @@ import (
 // headers and the JSON envelope, so a hostile request cannot grow the parse.
 const maxSendBodyBytes = compose.MaxBodyBytes + 64<<10
 
+// maxSendIDBytes bounds the client's idempotency id, which becomes the row's
+// primary key and a URL segment.
+const maxSendIDBytes = 128
+
 // handleSendMessage queues an outgoing message. The Send button is the explicit
 // confirmation (CLAUDE.md rule 6); this handler never submits anything itself.
 // It builds the wire and Sent copies, commits the queue row (durable before the
@@ -38,6 +42,10 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.AccountId == "" || req.From == "" {
 		writeError(w, http.StatusBadRequest, "bad_request", "A message needs an account and a From address")
+		return
+	}
+	if len(stringOr(req.Id, "")) > maxSendIDBytes {
+		writeError(w, http.StatusBadRequest, "bad_request", "That message id is too long")
 		return
 	}
 	acct, err := s.dbs.GetAccount(ctx, req.AccountId)
