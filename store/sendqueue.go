@@ -268,22 +268,22 @@ func (d *DBs) GetSend(ctx context.Context, id string) (SendMessage, error) {
 }
 
 // NextQueuedSend returns the lowest-sequence queued row that may be sent now, or
-// ErrNotFound. FIFO is strict: a row still inside its undo window or its retry
-// backoff blocks the ones behind it.
+// ErrNotFound. Only a due row qualifies: one still inside its undo window or its
+// retry backoff is skipped, not waited for, so a greylisted message never holds
+// back the rest of the outbox (operator's decision, review of round 61). Among
+// due rows the lowest sequence goes first.
 func (d *DBs) NextQueuedSend(ctx context.Context, accountID string, now time.Time) (SendMessage, error) {
+	at := formatTime(now)
 	m, err := scanSend(d.State.Read.QueryRowContext(ctx, sendSelect+`
-		WHERE account_id = ? AND state = ? ORDER BY seq LIMIT 1`, accountID, SendQueued))
+		WHERE account_id = ? AND state = ?
+			AND (undo_deadline IS NULL OR undo_deadline <= ?)
+			AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+		ORDER BY seq LIMIT 1`, accountID, SendQueued, at, at))
 	if errors.Is(err, sql.ErrNoRows) {
 		return SendMessage{}, ErrNotFound
 	}
 	if err != nil {
 		return SendMessage{}, fmt.Errorf("next queued send: %w", err)
-	}
-	if !m.UndoDeadline.IsZero() && m.UndoDeadline.After(now) {
-		return SendMessage{}, ErrNotFound
-	}
-	if !m.NextAttemptAt.IsZero() && m.NextAttemptAt.After(now) {
-		return SendMessage{}, ErrNotFound
 	}
 	return m, nil
 }

@@ -99,22 +99,30 @@ func TestNextQueuedSendRespectsUndoAndBackoff(t *testing.T) {
 		t.Fatalf("enqueue second: %v", err)
 	}
 
-	if _, err := dbs.NextQueuedSend(ctx, "acct-1", sendNow); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("next while the undo window is open = %v, want ErrNotFound", err)
+	// A row inside its undo window is not due, but it does not hold back a due row
+	// behind it: one greylisted message must not stall the rest of the outbox.
+	got, err := dbs.NextQueuedSend(ctx, "acct-1", sendNow)
+	if err != nil || got.ID != "send-2" {
+		t.Fatalf("next while send-1's window is open = %+v, %v, want send-2", got.ID, err)
 	}
-	got, err := dbs.NextQueuedSend(ctx, "acct-1", sendNow.Add(11*time.Second))
-	if err != nil {
-		t.Fatalf("next after the window: %v", err)
-	}
-	if got.ID != "send-1" {
-		t.Errorf("next = %s, want send-1 (strict FIFO)", got.ID)
+	// Among due rows the lowest sequence goes first.
+	got, err = dbs.NextQueuedSend(ctx, "acct-1", sendNow.Add(11*time.Second))
+	if err != nil || got.ID != "send-1" {
+		t.Fatalf("next after the window = %+v, %v, want send-1 first", got.ID, err)
 	}
 
 	if err := dbs.RetrySend(ctx, "send-1", "transient", "later", sendNow.Add(time.Minute), sendNow); err != nil {
 		t.Fatalf("retry: %v", err)
 	}
+	got, err = dbs.NextQueuedSend(ctx, "acct-1", sendNow.Add(11*time.Second))
+	if err != nil || got.ID != "send-2" {
+		t.Fatalf("next during send-1's backoff = %+v, %v, want send-2", got.ID, err)
+	}
+	if err := dbs.FailSend(ctx, "send-2", "rejected", "no", sendNow); err != nil {
+		t.Fatalf("fail send-2: %v", err)
+	}
 	if _, err := dbs.NextQueuedSend(ctx, "acct-1", sendNow.Add(11*time.Second)); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("next during the backoff = %v, want ErrNotFound", err)
+		t.Fatalf("next with only a backed-off row = %v, want ErrNotFound", err)
 	}
 }
 

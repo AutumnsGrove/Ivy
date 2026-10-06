@@ -1461,3 +1461,11 @@ are frozen into the 4a tests at gate G1.
   `EHLO` `SIZE` read, `RCPT`/`DATA` and the deadlines, matching `STACK.md`'s "thin wrapper at the
   boundary". The 4b send queue and the 4a tests both call `smtp.Submit`; `ARCHITECTURE.md` section 2's
   proposed `compose/`-only layout is updated when the package lands.
+
+## Review of the 4a-4c range (2026-10-06)
+
+- **Q: should a send waiting out a retry backoff block the sends behind it (strict FIFO)?** No. The
+  operator chose independent rows: a row in its backoff or undo window is skipped, due rows go lowest
+  sequence first (`store.NextQueuedSend`). This replaces the strict-FIFO line in the G2 design for the
+  send queue only; the IMAP outbox stays strict FIFO.
+- **Q: fix the four pre-existing golangci-lint findings at the CI pin in the review branch?** Yes.

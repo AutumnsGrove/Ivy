@@ -1533,3 +1533,9 @@ Baseline at `839bf05`: `go build`, `go vet`, `staticcheck`, `gofumpt -l` clean a
   deliberately owns its own context), and `errcheck` on `defer f.Close()` / `defer rows.Close()` (the config
   excludes `io.Closer` interface calls but not these concrete ones). Decide whether CI is meant to be clean at the
   pin; the cheap fix is `//nolint:contextcheck // reason` on the two calls and `_ = rows.Close()` style closes.
+- **#132** · `56660d6` · `store/sendqueue.go` · **risk** (operator decision) · `NextQueuedSend` took the lowest-sequence
+  queued row and returned "none" if it was not yet due, so one message in a retry backoff (a greylisted
+  recipient: 5 s doubling to 15 min over up to 8 tries) held every later send for hours. The operator chose
+  independent rows. `TestNextQueuedSendRespectsUndoAndBackoff` was rewritten for the new rule and failed before
+  the change (send-2 was held behind send-1's window); the query now filters on `undo_deadline` and
+  `next_attempt_at` and orders the due rows by sequence. STANDARDS row updated.

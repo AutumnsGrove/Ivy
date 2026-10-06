@@ -264,7 +264,7 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Terminal send rows kept (`store.MaxSendTerminalRetention`) | 7 days | pruned; the send queue's only deletion, and only of terminal rows |
 | Send error detail (`store.MaxSendErrorDetail`) | 500 bytes | truncated on the rune boundary |
 | An ambiguous send (`smtp.SendError.Ambiguous`) | one message | the row is `unconfirmed`, never auto-resent; the operator sends again explicitly |
-| Send retry backoff | 5 s doubling to 15 min, ±20% jitter | the send waits; a not-yet-due send blocks the ones behind it (strict FIFO) |
+| Send retry backoff | 5 s doubling to 15 min, ±20% jitter | the send waits; a not-yet-due send (backoff or undo window) is skipped, so it never blocks a due one behind it; due sends go lowest sequence first |
 | Undo send window (`store.UndoSendDelay`) | `compose.undo_delay_seconds`, 0-120 s, default 10, per account over global | a queued send is not submitted until the deadline; undo before it cancels the row; 0 disables undo, and a hand-edited value is clamped on read |
 | A line in a built outgoing body (`compose.maxWireLine`) | 900 bytes | broken at a space (plain text also at a rune boundary when there is none); enmime sends all-ASCII text as 7bit, so this is what keeps a line under RFC 5322's 998 |
 | Sends listed by `GET /send` (`store.MaxSendListLimit`) | 200, default 50 | a larger `limit` is clamped |
