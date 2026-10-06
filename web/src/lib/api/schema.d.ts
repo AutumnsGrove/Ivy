@@ -645,7 +645,7 @@ export interface components {
         /** @description One hint on the event stream. It says what changed, never the new value. */
         Event: {
             /** @enum {string} */
-            type: "message.changed" | "folder.changed" | "sync.state" | "outbox.state" | "health.alert" | "update.state";
+            type: "message.changed" | "folder.changed" | "sync.state" | "outbox.state" | "health.alert" | "update.state" | "send.state";
             accountId?: string;
             folder?: string;
             /** @description Stable reason, used by health.alert */

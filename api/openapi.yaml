@@ -1029,11 +1029,11 @@ components:
       properties:
         type:
           type: string
-          enum: [message.changed, folder.changed, sync.state, outbox.state, health.alert, update.state]
+          enum: [message.changed, folder.changed, sync.state, outbox.state, health.alert, update.state, send.state]
           # Without explicit names the Go constant for sync.state is `SyncState`,
           # which collides with the SyncState type.
           x-enum-varnames:
-            [EventTypeMessageChanged, EventTypeFolderChanged, EventTypeSyncState, EventTypeOutboxState, EventTypeHealthAlert, EventTypeUpdateState]
+            [EventTypeMessageChanged, EventTypeFolderChanged, EventTypeSyncState, EventTypeOutboxState, EventTypeHealthAlert, EventTypeUpdateState, EventTypeSendState]
         accountId:
           type: string
         folder:

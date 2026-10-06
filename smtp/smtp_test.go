@@ -358,6 +358,56 @@ func TestSubmitComposedMessageRoundTrips(t *testing.T) {
 	}
 }
 
+// TestSubmitAcceptThenDropIsAmbiguous is the unknown window: the server has the
+// message but the client never saw the 250. The error must say so, so the queue
+// can mark it unconfirmed rather than resend.
+func TestSubmitAcceptThenDropIsAmbiguous(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, 0)
+	w.Account("autumn@grove.test", "secret")
+	w.Account("mara@grove.test", "secret")
+	w.Fault(mailworld.SMTPAcceptThenDrop{})
+	acct := accountFor(t, w, "autumn@grove.test")
+	raw := rawMessage("<smtp-accept-drop@example.test>", "mara@grove.test")
+
+	err := testSubmitter().Submit(t.Context(), acct, smtp.Envelope{From: "autumn@grove.test", To: []string{"mara@grove.test"}}, bytes.NewReader(raw), int64(len(raw)))
+	var se *smtp.SendError
+	if !errors.As(err, &se) {
+		t.Fatalf("Submit error = %v, want a *smtp.SendError", err)
+	}
+	if !se.Ambiguous {
+		t.Errorf("Ambiguous = false, want true: the server accepted and the client cannot know")
+	}
+	if got := len(w.Sent()); got != 1 {
+		t.Errorf("recorded %d messages, want 1: the server did accept it", got)
+	}
+}
+
+// TestSubmitBeforeDataAbortSendsNothing proves the durable point is before DATA:
+// when the queue cannot commit it, nothing reaches the server and the failure is
+// not ambiguous.
+func TestSubmitBeforeDataAbortSendsNothing(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, 0)
+	w.Account("autumn@grove.test", "secret")
+	acct := accountFor(t, w, "autumn@grove.test")
+	raw := rawMessage("<smtp-beforedata@example.test>", "mara@grove.test")
+
+	called := false
+	err := testSubmitter().Submit(t.Context(), acct, smtp.Envelope{From: "autumn@grove.test", To: []string{"mara@grove.test"}}, bytes.NewReader(raw), int64(len(raw)),
+		smtp.WithBeforeData(func() error { called = true; return errors.New("state db down") }))
+	if !called {
+		t.Fatal("BeforeData was not called, so the queue never got its durable point")
+	}
+	se := assertKind(t, err, smtp.KindLocal, true)
+	if se.Ambiguous {
+		t.Errorf("Ambiguous = true, want false: no DATA was sent")
+	}
+	if got := len(w.Sent()); got != 0 {
+		t.Errorf("recorded %d messages, want 0", got)
+	}
+}
+
 // TestSubmitAllErrorsAreSendErrors guards the contract the 4b queue depends on:
 // every failure carries a Kind and a Transient verdict, so the queue never has
 // to guess what an error means.

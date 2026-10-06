@@ -258,6 +258,13 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | SMTP DATA, body and final reply (`smtp.DefaultDataTimeout`) | 2 min | `SendError` `timeout`, transient |
 | Message size against the provider's `EHLO` SIZE | provider's advertised value (about 48.8 MiB on Purelymail) | refused before DATA with `too_large`; without a SIZE, the provider's own 552 is the backstop |
 | A refused `RCPT` among several (`smtp.KindRecipientRefused`) | one address | the whole transaction is aborted with `RSET`; nobody receives the message (round 61) |
+| SMTP attempts per send (`store.MaxSendAttempts`) | 8 | the send is `failed` (`retries_exhausted`); a dial, timeout or 4xx counts, and a crash does not |
+| Send row age (`store.MaxSendAge`) | 24 h | the send is `failed` (`expired`) |
+| Live send rows per account (`store.MaxQueuedSends`) | 500 | the enqueue is refused (`send_full`); the body is never stored |
+| Terminal send rows kept (`store.MaxSendTerminalRetention`) | 7 days | pruned; the send queue's only deletion, and only of terminal rows |
+| Send error detail (`store.MaxSendErrorDetail`) | 500 bytes | truncated on the rune boundary |
+| An ambiguous send (`smtp.SendError.Ambiguous`) | one message | the row is `unconfirmed`, never auto-resent; the operator sends again explicitly |
+| Send retry backoff | 5 s doubling to 15 min, ±20% jitter | the send waits; a not-yet-due send blocks the ones behind it (strict FIFO) |
 
 ## 5. Frontend standards
 

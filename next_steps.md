@@ -5,11 +5,10 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-06. **4a is done** (`compose/` and `smtp/`, round 61; gate G1 was recorded
-and the operator said continue without a stop). The builder validates every header-bound value,
-renders markdown to the HTML alternative, and keeps Bcc on the envelope only; the transport submits
-over implicit TLS with EHLO `SIZE`, per-recipient classification and deadlines. 4b (the send queue
-and the Sent copy) is next, from the G2 design in `docs/handoffs/`. **In-app account
+last updated: 2026-10-06. **4a and 4b are done** (`compose/` + `smtp/`, then `send_queue` + the Sent
+copy; gates G1-G3 recorded). The builder validates every header-bound value and renders markdown;
+the transport submits over implicit TLS; the queue is durable, and a crash whose outcome is unknown
+is `unconfirmed` and never auto-resent. 4c (the send API and undo) is next. **In-app account
 setup is built (round 59)**, the last thing before the first install: an account is typed into
 `/welcome/account`, tested against Purelymail, stored as a private password file plus a `state.db`
 row, and started without a restart; what is left is `sudo ./install.sh` on the board and the live
@@ -71,9 +70,15 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 
 ## ▶ Now
 
-**4b is at gate G2** (design before code): `docs/handoffs/2026-10-06-G2-send-queue-design.md` has
-the `send_queue` states and durable points, the `unconfirmed` rule, the `append` idempotency key and
-the per-crash-point recovery. Implementation follows in small commits.
+**4b is done** (2026-10-06; gates G2 and G3 in `docs/handoffs/2026-10-06-G2-send-queue-design.md`
+and `2026-10-06-G3-send-crash.md`). State migration 10 adds `send_queue`: the whole message (wire and
+Sent bodies), an undo-deadline column for 4c, and the states from the design. `submitting` is the
+durable may-have-been-sent point before `DATA`; a crash from there is `unconfirmed` and never
+resent. The `append` outbox kind files the Sent copy with `\Seen`, searching by `Message-ID` so it
+can never file twice, and a failed copy leaves the send `done` with `sent_copy_failed`. `send/` runs
+as a third worker per account and publishes `send.state`. Tests cover 12 repeated accept-then-drop
+crashes, a crash during `DATA`, a crash after the 250, and the Sent-copy edge cases; see
+`docs/BUILD-LOG.md`. **Next: 4c** (the send API and undo).
 
 **4a is done** (2026-10-06; gate G1 in `docs/handoffs/2026-10-06-G1-compose-smtp-tests.md`).
 `compose/` is a pure builder (see `docs/BUILD-LOG.md`): every header-bound value is validated, an
@@ -410,9 +415,9 @@ T11-T13 on top of chunk 3's T1-T10) are in `docs/CHUNK4-BRIEF.md`; read it after
 
 Checkpoints: **G1** (4a, injection corpus failing before the builder), **G2** (4b, design before code),
 **G3** (4b, crash tests pass), **G4** (4g, before any image dependency), **G5** (end of chunk, Claude's
-Review). **4a is done**: `compose/` and `smtp/` are implemented, their G1 tests pass and the limits
-are in the `STANDARDS.md` 4a table (`docs/BUILD-LOG.md`). **4b is at G2**: the design is committed
-and the `send_queue` implementation is next.
+Review). **4a and 4b are done**: `compose/` and `smtp/` are implemented and green, and `send_queue`
+with the Sent copy is implemented and crash-tested (gates G1-G3, `docs/BUILD-LOG.md`). **4c** (the
+send API and undo) is next.
 
 ## Operator actions still open
 

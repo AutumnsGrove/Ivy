@@ -703,3 +703,34 @@ before either side was written.
   suites are `-race` green; `make check` green after the corpus and the transport landed.
 - **Next.** 4b is the `send_queue` and the Sent `APPEND` (gate G2 is its design).
 
+## 4b Send queue and Sent copy (round 61, 2026-10-06)
+
+The queue that makes sending durable and never duplicates a message. Designed at gate G2
+(`docs/handoffs/2026-10-06-G2-send-queue-design.md`) before any code; crash-tested at gate G3
+(`docs/handoffs/2026-10-06-G3-send-crash.md`).
+
+- **The queue.** State migration 10 adds `send_queue` to `state.db`: the whole message (wire body
+  and Sent body, which keeps `Bcc`), the recipients, the injected `Message-ID`, the undo deadline,
+  and the Sent append id. `store/sendqueue.go` is the state machine. `submitting` is the durable
+  "may have been sent" point, written after the last `RCPT` and immediately before `DATA`; a crash
+  from there is `unconfirmed` on the next start, never resent. `submitted` is written only after the
+  server's 250. Limits are in the `STANDARDS.md` 4a table.
+- **The transport seam.** `smtp.Submit` gained `WithBeforeData` (the durable point) and
+  `SendError.Ambiguous` (a network failure at the end of `DATA`, when the dot may already be
+  written). An explicit 4xx/5xx is definitive; anything else at that boundary is unknown.
+- **The worker.** `send/` drains one account's queue: it recovers `submitting` rows to `unconfirmed`,
+  submits queued rows, and tracks each Sent copy through the outbox. `accountsvc.Supervisor` runs it
+  as a third worker and publishes a `send.state` hint; the contract enum gained the value.
+- **The Sent copy.** The outbox gained an `append` kind: it loads the `sent_body` by send id and
+  `APPEND`s it with `\Seen`, searching the destination by `Message-ID` first, so a retried enqueue or
+  a lost acknowledgement never files two copies. A failed copy leaves the send `done` with
+  `sent_copy_failed` (the mail went out; only Ivy's copy is missing).
+- **Tests.** `store/sendqueue_test.go` (sequence, idempotency, cap, undo/backoff FIFO, the durable
+  points, recovery, prune, the append key), `sync/outbox_test.go` (filed once, already present,
+  in-flight recovery) and `send/worker_test.go` (deliver + file, no Sent folder, transient retry,
+  permanent failure, 12 repeated accept-then-drop crashes that never resend, crash during DATA,
+  crash after the 250, and a failed copy).
+- **Left for the operator.** The live send on the board (send to self, the Sent copy visible in Apple
+  Mail); it waits on 4c's API and 4f's screen to be reachable from the app.
+
+

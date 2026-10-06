@@ -118,6 +118,7 @@ const (
 	EventTypeHealthAlert    EventType = "health.alert"
 	EventTypeMessageChanged EventType = "message.changed"
 	EventTypeOutboxState    EventType = "outbox.state"
+	EventTypeSendState      EventType = "send.state"
 	EventTypeSyncState      EventType = "sync.state"
 	EventTypeUpdateState    EventType = "update.state"
 )
@@ -132,6 +133,8 @@ func (e EventType) Valid() bool {
 	case EventTypeMessageChanged:
 		return true
 	case EventTypeOutboxState:
+		return true
+	case EventTypeSendState:
 		return true
 	case EventTypeSyncState:
 		return true

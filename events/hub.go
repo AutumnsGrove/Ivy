@@ -23,6 +23,9 @@ const (
 	OutboxState    Type = "outbox.state"
 	HealthAlert    Type = "health.alert"
 	UpdateState    Type = "update.state"
+	// SendState is a hint that an outgoing message changed state (queued,
+	// unconfirmed, done). The send API and screen arrive in 4c/4f.
+	SendState Type = "send.state"
 )
 
 // Event is one hint. It is comparable on purpose: an identical hint already

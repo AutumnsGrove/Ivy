@@ -66,15 +66,21 @@ const (
 	KindRejected Kind = "rejected"
 	// KindTransient is a 4xx reply. Transient.
 	KindTransient Kind = "transient"
+	// KindLocal is a local failure before DATA (the queue could not commit its
+	// may-have-been-sent point). Nothing was sent. Transient.
+	KindLocal Kind = "local"
 )
 
 // SendError is a failed submission. Transient reports whether an automatic
 // retry may help; a retry is only ever allowed from a state that proves nothing
-// was accepted (a 4xx or a failure before DATA ended). Code is the SMTP reply
+// was accepted (a 4xx or a failure before DATA ended). Ambiguous means the
+// message may have been accepted and must not be retried automatically: the
+// send queue turns it into `unconfirmed` (round 60). Code is the SMTP reply
 // code when there was one, otherwise zero.
 type SendError struct {
 	Kind      Kind
 	Transient bool
+	Ambiguous bool
 	Recipient string
 	Code      int
 	Err       error
@@ -145,7 +151,11 @@ func New(opts ...Option) *Submitter {
 // On failure it returns a *SendError. Submission to one recipient is the unit:
 // a RCPT refusal aborts the whole message, so that send never goes out
 // partially (round 61).
-func (s *Submitter) Submit(ctx context.Context, acct Account, env Envelope, body io.Reader, size int64) error {
+func (s *Submitter) Submit(ctx context.Context, acct Account, env Envelope, body io.Reader, size int64, options ...SubmitOption) error {
+	cfg := submitConfig{}
+	for _, opt := range options {
+		opt(&cfg)
+	}
 	conn, err := s.dialConn(ctx, acct)
 	if err != nil {
 		return &SendError{Kind: KindUnreachable, Transient: true, Err: err}
@@ -186,11 +196,11 @@ func (s *Submitter) Submit(ctx context.Context, acct Account, env Envelope, body
 			Err: fmt.Errorf("message is %d bytes, the provider accepts %d", size, maxSize),
 		}
 	}
-	opts := &gosmtp.MailOptions{}
+	mailOpts := &gosmtp.MailOptions{}
 	if size >= 0 {
-		opts.Size = size
+		mailOpts.Size = size
 	}
-	if err := c.Mail(env.From, opts); err != nil {
+	if err := c.Mail(env.From, mailOpts); err != nil {
 		return classify(ctx, err)
 	}
 	for _, rcpt := range env.To {
@@ -208,6 +218,13 @@ func (s *Submitter) Submit(ctx context.Context, acct Account, env Envelope, body
 			return &SendError{Kind: KindRecipientRefused, Recipient: rcpt, Err: err}
 		}
 	}
+	// The durable point before DATA. Everything before it is safe to retry.
+	if cfg.beforeData != nil {
+		if err := cfg.beforeData(); err != nil {
+			_ = c.Reset()
+			return &SendError{Kind: KindLocal, Transient: true, Err: err}
+		}
+	}
 
 	w, err := c.Data()
 	if err != nil {
@@ -222,7 +239,9 @@ func (s *Submitter) Submit(ctx context.Context, acct Account, env Envelope, body
 	}
 	if err := w.Close(); err != nil {
 		_ = conn.SetDeadline(time.Time{})
-		return classify(ctx, err)
+		// The terminating dot may already be on the wire, so a network failure here
+		// is ambiguous; an explicit server reply is not.
+		return classifyAmbiguous(ctx, err)
 	}
 	_ = conn.SetDeadline(time.Time{})
 	_ = c.Quit() // the message is accepted; a failed goodbye changes nothing
@@ -250,6 +269,34 @@ func (s *Submitter) dialConn(ctx context.Context, acct Account) (net.Conn, error
 		return nil, err
 	}
 	return tlsConn, nil
+}
+
+// SubmitOption customises one submission.
+type SubmitOption func(*submitConfig)
+
+type submitConfig struct {
+	beforeData func() error
+}
+
+// WithBeforeData runs fn after the last RCPT and immediately before DATA. The
+// send queue commits its "may have been sent" point there, so a crash before
+// this point is safely retried and a crash after it is unconfirmed. A non-nil
+// error from fn aborts before DATA and nothing is ambiguous.
+func WithBeforeData(fn func() error) SubmitOption {
+	return func(c *submitConfig) { c.beforeData = fn }
+}
+
+// classifyAmbiguous maps a failure at the end of DATA. An explicit server reply
+// is definitive; a network, timeout or cancellation failure means the dot may
+// already have been written, so the outcome is unknown.
+func classifyAmbiguous(ctx context.Context, err error) *SendError {
+	se := classify(ctx, err)
+	var smtpErr *gosmtp.SMTPError
+	if errors.As(err, &smtpErr) {
+		return se
+	}
+	se.Ambiguous = true
+	return se
 }
 
 // classify maps a go-smtp or network error to the queue's stable verdict. A
