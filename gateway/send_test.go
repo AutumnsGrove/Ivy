@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -184,7 +185,7 @@ func TestUndoSendBoundary(t *testing.T) {
 	if undone.Draft == nil || !strings.Contains(*undone.Draft, `"subject":"hello"`) {
 		t.Errorf("draft = %v, want the stored request back", undone.Draft)
 	}
-	if _, err := dbs.NextQueuedSend(context.Background(), "acct-1", *now); err != store.ErrNotFound {
+	if _, err := dbs.NextQueuedSend(context.Background(), "acct-1", *now); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("a cancelled send is still queued: %v", err)
 	}
 

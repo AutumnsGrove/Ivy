@@ -1523,3 +1523,13 @@ Baseline at `839bf05`: `go build`, `go vet`, `staticcheck`, `gofumpt -l` clean a
   primary key and a URL segment, had no maximum (only the 1 MiB body bound it). Reproduced with
   `TestSendRefusesAnOversizedClientID` (a 129-byte id was accepted with 202; failed). It is now refused with 400
   `bad_request` above 128 bytes (`maxSendIDBytes`, in the limits table).
+
+### Lint at the CI-pinned version (golangci-lint v2.12.1, `.golangci.yml`)
+
+- **#131** · `839bf05` · `gateway/send_test.go` · **nit** · `err != store.ErrNotFound` (errorlint); now `errors.Is`.
+- **N45 (open, outside this range)** · `84533c5`, `40d5779`, `128e582` · `internal/accountsvc/connector.go:127,148`,
+  `internal/secrets/secrets.go:95`, `store/accountconfigs.go:63` · the pinned linter reports four more findings on
+  `main`, all from commits before `d703629`: `contextcheck` on `Supervisor.Start(acct)` (twice, the supervisor
+  deliberately owns its own context), and `errcheck` on `defer f.Close()` / `defer rows.Close()` (the config
+  excludes `io.Closer` interface calls but not these concrete ones). Decide whether CI is meant to be clean at the
+  pin; the cheap fix is `//nolint:contextcheck // reason` on the two calls and `_ = rows.Close()` style closes.
