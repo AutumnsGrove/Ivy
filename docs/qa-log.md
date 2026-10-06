@@ -1503,3 +1503,30 @@ Related choices settled in the design file rather than asked: one immutable `dra
 version (the head is the highest live version); a fresh injected Message-ID per save; `\Draft` and
 no `\Seen`; a missing Drafts folder is a clear error (no auto-create in 4d); resume parses a
 server-only draft's stored MIME back into To/Cc/Subject/text without the inbound sanitiser.
+
+## Round 63 — 4e identities and reply logic, the design questions (2026-10-06, operator; four answers)
+
+Before coding 4e, the four open choices were put to the operator. They are settled into
+`docs/handoffs/2026-10-06-4e-identities-design.md`.
+
+- **Surface: API + settings editor.** 4e ships the store, the CRUD API, the reply/reply-all/forward
+  logic and a small identities and signatures section on the account settings screen. The operator
+  can add aliases and run the live send-as check without waiting for the compose screen (4f), which
+  still owns the From picker. This is the first time a 4x stage adds a screen; the risk is low and
+  the alternative left the identities unreachable from the app.
+- **Signature: per identity, plain text, `-- ` separator.** A non-empty signature is appended after
+  the body (`\n\n-- \n<signature>`); when markdown is on the whole text is rendered, so the
+  signature styles with the message. A global-default-plus-override model was rejected as more state
+  for no gain on a single-operator box.
+- **Forward: attribution block.** A blank line, `---------- Forwarded message ----------`, then
+  `From`/`Date`/`Subject`/`To` and the original plain text. Attachments are not attached unless
+  asked (CHUNK4-BRIEF section 3).
+- **Aliases: configured only, offer to add.** `From` must be the account's own address or a stored
+  identity. When a reply's delivered-to address has no identity, the prefill reports it and the
+  screen offers to add it in one tap; an unconfigured address never sends.
+
+Related choices settled in the design file rather than asked: the account's own address is always a
+synthetic, non-deletable primary identity merged at read time (no seed migration, because accounts
+live in the rebuildable mirror); direct reply goes to `Reply-To` then `From`; reply-all adds the
+original To/Cc minus every one of the operator's addresses; `List-Post` and other list semantics stay
+out of v1; a reply body is empty and a forward body is the attribution block plus the original text.

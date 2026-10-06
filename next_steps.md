@@ -8,8 +8,9 @@ it in the same stage as the work**, so the next session can resume after a conte
 last updated: 2026-10-06. **4a, 4b, 4c and 4d are done** (`compose/` + `smtp/`, the `send_queue` +
 Sent copy, then the send API and undo). `POST /send` builds both copies and queues with a server-side
 undo deadline; `POST /send/{id}/undo` cancels before it and hands the draft back. **4d (drafts) is
-done** and 4e (identities) is next: the design is at the 4d gate
-(`docs/handoffs/2026-10-06-4d-drafts-design.md`, round 62). **In-app account
+done** and **4e (identities and reply logic) is in progress**: the design is settled in
+`docs/handoffs/2026-10-06-4e-identities-design.md` (round 63) and the store, reply logic, API and
+settings editor are being built. **In-app account
 setup is built (round 59)**, the last thing before the first install: an account is typed into
 `/welcome/account`, tested against Purelymail, stored as a private password file plus a `state.db`
 row, and started without a restart; what is left is `sudo ./install.sh` on the board and the live
@@ -70,6 +71,13 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 `cmd/` (`ivy`, `ivy-dev`, `ivy-assets`). No `Dockerfile` or image-publish workflow yet.
 
 ## ▶ Now
+
+**4e is in progress** (2026-10-06). The four design choices are settled in
+`docs/handoffs/2026-10-06-4e-identities-design.md` (round 63): identities and signatures in
+`state.db` with a settings editor; a per-identity plain-text signature behind `-- `; a forward
+attribution block; and `From` restricted to configured identities, with an offer to add a delivered-to
+alias. Work in progress: state migration 14 and the identities store, the pure reply/reply-all/forward
+logic, the identities/reply API and the identity-aware `From`, and the account-settings editor.
 
 **4c is done** (2026-10-06). `compose.undo_delay_seconds` is a global/per-account setting (default 10,
 0 = off, clamped to 120). `POST /send` builds the wire and Sent copies, stores the original request
