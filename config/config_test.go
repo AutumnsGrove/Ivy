@@ -116,6 +116,83 @@ accounts:
 	}
 }
 
+const secretsTestConfig = `
+accounts:
+  - id: autumn
+    address: me@example.com
+    imap_host: imap.example.com
+    imap_port: 993
+    smtp_host: smtp.example.com
+    smtp_port: 465
+    username: me@example.com
+`
+
+// The in-app connect screen stores the password in data/secrets, so Load must
+// find it there when neither the environment nor .env has one.
+func TestLoadPasswordFromSecretsFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ivy.yaml")
+	write(t, path, secretsTestConfig)
+	if err := os.MkdirAll(filepath.Join(dir, "secrets"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dir, "secrets", "autumn"), "fromsecrets")
+	t.Setenv("IVY_DATA_DIR", dir)
+	t.Setenv("IVY_AUTUMN_PASSWORD", "")
+	os.Unsetenv("IVY_AUTUMN_PASSWORD")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Accounts[0].Password; got != "fromsecrets" {
+		t.Errorf("Password = %q, want from the secrets file", got)
+	}
+}
+
+func TestEnvPasswordBeatsTheSecretsFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ivy.yaml")
+	write(t, path, secretsTestConfig)
+	if err := os.MkdirAll(filepath.Join(dir, "secrets"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dir, "secrets", "autumn"), "fromsecrets")
+	t.Setenv("IVY_DATA_DIR", dir)
+	t.Setenv("IVY_AUTUMN_PASSWORD", "fromenv")
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Accounts[0].Password; got != "fromenv" {
+		t.Errorf("Password = %q, want the environment to win", got)
+	}
+}
+
+// A password file other users can read is a failure to report, not a password
+// to use quietly.
+func TestLoadRefusesALooseSecretsFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ivy.yaml")
+	write(t, path, secretsTestConfig)
+	if err := os.MkdirAll(filepath.Join(dir, "secrets"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	loose := filepath.Join(dir, "secrets", "autumn")
+	write(t, loose, "fromsecrets")
+	if err := os.Chmod(loose, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("IVY_DATA_DIR", dir)
+	t.Setenv("IVY_AUTUMN_PASSWORD", "")
+	os.Unsetenv("IVY_AUTUMN_PASSWORD")
+
+	if _, err := Load(path); err == nil {
+		t.Fatal("Load accepted a world-readable password file")
+	}
+}
+
 func TestInvalidAccountRejected(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

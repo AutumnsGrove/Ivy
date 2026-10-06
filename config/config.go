@@ -1,6 +1,7 @@
 // Package config loads ivy.yaml and .env, applies defaults and validates them.
-// Secrets come only from the environment or .env, never from the database
-// (ARCHITECTURE.md section 8, STANDARDS.md section 4).
+// Secrets come only from the environment, .env or the private files in
+// data/secrets, never from the database (ARCHITECTURE.md section 8,
+// STANDARDS.md section 4).
 package config
 
 import (
@@ -15,6 +16,8 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/joho/godotenv"
+
+	"github.com/AutumnsGrove/Ivy/internal/secrets"
 )
 
 // Defaults used when ivy.yaml does not say otherwise.
@@ -224,10 +227,42 @@ func Load(path string) (*Config, error) {
 	}
 
 	applyEnv(cfg)
+	if err := cfg.applySecretFiles(); err != nil {
+		return nil, err
+	}
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+// SecretsDir is where passwords entered in the app are kept, one private file
+// per account (internal/secrets). It is inside the data directory but is not
+// part of any backup.
+func (c *Config) SecretsDir() string {
+	return filepath.Join(c.DataDir, "secrets")
+}
+
+// applySecretFiles fills in a password from data/secrets for any account that
+// the environment did not supply, so the environment (and .env) still wins. A
+// file that exists but cannot be used is an error: silently starting without
+// the password would look like a sign-in failure with no explanation.
+func (c *Config) applySecretFiles() error {
+	for i := range c.Accounts {
+		a := &c.Accounts[i]
+		if a.Password != "" || !secrets.ValidID(a.ID) {
+			continue
+		}
+		pw, err := secrets.Read(c.SecretsDir(), a.ID)
+		if errors.Is(err, secrets.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("account %s: %w", a.ID, err)
+		}
+		a.Password = pw
+	}
+	return nil
 }
 
 func applyEnv(cfg *Config) {

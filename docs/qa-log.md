@@ -1398,3 +1398,22 @@ operator's answers (recommended option unless noted):
 - **First-install runbook: yes, `docs/DEPLOY.md`.** Clone, `install.sh`, `ivy.yaml` and `data/.env`
   templates, `allowed_hosts`, first start, one live update, rollback; linked from the README and the
   doc map.
+
+## Round 59 — in-app account setup, before the first install (2026-10-06, operator; four answers)
+
+The operator would not copy a mailbox password to the board over SSH and wants to type it into the
+app as part of setup. `/welcome/account` was a designed screen that only navigated; no endpoint
+created an account or stored a secret. The first install waits on building it. Answers:
+
+- **Build in-app account setup before deploying.** The OpenRouter key may still go in `data/.env`;
+  the mailbox password may not travel anywhere but the browser.
+- **Non-secret account settings live in `state.db`, merged with `ivy.yaml` (recommended).** It matches
+  `ARCHITECTURE.md` section 9 ("accounts without secrets" are in `state.db`) and gets backed up;
+  accounts in `ivy.yaml` keep working (the dev stack uses them). **The password never enters a
+  database**: it is a mode-0600 file under `data/` that no backup touches (`STANDARDS.md` 2 and 8).
+- **Purelymail only for now, and no provider presets.** The host and ports are fixed server-side for
+  Purelymail. Later, other providers are plain host and port fields with no preset list (operator's
+  wording). Arbitrary hosts need the SSRF guard first, so that is not in this stage.
+- **The connect endpoint is always open (operator's choice over the recommended first-run-only).**
+  Anyone on the tailnet can add an account or replace a password. The tailnet is the access control,
+  as for every other endpoint; revisit when auth lands.
