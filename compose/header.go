@@ -183,28 +183,34 @@ func encodedWord(chunk []byte) string {
 	return "=?utf-8?B?" + base64.StdEncoding.EncodeToString(chunk) + "?="
 }
 
-// mailAddress renders one address for a header: the display name is encoded
-// first, so net/mail's quoting never has to see non-ASCII, and the addr-spec is
-// validated ASCII.
-func mailAddress(a Address) mail.Address {
-	return mail.Address{Name: encodeWord(a.Name), Address: a.Address}
-}
-
+// mailAddresses hands the builder the raw addresses; it only needs them to
+// accept the message. The header text itself is written by formatAddress, below.
 func mailAddresses(list []Address) []mail.Address {
 	out := make([]mail.Address, len(list))
 	for i, a := range list {
-		out[i] = mailAddress(a)
+		out[i] = mail.Address{Name: a.Name, Address: a.Address}
 	}
 	return out
 }
 
+// formatAddress renders one mailbox for a header. A plain ASCII name goes
+// through net/mail, which quotes it as needed. Anything else becomes RFC 2047
+// encoded words written bare: net/mail would wrap them in a quoted-string, where
+// RFC 2047 section 5 forbids encoded words and a client shows them verbatim.
+func formatAddress(a Address) string {
+	if isASCII(a.Name) && !strings.Contains(a.Name, "=?") {
+		return (&mail.Address{Name: a.Name, Address: a.Address}).String()
+	}
+	return encodeWord(a.Name) + " <" + a.Address + ">"
+}
+
 // joinAddresses renders an address list as one header value. enmime's own
-// joiner is unexported, so compose formats the Bcc header it adds itself.
+// joiner is unexported and quotes encoded words, so compose formats every
+// address header itself and overwrites the builder's.
 func joinAddresses(list []Address) string {
 	parts := make([]string, len(list))
 	for i, a := range list {
-		addr := mailAddress(a)
-		parts[i] = addr.String()
+		parts[i] = formatAddress(a)
 	}
 	return strings.Join(parts, ", ")
 }

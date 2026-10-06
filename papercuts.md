@@ -1426,3 +1426,27 @@ vector scan time over a real mailbox; the update rollback against a real unhealt
   Writing it turned up one thing to change rather than document: narrowing the published port meant editing the
   tracked `docker-compose.yml`, which the watcher's `git pull` would then trip over, so the bind address is now
   `IVY_BIND` in `.env` (default `0.0.0.0`, unchanged behaviour).
+
+## Review of `d703629..839bf05` (chunk 4a-4c: compose, SMTP, send queue, send API; 2026-10-06)
+
+Baseline at `839bf05`: `go build`, `go vet`, `staticcheck`, `gofumpt -l` clean and `go test -race ./...` green
+(CGO on); nothing was broken before the review began.
+
+### `d08120d` Build outgoing messages in compose
+
+- **#120** · `d08120d` · `compose/header.go`, `compose/compose.go` · **bug** · display names that needed RFC 2047
+  encoding (any non-ASCII name, or an ASCII one that looks like an encoded word) were encoded and then handed to
+  net/mail, which wrapped the encoded words in a quoted-string: `From: "=?utf-8?B?Wm/Dqw==?=" <a@b>`. RFC 2047
+  section 5 forbids an encoded word inside a quoted-string, so a compliant client shows the raw `=?utf-8?B?...`
+  text. The existing test passed because its `parseAddress` helper decodes a quoted name itself, a lenient
+  oracle. Reproduced with `TestBuildEncodedDisplayNamesAreNotQuoted` (net/mail's own parser, no extra decoding;
+  failed before the fix for From, To and Bcc, three names). `compose` now writes From, To, Cc, Reply-To and the
+  Sent copy's Bcc itself (`formatAddress`): ASCII names still go through net/mail, anything else is bare
+  encoded words.
+- **#121** · `d08120d` · `compose/wire.go`, `compose/compose.go` · **bug** · an all-ASCII body is sent by enmime as
+  7bit exactly as given, so the operator's lone LF or CR and any line over 998 bytes reached the wire (a paragraph
+  typed on a phone is one long line) and the Sent copy was written with bare LFs. Non-ASCII bodies were fine
+  (quoted-printable). Reproduced with `TestBuildBodyLinesAreWireSafe`, plain and markdown (failed: bare LF at
+  byte 237; the long line check is behind it). New `wireText` normalises to CRLF and breaks any line over 900
+  bytes at a space (plain text also hard-cuts at a rune boundary when a line has none; HTML only breaks at spaces,
+  so a tag is never split). The markdown test now compares the text part line-ending-insensitively.

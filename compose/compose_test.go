@@ -277,8 +277,9 @@ func TestBuildMarkdownRendersSafeHTML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read built message: %v", err)
 	}
-	if env.Text != m.Text {
-		t.Errorf("text/plain part = %q, want the raw markdown %q", env.Text, m.Text)
+	// Line breaks go out as CRLF; the markdown source is otherwise untouched.
+	if got := strings.ReplaceAll(env.Text, "\r\n", "\n"); got != m.Text {
+		t.Errorf("text/plain part = %q, want the raw markdown %q", got, m.Text)
 	}
 	if !strings.Contains(env.HTML, "<strong>Hi</strong>") {
 		t.Errorf("text/html part did not render bold: %q", env.HTML)
@@ -377,4 +378,84 @@ func htmlNodes(t *testing.T, doc string) []*html.Node {
 func allowedScheme(raw string) bool {
 	lower := strings.ToLower(strings.TrimSpace(raw))
 	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "mailto:")
+}
+
+// TestBuildEncodedDisplayNamesAreNotQuoted: RFC 2047 section 5 forbids an
+// encoded word inside a quoted-string, so a client shows `"=?utf-8?B?...?="`
+// verbatim. The oracle here is net/mail's own phrase parser with no extra
+// decoding, unlike parseAddress, which decodes a quoted name itself and so let
+// this through.
+func TestBuildEncodedDisplayNamesAreNotQuoted(t *testing.T) {
+	t.Parallel()
+	cases := map[string]string{
+		"non-ASCII":                 "Zoë Müller",
+		"long non-ASCII":            strings.Repeat("é", 60),
+		"ASCII that looks like one": "=?utf-8?q?hi?=",
+	}
+	for name, display := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			m := base()
+			m.From.Name = display
+			m.To[0].Name = display
+			m.Bcc = []compose.Address{{Name: display, Address: "hidden@example.test"}}
+			m.KeepBcc = true
+			raw, _, err := compose.Build(m)
+			if err != nil {
+				t.Fatalf("Build: %v", err)
+			}
+			msg := assertSafeHeaders(t, raw)
+			for _, h := range []string{"From", "To", "Bcc"} {
+				got := msg.Header.Get(h)
+				if strings.Contains(got, `"=?`) {
+					t.Errorf("%s header quotes an encoded word: %q", h, got)
+				}
+				addr, err := new(mail.AddressParser).Parse(got)
+				if err != nil {
+					t.Fatalf("parse %s %q: %v", h, got, err)
+				}
+				// The parser decodes encoded words in an unquoted phrase itself.
+				if addr.Name != display {
+					t.Errorf("%s display name = %q, want %q", h, addr.Name, display)
+				}
+			}
+		})
+	}
+}
+
+// TestBuildBodyLinesAreWireSafe: an all-ASCII body is sent as 7bit with no
+// re-encoding, so the operator's own line endings and line lengths reached the
+// wire. A paragraph typed on a phone is one very long line, and RFC 5322 caps a
+// line at 998 bytes; a lone LF or CR is not a line break SMTP accepts.
+func TestBuildBodyLinesAreWireSafe(t *testing.T) {
+	t.Parallel()
+	long := strings.Repeat("word ", 400) // one 2000-byte line
+	for _, md := range []bool{false, true} {
+		t.Run(fmt.Sprintf("markdown=%v", md), func(t *testing.T) {
+			t.Parallel()
+			m := base()
+			m.Markdown = md
+			m.Text = "first\nsecond\rthird\r\n" + long + "\nlast"
+			raw, _, err := compose.Build(m)
+			if err != nil {
+				t.Fatalf("Build: %v", err)
+			}
+			assertSafeHeaders(t, raw) // fails on any bare LF
+			if bytes.Contains(bytes.ReplaceAll(raw, []byte("\r\n"), nil), []byte("\r")) {
+				t.Errorf("output carries a lone CR")
+			}
+			for i, line := range bytes.Split(raw, []byte("\r\n")) {
+				if len(line) > 998 {
+					t.Errorf("line %d is %d bytes, over the 998 limit of RFC 5322", i, len(line))
+				}
+			}
+			env, err := enmime.ReadEnvelope(bytes.NewReader(raw))
+			if err != nil {
+				t.Fatalf("read back: %v", err)
+			}
+			if got, want := strings.Fields(env.Text), strings.Fields(m.Text); strings.Join(got, " ") != strings.Join(want, " ") {
+				t.Errorf("words changed in transit:\n got %q\nwant %q", env.Text, m.Text)
+			}
+		})
+	}
 }
