@@ -338,6 +338,39 @@ func TestSaveDraftRefusesBeyondTheOutboxCap(t *testing.T) {
 	}
 }
 
+// A draft created in another client has no local row but still appears: the
+// list reads the mirrored Drafts folder for the server-side entries.
+func TestDraftsInFolderListsServerDrafts(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct-1")
+	if err := dbs.UpsertFolder(ctx, Folder{
+		ID: "drafts-folder", AccountID: "acct-1", Name: "Drafts", Role: RoleDrafts,
+	}); err != nil {
+		t.Fatalf("folder: %v", err)
+	}
+	base := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	if err := dbs.UpsertMessage(ctx, Message{
+		ID: "srv-1", AccountID: "acct-1", FolderID: "drafts-folder", UID: 1,
+		ContentKey: "ck:srv-1", MessageID: "<srv-1@example.test>",
+		Subject: "A draft from Apple Mail", To: []Address{{Address: "you@example.test"}},
+		Date: base,
+	}); err != nil {
+		t.Fatalf("message: %v", err)
+	}
+	rows, err := dbs.DraftsInFolder(ctx, "acct-1", 50)
+	if err != nil {
+		t.Fatalf("drafts in folder: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != "srv-1" || rows[0].Subject != "A draft from Apple Mail" {
+		t.Fatalf("rows = %+v, want the one server draft", rows)
+	}
+	if len(rows[0].To) != 1 || rows[0].To[0].Address != "you@example.test" {
+		t.Fatalf("to = %+v, want the stored recipient", rows[0].To)
+	}
+}
+
 // A terminal abandoned draft is pruned after the retention; a live draft is not.
 func TestPruneDraftsRemovesOnlyOldTerminalRows(t *testing.T) {
 	t.Parallel()

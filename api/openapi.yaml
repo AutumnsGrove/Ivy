@@ -940,6 +940,103 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /drafts:
+    get:
+      operationId: listDrafts
+      summary: Compose drafts
+      description: >
+        The local drafts Ivy tracks merged with the account's mirrored Drafts
+        folder, so a draft made in Apple Mail appears too. Newest first.
+      parameters:
+        - name: account_id
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The drafts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DraftList"
+    post:
+      operationId: saveDraft
+      summary: Save a compose draft version
+      description: >
+        Files a new immutable version into the server's Drafts folder and removes
+        the version it supersedes, through the outbox. `draftId` plus
+        `baseVersion` give optimistic concurrency: a stale save is 409
+        `draft_conflict` carrying the newer content. A client-supplied `id` makes
+        a retried save idempotent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DraftRequest"
+      responses:
+        "200":
+          description: The stored version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DraftSummary"
+        "400":
+          description: >
+            `bad_request` (malformed), `bad_from` (the From is not this
+            account's address) or `invalid_message` (the builder refused a
+            field; `detail` names it).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: >
+            A stale save (`draft_conflict`; the body is the newer DraftResume) or
+            a full outbox (`outbox_full`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DraftResume"
+  /drafts/{id}:
+    get:
+      operationId: getDraft
+      summary: Resume a draft
+      parameters:
+        - $ref: "#/components/parameters/DraftID"
+        - name: account_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The compose fields to resume
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DraftResume"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: discardDraft
+      summary: Discard a draft and remove its server copy
+      parameters:
+        - $ref: "#/components/parameters/DraftID"
+        - name: account_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "204":
+          description: The draft is gone
+        "404":
+          $ref: "#/components/responses/NotFound"
   /outbox:
     post:
       operationId: enqueueOutbox
@@ -1097,6 +1194,12 @@ components:
       schema:
         type: string
     SendID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    DraftID:
       name: id
       in: path
       required: true
@@ -2034,3 +2137,141 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SendStatus"
+    DraftSource:
+      type: string
+      description: Whether a draft is Ivy's own local version or a mirrored server copy.
+      enum: [local, server]
+      x-enum-varnames: [DraftSourceLocal, DraftSourceServer]
+    DraftRequest:
+      type: object
+      required: [accountId, from, to, text]
+      properties:
+        id:
+          type: string
+          description: Optional version-row idempotency key; a retried save returns the stored version.
+        draftId:
+          type: string
+          description: The stable draft identity; omit on the first save.
+        baseVersion:
+          type: integer
+          description: The version the caller last saw; 0 for a new draft. A stale value is `draft_conflict`.
+        accountId:
+          type: string
+        from:
+          type: string
+          description: The sending address; for now it must be this account's address.
+        fromName:
+          type: string
+        to:
+          type: array
+          items:
+            type: string
+        cc:
+          type: array
+          items:
+            type: string
+        bcc:
+          type: array
+          items:
+            type: string
+        replyTo:
+          type: array
+          items:
+            type: string
+        subject:
+          type: string
+        text:
+          type: string
+          description: The message exactly as typed; it is the text/plain part.
+        markdown:
+          type: boolean
+        inReplyTo:
+          type: string
+        references:
+          type: array
+          items:
+            type: string
+    DraftSummary:
+      type: object
+      description: One draft as the list shows it
+      required: [id, accountId, version, subject, to, updatedAt, source]
+      properties:
+        id:
+          type: string
+          description: The local draft id, or the mirror message id for a server-only draft.
+        draftId:
+          type: string
+        accountId:
+          type: string
+        version:
+          type: integer
+        messageId:
+          type: string
+        subject:
+          type: string
+        to:
+          type: array
+          items:
+            type: string
+        updatedAt:
+          type: string
+          format: date-time
+        source:
+          $ref: "#/components/schemas/DraftSource"
+    DraftResume:
+      type: object
+      description: The compose fields needed to resume a draft
+      required: [id, accountId, version, source, to, text]
+      properties:
+        id:
+          type: string
+        draftId:
+          type: string
+        accountId:
+          type: string
+        version:
+          type: integer
+        messageId:
+          type: string
+        source:
+          $ref: "#/components/schemas/DraftSource"
+        from:
+          type: string
+        fromName:
+          type: string
+        to:
+          type: array
+          items:
+            type: string
+        cc:
+          type: array
+          items:
+            type: string
+        bcc:
+          type: array
+          items:
+            type: string
+        replyTo:
+          type: array
+          items:
+            type: string
+        subject:
+          type: string
+        text:
+          type: string
+        markdown:
+          type: boolean
+        inReplyTo:
+          type: string
+        references:
+          type: array
+          items:
+            type: string
+    DraftList:
+      type: object
+      required: [drafts]
+      properties:
+        drafts:
+          type: array
+          items:
+            $ref: "#/components/schemas/DraftSummary"

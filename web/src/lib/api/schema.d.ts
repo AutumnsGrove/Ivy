@@ -605,6 +605,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compose drafts
+         * @description The local drafts Ivy tracks merged with the account's mirrored Drafts folder, so a draft made in Apple Mail appears too. Newest first.
+         */
+        get: operations["listDrafts"];
+        put?: never;
+        /**
+         * Save a compose draft version
+         * @description Files a new immutable version into the server's Drafts folder and removes the version it supersedes, through the outbox. `draftId` plus `baseVersion` give optimistic concurrency: a stale save is 409 `draft_conflict` carrying the newer content. A client-supplied `id` makes a retried save idempotent.
+         */
+        post: operations["saveDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/drafts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resume a draft */
+        get: operations["getDraft"];
+        put?: never;
+        post?: never;
+        /** Discard a draft and remove its server copy */
+        delete: operations["discardDraft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/outbox": {
         parameters: {
             query?: never;
@@ -1145,6 +1187,70 @@ export interface components {
             active: components["schemas"]["SendStatus"][];
             recent: components["schemas"]["SendStatus"][];
         };
+        /**
+         * @description Whether a draft is Ivy's own local version or a mirrored server copy.
+         * @enum {string}
+         */
+        DraftSource: "local" | "server";
+        DraftRequest: {
+            /** @description Optional version-row idempotency key; a retried save returns the stored version. */
+            id?: string;
+            /** @description The stable draft identity; omit on the first save. */
+            draftId?: string;
+            /** @description The version the caller last saw; 0 for a new draft. A stale value is `draft_conflict`. */
+            baseVersion?: number;
+            accountId: string;
+            /** @description The sending address; for now it must be this account's address. */
+            from: string;
+            fromName?: string;
+            to: string[];
+            cc?: string[];
+            bcc?: string[];
+            replyTo?: string[];
+            subject?: string;
+            /** @description The message exactly as typed; it is the text/plain part. */
+            text: string;
+            markdown?: boolean;
+            inReplyTo?: string;
+            references?: string[];
+        };
+        /** @description One draft as the list shows it */
+        DraftSummary: {
+            /** @description The local draft id, or the mirror message id for a server-only draft. */
+            id: string;
+            draftId?: string;
+            accountId: string;
+            version: number;
+            messageId?: string;
+            subject: string;
+            to: string[];
+            /** Format: date-time */
+            updatedAt: string;
+            source: components["schemas"]["DraftSource"];
+        };
+        /** @description The compose fields needed to resume a draft */
+        DraftResume: {
+            id: string;
+            draftId?: string;
+            accountId: string;
+            version: number;
+            messageId?: string;
+            source: components["schemas"]["DraftSource"];
+            from?: string;
+            fromName?: string;
+            to: string[];
+            cc?: string[];
+            bcc?: string[];
+            replyTo?: string[];
+            subject?: string;
+            text: string;
+            markdown?: boolean;
+            inReplyTo?: string;
+            references?: string[];
+        };
+        DraftList: {
+            drafts: components["schemas"]["DraftSummary"][];
+        };
     };
     responses: {
         /** @description No such resource */
@@ -1161,6 +1267,7 @@ export interface components {
         MessageID: string;
         OutboxID: string;
         SendID: string;
+        DraftID: string;
         RuleID: string;
     };
     requestBodies: never;
@@ -2368,6 +2475,120 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    listDrafts: {
+        parameters: {
+            query?: {
+                account_id?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The drafts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftList"];
+                };
+            };
+        };
+    };
+    saveDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftRequest"];
+            };
+        };
+        responses: {
+            /** @description The stored version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftSummary"];
+                };
+            };
+            /** @description `bad_request` (malformed), `bad_from` (the From is not this account's address) or `invalid_message` (the builder refused a field; `detail` names it). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description A stale save (`draft_conflict`; the body is the newer DraftResume) or a full outbox (`outbox_full`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftResume"];
+                };
+            };
+        };
+    };
+    getDraft: {
+        parameters: {
+            query?: {
+                account_id?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["DraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The compose fields to resume */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftResume"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    discardDraft: {
+        parameters: {
+            query?: {
+                account_id?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["DraftID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The draft is gone */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     listOutbox: {

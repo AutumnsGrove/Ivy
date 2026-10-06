@@ -109,6 +109,63 @@ func scanDraft(s scanner) (Draft, error) {
 	return d, nil
 }
 
+// DraftServerRow is one mirrored message in an account's Drafts folder: a draft
+// created by another client, with no local compose row.
+type DraftServerRow struct {
+	ID         string
+	AccountID  string
+	ContentKey string
+	MessageID  string
+	Subject    string
+	To         []Address
+	Date       time.Time
+}
+
+// DraftsInFolder returns an account's mirrored Drafts-folder messages, newest
+// first, for the drafts list's server-side entries. A disabled message is not
+// listed.
+func (d *DBs) DraftsInFolder(ctx context.Context, accountID string, limit int) ([]DraftServerRow, error) {
+	if limit <= 0 {
+		limit = DefaultDraftListLimit
+	}
+	limit = min(limit, MaxDraftListLimit)
+	rows, err := d.Mirror.Read.QueryContext(ctx, `
+		SELECT m.id, m.account_id, m.content_key, COALESCE(m.message_id_hdr, ''),
+		       COALESCE(m.subject, ''), COALESCE(m.to_json, ''), COALESCE(m.date, '')
+		FROM messages m JOIN folders f ON f.id = m.folder_id
+		WHERE f.account_id = ? AND f.role = ? AND f.gone_at IS NULL AND m.disabled_at IS NULL
+		ORDER BY COALESCE(m.date, '') DESC, m.id DESC LIMIT ?`,
+		accountID, RoleDrafts, limit)
+	if err != nil {
+		return nil, fmt.Errorf("drafts in folder for %s: %w", accountID, err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []DraftServerRow
+	for rows.Next() {
+		var (
+			r      DraftServerRow
+			toJSON string
+			date   string
+		)
+		if err := rows.Scan(&r.ID, &r.AccountID, &r.ContentKey, &r.MessageID, &r.Subject, &toJSON, &date); err != nil {
+			return nil, fmt.Errorf("drafts in folder for %s: %w", accountID, err)
+		}
+		if err := decodeJSON(toJSON, &r.To); err != nil {
+			r.To = nil
+		}
+		if date != "" {
+			if t, err := parseTime(date); err == nil {
+				r.Date = t
+			}
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("drafts in folder for %s: %w", accountID, err)
+	}
+	return out, nil
+}
+
 // DraftTerminalRetention is how long a sent or discarded version row survives,
 // so a recent history or undo can still resolve it. The queue's own pruning is
 // the only deletion, and only of terminal rows.

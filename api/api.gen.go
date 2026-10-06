@@ -112,6 +112,24 @@ func (e CheckDetailSureness) Valid() bool {
 	}
 }
 
+// Defines values for DraftSource.
+const (
+	DraftSourceLocal  DraftSource = "local"
+	DraftSourceServer DraftSource = "server"
+)
+
+// Valid indicates whether the value is a known member of the DraftSource enum.
+func (e DraftSource) Valid() bool {
+	switch e {
+	case DraftSourceLocal:
+		return true
+	case DraftSourceServer:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EventType.
 const (
 	EventTypeFolderChanged  EventType = "folder.changed"
@@ -647,6 +665,83 @@ type Conversation struct {
 	When time.Time `json:"when"`
 }
 
+// DraftList defines model for DraftList.
+type DraftList struct {
+	Drafts []DraftSummary `json:"drafts"`
+}
+
+// DraftRequest defines model for DraftRequest.
+type DraftRequest struct {
+	AccountId string `json:"accountId"`
+
+	// BaseVersion The version the caller last saw; 0 for a new draft. A stale value is `draft_conflict`.
+	BaseVersion *int      `json:"baseVersion,omitempty"`
+	Bcc         *[]string `json:"bcc,omitempty"`
+	Cc          *[]string `json:"cc,omitempty"`
+
+	// DraftId The stable draft identity; omit on the first save.
+	DraftId *string `json:"draftId,omitempty"`
+
+	// From The sending address; for now it must be this account's address.
+	From     string  `json:"from"`
+	FromName *string `json:"fromName,omitempty"`
+
+	// Id Optional version-row idempotency key; a retried save returns the stored version.
+	Id         *string   `json:"id,omitempty"`
+	InReplyTo  *string   `json:"inReplyTo,omitempty"`
+	Markdown   *bool     `json:"markdown,omitempty"`
+	References *[]string `json:"references,omitempty"`
+	ReplyTo    *[]string `json:"replyTo,omitempty"`
+	Subject    *string   `json:"subject,omitempty"`
+
+	// Text The message exactly as typed; it is the text/plain part.
+	Text string   `json:"text"`
+	To   []string `json:"to"`
+}
+
+// DraftResume The compose fields needed to resume a draft
+type DraftResume struct {
+	AccountId  string    `json:"accountId"`
+	Bcc        *[]string `json:"bcc,omitempty"`
+	Cc         *[]string `json:"cc,omitempty"`
+	DraftId    *string   `json:"draftId,omitempty"`
+	From       *string   `json:"from,omitempty"`
+	FromName   *string   `json:"fromName,omitempty"`
+	Id         string    `json:"id"`
+	InReplyTo  *string   `json:"inReplyTo,omitempty"`
+	Markdown   *bool     `json:"markdown,omitempty"`
+	MessageId  *string   `json:"messageId,omitempty"`
+	References *[]string `json:"references,omitempty"`
+	ReplyTo    *[]string `json:"replyTo,omitempty"`
+
+	// Source Whether a draft is Ivy's own local version or a mirrored server copy.
+	Source  DraftSource `json:"source"`
+	Subject *string     `json:"subject,omitempty"`
+	Text    string      `json:"text"`
+	To      []string    `json:"to"`
+	Version int         `json:"version"`
+}
+
+// DraftSource Whether a draft is Ivy's own local version or a mirrored server copy.
+type DraftSource string
+
+// DraftSummary One draft as the list shows it
+type DraftSummary struct {
+	AccountId string  `json:"accountId"`
+	DraftId   *string `json:"draftId,omitempty"`
+
+	// Id The local draft id, or the mirror message id for a server-only draft.
+	Id        string  `json:"id"`
+	MessageId *string `json:"messageId,omitempty"`
+
+	// Source Whether a draft is Ivy's own local version or a mirrored server copy.
+	Source    DraftSource `json:"source"`
+	Subject   string      `json:"subject"`
+	To        []string    `json:"to"`
+	UpdatedAt time.Time   `json:"updatedAt"`
+	Version   int         `json:"version"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	// Code Stable code the UI maps to its own copy
@@ -1109,6 +1204,9 @@ type Version struct {
 	Version string `json:"version"`
 }
 
+// DraftID defines model for DraftID.
+type DraftID = string
+
 // MessageID defines model for MessageID.
 type MessageID = string
 
@@ -1123,6 +1221,22 @@ type SendID = string
 
 // NotFound defines model for NotFound.
 type NotFound = Error
+
+// ListDraftsParams defines parameters for ListDrafts.
+type ListDraftsParams struct {
+	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
+	Limit     *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DiscardDraftParams defines parameters for DiscardDraft.
+type DiscardDraftParams struct {
+	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
+}
+
+// GetDraftParams defines parameters for GetDraft.
+type GetDraftParams struct {
+	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
+}
 
 // ListInboxParams defines parameters for ListInbox.
 type ListInboxParams struct {
@@ -1183,6 +1297,9 @@ type UpdateAccountPasswordJSONRequestBody = UpdatePassword
 
 // AskJSONRequestBody defines body for Ask for application/json ContentType.
 type AskJSONRequestBody = AskRequest
+
+// SaveDraftJSONRequestBody defines body for SaveDraft for application/json ContentType.
+type SaveDraftJSONRequestBody = DraftRequest
 
 // SnoozeMessageJSONRequestBody defines body for SnoozeMessage for application/json ContentType.
 type SnoozeMessageJSONRequestBody = SnoozeRequest
