@@ -742,6 +742,17 @@ var stateMigrations = []migration{
 				WHERE state NOT IN ('appended','done','failed','unconfirmed')`,
 		},
 	},
+	{
+		version: 11,
+		statements: []string{
+			// The original compose request, kept so undo can hand the draft back to
+			// the compose screen (and 4d can file it in Drafts). It is the caller's
+			// JSON, stored verbatim so nothing the operator typed is lost to a
+			// re-render; the built wire and Sent bodies remain the source of truth
+			// for the message itself.
+			`ALTER TABLE send_queue ADD COLUMN compose_json BLOB`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state

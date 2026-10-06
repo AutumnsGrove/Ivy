@@ -547,6 +547,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Live and recent outgoing messages */
+        get: operations["listSends"];
+        put?: never;
+        /**
+         * Queue an outgoing message
+         * @description The Send button is the explicit confirmation. The message is built and committed to the send queue before this answers; the worker submits it after the undo window (`compose.undo_delay_seconds`, 0 = no window). A client-supplied `id` makes a retried request idempotent.
+         */
+        post: operations["sendMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/send/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One outgoing message */
+        get: operations["getSend"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/send/{id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo a queued send before its deadline
+         * @description Cancels a queued message and returns its draft so the compose screen can restore it. The deadline is server-side, so a closed tab or a restart does not move it. At or after the deadline, or once the message has left the queue, the answer is 409 `too_late`; there is no undo.
+         */
+        post: operations["undoSend"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/outbox": {
         parameters: {
             query?: never;
@@ -1039,6 +1097,54 @@ export interface components {
             active: components["schemas"]["OutboxItem"][];
             recent: components["schemas"]["OutboxItem"][];
         };
+        SendRequest: {
+            /** @description Optional client idempotency key. A repeat returns the existing send instead of queueing a second one. */
+            id?: string;
+            accountId: string;
+            /** @description The sending address; for now it must be this account's address. */
+            from: string;
+            /** @description An optional display name, RFC 2047 encoded by the builder. */
+            fromName?: string;
+            to: string[];
+            cc?: string[];
+            bcc?: string[];
+            replyTo?: string[];
+            subject: string;
+            /** @description The message exactly as typed; it is the text/plain part. */
+            text: string;
+            /** @description Render `text` through goldmark into the text/html part. */
+            markdown?: boolean;
+            inReplyTo?: string;
+            references?: string[];
+        };
+        /** @description One outgoing message and where it is in the queue */
+        SendStatus: {
+            id: string;
+            accountId: string;
+            messageId?: string;
+            /** @enum {string} */
+            state: "queued" | "submitting" | "submitted" | "appended" | "done" | "failed" | "unconfirmed" | "cancelled";
+            from?: string;
+            to: string[];
+            subject?: string;
+            attempts?: number;
+            lastErrorCode?: string;
+            lastErrorDetail?: string;
+            /** Format: date-time */
+            undoDeadline?: string;
+            /** @description The original request JSON, returned by undo so the screen can restore it. */
+            draft?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            completedAt?: string;
+        };
+        SendList: {
+            active: components["schemas"]["SendStatus"][];
+            recent: components["schemas"]["SendStatus"][];
+        };
     };
     responses: {
         /** @description No such resource */
@@ -1054,6 +1160,7 @@ export interface components {
     parameters: {
         MessageID: string;
         OutboxID: string;
+        SendID: string;
         RuleID: string;
     };
     requestBodies: never;
@@ -2133,6 +2240,127 @@ export interface operations {
             };
             /** @description Too many streams are open (`too_many_streams`) or Ivy is shutting down (`unavailable`) */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listSends: {
+        parameters: {
+            query?: {
+                account_id?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Live sends and recent terminal ones */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendList"];
+                };
+            };
+        };
+    };
+    sendMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendRequest"];
+            };
+        };
+        responses: {
+            /** @description The message is queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendStatus"];
+                };
+            };
+            /** @description `bad_request` (malformed), `bad_from` (the From is not this account's address; send-as arrives in 4e), `invalid_message` (the builder refused a field; `detail` names it), or an over-large body. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description The account's send queue is full (`send_full`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getSend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["SendID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The send */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendStatus"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    undoSend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["SendID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The send is cancelled; `draft` holds the original request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendStatus"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description The send can no longer be undone (`too_late`) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

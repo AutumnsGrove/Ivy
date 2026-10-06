@@ -733,4 +733,25 @@ The queue that makes sending durable and never duplicates a message. Designed at
 - **Left for the operator.** The live send on the board (send to self, the Sent copy visible in Apple
   Mail); it waits on 4c's API and 4f's screen to be reachable from the app.
 
+## 4c Undo send and the send API (round 61, 2026-10-06)
+
+- **The setting.** `compose.undo_delay_seconds` lives in `state.db`'s settings, global with a
+  per-account override, default 10 s, 0 = off, clamped to 120 s on read so a hand-edited row cannot
+  send early. `store.UndoSendDelay`/`SetUndoSendDelay`; the limits are in the 4a table.
+- **The API.** `POST /send` builds the wire and Sent copies with `compose`, stores the original
+  request as the draft, and commits the queue row with an undo deadline; a client-supplied `id`
+  makes a retried tap idempotent. `POST /send/{id}/undo` cancels a queued row before its server-side
+  deadline and returns the draft; at or after it the answer is 409 `too_late`. `GET /send` and
+  `GET /send/{id}` expose the live and recent state, and each change publishes a `send.state` hint.
+  The From must be the account's own address (send-as is 4e). Migration 11 adds the `compose_json`
+  draft column and a `cancelled` send state; `store.CancelSend` is the one cancel path.
+- **Tests.** `store/sendqueue_test.go` (cancel before/at the deadline, no window, unknown id, the
+  setting's precedence and clamping), `gateway/send_test.go` (queue + deadline + both built copies,
+  foreign From, unknown account, an injected subject, an over-large body, client-id idempotency, the
+  undo boundary at the second before and at the deadline, the zero-delay case, list/get, and the
+  `send.state` hint) and `send/worker_test.go` (`TestSendWaitsForTheUndoWindow`, a restart reading the
+  deadline from the database). `make check` green.
+- **Next.** 4d drafts and 4e identities, then 4f wires the compose screen to these endpoints.
+
+
 

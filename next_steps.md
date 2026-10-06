@@ -5,10 +5,10 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-06. **4a and 4b are done** (`compose/` + `smtp/`, then `send_queue` + the Sent
-copy; gates G1-G3 recorded). The builder validates every header-bound value and renders markdown;
-the transport submits over implicit TLS; the queue is durable, and a crash whose outcome is unknown
-is `unconfirmed` and never auto-resent. 4c (the send API and undo) is next. **In-app account
+last updated: 2026-10-06. **4a, 4b and 4c are done** (`compose/` + `smtp/`, the `send_queue` +
+Sent copy, then the send API and undo). `POST /send` builds both copies and queues with a server-side
+undo deadline; `POST /send/{id}/undo` cancels before it and hands the draft back. 4d (drafts) and 4e
+(identities) are next. **In-app account
 setup is built (round 59)**, the last thing before the first install: an account is typed into
 `/welcome/account`, tested against Purelymail, stored as a private password file plus a `state.db`
 row, and started without a restart; what is left is `sudo ./install.sh` on the board and the live
@@ -69,6 +69,15 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 `cmd/` (`ivy`, `ivy-dev`, `ivy-assets`). No `Dockerfile` or image-publish workflow yet.
 
 ## ▶ Now
+
+**4c is done** (2026-10-06). `compose.undo_delay_seconds` is a global/per-account setting (default 10,
+0 = off, clamped to 120). `POST /send` builds the wire and Sent copies, stores the original request
+as the draft, and commits the queue row with an `undo_deadline`; a client `id` makes a retried tap
+idempotent. `POST /send/{id}/undo` cancels a queued row before the server-side deadline and returns
+the draft; at or after it the answer is 409 `too_late`. `GET /send` and `GET /send/{id}` expose the
+state, and every change publishes a `send.state` hint. The From must be the account's own address
+until 4e brings identities. State migration 11 adds the draft column and the `cancelled` state. See
+`docs/BUILD-LOG.md`. **Next: 4d drafts and 4e identities.**
 
 **4b is done** (2026-10-06; gates G2 and G3 in `docs/handoffs/2026-10-06-G2-send-queue-design.md`
 and `2026-10-06-G3-send-crash.md`). State migration 10 adds `send_queue`: the whole message (wire and
@@ -415,9 +424,9 @@ T11-T13 on top of chunk 3's T1-T10) are in `docs/CHUNK4-BRIEF.md`; read it after
 
 Checkpoints: **G1** (4a, injection corpus failing before the builder), **G2** (4b, design before code),
 **G3** (4b, crash tests pass), **G4** (4g, before any image dependency), **G5** (end of chunk, Claude's
-Review). **4a and 4b are done**: `compose/` and `smtp/` are implemented and green, and `send_queue`
-with the Sent copy is implemented and crash-tested (gates G1-G3, `docs/BUILD-LOG.md`). **4c** (the
-send API and undo) is next.
+Review). **4a, 4b and 4c are done**: `compose/`/`smtp/`, the `send_queue` with the Sent copy, and the
+send API with undo are implemented and green. **4d** (drafts) and **4e** (identities) are next, then
+4f wires the compose screen.
 
 ## Operator actions still open
 

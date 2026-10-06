@@ -328,6 +328,42 @@ func (e RuleConditionField) Valid() bool {
 	}
 }
 
+// Defines values for SendStatusState.
+const (
+	SendStateAppended    SendStatusState = "appended"
+	SendStateCancelled   SendStatusState = "cancelled"
+	SendStateDone        SendStatusState = "done"
+	SendStateFailed      SendStatusState = "failed"
+	SendStateQueued      SendStatusState = "queued"
+	SendStateSubmitted   SendStatusState = "submitted"
+	SendStateSubmitting  SendStatusState = "submitting"
+	SendStateUnconfirmed SendStatusState = "unconfirmed"
+)
+
+// Valid indicates whether the value is a known member of the SendStatusState enum.
+func (e SendStatusState) Valid() bool {
+	switch e {
+	case SendStateAppended:
+		return true
+	case SendStateCancelled:
+		return true
+	case SendStateDone:
+		return true
+	case SendStateFailed:
+		return true
+	case SendStateQueued:
+		return true
+	case SendStateSubmitted:
+		return true
+	case SendStateSubmitting:
+		return true
+	case SendStateUnconfirmed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SnoozeRequestPreset.
 const (
 	SnoozeRequestPresetLaterToday SnoozeRequestPreset = "later_today"
@@ -936,6 +972,63 @@ type SearchResults struct {
 	Total      int         `json:"total"`
 }
 
+// SendList defines model for SendList.
+type SendList struct {
+	Active []SendStatus `json:"active"`
+	Recent []SendStatus `json:"recent"`
+}
+
+// SendRequest defines model for SendRequest.
+type SendRequest struct {
+	AccountId string    `json:"accountId"`
+	Bcc       *[]string `json:"bcc,omitempty"`
+	Cc        *[]string `json:"cc,omitempty"`
+
+	// From The sending address; for now it must be this account's address.
+	From string `json:"from"`
+
+	// FromName An optional display name, RFC 2047 encoded by the builder.
+	FromName *string `json:"fromName,omitempty"`
+
+	// Id Optional client idempotency key. A repeat returns the existing send instead of queueing a second one.
+	Id        *string `json:"id,omitempty"`
+	InReplyTo *string `json:"inReplyTo,omitempty"`
+
+	// Markdown Render `text` through goldmark into the text/html part.
+	Markdown   *bool     `json:"markdown,omitempty"`
+	References *[]string `json:"references,omitempty"`
+	ReplyTo    *[]string `json:"replyTo,omitempty"`
+	Subject    string    `json:"subject"`
+
+	// Text The message exactly as typed; it is the text/plain part.
+	Text string   `json:"text"`
+	To   []string `json:"to"`
+}
+
+// SendStatus One outgoing message and where it is in the queue
+type SendStatus struct {
+	AccountId   string     `json:"accountId"`
+	Attempts    *int       `json:"attempts,omitempty"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+
+	// Draft The original request JSON, returned by undo so the screen can restore it.
+	Draft           *string         `json:"draft,omitempty"`
+	From            *string         `json:"from,omitempty"`
+	Id              string          `json:"id"`
+	LastErrorCode   *string         `json:"lastErrorCode,omitempty"`
+	LastErrorDetail *string         `json:"lastErrorDetail,omitempty"`
+	MessageId       *string         `json:"messageId,omitempty"`
+	State           SendStatusState `json:"state"`
+	Subject         *string         `json:"subject,omitempty"`
+	To              []string        `json:"to"`
+	UndoDeadline    *time.Time      `json:"undoDeadline,omitempty"`
+	UpdatedAt       time.Time       `json:"updatedAt"`
+}
+
+// SendStatusState defines model for SendStatus.State.
+type SendStatusState string
+
 // SnoozeRequest defines model for SnoozeRequest.
 type SnoozeRequest struct {
 	Preset SnoozeRequestPreset `json:"preset"`
@@ -1025,6 +1118,9 @@ type OutboxID = string
 // RuleID defines model for RuleID.
 type RuleID = string
 
+// SendID defines model for SendID.
+type SendID = string
+
 // NotFound defines model for NotFound.
 type NotFound = Error
 
@@ -1070,6 +1166,12 @@ type SearchParams struct {
 	Cursor    *string   `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// ListSendsParams defines parameters for ListSends.
+type ListSendsParams struct {
+	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
+	Limit     *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ConnectAccountJSONRequestBody defines body for ConnectAccount for application/json ContentType.
 type ConnectAccountJSONRequestBody = ConnectAccount
 
@@ -1102,6 +1204,9 @@ type SetRuleEnabledJSONRequestBody = RuleToggle
 
 // UpdateRuleJSONRequestBody defines body for UpdateRule for application/json ContentType.
 type UpdateRuleJSONRequestBody = RuleInput
+
+// SendMessageJSONRequestBody defines body for SendMessage for application/json ContentType.
+type SendMessageJSONRequestBody = SendRequest
 
 // CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
 type CreateTagJSONRequestBody = TagCreate

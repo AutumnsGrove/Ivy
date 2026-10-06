@@ -307,6 +307,37 @@ func TestSendCrashAfterSubmitBeforeAppend(t *testing.T) {
 	}
 }
 
+// TestSendWaitsForTheUndoWindow proves the deadline is respected and survives a
+// restart: nothing is sent before it, and a fresh worker sends once it passes.
+func TestSendWaitsForTheUndoWindow(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t, true)
+	msgID := "<undo-window@example.test>"
+	body := mailworld.Msg().From("me@grove.test").To("you@example.test").
+		Subject("undo").MessageID(msgID).Text("wait").Build()
+	deadline := fx.now.Add(10 * time.Second)
+	if _, _, err := fx.dbs.EnqueueSend(fx.ctx, store.SendMessage{
+		ID: "send-1", AccountID: "acct-1", MessageID: msgID,
+		ContentKey: store.ContentKey(msgID, nil), EnvelopeFrom: "me@grove.test",
+		Recipients: []string{"you@example.test"}, WireBody: body, SentBody: body,
+		UndoDeadline: deadline, CreatedAt: fx.now, UpdatedAt: fx.now,
+	}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	fx.runSend(t)
+	if got := len(fx.w.Sent()); got != 0 {
+		t.Fatalf("sent %d messages inside the undo window, want 0", got)
+	}
+
+	// A restart is a fresh worker reading the deadline from the database.
+	fx.now = deadline
+	fx.runSend(t)
+	if got := len(fx.w.Sent()); got != 1 {
+		t.Fatalf("sent %d messages after the window closed, want 1", got)
+	}
+}
+
 // A failed Sent copy does not fail the send: the message went out, only Ivy's
 // own copy is missing, and the row says so.
 func TestSendSentCopyFailureIsNotASendFailure(t *testing.T) {

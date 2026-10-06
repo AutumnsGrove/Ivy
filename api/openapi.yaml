@@ -841,6 +841,105 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /send:
+    post:
+      operationId: sendMessage
+      summary: Queue an outgoing message
+      description: >
+        The Send button is the explicit confirmation. The message is built and
+        committed to the send queue before this answers; the worker submits it
+        after the undo window (`compose.undo_delay_seconds`, 0 = no window). A
+        client-supplied `id` makes a retried request idempotent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendRequest"
+      responses:
+        "202":
+          description: The message is queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendStatus"
+        "400":
+          description: >
+            `bad_request` (malformed), `bad_from` (the From is not this
+            account's address; send-as arrives in 4e), `invalid_message` (the
+            builder refused a field; `detail` names it), or an over-large body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The account's send queue is full (`send_full`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      operationId: listSends
+      summary: Live and recent outgoing messages
+      parameters:
+        - name: account_id
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Live sends and recent terminal ones
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendList"
+  /send/{id}:
+    get:
+      operationId: getSend
+      summary: One outgoing message
+      parameters:
+        - $ref: "#/components/parameters/SendID"
+      responses:
+        "200":
+          description: The send
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendStatus"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /send/{id}/undo:
+    post:
+      operationId: undoSend
+      summary: Undo a queued send before its deadline
+      description: >
+        Cancels a queued message and returns its draft so the compose screen can
+        restore it. The deadline is server-side, so a closed tab or a restart
+        does not move it. At or after the deadline, or once the message has left
+        the queue, the answer is 409 `too_late`; there is no undo.
+      parameters:
+        - $ref: "#/components/parameters/SendID"
+      responses:
+        "200":
+          description: The send is cancelled; `draft` holds the original request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendStatus"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The send can no longer be undone (`too_late`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /outbox:
     post:
       operationId: enqueueOutbox
@@ -992,6 +1091,12 @@ components:
       schema:
         type: string
     OutboxID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    SendID:
       name: id
       in: path
       required: true
@@ -1824,3 +1929,108 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OutboxItem"
+    SendRequest:
+      type: object
+      required: [accountId, from, to, subject, text]
+      properties:
+        id:
+          type: string
+          description: >
+            Optional client idempotency key. A repeat returns the existing send
+            instead of queueing a second one.
+        accountId:
+          type: string
+        from:
+          type: string
+          description: The sending address; for now it must be this account's address.
+        fromName:
+          type: string
+          description: An optional display name, RFC 2047 encoded by the builder.
+        to:
+          type: array
+          items:
+            type: string
+        cc:
+          type: array
+          items:
+            type: string
+        bcc:
+          type: array
+          items:
+            type: string
+        replyTo:
+          type: array
+          items:
+            type: string
+        subject:
+          type: string
+        text:
+          type: string
+          description: The message exactly as typed; it is the text/plain part.
+        markdown:
+          type: boolean
+          description: Render `text` through goldmark into the text/html part.
+        inReplyTo:
+          type: string
+        references:
+          type: array
+          items:
+            type: string
+    SendStatus:
+      type: object
+      description: One outgoing message and where it is in the queue
+      required: [id, accountId, state, to, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        accountId:
+          type: string
+        messageId:
+          type: string
+        state:
+          type: string
+          enum: [queued, submitting, submitted, appended, done, failed, unconfirmed, cancelled]
+          x-enum-varnames:
+            [SendStateQueued, SendStateSubmitting, SendStateSubmitted, SendStateAppended,
+             SendStateDone, SendStateFailed, SendStateUnconfirmed, SendStateCancelled]
+        from:
+          type: string
+        to:
+          type: array
+          items:
+            type: string
+        subject:
+          type: string
+        attempts:
+          type: integer
+        lastErrorCode:
+          type: string
+        lastErrorDetail:
+          type: string
+        undoDeadline:
+          type: string
+          format: date-time
+        draft:
+          type: string
+          description: The original request JSON, returned by undo so the screen can restore it.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+    SendList:
+      type: object
+      required: [active, recent]
+      properties:
+        active:
+          type: array
+          items:
+            $ref: "#/components/schemas/SendStatus"
+        recent:
+          type: array
+          items:
+            $ref: "#/components/schemas/SendStatus"

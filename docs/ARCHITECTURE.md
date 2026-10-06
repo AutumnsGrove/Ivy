@@ -354,7 +354,12 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   is an envelope recipient on the wire and a header only on the Sent copy. `smtp.Submit` opens one
   implicit-TLS connection per call, reads `SIZE` from `EHLO`, and returns a `*SendError` whose `Kind`
   and `Transient` flag the 4b queue branches on; a refused recipient aborts the whole transaction, so
-  a send is never partial. Nothing is queued or resend yet: that is 4b.
+  a send is never partial. **4b** added the `send_queue` (the durable may-have-been-sent point
+  before `DATA`, `unconfirmed` for an unknown outcome, the Sent `append`) and **4c** the API: `POST
+  /send` builds both copies and commits the row with the undo deadline, `POST /send/{id}/undo`
+  cancels a queued row before its server-side deadline and returns the draft, and every change is a
+  `send.state` hint. The window is `compose.undo_delay_seconds` (default 10, 0 = off, per account over
+  global); the From must be the account's own address until 4e brings identities.
 - **Auth results:** parse `Authentication-Results` (SPF/DKIM/DMARC) into a trust signal used by
   the phishing question and the spoofed-sender discount. Only the **topmost** header whose
   `authserv-id` is in the account's `trusted_authserv_ids` is believed, and **only that one

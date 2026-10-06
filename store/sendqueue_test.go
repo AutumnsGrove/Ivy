@@ -218,6 +218,109 @@ func TestPruneSendQueueRemovesOnlyOldTerminalRows(t *testing.T) {
 	}
 }
 
+// undoMessage is a live send with a 10-second window and a stored draft.
+func undoMessage() SendMessage {
+	m := newSend("send-1", "<m1@example.test>")
+	m.UndoDeadline = sendNow.Add(10 * time.Second)
+	m.Draft = []byte(`{"to":"you@example.test","subject":"hi"}`)
+	return m
+}
+
+// Undo works the second before the deadline, hands the draft back, and cannot
+// run twice.
+func TestCancelSendUndoesBeforeTheDeadline(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	if _, _, err := dbs.EnqueueSend(ctx, undoMessage()); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	cancelled, err := dbs.CancelSend(ctx, "send-1", sendNow.Add(9*time.Second))
+	if err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	if cancelled.State != SendCancelled {
+		t.Fatalf("state = %q, want cancelled", cancelled.State)
+	}
+	if string(cancelled.Draft) != `{"to":"you@example.test","subject":"hi"}` {
+		t.Errorf("draft = %q, want the stored request back", cancelled.Draft)
+	}
+	if _, err := dbs.CancelSend(ctx, "send-1", sendNow.Add(9*time.Second)); !errors.Is(err, ErrSendTooLate) {
+		t.Errorf("second undo = %v, want ErrSendTooLate", err)
+	}
+	if _, err := dbs.NextQueuedSend(ctx, "acct-1", sendNow.Add(time.Minute)); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a cancelled send is still queued: %v", err)
+	}
+}
+
+// At the deadline the send is no longer cancellable.
+func TestCancelSendIsTooLateAtTheDeadline(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	if _, _, err := dbs.EnqueueSend(ctx, undoMessage()); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if _, err := dbs.CancelSend(ctx, "send-1", sendNow.Add(10*time.Second)); !errors.Is(err, ErrSendTooLate) {
+		t.Fatalf("cancel at the deadline = %v, want ErrSendTooLate", err)
+	}
+	if got, _ := dbs.GetSend(ctx, "send-1"); got.State != SendQueued {
+		t.Errorf("state = %q, want still queued", got.State)
+	}
+}
+
+// No window (delay 0) means no undo, and an unknown id is not found.
+func TestCancelSendWithoutAWindowAndUnknownID(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	if _, _, err := dbs.EnqueueSend(ctx, newSend("send-1", "<m1@example.test>")); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if _, err := dbs.CancelSend(ctx, "send-1", sendNow); !errors.Is(err, ErrSendTooLate) {
+		t.Errorf("cancel with no window = %v, want ErrSendTooLate", err)
+	}
+	if _, err := dbs.CancelSend(ctx, "missing", sendNow); !errors.Is(err, ErrNotFound) {
+		t.Errorf("cancel unknown = %v, want ErrNotFound", err)
+	}
+}
+
+func TestUndoSendDelayPrecedenceAndBounds(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	if n, err := dbs.UndoSendDelay(ctx, "acct-1"); err != nil || n != DefaultUndoSendDelay {
+		t.Fatalf("default = %d, %v; want %d", n, err, DefaultUndoSendDelay)
+	}
+	if err := dbs.SetUndoSendDelay(ctx, "", 30); err != nil {
+		t.Fatalf("set global: %v", err)
+	}
+	if n, _ := dbs.UndoSendDelay(ctx, "acct-1"); n != 30 {
+		t.Errorf("global = %d, want 30", n)
+	}
+	if err := dbs.SetUndoSendDelay(ctx, "acct-1", 0); err != nil {
+		t.Fatalf("set account: %v", err)
+	}
+	if n, _ := dbs.UndoSendDelay(ctx, "acct-1"); n != 0 {
+		t.Errorf("account override = %d, want 0", n)
+	}
+	if n, _ := dbs.UndoSendDelay(ctx, "other"); n != 30 {
+		t.Errorf("another account = %d, want the global 30", n)
+	}
+	if err := dbs.SetUndoSendDelay(ctx, "", MaxUndoSendDelay+1); err == nil {
+		t.Error("an out-of-bounds value was accepted")
+	}
+	// A hand-edited database value is clamped on read, never trusted.
+	if err := dbs.SetSetting(ctx, "acct-1", UndoSendDelayKey, "99999"); err != nil {
+		t.Fatalf("hand edit: %v", err)
+	}
+	if n, _ := dbs.UndoSendDelay(ctx, "acct-1"); n != MaxUndoSendDelay {
+		t.Errorf("clamped = %d, want %d", n, MaxUndoSendDelay)
+	}
+}
+
 // The Sent append op is keyed on its send id, so a retried enqueue is the same
 // op and one send files exactly one copy.
 func TestAppendOutboxOpIsIdempotentPerSend(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -31,6 +32,9 @@ const (
 	// SendUnconfirmed is "may have been sent, unknown". Terminal and never
 	// automatically resent (round 60).
 	SendUnconfirmed = "unconfirmed"
+	// SendCancelled is a queued send the operator undid before its deadline.
+	// Terminal; the draft is returned to the compose screen (4c).
+	SendCancelled = "cancelled"
 )
 
 // Send queue limits (STANDARDS.md 4a). They are constants so a beyond-limit path
@@ -48,22 +52,38 @@ const (
 	MaxSendErrorDetail = 500
 )
 
+// Undo send (CHUNK4-BRIEF 1.3). The window is a setting, global and per account.
+const (
+	// UndoSendDelayKey is the settings key, in seconds.
+	UndoSendDelayKey = "compose.undo_delay_seconds"
+	// DefaultUndoSendDelay is the window when the operator has not chosen one.
+	DefaultUndoSendDelay = 10
+	// MaxUndoSendDelay bounds the window; a longer one would only hold mail.
+	MaxUndoSendDelay = 120
+)
+
 // ErrSendFull reports an enqueue refused because the account already holds
 // MaxQueuedSends live rows.
 var ErrSendFull = errors.New("send queue full")
 
+// ErrSendTooLate reports an undo after the deadline, or once the message has
+// left the queue: it is no longer cancellable.
+var ErrSendTooLate = errors.New("send is no longer cancellable")
+
 // SendMessage is one queued outgoing message. The wire and Sent bodies are both
 // stored so a retry is byte-identical and the Sent copy keeps its Bcc header.
 type SendMessage struct {
-	ID              string
-	AccountID       string
-	Seq             int64
-	MessageID       string
-	ContentKey      string
-	EnvelopeFrom    string
-	Recipients      []string
-	WireBody        []byte
-	SentBody        []byte
+	ID           string
+	AccountID    string
+	Seq          int64
+	MessageID    string
+	ContentKey   string
+	EnvelopeFrom string
+	Recipients   []string
+	WireBody     []byte
+	SentBody     []byte
+	// Draft is the original compose request, kept so undo can hand it back.
+	Draft           []byte
 	State           string
 	Attempts        int
 	NextAttemptAt   time.Time
@@ -77,7 +97,7 @@ type SendMessage struct {
 }
 
 const sendSelect = `SELECT id, account_id, seq, message_id, content_key, envelope_from,
-	recipients, wire_body, sent_body, state, attempts, next_attempt_at,
+	recipients, wire_body, sent_body, compose_json, state, attempts, next_attempt_at,
 	last_error_code, last_error_detail, undo_deadline, sent_append_id,
 	created_at, updated_at, completed_at FROM send_queue`
 
@@ -93,7 +113,7 @@ func scanSend(s scanner) (SendMessage, error) {
 	)
 	if err := s.Scan(
 		&m.ID, &m.AccountID, &m.Seq, &m.MessageID, &m.ContentKey, &m.EnvelopeFrom,
-		&recipients, &m.WireBody, &m.SentBody, &m.State, &m.Attempts, &next,
+		&recipients, &m.WireBody, &m.SentBody, &m.Draft, &m.State, &m.Attempts, &next,
 		&m.LastErrorCode, &m.LastErrorDetail, &undo, &m.SentAppendID,
 		&created, &updated, &completed,
 	); err != nil {
@@ -169,8 +189,8 @@ func (d *DBs) EnqueueSend(ctx context.Context, m SendMessage) (SendMessage, bool
 
 	var queued int
 	if err := tx.QueryRowContext(ctx,
-		`SELECT count(*) FROM send_queue WHERE account_id = ? AND state NOT IN (?, ?, ?, ?)`,
-		m.AccountID, SendAppended, SendDone, SendFailed, SendUnconfirmed).Scan(&queued); err != nil {
+		`SELECT count(*) FROM send_queue WHERE account_id = ? AND state NOT IN (?, ?, ?, ?, ?)`,
+		m.AccountID, SendAppended, SendDone, SendFailed, SendUnconfirmed, SendCancelled).Scan(&queued); err != nil {
 		return SendMessage{}, false, fmt.Errorf("enqueue send: count queue: %w", err)
 	}
 	if queued >= MaxQueuedSends {
@@ -189,11 +209,11 @@ func (d *DBs) EnqueueSend(ctx context.Context, m SendMessage) (SendMessage, bool
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO send_queue (
 			id, account_id, seq, message_id, content_key, envelope_from, recipients,
-			wire_body, sent_body, state, attempts, next_attempt_at, last_error_code,
+			wire_body, sent_body, compose_json, state, attempts, next_attempt_at, last_error_code,
 			last_error_detail, undo_deadline, sent_append_id, created_at, updated_at, completed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.ID, m.AccountID, m.Seq, m.MessageID, m.ContentKey, m.EnvelopeFrom, string(recipients),
-		m.WireBody, m.SentBody, m.State, m.Attempts, nullableTime(m.NextAttemptAt),
+		m.WireBody, m.SentBody, m.Draft, m.State, m.Attempts, nullableTime(m.NextAttemptAt),
 		m.LastErrorCode, m.LastErrorDetail, nullableTime(m.UndoDeadline), m.SentAppendID,
 		formatTime(m.CreatedAt), formatTime(m.UpdatedAt), nullableTime(m.CompletedAt)); err != nil {
 		return SendMessage{}, false, fmt.Errorf("enqueue send %s: %w", m.ID, err)
@@ -206,8 +226,8 @@ func (d *DBs) EnqueueSend(ctx context.Context, m SendMessage) (SendMessage, bool
 
 func liveSendByMessage(ctx context.Context, tx *sql.Tx, accountID, messageID string) (SendMessage, error) {
 	row := tx.QueryRowContext(ctx, sendSelect+`
-		WHERE account_id = ? AND message_id = ? AND state NOT IN (?, ?, ?, ?)`,
-		accountID, messageID, SendAppended, SendDone, SendFailed, SendUnconfirmed)
+		WHERE account_id = ? AND message_id = ? AND state NOT IN (?, ?, ?, ?, ?)`,
+		accountID, messageID, SendAppended, SendDone, SendFailed, SendUnconfirmed, SendCancelled)
 	m, err := scanSend(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SendMessage{}, ErrNotFound
@@ -363,6 +383,78 @@ func (d *DBs) MarkSendDone(ctx context.Context, id, code, detail string, now tim
 		SendDone, code, truncateSendDetail(detail), formatTime(now), formatTime(now), id)
 }
 
+// CancelSend undoes a queued send before its deadline. It returns the cancelled
+// row, whose Draft is the original compose request. A row that is no longer
+// queued, or whose deadline has passed (or that had no window), is ErrSendTooLate.
+func (d *DBs) CancelSend(ctx context.Context, id string, now time.Time) (SendMessage, error) {
+	tx, err := d.State.Write.BeginTx(ctx, nil)
+	if err != nil {
+		return SendMessage{}, fmt.Errorf("cancel send %s: %w", id, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	m, err := scanSend(tx.QueryRowContext(ctx, sendSelect+` WHERE id = ?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return SendMessage{}, ErrNotFound
+	}
+	if err != nil {
+		return SendMessage{}, fmt.Errorf("cancel send %s: %w", id, err)
+	}
+	if m.State != SendQueued || m.UndoDeadline.IsZero() || !now.Before(m.UndoDeadline) {
+		return SendMessage{}, ErrSendTooLate
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE send_queue SET state = ?, updated_at = ?, completed_at = ?
+		WHERE id = ? AND state = ?`, SendCancelled, formatTime(now), formatTime(now), id, SendQueued); err != nil {
+		return SendMessage{}, fmt.Errorf("cancel send %s: %w", id, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return SendMessage{}, fmt.Errorf("cancel send %s: %w", id, err)
+	}
+	m.State, m.UpdatedAt, m.CompletedAt = SendCancelled, now, now
+	return m, nil
+}
+
+// UndoSendDelay returns the effective undo window in seconds for an account,
+// preferring its own setting over the global one and then the default. A stored
+// value outside the bounds is clamped, so a hand-edited row cannot send early.
+func (d *DBs) UndoSendDelay(ctx context.Context, accountID string) (int, error) {
+	for _, scope := range []string{accountID, ""} {
+		raw, ok, err := d.GetSetting(ctx, scope, UndoSendDelayKey)
+		if err != nil {
+			return 0, err
+		}
+		if !ok {
+			continue
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(raw))
+		if err != nil {
+			continue // a malformed value falls through to the next scope
+		}
+		return clampUndoDelay(n), nil
+	}
+	return DefaultUndoSendDelay, nil
+}
+
+// SetUndoSendDelay stores the window for a scope; an empty accountID is global.
+func (d *DBs) SetUndoSendDelay(ctx context.Context, accountID string, seconds int) error {
+	if seconds < 0 || seconds > MaxUndoSendDelay {
+		return fmt.Errorf("undo delay %d is outside 0-%d", seconds, MaxUndoSendDelay)
+	}
+	return d.SetSetting(ctx, accountID, UndoSendDelayKey, strconv.Itoa(seconds))
+}
+
+func clampUndoDelay(seconds int) int {
+	switch {
+	case seconds < 0:
+		return 0
+	case seconds > MaxUndoSendDelay:
+		return MaxUndoSendDelay
+	default:
+		return seconds
+	}
+}
+
 // RecoverSubmittingSends marks every row that was mid-attempt when the process
 // stopped as unconfirmed. It runs once at worker startup. A submitting row means
 // DATA may have begun, and SMTP cannot be asked what happened.
@@ -389,8 +481,8 @@ func (d *DBs) PruneSendQueue(ctx context.Context, now time.Time) (int, error) {
 	cutoff := formatTime(now.Add(-MaxSendTerminalRetention))
 	res, err := d.State.Write.ExecContext(ctx, `
 		DELETE FROM send_queue
-		WHERE state IN (?, ?, ?, ?) AND completed_at IS NOT NULL AND completed_at < ?`,
-		SendAppended, SendDone, SendFailed, SendUnconfirmed, cutoff)
+		WHERE state IN (?, ?, ?, ?, ?) AND completed_at IS NOT NULL AND completed_at < ?`,
+		SendAppended, SendDone, SendFailed, SendUnconfirmed, SendCancelled, cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("prune send queue: %w", err)
 	}

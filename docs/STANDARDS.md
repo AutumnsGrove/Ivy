@@ -265,6 +265,8 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Send error detail (`store.MaxSendErrorDetail`) | 500 bytes | truncated on the rune boundary |
 | An ambiguous send (`smtp.SendError.Ambiguous`) | one message | the row is `unconfirmed`, never auto-resent; the operator sends again explicitly |
 | Send retry backoff | 5 s doubling to 15 min, ±20% jitter | the send waits; a not-yet-due send blocks the ones behind it (strict FIFO) |
+| Undo send window (`store.UndoSendDelay`) | `compose.undo_delay_seconds`, 0-120 s, default 10, per account over global | a queued send is not submitted until the deadline; undo before it cancels the row; 0 disables undo, and a hand-edited value is clamped on read |
+| A compose request body (`maxSendBodyBytes`) | `compose.MaxBodyBytes` + 64 KiB | rejected with 400 `bad_request` |
 
 ## 5. Frontend standards
 
