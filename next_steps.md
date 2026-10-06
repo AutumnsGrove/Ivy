@@ -71,6 +71,10 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 
 ## ▶ Now
 
+**4b is at gate G2** (design before code): `docs/handoffs/2026-10-06-G2-send-queue-design.md` has
+the `send_queue` states and durable points, the `unconfirmed` rule, the `append` idempotency key and
+the per-crash-point recovery. Implementation follows in small commits.
+
 **4a is done** (2026-10-06; gate G1 in `docs/handoffs/2026-10-06-G1-compose-smtp-tests.md`).
 `compose/` is a pure builder (see `docs/BUILD-LOG.md`): every header-bound value is validated, an
 outgoing addr-spec must be ASCII (no `SMTPUTF8`), a display name or subject that could be read as an
@@ -407,8 +411,8 @@ T11-T13 on top of chunk 3's T1-T10) are in `docs/CHUNK4-BRIEF.md`; read it after
 Checkpoints: **G1** (4a, injection corpus failing before the builder), **G2** (4b, design before code),
 **G3** (4b, crash tests pass), **G4** (4g, before any image dependency), **G5** (end of chunk, Claude's
 Review). **4a is done**: `compose/` and `smtp/` are implemented, their G1 tests pass and the limits
-are in the `STANDARDS.md` 4a table (`docs/BUILD-LOG.md`). 4b starts from the G2 design; it has not
-been coded yet.
+are in the `STANDARDS.md` 4a table (`docs/BUILD-LOG.md`). **4b is at G2**: the design is committed
+and the `send_queue` implementation is next.
 
 ## Operator actions still open
 
