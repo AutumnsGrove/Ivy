@@ -353,9 +353,43 @@ func TestSMTPStallGreetingTimesOut(t *testing.T) {
 	}
 }
 
+// TestSMTPAcceptThenDropRecordsThenDrops models the dangerous window: the server
+// accepts and delivers the message, then the link dies before the client reads
+// the 250. The client errors even though the mail went out, which is exactly why
+// the send queue must mark the row unconfirmed.
+func TestSMTPAcceptThenDropRecordsThenDrops(t *testing.T) {
+	t.Parallel()
+	w, err := mailworld.New()
+	if err != nil {
+		t.Fatalf("new world: %v", err)
+	}
+	t.Cleanup(func() { _ = w.Close() })
+	w.Account("a@grove.test", "secret")
+	w.Account("b@grove.test", "secret")
+	w.Fault(mailworld.SMTPAcceptThenDrop{})
+
+	conn, err := net.Dial("tcp", w.SMTPAddr())
+	if err != nil {
+		t.Fatalf("dial smtp: %v", err)
+	}
+	defer conn.Close()
+	c := smtp.NewClient(conn)
+	c.CommandTimeout = 500 * time.Millisecond
+	c.SubmissionTimeout = 500 * time.Millisecond
+	if err := c.Auth(sasl.NewPlainClient("", "a@grove.test", "secret")); err != nil {
+		t.Fatalf("auth: %v", err)
+	}
+	raw := mailworld.Msg().From("a@grove.test").To("b@grove.test").Subject("maybe").Build()
+	if err := c.SendMail("a@grove.test", []string{"b@grove.test"}, bytes.NewReader(raw)); err == nil {
+		t.Fatal("send succeeded, want the connection dropped before the 250")
+	}
+	if got := len(w.Sent()); got != 1 {
+		t.Errorf("recorded %d messages, want 1: the server accepted before the drop", got)
+	}
+}
+
 // TestSMTPStallDataTimesOutWithoutRecording parks the server after 354, so the
-// client's submission deadline fires and no message is recorded: the fake's
-// model of the dangerous window where the client cannot know what happened.
+// client's submission deadline fires and no message is recorded.
 func TestSMTPStallDataTimesOutWithoutRecording(t *testing.T) {
 	t.Parallel()
 	w, err := mailworld.New()

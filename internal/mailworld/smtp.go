@@ -1,6 +1,7 @@
 package mailworld
 
 import (
+	"errors"
 	"io"
 	"net"
 	"sync"
@@ -96,6 +97,15 @@ type SMTPStall struct{ Phase SMTPStallPhase }
 
 func (SMTPStall) isFault() {}
 
+// SMTPAcceptThenDrop records and delivers the message, then drops the
+// connection before the client can read the 250, modelling the window where the
+// server has the message and the client cannot know. It lasts until the faults
+// are cleared; a retry without asking would duplicate the mail, which is why
+// the send queue marks such a row unconfirmed.
+type SMTPAcceptThenDrop struct{}
+
+func (SMTPAcceptThenDrop) isFault() {}
+
 // smtpFaultListener wraps the SMTP listener so an armed greeting stall parks a
 // connection before the server writes anything.
 type smtpFaultListener struct {
@@ -156,8 +166,8 @@ func (a *Account) SetSentCopy(mode SentCopy) { a.sentCopy = mode }
 // smtpBackend is the go-smtp backend; each connection gets a session.
 type smtpBackend struct{ w *World }
 
-func (b *smtpBackend) NewSession(*smtp.Conn) (smtp.Session, error) {
-	return &smtpSession{w: b.w}, nil
+func (b *smtpBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
+	return &smtpSession{w: b.w, conn: c}, nil
 }
 
 // smtpSession is one SMTP connection. Local recipients are delivered into
@@ -165,6 +175,7 @@ func (b *smtpBackend) NewSession(*smtp.Conn) (smtp.Session, error) {
 // same way a real provider does.
 type smtpSession struct {
 	w       *World
+	conn    *smtp.Conn
 	account *Account
 	from    string
 	rcpts   []string
@@ -241,6 +252,12 @@ func (s *smtpSession) Data(r io.Reader) error {
 		if _, err := s.account.Append("Sent", raw); err != nil {
 			return &smtp.SMTPError{Code: 451, EnhancedCode: smtp.EnhancedCode{4, 3, 0}, Message: "sent copy failed: " + err.Error()}
 		}
+	}
+	if s.w.hasFault(SMTPAcceptThenDrop{}) {
+		if s.conn != nil {
+			_ = s.conn.Close()
+		}
+		return errors.New("mailworld: message accepted, connection dropped (fault)")
 	}
 	s.Reset()
 	return nil
