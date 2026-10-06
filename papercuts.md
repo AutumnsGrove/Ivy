@@ -1463,3 +1463,6 @@ Baseline at `839bf05`: `go build`, `go vet`, `staticcheck`, `gofumpt -l` clean a
   `TestSubmitTransientRecipientRefusalIsRetryable` (a 451 at RCPT via `SMTPRejectRcpt`; failed: kind
   `recipient_refused`, not transient). Only a 5xx is a recipient verdict now; anything else goes through
   `classify` with `Recipient` set.
+- **#124** · `a12971f` · `docs/ARCHITECTURE.md`, `docs/STANDARDS.md` · **standards** · the 4a docs said the text part
+  goes out "exactly as typed" and the 4a limits table had no row for line length; both now describe `wireText`
+  (CRLF, 900-byte lines). `docs/qa-log.md` round 61 keeps its original wording, as a record of the answer.
