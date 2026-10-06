@@ -675,3 +675,31 @@ Seven stages, each test-first and committed on main.
   phone and desktop. `make check` green and the mock Playwright suite 302 passed / 10 skipped.
 - **Left for the operator.** The live connect against the real Purelymail on the board, and a restart to
   confirm the account comes back.
+
+## 4a Builder and submit (round 61, 2026-10-06)
+
+The first send stage: a pure MIME builder and the only SMTP transport. No queue and no API yet; the
+corpus and the failure tests were frozen at gate G1 (`docs/handoffs/2026-10-06-G1-compose-smtp-tests.md`)
+before either side was written.
+
+- **compose/ (pure).** `Validate`/`Build` turn a `Message` into RFC 5322 bytes plus the SMTP envelope.
+  Every header-bound value is validated: a CR, LF or NUL is rejected (never stripped), an outgoing
+  addr-spec must be ASCII because Purelymail has no `SMTPUTF8`, and a display name or subject that
+  could be read as an RFC 2047 encoded word is force-encoded (base64 words, split under 75 bytes).
+  `Bcc` is an envelope recipient on the wire and a header only on the Sent copy (invariant 7). The
+  operator's markdown is the `text/plain` part exactly as typed and goldmark v1.8.6 renders the
+  `text/html` part of a `multipart/alternative`; raw HTML stays off and a compose-only bluemonday
+  policy narrows links to `http`/`https`/`mailto`.
+- **smtp/ (transport).** `Submit` dials implicit TLS (plaintext only for the loopback fake), reads
+  `SIZE` from `EHLO`, and returns a `*SendError` with a stable `Kind` and a `Transient` verdict. A
+  refused recipient aborts the whole transaction with `RSET`, so a send is never partial (round 61).
+  Deadlines: dial/TLS 15 s, command 30 s, DATA 2 min; closing the connection on context cancellation
+  means a caller who gives up is never held. All limits are in the `STANDARDS.md` 4a table.
+- **The fake.** `mailworld` gained `SIZE` advertisement/enforcement, `SMTPStall` (greeting and DATA)
+  and `SMTPRejectRcpt`, each with its own green test, so the real tests exercise real boundaries.
+- **Tests.** `compose/compose_test.go` (22-case injection corpus plus the accepted/encoding cases,
+  markdown and Bcc) and `smtp/smtp_test.go` (success, 4xx/5xx, auth, refused recipient, retry,
+  too-large both ways, unreachable, stalls, cancellation, and a compose→submit→parse slice). Both
+  suites are `-race` green; `make check` green after the corpus and the transport landed.
+- **Next.** 4b is the `send_queue` and the Sent `APPEND` (gate G2 is its design).
+

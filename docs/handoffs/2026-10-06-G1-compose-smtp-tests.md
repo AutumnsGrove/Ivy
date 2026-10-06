@@ -175,3 +175,13 @@ the operator says "go".
 
 **Operator update (2026-10-06):** continue without a stop. This checkpoint is recorded for review but
 does not gate; the work proceeds in the same small commits and the handoff is read later.
+
+## Outcome (2026-10-06): 4a is done
+
+The operator said continue past G1. Both suites are now green and committed: `d08120d` (compose) and
+`54913ce` (smtp), on the G1 commit `19082f6`. `make check` (whole `-race` suite, gofumpt, vet,
+staticcheck, svelte-check, 279 Vitest) is green. The new bounds are in the `STANDARDS.md` 4a table;
+`ARCHITECTURE.md` sections 2 and 5, `STACK.md` (goldmark v1.8.6), `BUILD-LOG.md` and `next_steps.md`
+are updated. Two small implementation refinements to the frozen tests were made honestly and are in
+the diffs: the `text/plain` part is compared after MIME's line handling, and the recorded SMTP bytes
+allow the final CRLF that a line-oriented DATA adds. No stop-trigger fired.

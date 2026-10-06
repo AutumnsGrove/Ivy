@@ -5,9 +5,11 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-06. **4a is at gate G1**: the header-injection corpus and the SMTP failure
-tests are written and red for the right reason, waiting for an explicit "go"; see
-`docs/handoffs/2026-10-06-G1-compose-smtp-tests.md`. Everything below is unchanged. **In-app account
+last updated: 2026-10-06. **4a is done** (`compose/` and `smtp/`, round 61; gate G1 was recorded
+and the operator said continue without a stop). The builder validates every header-bound value,
+renders markdown to the HTML alternative, and keeps Bcc on the envelope only; the transport submits
+over implicit TLS with EHLO `SIZE`, per-recipient classification and deadlines. 4b (the send queue
+and the Sent copy) is next, from the G2 design in `docs/handoffs/`. **In-app account
 setup is built (round 59)**, the last thing before the first install: an account is typed into
 `/welcome/account`, tested against Purelymail, stored as a private password file plus a `state.db`
 row, and started without a restart; what is left is `sudo ./install.sh` on the board and the live
@@ -69,14 +71,15 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 
 ## ▶ Now
 
-**4a is waiting at gate G1** (2026-10-06; `docs/handoffs/2026-10-06-G1-compose-smtp-tests.md`). The
-header-injection corpus (`compose/compose_test.go`) and the SMTP failure tests (`smtp/smtp_test.go`)
-are written and red for the right reason; `compose.Build` and `smtp.Submit` are stubs. The fake mail
-world gained `SIZE`, `SMTPStall` and `SMTPRejectRcpt` first, with their own green tests. Round 61
-recorded the operator's three answers (a refused recipient aborts the whole send; the `text/plain`
-part is the raw markdown as typed; the SMTP client is a new `smtp/` package). On "go", implement the
-builder and the transport, make both suites green, fold the decisions into the docs and update this
-file. No API or `ivy run` wiring in 4a.
+**4a is done** (2026-10-06; gate G1 in `docs/handoffs/2026-10-06-G1-compose-smtp-tests.md`).
+`compose/` is a pure builder (see `docs/BUILD-LOG.md`): every header-bound value is validated, an
+outgoing addr-spec must be ASCII (no `SMTPUTF8`), a display name or subject that could be read as an
+RFC 2047 word is force-encoded, the operator's markdown is the `text/plain` part and goldmark renders
+the HTML alternative, and `Bcc` is an envelope recipient on the wire and a header only on the Sent
+copy. `smtp/` is the only transport: one implicit-TLS connection per call, `AUTH PLAIN`, the EHLO
+`SIZE` read, per-RCPT classification, and a refused recipient aborts the whole transaction (round
+61). Both suites are `-race` green and `make check` is green; the fake gained `SIZE`, `SMTPStall` and
+`SMTPRejectRcpt`. **Next: 4b**, the `send_queue` and the Sent `APPEND`, starting from the G2 design.
 
 **3c is done** (round 43). `internal/blobstore` is a content-addressed, de-duplicated, append-only
 store under `data/blobs`; `sync` copies a hidden message's bytes there at disable time (mirror
@@ -403,9 +406,9 @@ T11-T13 on top of chunk 3's T1-T10) are in `docs/CHUNK4-BRIEF.md`; read it after
 
 Checkpoints: **G1** (4a, injection corpus failing before the builder), **G2** (4b, design before code),
 **G3** (4b, crash tests pass), **G4** (4g, before any image dependency), **G5** (end of chunk, Claude's
-review). 4a has started: its tests are written and red at G1
-(`docs/handoffs/2026-10-06-G1-compose-smtp-tests.md`); the builder and the transport are not written
-yet.
+Review). **4a is done**: `compose/` and `smtp/` are implemented, their G1 tests pass and the limits
+are in the `STANDARDS.md` 4a table (`docs/BUILD-LOG.md`). 4b starts from the G2 design; it has not
+been coded yet.
 
 ## Operator actions still open
 

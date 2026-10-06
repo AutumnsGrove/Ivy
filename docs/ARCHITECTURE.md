@@ -345,6 +345,16 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   Medium, default Large), per-attachment remove, the saved draft in the Drafts folder carries its
   attachments, and the copy in Sent keeps them. Reply/forward re-attach the original's attachments
   only when asked.
+- **Building and submitting (chunk 4a, round 61):** `compose/` is a pure builder and `smtp/` the
+  only transport. Every header-bound value is validated (a CR, LF or NUL is rejected, never
+  stripped), an outgoing addr-spec must be ASCII because Purelymail has no `SMTPUTF8`, and a display
+  name or subject that could be read as an RFC 2047 word is force-encoded. The operator's markdown
+  is the `text/plain` part exactly as typed and goldmark renders the `text/html` part of a
+  `multipart/alternative` (raw HTML stays off; links are narrowed to `http`/`https`/`mailto`). `Bcc`
+  is an envelope recipient on the wire and a header only on the Sent copy. `smtp.Submit` opens one
+  implicit-TLS connection per call, reads `SIZE` from `EHLO`, and returns a `*SendError` whose `Kind`
+  and `Transient` flag the 4b queue branches on; a refused recipient aborts the whole transaction, so
+  a send is never partial. Nothing is queued or resend yet: that is 4b.
 - **Auth results:** parse `Authentication-Results` (SPF/DKIM/DMARC) into a trust signal used by
   the phishing question and the spoofed-sender discount. Only the **topmost** header whose
   `authserv-id` is in the account's `trusted_authserv_ids` is believed, and **only that one

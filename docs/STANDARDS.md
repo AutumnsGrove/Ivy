@@ -247,6 +247,17 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Snoozes per account (`store.MaxSnoozes`) | 2000 | a new snooze is refused with 409 `too_many_snoozes`; an existing one may be extended |
 | Hidden content keys an inbox view loads (`maxHiddenKeys`) | 2000 | the remainder still shows in the inbox, a bounded degradation |
 | Conversations on a person page (`maxPersonConversations`) | 20 | the rest are omitted |
+| Recipients on an outgoing message, To+Cc+Bcc after de-duplication (`compose.MaxRecipients`) | 100 | refused with 400 `bad_request` before anything is built |
+| Outgoing subject (`compose.MaxSubjectBytes`) | 998 bytes | refused with 400 `bad_request`; a value that looks like an RFC 2047 word is force-encoded, never read as one |
+| Outgoing plain-text body (`compose.MaxBodyBytes`) | 1 MiB | refused with 400 `bad_request` |
+| `References` ids on an outgoing message (`compose.MaxReferences`) | 20 | refused with 400 `bad_request` |
+| One outgoing `<message-id>` (`compose.MaxMessageIDBytes`) | 320 bytes | refused with 400 `bad_request`; a CR, LF or NUL in any header value is refused, never stripped |
+| Outgoing addr-specs | ASCII only (no `SMTPUTF8`) | refused with 400 `bad_request`; a non-ASCII display name is RFC 2047 encoded |
+| SMTP dial and implicit-TLS handshake (`smtp.DefaultDialTimeout`) | 15 s | `SendError` `unreachable`, transient |
+| One SMTP command reply (`smtp.DefaultCommandTimeout`) | 30 s | `SendError` `timeout`, transient |
+| SMTP DATA, body and final reply (`smtp.DefaultDataTimeout`) | 2 min | `SendError` `timeout`, transient |
+| Message size against the provider's `EHLO` SIZE | provider's advertised value (about 48.8 MiB on Purelymail) | refused before DATA with `too_large`; without a SIZE, the provider's own 552 is the backstop |
+| A refused `RCPT` among several (`smtp.KindRecipientRefused`) | one address | the whole transaction is aborted with `RSET`; nobody receives the message (round 61) |
 
 ## 5. Frontend standards
 
