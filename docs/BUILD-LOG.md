@@ -792,5 +792,49 @@ op is Trash-only and the `append` op dedupes by Message-ID, so a replace could n
 - **Left for the operator.** The live check on the board: a draft saved from the app visible in
   Apple Mail, edited there, and resumed in Ivy; `next_steps.md` carries it.
 
+## 4e Identities and reply logic (round 63, 2026-10-06)
+
+The addresses an account may send as, and the pure logic that turns an incoming message into a
+reply. Designed before code at the reply gate (`docs/handoffs/2026-10-06-4e-identities-design.md`);
+the four choices (surface, signature, forward, aliases) were settled in round 63.
+
+- **State (migration 14).** `identities` holds one address per (account, address), case-insensitive,
+  with a display name and a plain-text signature. `ListIdentities`, `GetIdentity`,
+  `GetIdentityByID`, `UpsertIdentity` (create or edit in one transaction, preserving the row id and
+  `created_at`), `DeleteIdentity`. A bare ASCII addr-spec is required; the count, address, name and
+  signature are bounded. The account's own address is merged on read as a synthetic, non-deletable
+  primary, so nothing needs seeding and a mirror rebuild cannot duplicate it.
+- **Reply logic (`compose/reply.go`, pure).** `Reply(orig, ids, default, all)` and
+  `Forward(orig, ids, default)` take parsed headers and return a `Prefill`: the direct target is
+  `Reply-To` then `From`; reply-all Cc's the original To/Cc minus every one of the operator's
+  addresses; a forward carries a `---------- Forwarded message ----------` attribution block and no
+  threading headers; the identity sent as is whichever Delivered-To, To or Cc address is configured,
+  else the account default, and an unconfigured Delivered-To is reported as `MissingIdentity` for
+  the screen to offer to add. `AppendSignature` appends a non-empty signature behind the standard
+  `-- ` line. `Incoming`, `IdentityRef`, `Prefill` are the package's own types, so the tables test
+  hostile and odd header sets without a store.
+- **API and From.** `GET/PUT /api/v1/accounts/{id}/identities`,
+  `DELETE /api/v1/accounts/{id}/identities/{identityId}`, `GET /api/v1/messages/{id}/reply?all=`,
+  `GET /api/v1/messages/{id}/forward`, with `Identity`, `IdentityInput`, `IdentityList` and
+  `ComposePrefill` in `openapi.yaml` and both generated outputs. `POST /send` and the draft save now
+  accept any configured identity as the `From` and default its display name from the identity.
+  The client gained the four calls and the new error codes; the mock E2E serves the endpoints.
+- **Web.** The account settings screen has a "Send as" section listing every address (primary
+  first, marked), with an add/edit form for the display name and signature and a remove action on
+  aliases only. No compose-screen change (4f).
+- **Tests.** `store/identities_test.go` (create, case-insensitive edit in place, hostile addresses,
+  the limit, account scoping, delete, reopen), `compose/reply_test.go` (Reply-To precedence, the
+  delivered identity, missing identity, reply-all, subject/References bounding, odd headers,
+  forward, signature) and `gateway/identities_test.go` (the merged primary, create/edit, hostile
+  address, primary delete refusal, unknown delete, send from a configured identity, reply/reply-all/
+  forward prefill, a missing message). `web/src/lib/api/identities.test.ts` and the new account E2E.
+  `make check`, `pnpm test` (285) and the account Playwright suite are green.
+- **Process note.** The store, the reply logic and the gateway tests were written first and seen
+  failing for the missing behaviour; the settings editor was written alongside its Playwright test.
+- **Left for the operator.** The live send-as check per address on the board: add each alias as an
+  identity, send to an address the operator owns, and confirm the mailbox accepts the `From` and the
+  message lands (and the Sent copy is right). `next_steps.md` carries it, with the other chunk-4 live
+  checks.
+
 
 

@@ -5,12 +5,13 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-06. **4a, 4b, 4c and 4d are done** (`compose/` + `smtp/`, the `send_queue` +
+last updated: 2026-10-06. **4a-4e are done** (`compose/` + `smtp/`, the `send_queue` +
 Sent copy, then the send API and undo). `POST /send` builds both copies and queues with a server-side
 undo deadline; `POST /send/{id}/undo` cancels before it and hands the draft back. **4d (drafts) is
-done** and **4e (identities and reply logic) is in progress**: the design is settled in
-`docs/handoffs/2026-10-06-4e-identities-design.md` (round 63) and the store, reply logic, API and
-settings editor are being built. **In-app account
+done** and **4e (identities and reply logic) is done**: the addresses an account may send as and
+the reply/reply-all/forward logic live in `state.db` and `compose/`, with the identities API and the
+account-settings editor (design at `docs/handoffs/2026-10-06-4e-identities-design.md`, round 63).
+**In-app account
 setup is built (round 59)**, the last thing before the first install: an account is typed into
 `/welcome/account`, tested against Purelymail, stored as a private password file plus a `state.db`
 row, and started without a restart; what is left is `sudo ./install.sh` on the board and the live
@@ -51,7 +52,7 @@ screens**.
 | 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
 | 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, rules, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; 3e done; 3f done; 3g done; **3h done** |
-| 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | **planned, split into 4a-4h** (round 60; see "Chunk 4 stages" and `docs/CHUNK4-BRIEF.md`); nothing built yet |
+| 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | **in progress, split into 4a-4h** (round 60; see "Chunk 4 stages" and `docs/CHUNK4-BRIEF.md`); **4a-4e done**, 4f is next |
 | 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | not started |
 
 Frontend: SvelteKit 3 app in `web/`, 32 screens. The reader endpoints (`/accounts`, `/inbox`,
@@ -72,12 +73,19 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 
 ## ▶ Now
 
-**4e is in progress** (2026-10-06). The four design choices are settled in
-`docs/handoffs/2026-10-06-4e-identities-design.md` (round 63): identities and signatures in
-`state.db` with a settings editor; a per-identity plain-text signature behind `-- `; a forward
-attribution block; and `From` restricted to configured identities, with an offer to add a delivered-to
-alias. Work in progress: state migration 14 and the identities store, the pure reply/reply-all/forward
-logic, the identities/reply API and the identity-aware `From`, and the account-settings editor.
+**4e is done** (2026-10-06; design at the reply gate in
+`docs/handoffs/2026-10-06-4e-identities-design.md`, qa-log round 63). State migration 14 adds
+`identities`, one address per (account, address) with a display name and a plain-text signature; the
+account's own address is merged on read as a synthetic, non-deletable primary, so no seed and no
+mirror dependence. `compose/reply.go` is the pure reply, reply-all and forward logic: `Reply-To`
+then `From` for the direct target, the original To/Cc minus the operator's addresses for reply-all,
+an attribution block for a forward, and the identity chosen from the configured Delivered-To/To/Cc
+addresses with an unconfigured one reported for a one-tap add. `GET/PUT /accounts/{id}/identities`,
+`DELETE /accounts/{id}/identities/{identityId}`, `GET /messages/{id}/reply?all=` and
+`GET /messages/{id}/forward` are real; `POST /send` and the draft save accept any configured
+identity as the `From` and default its display name. The account settings screen has a "Send as"
+editor. `make check`, `pnpm test` and the account Playwright suite are green. **Next: 4f**, the
+compose screen. **The live send-as check per address is the operator's** (below).
 
 **4c is done** (2026-10-06). `compose.undo_delay_seconds` is a global/per-account setting (default 10,
 0 = off, clamped to 120). `POST /send` builds the wire and Sent copies, stores the original request
@@ -444,9 +452,9 @@ T11-T13 on top of chunk 3's T1-T10) are in `docs/CHUNK4-BRIEF.md`; read it after
 
 Checkpoints: **G1** (4a, injection corpus failing before the builder), **G2** (4b, design before code),
 **G3** (4b, crash tests pass), **G4** (4g, before any image dependency), **G5** (end of chunk, Claude's
-Review). **4a, 4b, 4c and 4d are done**: `compose/`/`smtp/`, the `send_queue` with the Sent copy, the
-send API with undo, and the server Drafts folder. **4e** (identities) is next, then
-4f wires the compose screen.
+Review). **4a-4e are done**: `compose/`/`smtp/`, the `send_queue` with the Sent copy, the
+send API with undo, the server Drafts folder, and the identities and reply logic. **4f** (the
+compose screen) is next.
 
 ## Operator actions still open
 
@@ -461,10 +469,14 @@ send API with undo, and the server Drafts folder. **4e** (identities) is next, t
   `ghcr.io/autumnsgrove/ivy:latest` resolves anonymously to `sha256:e6fdc57c…`, so the package is
   public and the potato needs no `docker login`. **Left:** on the board, `sudo ./install.sh` and one
   real `ivy update` end to end, recording the result.
-- Send and drafts (4a-4d): the API is real but the compose screen is wired in 4f, so the live check
+- Send and drafts (4a-4e): the API is real but the compose screen is wired in 4f, so the live check
   waits on it. Then, against a mailbox the operator owns: send to self and see the Sent copy in
   Apple Mail; save a draft and see it in Apple Mail; edit it there and resume it in Ivy; confirm a
-  sent draft leaves Drafts; and, with 4e, send-as per address.
+  sent draft leaves Drafts; and send-as per address. For 4e, add each alias on `/settings/account`
+  and do the **live send-as check**: send from the alias to an address the operator owns and confirm
+  the provider accepts the `From` (Purelymail send-as works but its scope is unprobed, spike S1c) and
+  the message and Sent copy are right. An alias the provider refuses is a provider setting to fix,
+  not an Ivy bug; record what each address does.
 - Repo visibility: **public** now (was private). The remaining `docs/CI.md` 6 items (gitleaks over
   full history, branch ruleset + required checks, secret scanning) are the operator's checklist.
 - Bump the local Go toolchain off 1.26.1, which `govulncheck` flags (fixed in 1.26.2+); CI resolves

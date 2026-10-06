@@ -278,6 +278,12 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Raw read to resume a server-only draft (`maxDraftResumeBytes`) | 2 MiB | refused with 409 `draft_too_large` |
 | Removing a superseded draft copy (a `draft` op) | UIDPLUS | the op fails `unsupported`; it never falls back to a bare `EXPUNGE` |
 | Drafts per `POST /drafts` save | one immutable version, committed with its op | a full outbox rolls the whole save back (`outbox_full`) |
+| Send identities per account (`store.MaxIdentitiesPerAccount`) | 50 | a new address is refused with 409 `too_many_identities`; editing an existing one still works at the limit |
+| An identity address (`store.MaxIdentityAddressBytes`) | 320 bytes | refused with 400 `bad_request`; a CR, LF or NUL is refused, never stripped, and a non-ASCII address is refused (Purelymail has no SMTPUTF8) |
+| An identity display name (`maxIdentityNameRunes`) | 120 runes | refused with 400 `bad_request`; the builder RFC 2047 encodes it |
+| An identity signature (`store.MaxSignatureBytes`) | 8 KiB | refused with 400 `bad_request` |
+| An identity request body (`maxIdentityBodyBytes`) | 16 KiB | rejected with 400 `bad_request` |
+| A reply/forward prefill | one message's bounded stored headers and `body_text` | the raw blob is never read whole; the compose screen may change any of it before sending |
 
 ## 5. Frontend standards
 

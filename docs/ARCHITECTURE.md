@@ -360,7 +360,7 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   /send` builds both copies and commits the row with the undo deadline, `POST /send/{id}/undo`
   cancels a queued row before its server-side deadline and returns the draft, and every change is a
   `send.state` hint. The window is `compose.undo_delay_seconds` (default 10, 0 = off, per account over
-  global); the From must be the account's own address until 4e brings identities. **4d** added drafts:
+  global). **4d** added drafts:
   each autosave is an immutable version row in `state.db` whose built MIME and outbox op commit
   together (so a retried or racing save cannot file the wrong bytes), and a dedicated `draft` op
   appends the new version and expunges the one it supersedes by `Message-ID`. The existing `expunge`
@@ -370,6 +370,19 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   mirrored Drafts folder (an Apple Mail draft appears), resume returns the exact compose request for
   a local draft or parses the stored message for a server copy, and a send records the version it
   came from so its copy leaves Drafts after the `250` (an undo or a permanent failure keeps it).
+  **4e** added identities and the reply logic. `state.db.identities` holds every address an account
+  may send as, with a display name and a plain-text signature, keyed by account and address; the
+  account's own address is merged at read time as a synthetic, non-deletable primary, so no seed
+  migration is needed and a mirror rebuild cannot duplicate it. `POST /send` and the draft save
+  accept any configured identity as the `From` and default its display name from the identity;
+  `GET/PUT /accounts/{id}/identities` and `DELETE /accounts/{id}/identities/{identityId}` are the
+  CRUD surface the account settings editor uses. `compose/reply.go` is the pure reply, reply-all and
+  forward logic: the direct target is `Reply-To` then `From`; reply-all Cc's the original To/Cc
+  minus every one of the operator's addresses; a forward carries an attribution block instead of a
+  quote; the identity is whichever Delivered-To, To or Cc address is configured, else the account's
+  primary; a non-empty signature is appended behind the `-- ` line. `GET /messages/{id}/reply`
+  (with `?all=true`) and `GET /messages/{id}/forward` serve the prefill; the per-address send-as
+  check against a real mailbox is the operator's.
 - **Auth results:** parse `Authentication-Results` (SPF/DKIM/DMARC) into a trust signal used by
   the phishing question and the spoofed-sender discount. Only the **topmost** header whose
   `authserv-id` is in the account's `trusted_authserv_ids` is believed, and **only that one
