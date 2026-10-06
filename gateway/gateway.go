@@ -53,6 +53,9 @@ type Server struct {
 	updateCtx context.Context
 	// update is the single in-process update slot.
 	update updateStatus
+	// connector tests, stores and starts an account typed into the app; nil
+	// means this deployment cannot connect accounts from the app.
+	connector AccountConnector
 }
 
 // WithSearch enables hybrid ranking. qe may be nil, in which case search stays
@@ -131,6 +134,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/version", s.handleVersion)
 	api.HandleFunc("GET /api/v1/health", s.handleHealth)
 	api.HandleFunc("GET /api/v1/accounts", s.handleAccounts)
+	api.HandleFunc("POST /api/v1/accounts", s.handleConnectAccount)
+	api.HandleFunc("PUT /api/v1/accounts/{id}/password", s.handleUpdateAccountPassword)
 	api.HandleFunc("PATCH /api/v1/accounts/{id}", s.handleUpdateAccountProfile)
 	api.HandleFunc("GET /api/v1/accounts/{id}/photo", s.handleAccountPhoto)
 	api.HandleFunc("PUT /api/v1/accounts/{id}/photo", s.handleUploadAccountPhoto)

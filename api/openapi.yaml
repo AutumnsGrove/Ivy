@@ -53,6 +53,108 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Account"
+    post:
+      operationId: connectAccount
+      summary: Connect a mailbox
+      description: >
+        Tests the login against the provider, and only if it works stores the
+        password (a private file on the server, never a database) and starts
+        syncing. The password is never returned. Purelymail is the only
+        provider for now, so the server fixes the hosts and the request names
+        only the address and password. There is no login on Ivy, so this is open
+        to anything that can reach it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectAccount"
+      responses:
+        "201":
+          description: Connected; the first sync has started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectedAccount"
+        "400":
+          description: The address or password is not valid (`bad_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: This address is already connected (`already_connected`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: The provider refused the login (`auth_failed`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: The provider did not answer (`unreachable`), or the test failed for another reason (`connect_failed`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: This deployment cannot connect accounts (`connect_unavailable`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /accounts/{id}/password:
+    put:
+      operationId: updateAccountPassword
+      summary: Replace an account's password
+      description: >
+        Tests the new password first and keeps the old one if it fails. On
+        success sync restarts with the new password, which is how an account
+        that stopped on `auth_failed` recovers.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePassword"
+      responses:
+        "204":
+          description: Replaced; sync restarted
+        "400":
+          description: The password is not valid (`bad_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: The provider refused the login (`auth_failed`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: The provider did not answer (`unreachable`), or the test failed for another reason (`connect_failed`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: This deployment cannot connect accounts (`connect_unavailable`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /accounts/{id}:
     patch:
       operationId: updateAccountProfile
@@ -1063,6 +1165,38 @@ components:
         icon:
           type: string
           maxLength: 16
+    ConnectAccount:
+      type: object
+      required: [address, password]
+      properties:
+        address:
+          type: string
+          maxLength: 254
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 1024
+          description: An app password if the provider offers one. Never stored in a database and never returned.
+        smart:
+          type: boolean
+          description: Smart features (hosted embeddings for search). Off unless asked for.
+    ConnectedAccount:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          description: The account id to use with the other account endpoints
+    UpdatePassword:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 1024
     Attachment:
       type: object
       required: [id, name, size, kind]

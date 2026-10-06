@@ -48,6 +48,30 @@ export interface paths {
         /** Configured accounts */
         get: operations["listAccounts"];
         put?: never;
+        /**
+         * Connect a mailbox
+         * @description Tests the login against the provider, and only if it works stores the password (a private file on the server, never a database) and starts syncing. The password is never returned. Purelymail is the only provider for now, so the server fixes the hosts and the request names only the address and password. There is no login on Ivy, so this is open to anything that can reach it.
+         */
+        post: operations["connectAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{id}/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace an account's password
+         * @description Tests the new password first and keeps the old one if it fails. On success sync restarts with the new password, which is how an account that stopped on `auth_failed` recovers.
+         */
+        put: operations["updateAccountPassword"];
         post?: never;
         delete?: never;
         options?: never;
@@ -695,6 +719,20 @@ export interface components {
             displayName?: string;
             icon?: string;
         };
+        ConnectAccount: {
+            address: string;
+            /** @description An app password if the provider offers one. Never stored in a database and never returned. */
+            password: string;
+            /** @description Smart features (hosted embeddings for search). Off unless asked for. */
+            smart?: boolean;
+        };
+        ConnectedAccount: {
+            /** @description The account id to use with the other account endpoints */
+            id: string;
+        };
+        UpdatePassword: {
+            password: string;
+        };
         Attachment: {
             id: string;
             name: string;
@@ -1089,6 +1127,136 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Account"][];
+                };
+            };
+        };
+    };
+    connectAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectAccount"];
+            };
+        };
+        responses: {
+            /** @description Connected; the first sync has started */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectedAccount"];
+                };
+            };
+            /** @description The address or password is not valid (`bad_request`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description This address is already connected (`already_connected`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The provider refused the login (`auth_failed`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The provider did not answer (`unreachable`), or the test failed for another reason (`connect_failed`) */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description This deployment cannot connect accounts (`connect_unavailable`) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateAccountPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePassword"];
+            };
+        };
+        responses: {
+            /** @description Replaced; sync restarted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The password is not valid (`bad_request`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description The provider refused the login (`auth_failed`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The provider did not answer (`unreachable`), or the test failed for another reason (`connect_failed`) */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description This deployment cannot connect accounts (`connect_unavailable`) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };

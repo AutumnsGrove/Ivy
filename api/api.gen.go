@@ -580,6 +580,23 @@ type CheckDetail struct {
 // CheckDetailSureness defines model for CheckDetail.Sureness.
 type CheckDetailSureness string
 
+// ConnectAccount defines model for ConnectAccount.
+type ConnectAccount struct {
+	Address string `json:"address"`
+
+	// Password An app password if the provider offers one. Never stored in a database and never returned.
+	Password *string `json:"password,omitempty"`
+
+	// Smart Smart features (hosted embeddings for search). Off unless asked for.
+	Smart *bool `json:"smart,omitempty"`
+}
+
+// ConnectedAccount defines model for ConnectedAccount.
+type ConnectedAccount struct {
+	// Id The account id to use with the other account endpoints
+	Id string `json:"id"`
+}
+
 // Conversation defines model for Conversation.
 type Conversation struct {
 	Id      string `json:"id"`
@@ -951,6 +968,11 @@ type TagsOverview struct {
 	Placed      []PlacedTag `json:"placed"`
 }
 
+// UpdatePassword defines model for UpdatePassword.
+type UpdatePassword struct {
+	Password *string `json:"password,omitempty"`
+}
+
 // UpdateStatus defines model for UpdateStatus.
 type UpdateStatus struct {
 	Done        bool    `json:"done"`
@@ -1045,8 +1067,14 @@ type SearchParams struct {
 	Cursor    *string   `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// ConnectAccountJSONRequestBody defines body for ConnectAccount for application/json ContentType.
+type ConnectAccountJSONRequestBody = ConnectAccount
+
 // UpdateAccountProfileJSONRequestBody defines body for UpdateAccountProfile for application/json ContentType.
 type UpdateAccountProfileJSONRequestBody = AccountProfile
+
+// UpdateAccountPasswordJSONRequestBody defines body for UpdateAccountPassword for application/json ContentType.
+type UpdateAccountPasswordJSONRequestBody = UpdatePassword
 
 // AskJSONRequestBody defines body for Ask for application/json ContentType.
 type AskJSONRequestBody = AskRequest
