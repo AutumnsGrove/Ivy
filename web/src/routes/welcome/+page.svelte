@@ -1,19 +1,32 @@
 <script lang="ts">
 	import Button from '#lib/components/ui/Button.svelte';
+	import type { PageProps } from './$types';
+
+	let { data }: PageProps = $props();
 </script>
 
 <div class="welcome">
+	{#if data.hasAccount}
+		<div class="top">
+			<Button variant="primary" size="lg" block href="/">Take me to my inbox</Button>
+		</div>
+	{/if}
 	<div class="halo"><img class="logo" src="/icon-256.png" alt="Ivy" /></div>
 	<h1>Ivy</h1>
 	<p class="tag">A quiet place for your mail.</p>
 	<div class="cta">
-		<Button variant="primary" size="xl" block href="/welcome/account">Connect your first account</Button>
+		{#if data.hasAccount}
+			<Button variant="tonal" size="xl" block href="/welcome/account">Connect another account</Button>
+		{:else}
+			<Button variant="primary" size="xl" block href="/welcome/account">Connect your first account</Button>
+		{/if}
 		<p>Your mail stays on your own server.<br />Nothing is sent anywhere until you say so.</p>
 	</div>
 </div>
 
 <style>
 	.welcome {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -21,6 +34,13 @@
 		min-height: 100dvh;
 		padding: var(--sp-24) var(--sp-24) var(--sp-50);
 		text-align: center;
+	}
+	.top {
+		position: absolute;
+		top: calc(env(safe-area-inset-top) + var(--sp-24));
+		left: 50%;
+		width: min(calc(100% - var(--sp-48)), var(--reading-col));
+		transform: translateX(-50%);
 	}
 	.halo {
 		display: grid;

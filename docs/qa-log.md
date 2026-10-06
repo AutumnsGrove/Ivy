@@ -1469,3 +1469,11 @@ are frozen into the 4a tests at gate G1.
   sequence first (`store.NextQueuedSend`). This replaces the strict-FIFO line in the G2 design for the
   send queue only; the IMAP outbox stays strict FIFO.
 - **Q: fix the four pre-existing golangci-lint findings at the CI pin in the review branch?** Yes.
+
+## Welcome screen with an account (2026-10-06)
+
+- **Q: what should `/welcome` do when an account already exists (a stale bookmark landed there)?**
+  Not an automatic redirect: it shows a "Take me to my inbox" button at the top and turns the main
+  button into "Connect another account". With no account it is unchanged. The lookup is a
+  convenience, so a failed `/accounts` call falls back to the first-run view instead of an error page.
+  The reported "accounts vanished" issue was a bookmark of `/welcome`, not lost data.
