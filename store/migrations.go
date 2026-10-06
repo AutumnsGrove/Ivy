@@ -704,6 +704,44 @@ var stateMigrations = []migration{
 			)`,
 		},
 	},
+	{
+		version: 10,
+		statements: []string{
+			// Unsent work is locally owned and cannot be rebuilt from IMAP, so it lives
+			// in the backed-up state database (CHUNK4-BRIEF 1.5). A row is the whole
+			// message: the wire copy and the Sent copy (which differs only by Bcc), so
+			// a retry is byte-identical. The states and the durable points are in
+			// docs/handoffs/2026-10-06-G2-send-queue-design.md.
+			`CREATE TABLE send_queue (
+				id                TEXT PRIMARY KEY,
+				account_id        TEXT NOT NULL,
+				seq               INTEGER NOT NULL,
+				message_id        TEXT NOT NULL,
+				content_key       TEXT NOT NULL,
+				envelope_from     TEXT NOT NULL,
+				recipients        TEXT NOT NULL,
+				wire_body         BLOB NOT NULL,
+				sent_body         BLOB NOT NULL,
+				state             TEXT NOT NULL,
+				attempts          INTEGER NOT NULL DEFAULT 0,
+				next_attempt_at   TEXT,
+				last_error_code   TEXT NOT NULL DEFAULT '',
+				last_error_detail TEXT NOT NULL DEFAULT '',
+				undo_deadline     TEXT,
+				sent_append_id    TEXT NOT NULL DEFAULT '',
+				created_at        TEXT NOT NULL,
+				updated_at        TEXT NOT NULL,
+				completed_at      TEXT
+			)`,
+			`CREATE INDEX idx_send_queue_account_state_seq ON send_queue(account_id, state, seq)`,
+			// A live send is one message: a repeated enqueue of the same Message-ID
+			// returns the existing row. A terminal row never blocks a resend, which is
+			// always a new row (the operator's explicit tap).
+			`CREATE UNIQUE INDEX idx_send_queue_live_message
+				ON send_queue(account_id, message_id)
+				WHERE state NOT IN ('appended','done','failed','unconfirmed')`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state

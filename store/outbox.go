@@ -13,12 +13,15 @@ import (
 	"time"
 )
 
-// Outbox op kinds. Tags (3e) are another op kind over flags; compose and APPEND
-// arrive in chunk 4.
+// Outbox op kinds. Tags (3e) are another op kind over flags; an append files a
+// copy into a folder (the Sent copy in 4b, a draft in 4d).
 const (
 	OutboxFlags   = "flags"
 	OutboxMove    = "move"
 	OutboxExpunge = "expunge"
+	// OutboxAppend copies a body from the send queue into a folder. It names the
+	// send row in Expect.SendID rather than acting on a mirrored message.
+	OutboxAppend = "append"
 )
 
 // Outbox op states. pending and in_flight are the live ones sync defers to;
@@ -62,11 +65,14 @@ var ErrOutboxLive = errors.New("outbox op is still live")
 // is canonical JSON, so the same intention always hashes to the same
 // idempotency key. Only the fields the kind uses are set.
 type OutboxExpect struct {
-	// DestFolderID is the destination for a move.
+	// DestFolderID is the destination for a move or an append.
 	DestFolderID string `json:"dest_folder_id,omitempty"`
 	// FlagsAdd and FlagsClear are the flags the message should gain and lose.
 	FlagsAdd   []string `json:"flags_add,omitempty"`
 	FlagsClear []string `json:"flags_clear,omitempty"`
+	// SendID names the send_queue row whose sent_body an append files. It is part
+	// of the idempotency key, so one send files exactly one Sent copy.
+	SendID string `json:"send_id,omitempty"`
 }
 
 // OutboxKey identifies the mail an op acts on. A message is identified by its
