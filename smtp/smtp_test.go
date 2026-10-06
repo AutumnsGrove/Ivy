@@ -6,9 +6,13 @@ import (
 	"errors"
 	"net"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jhillyerd/enmime"
+
+	"github.com/AutumnsGrove/Ivy/compose"
 	"github.com/AutumnsGrove/Ivy/internal/mailworld"
 	"github.com/AutumnsGrove/Ivy/smtp"
 )
@@ -106,7 +110,11 @@ func TestSubmitDeliversAndRecordsTheEnvelope(t *testing.T) {
 		t.Errorf("To = %v, want [mara@grove.test]", sent[0].To)
 	}
 	if !bytes.Equal(sent[0].Raw, raw) {
-		t.Errorf("recorded bytes differ from what was submitted")
+		// SMTP DATA is line-oriented: a final CRLF is added when the message does
+		// not end on a line boundary, which a message body need not.
+		if !bytes.Equal(bytes.TrimSuffix(sent[0].Raw, []byte("\r\n")), raw) {
+			t.Errorf("recorded bytes differ from what was submitted")
+		}
 	}
 }
 
@@ -297,6 +305,56 @@ func TestSubmitCancellationReturnsPromptly(t *testing.T) {
 	}
 	if got := len(w.Sent()); got != 0 {
 		t.Errorf("recorded %d messages after cancellation, want 0", got)
+	}
+}
+
+// TestSubmitComposedMessageRoundTrips is the thin 4a slice: compose builds a
+// real message, the transport submits it, and the fake's recorded bytes parse
+// back to what was composed. It is the seam a later stage wires to the queue.
+func TestSubmitComposedMessageRoundTrips(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t, 0)
+	w.Account("autumn@grove.test", "secret")
+	w.Account("mara@grove.test", "secret")
+	acct := accountFor(t, w, "autumn@grove.test")
+
+	m := compose.Message{
+		From:      compose.Address{Name: "Autumn", Address: "autumn@grove.test"},
+		To:        []compose.Address{{Name: "Mara", Address: "mara@grove.test"}},
+		Bcc:       []compose.Address{{Address: "quiet@grove.test"}},
+		Subject:   "Réunion 😀",
+		Text:      "**Hi** Mara",
+		Markdown:  true,
+		MessageID: "<round-trip@example.test>",
+		Date:      time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC),
+	}
+	raw, env, err := compose.Build(m)
+	if err != nil {
+		t.Fatalf("compose.Build: %v", err)
+	}
+	if err := testSubmitter().Submit(t.Context(), acct, smtp.Envelope{From: env.From, To: env.To}, bytes.NewReader(raw), int64(len(raw))); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+
+	sent := w.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("recorded %d messages, want 1", len(sent))
+	}
+	if len(sent[0].To) != 2 || sent[0].To[1] != "quiet@grove.test" {
+		t.Errorf("envelope To = %v, want the Bcc recipient present", sent[0].To)
+	}
+	parsed, err := enmime.ReadEnvelope(bytes.NewReader(sent[0].Raw))
+	if err != nil {
+		t.Fatalf("parse recorded message: %v", err)
+	}
+	if got := parsed.GetHeader("Subject"); got != "Réunion 😀" {
+		t.Errorf("Subject = %q, want the unicode subject", got)
+	}
+	if got := parsed.GetHeader("Bcc"); got != "" {
+		t.Errorf("wire message carries a Bcc header %q, want none", got)
+	}
+	if !strings.Contains(parsed.HTML, "<strong>Hi</strong>") {
+		t.Errorf("HTML part did not render markdown: %q", parsed.HTML)
 	}
 }
 

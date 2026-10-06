@@ -10,10 +10,17 @@ package smtp
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"os"
+	"strconv"
 	"time"
+
+	"github.com/emersion/go-sasl"
+	gosmtp "github.com/emersion/go-smtp"
 )
 
 // Account is the connection descriptor for one mailbox's SMTP submission. The
@@ -132,11 +139,6 @@ func New(opts ...Option) *Submitter {
 	return s
 }
 
-// errNotImplemented marks the 4a transport as unbuilt. It is removed when the
-// gate G1 tests pass; it exists so those tests compile and fail on behaviour
-// rather than on a compile error (STANDARDS.md section 1).
-var errNotImplemented = errors.New("smtp: not implemented")
-
 // Submit authenticates, checks the message against the provider's advertised
 // SIZE, sends it, and returns nil once the server has accepted the whole
 // transaction. size is the body's length in bytes, or negative when unknown.
@@ -144,5 +146,139 @@ var errNotImplemented = errors.New("smtp: not implemented")
 // a RCPT refusal aborts the whole message, so that send never goes out
 // partially (round 61).
 func (s *Submitter) Submit(ctx context.Context, acct Account, env Envelope, body io.Reader, size int64) error {
-	return errNotImplemented
+	conn, err := s.dialConn(ctx, acct)
+	if err != nil {
+		return &SendError{Kind: KindUnreachable, Transient: true, Err: err}
+	}
+	// go-smtp takes no context, so closing the connection is what unblocks a
+	// command parked on a stalled peer. A caller that gives up is never held.
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+	defer func() { _ = conn.Close() }()
+
+	c := gosmtp.NewClient(conn)
+	c.CommandTimeout = s.command
+	c.SubmissionTimeout = s.data
+
+	if err := c.Hello("localhost"); err != nil {
+		return classify(ctx, err)
+	}
+	if err := c.Auth(sasl.NewPlainClient("", acct.Username, acct.Password)); err != nil {
+		// The auth step is where the password is judged: a 535 (or any non-4xx
+		// refusal here) is permanent until the password changes. A timeout or a
+		// 4xx stays a transport verdict.
+		if ctx.Err() != nil {
+			return classify(ctx, err)
+		}
+		var netErr net.Error
+		if (errors.As(err, &netErr) && netErr.Timeout()) || errors.Is(err, os.ErrDeadlineExceeded) {
+			return classify(ctx, err)
+		}
+		var smtpErr *gosmtp.SMTPError
+		if errors.As(err, &smtpErr) && smtpErr.Code >= 400 && smtpErr.Code < 500 {
+			return classify(ctx, err)
+		}
+		return &SendError{Kind: KindAuthFailed, Err: err}
+	}
+	if maxSize, ok := c.MaxMessageSize(); ok && size >= 0 && int64(size) > int64(maxSize) {
+		return &SendError{
+			Kind: KindTooLarge, Code: 552,
+			Err: fmt.Errorf("message is %d bytes, the provider accepts %d", size, maxSize),
+		}
+	}
+	opts := &gosmtp.MailOptions{}
+	if size >= 0 {
+		opts.Size = size
+	}
+	if err := c.Mail(env.From, opts); err != nil {
+		return classify(ctx, err)
+	}
+	for _, rcpt := range env.To {
+		if err := c.Rcpt(rcpt, nil); err != nil {
+			// One refused recipient aborts the whole transaction: RSET, then
+			// report the address. Nobody gets a partial send.
+			_ = c.Reset()
+			if ctx.Err() != nil {
+				return classify(ctx, err)
+			}
+			var smtpErr *gosmtp.SMTPError
+			if errors.As(err, &smtpErr) {
+				return &SendError{Kind: KindRecipientRefused, Recipient: rcpt, Code: smtpErr.Code, Err: err}
+			}
+			return &SendError{Kind: KindRecipientRefused, Recipient: rcpt, Err: err}
+		}
+	}
+
+	w, err := c.Data()
+	if err != nil {
+		return classify(ctx, err)
+	}
+	// Bound the whole DATA phase on the connection: the body write and the final
+	// reply share the sender's data deadline.
+	_ = conn.SetDeadline(time.Now().Add(s.data))
+	if _, err := io.Copy(w, body); err != nil {
+		_ = conn.SetDeadline(time.Time{})
+		return classify(ctx, err)
+	}
+	if err := w.Close(); err != nil {
+		_ = conn.SetDeadline(time.Time{})
+		return classify(ctx, err)
+	}
+	_ = conn.SetDeadline(time.Time{})
+	_ = c.Quit() // the message is accepted; a failed goodbye changes nothing
+	return nil
+}
+
+// dialConn opens the connection: implicit TLS for a real provider, plaintext
+// only for the loopback fake (Insecure), with the dial and the handshake both
+// bounded by the dial deadline.
+func (s *Submitter) dialConn(ctx context.Context, acct Account) (net.Conn, error) {
+	d := &net.Dialer{Timeout: s.dial}
+	addr := net.JoinHostPort(acct.Host, strconv.Itoa(acct.Port))
+	raw, err := d.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	if acct.Insecure {
+		return raw, nil
+	}
+	tlsConn := tls.Client(raw, &tls.Config{ServerName: acct.Host, MinVersion: tls.VersionTLS12})
+	hsCtx, cancel := context.WithTimeout(ctx, s.dial)
+	defer cancel()
+	if err := tlsConn.HandshakeContext(hsCtx); err != nil {
+		_ = raw.Close()
+		return nil, err
+	}
+	return tlsConn, nil
+}
+
+// classify maps a go-smtp or network error to the queue's stable verdict. A
+// cancelled context wins: no server verdict stands when the caller left. A
+// timeout is transient; a 4xx is transient; a 5xx (552 included) is permanent.
+func classify(ctx context.Context, err error) *SendError {
+	if err == nil {
+		return nil
+	}
+	if ctx.Err() != nil {
+		return &SendError{Kind: KindCanceled, Err: ctx.Err()}
+	}
+	var smtpErr *gosmtp.SMTPError
+	if errors.As(err, &smtpErr) {
+		switch {
+		case smtpErr.Code == 552:
+			return &SendError{Kind: KindTooLarge, Code: 552, Err: err}
+		case smtpErr.Code >= 500:
+			return &SendError{Kind: KindRejected, Code: smtpErr.Code, Err: err}
+		case smtpErr.Code >= 400:
+			return &SendError{Kind: KindTransient, Transient: true, Code: smtpErr.Code, Err: err}
+		}
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return &SendError{Kind: KindTimeout, Transient: true, Err: err}
+	}
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		return &SendError{Kind: KindTimeout, Transient: true, Err: err}
+	}
+	return &SendError{Kind: KindUnreachable, Transient: true, Err: err}
 }
