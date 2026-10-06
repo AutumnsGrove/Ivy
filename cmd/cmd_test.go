@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/AutumnsGrove/Ivy/config"
+	"github.com/AutumnsGrove/Ivy/internal/accountsvc"
 	"github.com/AutumnsGrove/Ivy/internal/mailworld"
 	"github.com/AutumnsGrove/Ivy/store"
 )
@@ -193,6 +195,89 @@ accounts:
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("run did not shut down")
+	}
+}
+
+// The point of in-app setup: `ivy run` with no accounts configured at all, the
+// operator types the mailbox into the app, and mail starts flowing without a
+// restart. The password lands in a private file, not in ivy.yaml or the DB.
+// Not parallel: it swaps the package's provider for the fake mail world.
+func TestRunConnectsAnAccountTypedIntoTheApp(t *testing.T) {
+	addr := freeAddr(t)
+	dir := t.TempDir()
+	w, err := mailworld.New()
+	if err != nil {
+		t.Fatalf("mailworld: %v", err)
+	}
+	defer func() { _ = w.Close() }()
+	w.Account("me@grove.test", "secret").Deliver("INBOX", mailworld.Msg().From("a@example.com").Subject("hello").Build())
+	host, portStr, err := net.SplitHostPort(w.IMAPAddr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prev := appProvider
+	appProvider = accountsvc.Provider{IMAPHost: host, IMAPPort: port, SMTPHost: host, SMTPPort: 1, Insecure: true}
+	t.Cleanup(func() { appProvider = prev })
+
+	configPath := writeConfig(t, dir, fmt.Sprintf("listen: %s\ndata_dir: %s\n", addr, dir))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	root := New("test")
+	root.SetArgs([]string{"--config", configPath, "run"})
+	root.SetOut(os.Stderr)
+	root.SetErr(os.Stderr)
+	done := make(chan error, 1)
+	go func() { done <- root.ExecuteContext(ctx) }()
+	waitForHealth(t, "http://"+addr+"/api/v1/health")
+
+	resp, err := http.Post("http://"+addr+"/api/v1/accounts", "application/json",
+		strings.NewReader(`{"address":"me@grove.test","password":"secret"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("POST /accounts status = %d, want 201", resp.StatusCode)
+	}
+
+	dbs, err := store.Open(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() { _ = dbs.Close() }()
+	deadline := time.Now().Add(5 * time.Second)
+	synced := false
+	for time.Now().Before(deadline) && !synced {
+		if f, err := dbs.GetFolderByName(context.Background(), "purelymail", "INBOX"); err == nil {
+			if uids, err := dbs.MessageUIDs(context.Background(), f.ID); err == nil && len(uids) == 1 {
+				synced = true
+			}
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !synced {
+		t.Fatal("the account typed into the app never synced")
+	}
+	info, err := os.Stat(filepath.Join(dir, "secrets", "purelymail"))
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("password file = %v, %v; want a mode 600 file", info, err)
+	}
+	if yaml, _ := os.ReadFile(configPath); strings.Contains(string(yaml), "secret") {
+		t.Error("the password reached ivy.yaml")
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("run returned %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("run did not shut down with a worker started from the API")
 	}
 }
 

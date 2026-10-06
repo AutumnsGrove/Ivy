@@ -24,10 +24,10 @@ import (
 	"github.com/AutumnsGrove/Ivy/config"
 	"github.com/AutumnsGrove/Ivy/events"
 	"github.com/AutumnsGrove/Ivy/gateway"
+	"github.com/AutumnsGrove/Ivy/internal/accountsvc"
 	"github.com/AutumnsGrove/Ivy/internal/lockfile"
 	"github.com/AutumnsGrove/Ivy/internal/webui"
 	"github.com/AutumnsGrove/Ivy/store"
-	ivysync "github.com/AutumnsGrove/Ivy/sync"
 	"github.com/AutumnsGrove/Ivy/update"
 )
 
@@ -102,17 +102,41 @@ func runCmd(configPath *string, version string) *cobra.Command {
 			}
 			defer dbs.Close()
 
+			// Accounts typed into the app come back after a restart. They join the
+			// ivy.yaml ones here, before the embedding pipeline reads the account list,
+			// which is why "smart features" on a new account starts at the next start.
+			ivyYAMLAccounts := append([]config.Account(nil), cfg.Accounts...)
+			stored, err := accountsvc.StoredAccounts(cmd.Context(), dbs, cfg)
+			if err != nil {
+				return err
+			}
+			cfg.Accounts = append(cfg.Accounts, stored...)
+
 			// The embeddings gate is the only path to a paid provider; search uses it
 			// for the query embedding and the embed worker for each message.
 			embedding := NewEmbedding(cfg, dbs, os.Getenv("OPENROUTER_API_KEY"))
 
-			// No Read/WriteTimeout: SSE streams and large bodies are long-lived. The
-			// header and idle timeouts still shed slow-loris connections.
-			hub := events.New()
-			api := gateway.New(dbs, version, webui.FS).WithSearch(embedding.Query).WithEvents(hub).WithAllowedHosts(cfg.HostAllowList()).WithBackupTargets(cfg.BackupTargets())
-
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
+
+			// One owned worker per account: reconcile, then IDLE on INBOX. The defer
+			// order matters: workerStop cancels first, then the supervisor and the
+			// group wait, so every goroutine finishes before RunE returns.
+			workerCtx, workerStop := context.WithCancel(ctx)
+			var workers sync.WaitGroup
+			hub := events.New()
+			supervisor := accountsvc.NewSupervisor(workerCtx, dbs, hub)
+			defer workers.Wait()
+			defer supervisor.Wait()
+			defer workerStop()
+
+			connector := accountsvc.NewConnector(accountsvc.ConnectorOptions{
+				DBs: dbs, Supervisor: supervisor, SecretsDir: cfg.SecretsDir(), Provider: appProvider,
+				Existing: func() []config.Account { return ivyYAMLAccounts },
+			})
+			api := gateway.New(dbs, version, webui.FS).WithSearch(embedding.Query).WithEvents(hub).
+				WithAllowedHosts(cfg.HostAllowList()).WithBackupTargets(cfg.BackupTargets()).
+				WithAccountConnector(connector)
 
 			// The self-update path only makes sense in the container, where a host-side
 			// watcher reads the signal file. In dev it would write a file nothing reads
@@ -133,55 +157,8 @@ func runCmd(configPath *string, version string) *cobra.Command {
 			// timeout; closing the hub is what ends the streams.
 			srv.RegisterOnShutdown(hub.Close)
 
-			// One owned worker per account: reconcile, then IDLE on INBOX. The defer
-			// order matters: workerStop cancels first, then workers.Wait lets every
-			// goroutine finish before RunE returns.
-			workerCtx, workerStop := context.WithCancel(ctx)
-			var workers sync.WaitGroup
-			defer workers.Wait()
-			defer workerStop()
 			for _, a := range cfg.Accounts {
-				acct := syncAccountFor(a)
-				worker := ivysync.NewWorker(ivysync.NewFetcher(dbs), acct,
-					ivysync.WithWorkerSyncFunc(func(res ivysync.Result, err error) {
-						hub.Publish(events.Event{Type: events.SyncState, AccountID: acct.ID})
-						if err == nil && res.Stored > 0 {
-							hub.Publish(events.Event{Type: events.MessageChanged, AccountID: acct.ID})
-						}
-						// A sweep that hid enough mail to look like a mistake is a Mirror
-						// health alert, not a reason to stop syncing (ARCHITECTURE.md 4).
-						for _, md := range res.MassDisabled {
-							hub.Publish(events.Event{
-								Type: events.HealthAlert, AccountID: acct.ID,
-								Folder: md.Folder, Code: "mass_disable",
-							})
-						}
-					}))
-				workers.Add(1)
-				go func() {
-					defer workers.Done()
-					if err := worker.Run(workerCtx); err != nil && !errors.Is(err, context.Canceled) {
-						slog.WarnContext(workerCtx, "sync worker stopped", "account", acct.ID, "error", err)
-					}
-				}()
-
-				// The outbox is the one writer to IMAP; it owns its own connection and
-				// publishes a hint whenever an op changes, so a screen can drop its
-				// optimistic overlay once the server has it.
-				outboxWorker := ivysync.NewOutboxWorker(ivysync.NewFetcher(dbs), acct,
-					ivysync.WithOutboxNotify(func(op store.OutboxOp) {
-						hub.Publish(events.Event{Type: events.OutboxState, AccountID: acct.ID})
-						if op.State == store.OutboxDone {
-							hub.Publish(events.Event{Type: events.MessageChanged, AccountID: acct.ID})
-						}
-					}))
-				workers.Add(1)
-				go func() {
-					defer workers.Done()
-					if err := outboxWorker.Run(workerCtx); err != nil && !errors.Is(err, context.Canceled) {
-						slog.WarnContext(workerCtx, "outbox worker stopped", "account", acct.ID, "error", err)
-					}
-				}()
+				supervisor.Start(accountsvc.SyncAccount(a))
 			}
 
 			// Embedding is a low-priority background queue: one job at a time, so it
@@ -420,19 +397,9 @@ func inContainer() bool {
 	return err == nil
 }
 
-// syncAccountFor is the connection descriptor a sync worker uses for a
-// configured account. Real accounts use implicit TLS; only the loopback dev
-// fake sets Insecure (config.Account).
-func syncAccountFor(a config.Account) ivysync.Account {
-	return ivysync.Account{
-		ID: a.ID, Address: a.Address,
-		IMAPHost: a.IMAPHost, IMAPPort: a.IMAPPort,
-		SMTPHost: a.SMTPHost, SMTPPort: a.SMTPPort,
-		Username: a.Username, Password: a.Password,
-		Insecure:           a.Insecure,
-		TrustedAuthservIDs: a.TrustedAuthservIDs,
-	}
-}
+// appProvider is the server an account typed into the app talks to. It is a
+// variable only so a test can point it at the fake mail world.
+var appProvider = accountsvc.Purelymail
 
 // reportHosts says which host names the API answers to (loopback always, then
 // allowed_hosts and the listen host) and, when Ivy listens on a network address
