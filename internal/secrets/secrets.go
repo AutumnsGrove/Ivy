@@ -92,7 +92,7 @@ func Read(dir, id string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("open secret: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // read-only: a close error cannot lose data
 	info, err := f.Stat()
 	if err != nil {
 		return "", fmt.Errorf("stat secret: %w", err)

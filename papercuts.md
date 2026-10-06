@@ -1539,3 +1539,7 @@ Baseline at `839bf05`: `go build`, `go vet`, `staticcheck`, `gofumpt -l` clean a
   independent rows. `TestNextQueuedSendRespectsUndoAndBackoff` was rewritten for the new rule and failed before
   the change (send-2 was held behind send-1's window); the query now filters on `undo_deadline` and
   `next_attempt_at` and orders the due rows by sequence. STANDARDS row updated.
+- **N45 resolved** (operator asked for it) · `internal/accountsvc/connector.go`, `internal/secrets/secrets.go`,
+  `store/accountconfigs.go` · the four findings above are fixed: `//nolint:contextcheck` with the reason on both
+  `Supervisor.Start` calls, and explicit discarded closes on the two read-only defers. `golangci-lint run` at
+  v2.12.1 now reports 0 issues.
