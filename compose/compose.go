@@ -45,7 +45,7 @@ type Message struct {
 	Markdown bool
 
 	// InReplyTo and References are transmission headers only; the reply logic
-	// that computes them is stage 4e. References preserves order.
+	// that computes them lives in reply.go. References preserves order.
 	InReplyTo  string
 	References []string
 
