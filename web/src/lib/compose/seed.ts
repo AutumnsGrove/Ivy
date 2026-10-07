@@ -1,7 +1,7 @@
 // One shape for whatever starts a compose: a reply or forward prefill, a resumed
 // draft, or the request JSON an undo handed back. Keeping the mapping here (rather
 // than in the screen) makes the four sources and their absent fields table-tested.
-import type { AttachmentInfo, ComposePrefill, DraftResume } from '#lib/types.js';
+import type { AttachmentInfo, BodyFormat, ComposePrefill, DraftResume } from '#lib/types.js';
 
 export type ComposeSeed = {
 	from?: string;
@@ -11,6 +11,8 @@ export type ComposeSeed = {
 	bcc: string[];
 	subject: string;
 	text: string;
+	/** How `text` is meant: html only when a rich draft or send said so; absent means the screen's default. */
+	bodyFormat?: BodyFormat;
 	inReplyTo?: string;
 	references: string[];
 	/** Attachments already staged for this compose, from a resumed draft or undo. */
@@ -50,6 +52,7 @@ export function seedFromDraft(draft: DraftResume): ComposeSeed {
 		bcc: draft.bcc ?? [],
 		subject: draft.subject ?? '',
 		text: draft.text,
+		bodyFormat: draft.bodyFormat,
 		inReplyTo: draft.inReplyTo,
 		references: draft.references ?? [],
 		attachments: draft.attachments ?? []
@@ -74,7 +77,14 @@ export function seedFromSendRequest(raw: string): ComposeSeed | null {
 		bcc: strings(req.bcc),
 		subject: string(req.subject),
 		text: string(req.text),
+		bodyFormat: bodyFormat(req.bodyFormat, req.markdown),
 		inReplyTo: string(req.inReplyTo) || undefined,
 		references: strings(req.references)
 	};
+}
+
+/** A stored request's format: `bodyFormat` wins, the legacy markdown flag is the fallback. */
+function bodyFormat(value: unknown, markdown: unknown): BodyFormat | undefined {
+	if (value === 'html' || value === 'markdown' || value === 'plain') return value;
+	return markdown === true ? 'markdown' : undefined;
 }

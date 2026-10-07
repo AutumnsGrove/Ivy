@@ -6,14 +6,16 @@
 	import { ApiError } from '#lib/api/errors.js';
 	import { createAutosaver } from '#lib/compose/autosave.js';
 	import { applySignature } from '#lib/compose/signature.js';
+	import { textToHtml } from '#lib/compose/sanitize.js';
 	import { Bold, ChevronDown, FileText, ImageIcon, Italic, Link, List, Paperclip, Send, X } from '#lib/icons.js';
 	import { prepareImage } from '#lib/photo.js';
 	import { sends } from '#lib/sends.svelte.js';
 	import { toasts } from '#lib/toast.js';
-	import type { DraftResume, Identity, MailAttachment } from '#lib/types.js';
+	import type { BodyFormat, DraftResume, Identity, MailAttachment } from '#lib/types.js';
 	import AttachSheet from '#lib/components/compose/AttachSheet.svelte';
 	import NotSentSheet from '#lib/components/compose/NotSentSheet.svelte';
 	import RecipientField from '#lib/components/compose/RecipientField.svelte';
+	import RichEditor, { type RichEditorApi, type RichFormatState } from '#lib/components/compose/RichEditor.svelte';
 	import Button from '#lib/components/ui/Button.svelte';
 	import Dot from '#lib/components/ui/Dot.svelte';
 	import Glass from '#lib/components/ui/Glass.svelte';
@@ -92,7 +94,18 @@
 	let subject = $state(seed.subject);
 	const startedFresh = !snap.draftMeta && !snap.replyId && !snap.forwardId && !snap.undoId;
 	const initialSignature = (seedIdentity ?? primaryAtLoad)?.signature ?? '';
-	let body = $state(startedFresh ? applySignature('', '', initialSignature) : seed.text);
+	// Rich text is the default; a seed that names no format is plain text (a
+	// prefill or a fresh signature), so it is escaped before it enters the editor.
+	const initialFormat: BodyFormat = seed.bodyFormat ?? 'html';
+	const initialPlain = startedFresh ? applySignature('', '', initialSignature) : seed.text;
+	let bodyFormat = $state<BodyFormat>(initialFormat);
+	let body = $state(initialFormat === 'html' && !seed.bodyFormat ? textToHtml(initialPlain) : initialPlain);
+	// The format is fixed once the body has content; only a brand-new message can
+	// still switch, and then the body is just the signature (no conversion needed).
+	let touched = $state(false);
+	let format = $state<RichFormatState>({ bold: false, italic: false, list: false, link: false });
+	let rich = $state<RichEditorApi>();
+	const canSwitchMode = $derived(startedFresh && !touched);
 	const inReplyTo = seed.inReplyTo;
 	const references = seed.references;
 
@@ -124,7 +137,7 @@
 				bcc,
 				subject,
 				text: body,
-				markdown: true,
+				bodyFormat,
 				inReplyTo,
 				references,
 				attachments: attachments.filter((a) => a.id).map((a) => ({ id: a.id, inline: a.inline }))
@@ -149,6 +162,34 @@
 	});
 	if (snap.draftMeta) auto.adopt(snap.draftMeta);
 	const touch = () => auto.touch();
+
+	// The first keystroke settles the message's format (it is fixed once typed).
+	function markBodyTouched() {
+		touched = true;
+		touch();
+	}
+
+	// Only reachable on a fresh message, where the body is just the signature:
+	// switching escapes or unescapes it, it never converts formatting.
+	function switchMode(next: BodyFormat) {
+		if (!canSwitchMode || next === bodyFormat) return;
+		body = next === 'html' ? textToHtml(initialPlain) : initialPlain;
+		bodyFormat = next;
+	}
+
+	function addLink() {
+		if (bodyFormat !== 'html') return;
+		const url = window.prompt('Link address');
+		if (!url) return;
+		const trimmed = url.trim();
+		if (!/^(https?:|mailto:)/i.test(trimmed)) {
+			toasts.push({ text: 'A link needs to start with http, https or mailto', tone: 'warn' });
+			return;
+		}
+		rich?.makeLink(trimmed);
+	}
+
+	const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 	// Leaving the screen (or the tab) saves once more; a failed save keeps the
 	// content here, never silently drops it.
 	beforeNavigate(() => void auto.flush());
@@ -185,7 +226,10 @@
 							}
 						: a
 				);
-				if (isInline) body = `${body}\n![${up.name}](cid:${up.id}@ivy)`;
+				if (isInline) {
+					if (bodyFormat === 'html' && rich) rich.insertImage(up.id, up.name);
+					else body = `${body}\n![${up.name}](cid:${up.id}@ivy)`;
+				}
 				touch();
 			} catch (error) {
 				attachments = attachments.filter((a) => a.tempId !== tempId);
@@ -228,11 +272,16 @@
 		attachments = attachments.filter((a) => (a.tempId ?? a.id) !== key);
 		if (att.id) void api.deleteUpload(snap.accountId, att.id).catch(() => {});
 		if (att.inline && att.id) {
-			const ref = `cid:${att.id}@ivy`;
-			body = body
-				.split('\n')
-				.filter((line) => !line.includes(ref))
-				.join('\n');
+			if (bodyFormat === 'html' && rich) {
+				const ref = new RegExp(`<img[^>]*src="cid:${escapeRegExp(att.id)}@ivy"[^>]*>`, 'g');
+				rich.setHtml(body.replace(ref, ''));
+			} else {
+				const ref = `cid:${att.id}@ivy`;
+				body = body
+					.split('\n')
+					.filter((line) => !line.includes(ref))
+					.join('\n');
+			}
 		}
 		touch();
 	}
@@ -241,7 +290,11 @@
 		if (address === from) return;
 		const previous = identityByAddress(from);
 		const next = identityByAddress(address);
-		body = applySignature(body, previous?.signature ?? '', next?.signature ?? '');
+		// A rich body is HTML, so the plain-text signature swap does not apply; the
+		// signature inserted when the message started stays with it (4h limitation).
+		if (bodyFormat !== 'html') {
+			body = applySignature(body, previous?.signature ?? '', next?.signature ?? '');
+		}
 		from = address;
 		fromName = next?.name ?? '';
 		touch();
@@ -301,7 +354,7 @@
 				bcc,
 				subject,
 				text: body,
-				markdown: true,
+				bodyFormat,
 				inReplyTo,
 				references: references.length ? references : undefined,
 				draftMessageId,
@@ -379,7 +432,21 @@
 			</div>
 		{/if}
 
-		<textarea bind:value={body} oninput={touch} aria-label="Message body" placeholder="Write something kind…"></textarea>
+		{#if bodyFormat === 'html'}
+			<RichEditor
+				bind:value={body}
+				oninput={markBodyTouched}
+				onpath={(s) => (format = s)}
+				onapi={(a) => (rich = a)}
+			/>
+		{:else}
+			<textarea
+				bind:value={body}
+				oninput={markBodyTouched}
+				aria-label="Message body"
+				placeholder="Write something kind…"
+			></textarea>
+		{/if}
 
 		{#if attachments.length}
 			<div class="atts">
@@ -402,13 +469,36 @@
 	</Glass>
 
 	<Glass variant="strong" radius="bar" class="fmt">
-		<IconButton label="Bold (coming soon)" disabled><Bold /></IconButton>
-		<IconButton label="Italic (coming soon)" disabled><Italic /></IconButton>
-		<IconButton label="Link (coming soon)" disabled><Link /></IconButton>
-		<IconButton label="List (coming soon)" disabled><List /></IconButton>
+		<IconButton label="Bold" disabled={bodyFormat !== 'html'} pressed={format.bold} onclick={() => rich?.bold()}><Bold /></IconButton>
+		<IconButton label="Italic" disabled={bodyFormat !== 'html'} pressed={format.italic} onclick={() => rich?.italic()}
+			><Italic /></IconButton
+		>
+		<IconButton label="Link" disabled={bodyFormat !== 'html'} pressed={format.link} onclick={addLink}><Link /></IconButton>
+		<IconButton label="List" disabled={bodyFormat !== 'html'} pressed={format.list} onclick={() => rich?.toggleList()}
+			><List /></IconButton
+		>
 		<IconButton label="Insert image" tone="accent" onclick={() => ((inlineNext = true), (attachOpen = true))}><ImageIcon /></IconButton>
 		<span class="grow"></span>
-		<span class="undo">{snap.undoSeconds > 0 ? `Sends after ${snap.undoSeconds} s` : 'Sends immediately'}</span>
+		{#if canSwitchMode}
+			<div class="modes" role="group" aria-label="Message format">
+				<button
+					type="button"
+					class="mode"
+					class:on={bodyFormat === 'html'}
+					aria-pressed={bodyFormat === 'html'}
+					onclick={() => switchMode('html')}>Rich</button
+				>
+				<button
+					type="button"
+					class="mode"
+					class:on={bodyFormat === 'markdown'}
+					aria-pressed={bodyFormat === 'markdown'}
+					onclick={() => switchMode('markdown')}>Markdown</button
+				>
+			</div>
+		{:else}
+			<span class="undo">{snap.undoSeconds > 0 ? `Sends after ${snap.undoSeconds} s` : 'Sends immediately'}</span>
+		{/if}
 	</Glass>
 </div>
 
@@ -609,5 +699,24 @@
 		padding-right: var(--sp-8);
 		font-size: var(--fs-note);
 		color: var(--faint);
+	}
+	.modes {
+		display: flex;
+		gap: var(--sp-3);
+		padding: var(--sp-3);
+		border-radius: var(--radius-pill);
+		background: var(--wash-soft);
+	}
+	.mode {
+		padding: var(--sp-4) var(--sp-10);
+		border: 0;
+		border-radius: var(--radius-pill);
+		background: transparent;
+		color: var(--muted);
+		font: 500 var(--fs-note) var(--font-ui);
+	}
+	.mode.on {
+		background: var(--accent-soft);
+		color: var(--accent);
 	}
 </style>

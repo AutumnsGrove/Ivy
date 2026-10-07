@@ -55,6 +55,11 @@ describe('seedFromDraft', () => {
 		expect(seedFromDraft(draft).cc).toEqual([]);
 		expect(seedFromDraft(draft).bcc).toEqual([]);
 	});
+
+	it('carries the body format so a rich draft reopens as rich text', () => {
+		const draft: DraftResume = { id: 'v1', accountId: 'a1', version: 0, source: 'local', to: [], text: '<p>Hi</p>', bodyFormat: 'html' };
+		expect(seedFromDraft(draft).bodyFormat).toBe('html');
+	});
 });
 
 describe('seedFromSendRequest', () => {
@@ -85,5 +90,12 @@ describe('seedFromSendRequest', () => {
 	it('ignores a field of the wrong type', () => {
 		const seed = seedFromSendRequest(JSON.stringify({ to: 'not-an-array', subject: 5, text: null }));
 		expect(seed).toMatchObject({ to: [], subject: '', text: '' });
+	});
+
+	it('restores the body format, falling back to the legacy markdown flag', () => {
+		expect(seedFromSendRequest(JSON.stringify({ text: '<p>x</p>', bodyFormat: 'html' }))?.bodyFormat).toBe('html');
+		expect(seedFromSendRequest(JSON.stringify({ text: 'x', markdown: true }))?.bodyFormat).toBe('markdown');
+		expect(seedFromSendRequest(JSON.stringify({ text: 'x' }))?.bodyFormat).toBeUndefined();
+		expect(seedFromSendRequest(JSON.stringify({ text: 'x', bodyFormat: 'nonsense' }))?.bodyFormat).toBeUndefined();
 	});
 });

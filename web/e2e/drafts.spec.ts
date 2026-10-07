@@ -41,7 +41,7 @@ test.describe('drafts', () => {
 		await page.getByRole('link', { name: /A half-written note/ }).click();
 		await expect(page).toHaveURL(/\/compose\?draft=/);
 		await expect(page.getByLabel('Subject')).toHaveValue('A half-written note');
-		await expect(page.getByLabel('Message body')).toHaveValue('The start of something.');
+		await expect(page.getByLabel('Message body')).toContainText('The start of something.');
 	});
 
 	test('discarding asks first, then removes the draft', async ({ page }) => {

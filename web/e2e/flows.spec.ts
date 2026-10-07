@@ -65,7 +65,7 @@ test.describe('compose', () => {
 		await expect(sheet).toContainText('safe in Drafts');
 		await sheet.getByRole('button', { name: 'Go back and edit' }).click();
 		await expect(sheet).toBeHidden();
-		await expect(page.getByLabel('Message body')).toHaveValue('Hi Mara');
+		await expect(page.getByLabel('Message body')).toContainText('Hi Mara');
 	});
 
 	test('sending offers undo, which hands the message back to the editor', async ({ page }) => {
@@ -77,7 +77,7 @@ test.describe('compose', () => {
 		await expect(undoT).toBeVisible();
 		await undoT.getByRole('button', { name: 'Undo' }).click();
 		await expect(page).toHaveURL(/\/compose\?undo=/);
-		await expect(page.getByLabel('Message body')).toHaveValue('Undo me');
+		await expect(page.getByLabel('Message body')).toContainText('Undo me');
 	});
 
 	test('People autocomplete adds a recipient chip', async ({ page }) => {
@@ -96,6 +96,33 @@ test.describe('compose', () => {
 		await expect(from).toHaveValue('hello@example.com');
 		await from.selectOption('support@example.com');
 		await expect(from).toHaveValue('support@example.com');
+	});
+
+	test('rich text is the default and the mode can switch before typing', async ({ page }) => {
+		await page.goto('/compose');
+		const modes = page.getByRole('group', { name: 'Message format' });
+		await expect(modes.getByRole('button', { name: 'Rich' })).toHaveAttribute('aria-pressed', 'true');
+		await modes.getByRole('button', { name: 'Markdown' }).click();
+		await expect(page.getByLabel('Message body', { exact: true })).toHaveJSProperty('tagName', 'TEXTAREA');
+		await modes.getByRole('button', { name: 'Rich' }).click();
+		await expect(page.getByLabel('Message body', { exact: true })).toHaveAttribute('role', 'textbox');
+	});
+
+	test('the mode is fixed once the body has content', async ({ page }) => {
+		await page.goto('/compose');
+		await page.getByLabel('Message body', { exact: true }).fill('Typed something');
+		await expect(page.getByRole('group', { name: 'Message format' })).toHaveCount(0);
+	});
+
+	test('the format bar bolds a selection and starts a list', async ({ page }) => {
+		await page.goto('/compose');
+		const body = page.getByLabel('Message body', { exact: true });
+		await body.fill('hello world');
+		await body.selectText();
+		await page.getByRole('button', { name: 'Bold' }).click();
+		await expect(body.locator('b, strong')).toHaveCount(1);
+		await page.getByRole('button', { name: 'List' }).click();
+		await expect(body.locator('ul')).toHaveCount(1);
 	});
 });
 

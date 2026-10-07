@@ -406,6 +406,7 @@ function draftReply(state: AccountState, path: string, method: string, raw: Buff
 			bcc: Array.isArray(b.bcc) ? (b.bcc as string[]) : [],
 			subject,
 			text: typeof b.text === 'string' ? b.text : '',
+			bodyFormat: b.bodyFormat === 'html' || b.bodyFormat === 'markdown' || b.bodyFormat === 'plain' ? b.bodyFormat : undefined,
 			inReplyTo: typeof b.inReplyTo === 'string' ? b.inReplyTo : undefined,
 			references: Array.isArray(b.references) ? (b.references as string[]) : [],
 			attachments: refAttachments(state, b)

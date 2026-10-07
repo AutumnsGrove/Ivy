@@ -30,6 +30,7 @@ export type Identity = Schema['Identity'];
 export type IdentityInput = Schema['IdentityInput'];
 export type IdentityList = Schema['IdentityList'];
 export type ComposePrefill = Schema['ComposePrefill'];
+export type BodyFormat = Schema['BodyFormat'];
 export type SendRequest = Schema['SendRequest'];
 export type SendStatus = Schema['SendStatus'];
 export type SendList = Schema['SendList'];

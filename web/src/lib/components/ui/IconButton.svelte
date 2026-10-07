@@ -6,18 +6,22 @@
 		label: string;
 		/** `glass` floats over the scene, `plain` sits in a bar, `accent` marks the primary add action. */
 		tone?: 'glass' | 'plain' | 'accent';
+		/** Marks a toggle-style control (format bar) as on. */
+		pressed?: boolean;
 		href?: string;
 		disabled?: boolean;
 		onclick?: (e: MouseEvent) => void;
 		children: Snippet;
 	};
-	let { label, tone = 'plain', href, disabled = false, onclick, children }: Props = $props();
+	let { label, tone = 'plain', pressed = false, href, disabled = false, onclick, children }: Props = $props();
 </script>
 
 {#if href}
 	<a {href} class="ib {tone}" aria-label={label} {onclick}>{@render children()}</a>
 {:else}
-	<button type="button" class="ib {tone}" aria-label={label} {disabled} {onclick}>{@render children()}</button>
+	<button type="button" class="ib {tone}" class:on={pressed} aria-pressed={pressed} aria-label={label} {disabled} {onclick}
+		>{@render children()}</button
+	>
 {/if}
 
 <style>
@@ -46,5 +50,8 @@
 	}
 	.ib:disabled {
 		opacity: 0.4;
+	}
+	.on {
+		color: var(--accent);
 	}
 </style>

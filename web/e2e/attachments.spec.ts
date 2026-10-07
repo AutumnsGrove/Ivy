@@ -37,6 +37,6 @@ test.describe('outgoing attachments', () => {
 		await page.getByRole('button', { name: 'Insert image' }).click();
 		await page.getByLabel('Photos', { exact: true }).setInputFiles({ name: 'dot.png', mimeType: 'image/png', buffer: PNG });
 		await expect(page.getByRole('button', { name: 'Remove dot.png' })).toBeVisible();
-		await expect(page.getByLabel('Message body', { exact: true })).toHaveValue(/cid:up-\d+@ivy/);
+		await expect(page.getByLabel('Message body', { exact: true }).locator('img[src^="cid:"]')).toHaveCount(1);
 	});
 });
