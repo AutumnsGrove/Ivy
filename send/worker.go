@@ -109,6 +109,9 @@ const (
 	defaultSendPoll       = time.Second
 	defaultSendBackoff    = 5 * time.Second
 	defaultSendBackoffMax = 15 * time.Minute
+	// pruneInterval is how often Run ages out terminal rows; the retention itself
+	// is store.MaxSendTerminalRetention.
+	pruneInterval = time.Hour
 )
 
 // NewWorker builds a Worker for one account.
@@ -127,6 +130,7 @@ func NewWorker(dbs *store.DBs, acct Account, submitter *smtp.Submitter, opts ...
 
 // Run drains the queue as long as its context lives, polling when it is empty.
 func (w *Worker) Run(ctx context.Context) error {
+	var lastPrune time.Time
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -136,6 +140,14 @@ func (w *Worker) Run(ctx context.Context) error {
 		}
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+		// Terminal rows (bodies included) are the queue's only growth; nothing else
+		// deletes them, so the worker that owns the queue ages them out.
+		if lastPrune.IsZero() || w.now().Sub(lastPrune) > pruneInterval {
+			if _, err := w.dbs.PruneSendQueue(ctx, w.now()); err != nil {
+				slog.WarnContext(ctx, "send: prune failed", "account", w.acct.ID, "error", err)
+			}
+			lastPrune = w.now()
 		}
 		if !sleep(ctx, w.poll) {
 			return ctx.Err()

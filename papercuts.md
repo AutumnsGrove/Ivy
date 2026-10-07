@@ -1732,3 +1732,17 @@ real browser or the potato.
   clean, `CGO_ENABLED=1 go test -race -count=1 ./...` all packages pass, `pnpm test` (360) and `pnpm check` pass,
   Playwright `drafts.spec.ts` passes on the phone (WebKit) and desktop projects. Still not run: `govulncheck`, the
   other Playwright specs, a real iPhone, the potato.
+
+## N44, the send queue's bodies (operator answers, 2026-10-07)
+
+- **#146** · `839bf05` · `send/worker.go` · **bug** · `PruneSendQueue` was only ever called by its own test, so no terminal send row
+  was ever deleted: every message (both bodies, up to about 33 MiB each with attachments) stayed in the queue for
+  good, though `STANDARDS.md` and the constant say seven days. Found while planning N44. Reproduced with
+  `TestRunPrunesOldTerminalSends` (an 8-day-old failed send survived `Run`; failed before). `Run` now prunes on its
+  first pass and then hourly (`pruneInterval`).
+- **#147** · `56660d6` · `send/worker_test.go` · **bug** (tests) · the fixture pinned the send worker's clock at 2026-10-06
+  15:00 but built the outbox worker on the real clock. The outbox fails an op older than `MaxOutboxAge` (24 h), so
+  from 2026-10-07 15:00 the append op looked expired, the send settled `done` and three tests failed with no code
+  change (`TestSendDeliversAndFilesTheSentCopy`, `TestSendCrashAfterSubmitBeforeAppend`,
+  `TestSendRemovesTheDraftItCameFrom`). Reproduced with `worker.go` reverted (still red). The outbox worker now
+  shares the fixture's clock through `ivysync.WithClock`. The rest of the suite is unaffected (full run green).

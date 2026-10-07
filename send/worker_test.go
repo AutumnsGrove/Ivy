@@ -2,6 +2,7 @@ package send_test
 
 import (
 	"context"
+	"errors"
 	"net"
 	"strconv"
 	"testing"
@@ -88,7 +89,11 @@ func newFixture(t *testing.T, withSent bool, opts ...mailworld.Option) *fixture 
 	}
 	fx.worker = send.NewWorker(dbs, fx.acct, smtp.New(smtp.WithTimeout(2*time.Second, 2*time.Second, 2*time.Second)),
 		send.WithClock(func() time.Time { return fx.now }), send.WithPoll(time.Millisecond))
-	fx.outbox = ivysync.NewOutboxWorker(ivysync.NewFetcher(dbs), syncAcct)
+	// The outbox worker shares the fixture's clock. On the real clock an op the send
+	// worker stamped with the fixed fx.now looks more than MaxOutboxAge old a day
+	// after that date and is failed as expired, which turned these tests red.
+	fx.outbox = ivysync.NewOutboxWorker(
+		ivysync.NewFetcher(dbs, ivysync.WithClock(func() time.Time { return fx.now })), syncAcct)
 	return fx
 }
 
@@ -501,5 +506,40 @@ func TestSendRecoversTheDraftRemovalAfterARestart(t *testing.T) {
 	}
 	if got, err := fx.dbs.DraftVersion(fx.ctx, d.ID); err != nil || got.State != store.DraftSent {
 		t.Errorf("draft version = %+v, %v, want sent", got, err)
+	}
+}
+
+// A terminal send older than the retention is pruned by the worker itself. The
+// prune existed but nothing called it, so every message, body and all, stayed in
+// the queue for good.
+func TestRunPrunesOldTerminalSends(t *testing.T) {
+	fx := newFixture(t, true)
+	fx.enqueue(t, "old")
+	if err := fx.dbs.FailSend(fx.ctx, "old", "rejected", "a long time ago", fx.now.Add(-8*24*time.Hour)); err != nil {
+		t.Fatalf("fail send: %v", err)
+	}
+	fx.enqueue(t, "recent")
+	if err := fx.dbs.FailSend(fx.ctx, "recent", "rejected", "yesterday", fx.now.Add(-24*time.Hour)); err != nil {
+		t.Fatalf("fail recent: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(fx.ctx)
+	done := make(chan error, 1)
+	go func() { done <- fx.worker.Run(ctx) }()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := fx.dbs.GetSend(fx.ctx, "old"); errors.Is(err, store.ErrNotFound) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	<-done
+
+	if _, err := fx.dbs.GetSend(fx.ctx, "old"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("the 8-day-old terminal send = %v, want it pruned", err)
+	}
+	if _, err := fx.dbs.GetSend(fx.ctx, "recent"); err != nil {
+		t.Errorf("the recent terminal send = %v, want it kept", err)
 	}
 }
