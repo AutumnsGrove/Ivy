@@ -1619,3 +1619,10 @@ Baseline on `4f34628`: `go build`, `go vet` and `go test -count=1 ./...` all gre
   when an alias wrote it. Reproduced with `TestReplyToOwnMessageGoesToItsRecipients` (to was the operator's own
   address; failed before). The target is now the first recipient who is not the operator, the rest go to reply-all's
   Cc, and a message written by one of the identities is continued as that identity.
+
+### `0186dbd` draft to send link
+
+- **#142** · `0186dbd` · `gateway/send.go` · **standards** · `draftMessageId` is client-supplied, is stored on the send row and
+  becomes the Message-ID the worker searches for in Drafts, but had no maximum (only the 1 MiB body bound it;
+  4a). Reproduced with `TestSendRefusesAnOversizedDraftMessageID` (a 400-byte id was accepted with 202; failed
+  before). It is now refused with 400 above `compose.MaxMessageIDBytes`.

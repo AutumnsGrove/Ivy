@@ -368,3 +368,19 @@ func TestSendLegacyMarkdownFlagStillWorks(t *testing.T) {
 		t.Errorf("legacy markdown flag did not render: %q", wire.HTML)
 	}
 }
+
+// The draft Message-ID a send names is stored and later searched for on the
+// server, so it has a bound like every other client-sized field.
+func TestSendRefusesAnOversizedDraftMessageID(t *testing.T) {
+	t.Parallel()
+	srv, dbs, _, _ := sendServer(t)
+	req := sendRequest("with-draft")
+	long := "<" + strings.Repeat("x", 400) + "@example.test>"
+	req.DraftMessageId = &long
+	if code := postJSON(t, srv.URL+"/api/v1/send", req, nil); code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", code)
+	}
+	if rows, _ := dbs.SendsByAccount(context.Background(), "", 0); len(rows) != 0 {
+		t.Errorf("%d rows queued for a refused draft id, want none", len(rows))
+	}
+}

@@ -80,6 +80,10 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "That message id is too long")
 		return
 	}
+	if len(stringOr(req.DraftMessageId, "")) > compose.MaxMessageIDBytes {
+		writeError(w, http.StatusBadRequest, "bad_request", "That draft id is too long")
+		return
+	}
 	acct, err := s.dbs.GetAccount(ctx, req.AccountId)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
