@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -255,14 +256,45 @@ func (s *Server) accountViews(r *http.Request) ([]api.Account, error) {
 	if err != nil {
 		return nil, err
 	}
+	smart, err := s.smartAccounts(r.Context())
+	if err != nil {
+		return nil, err
+	}
 	out := make([]api.Account, 0, len(accounts))
 	for _, a := range accounts {
-		out = append(out, accountView(a, stats[a.ID], hidden[a.ID]))
+		out = append(out, accountView(a, stats[a.ID], hidden[a.ID], smartFor(a, smart)))
 	}
 	return out, nil
 }
 
-func accountView(a store.Account, st store.AccountStat, hidden store.DisabledStat) api.Account {
+// smartAccounts is the smart-features choice of every configured account:
+// ivy.yaml first (it wins a clash, as at startup), then the app-connected ones
+// in state.db. The mirror row is not asked, because sync never sets it.
+func (s *Server) smartAccounts(ctx context.Context) (map[string]bool, error) {
+	configs, err := s.dbs.AccountConfigs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(configs)+len(s.configuredSmart))
+	for _, c := range configs {
+		out[c.ID] = c.LLMEnabled
+	}
+	for id, on := range s.configuredSmart {
+		out[id] = on
+	}
+	return out, nil
+}
+
+// smartFor falls back to the mirror row only for an account no config names,
+// which is a seeded dev or test account.
+func smartFor(a store.Account, smart map[string]bool) bool {
+	if on, ok := smart[a.ID]; ok {
+		return on
+	}
+	return a.LLMEnabled
+}
+
+func accountView(a store.Account, st store.AccountStat, hidden store.DisabledStat, smart bool) api.Account {
 	state, note, progress := syncState(st)
 	v := api.Account{
 		Id:       a.ID,
@@ -274,7 +306,7 @@ func accountView(a store.Account, st store.AccountStat, hidden store.DisabledSta
 		Photo:    a.HasPhoto,
 		Slot:     api.AccountSlot(slotOf(a.SortOrder)),
 		Unread:   st.Unread,
-		Smart:    a.LLMEnabled,
+		Smart:    smart,
 		Sync:     state,
 		SyncNote: note,
 	}

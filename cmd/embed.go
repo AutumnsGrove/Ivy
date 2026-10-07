@@ -122,3 +122,13 @@ func (q *queryEmbedder) EmbedQuery(ctx context.Context, accountID, query string)
 	}
 	return vecs[0], model, nil
 }
+
+// smartOf is each configured account's smart-features choice, for the API to
+// report without reading it back from the mirror.
+func smartOf(accounts []config.Account) map[string]bool {
+	out := make(map[string]bool, len(accounts))
+	for _, a := range accounts {
+		out[a.ID] = a.LLMEnabled
+	}
+	return out
+}

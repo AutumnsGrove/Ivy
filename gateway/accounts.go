@@ -160,5 +160,9 @@ func (s *Server) accountByID(r *http.Request, id string) (api.Account, error) {
 	if err != nil {
 		return api.Account{}, err
 	}
-	return accountView(a, stats[a.ID], hidden[a.ID]), nil
+	smart, err := s.smartAccounts(r.Context())
+	if err != nil {
+		return api.Account{}, err
+	}
+	return accountView(a, stats[a.ID], hidden[a.ID], smartFor(a, smart)), nil
 }

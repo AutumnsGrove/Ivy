@@ -56,6 +56,17 @@ type Server struct {
 	// connector tests, stores and starts an account typed into the app; nil
 	// means this deployment cannot connect accounts from the app.
 	connector AccountConnector
+	// configuredSmart is each ivy.yaml account's llm_enabled. Accounts connected
+	// from the app keep theirs in state.db and are read live, so neither needs
+	// the mirror row, which sync creates without the setting.
+	configuredSmart map[string]bool
+}
+
+// WithConfiguredSmart sets the smart-features choice of the accounts declared
+// in ivy.yaml, which the gateway cannot read from either database.
+func (s *Server) WithConfiguredSmart(smart map[string]bool) *Server {
+	s.configuredSmart = smart
+	return s
 }
 
 // WithSearch enables hybrid ranking. qe may be nil, in which case search stays

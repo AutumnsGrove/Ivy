@@ -136,7 +136,7 @@ func runCmd(configPath *string, version string) *cobra.Command {
 			})
 			api := gateway.New(dbs, version, webui.FS).WithSearch(embedding.Query).WithEvents(hub).
 				WithAllowedHosts(cfg.HostAllowList()).WithBackupTargets(cfg.BackupTargets()).
-				WithAccountConnector(connector)
+				WithAccountConnector(connector).WithConfiguredSmart(smartOf(ivyYAMLAccounts))
 
 			// The self-update path only makes sense in the container, where a host-side
 			// watcher reads the signal file. In dev it would write a file nothing reads
