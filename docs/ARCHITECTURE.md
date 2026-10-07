@@ -395,6 +395,14 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   until 4g; the four markdown-format buttons stay inert until the rich-text editor (4h). A new
   `/drafts` screen lists the local and mirrored heads, resumes one into the composer, and discards
   one behind a confirmation.
+- **Outgoing attachments (chunk 4g, round 65):** the browser prepares photos (EXIF rotation via
+  `createImageBitmap`, downscale and a canvas re-encode that strips EXIF/GPS), so the server imports
+  no image decoder and the HEIC question is settled. Staged bytes are content-addressed under
+  `data/uploads/` with an account-scoped `state.db` table; the upload endpoint streams the body to
+  disk, sniffs it and refuses markup masquerading as an image plus a deny list of executables and
+  scripts. `compose` builds file and inline parts (`cid:` allowed in the outgoing HTML policy), send
+  and draft requests name staged ids with a bounded total, and a resume or undo re-materialises fresh
+  staging from the stored MIME. Limits: 25 MiB per file, 25 MiB total, 20 attachments.
 - **Auth results:** parse `Authentication-Results` (SPF/DKIM/DMARC) into a trust signal used by
   the phishing question and the spoofed-sender discount. Only the **topmost** header whose
   `authserv-id` is in the account's `trusted_authserv_ids` is believed, and **only that one

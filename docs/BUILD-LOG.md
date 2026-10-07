@@ -878,3 +878,46 @@ leave**, and the **attach sheet kept as a preview that blocks send** until 4g.
 - **Left for the operator.** The live check once 4f is on the board: send to self, see the Sent copy
   and the draft in Apple Mail, resume a draft made there, confirm a sent draft leaves Drafts, and the
   per-address send-as check from 4e.
+
+## 4g Outgoing attachments and images (round 65, 2026-10-06)
+
+Gate G4 was settled before any dependency decision (round 65,
+`docs/handoffs/2026-10-06-4g-attachments-G4.md`): **the browser prepares outgoing photos, so no
+server-side decoder and no new module is imported.** `createImageBitmap(file, { imageOrientation:
+'from-image' })` applies the EXIF rotation and Safari decodes HEIC; a canvas re-encode downscales
+(Original / Large 2560 / Medium 1600 / Small 1024, never upscaling) and strips EXIF/GPS by
+construction. The operator confirmed the phone hands back JPEG, and the limits are 25 MiB per file,
+25 MiB total and 20 files. Inline `cid:` images were kept in 4g. GIF, SVG and non-images bypass the
+browser path; SVG and the executable/script types are refused by the server's deny list.
+
+- **Staging.** `internal/blobstore` gained `Open` and `Remove` and now also backs `data/uploads/`
+  (content-addressed, so the same photo is stored once). State migration 15 adds an account-scoped
+  `uploads` table (id, hash, name, mime, size, created_at); a file is removed only when no row shares
+  its hash, and `SweepUploads` (wired into the outbox worker's six-hourly prune, 7-day age) clears
+  abandoned staging. Tests: `store/uploads_test.go`, `internal/blobstore`.
+- **Builder.** `compose.Message` gained bounded, validated `Attachments`; a name or type with a CR,
+  LF or NUL is refused, as are too many, too large and a bad inline CID. `Build` emits
+  `multipart/mixed` + `multipart/related` through enmime, and the outgoing HTML policy now allows the
+  `cid:` scheme. Tests: `compose/attach_test.go`, including a fuzz target over names, types and bytes.
+- **API.** `POST /accounts/{id}/uploads?name=` streams the raw body to disk (never
+  `io.ReadAll`), sniffs the head, refuses a declared image that is really markup and anything on the
+  deny list; `GET`/`DELETE .../uploads/{uploadId}` serve and free; `POST .../uploads/from-mail`
+  copies a mirrored part through an `io.Pipe`; `GET .../mail-attachments` lists recent visible
+  attachments. A staged raster image is served inline, everything else as a download with nosniff.
+  Tests: `gateway/uploads_test.go`.
+- **Send, drafts and resume.** `SendRequest`/`DraftRequest` gained `attachments: [{id, inline}]`;
+  the resolve helper bounds the total before reading any file and derives the inline Content-ID from
+  the upload id. A resume re-materialises fresh staging from the stored MIME, and `GET /send/{id}`
+  (and undo) expose each attachment's name and size, reading staging while it exists and rebuilding
+  from the Sent copy only if it was swept. `gateway/attachments_integration_test.go` wrote the
+  failures first. OpenAPI and both generated outputs carry the new endpoints and schemas.
+
+- **Frontend.** `prepareImage` in `lib/photo.ts` (Vitest: downscale, rotate, strip, alpha to PNG,
+  hostile input); the attach sheet opens the real Photos/Camera/Files pickers, lists "From your mail"
+  and shows the real Photo size and location settings; compose stages with a spinner, removes through
+  the API, and the image button inserts `![name](cid:<id>@ivy)`. `e2e/attachments.spec.ts` (file send,
+  from-mail copy, inline image) passes on phone and desktop; the full mock suite is 336 passed.
+  `make check` is green.
+- **Left for the operator.** A live send with a photo and a PDF to an address they own, checking the
+  recipient and the Sent copy; the phone picker handing back JPEG once more; "From your mail" against
+  the real mailbox. A type the deny list blocks that they actually need is a one-line change.

@@ -5,7 +5,7 @@ the dependency choice is settled **before any code**, in the spirit of `docs/CHU
 5. This is the gate-G4 checkpoint: what 4g needs, what stdlib covers, the `STACK.md` entry, and the
 phone's real HEIC behaviour.
 
-**Nothing here is implemented yet.** The four operator choices are recorded in `docs/qa-log.md` round
+**Implemented in 4g; the completion entry is in `docs/BUILD-LOG.md`.** The four operator choices are recorded in `docs/qa-log.md` round
 65.
 
 ## 1. What 4g must do

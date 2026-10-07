@@ -273,14 +273,20 @@ func uploadView(u store.Upload) api.Upload {
 	return api.Upload{Id: u.ID, Name: u.Name, Mime: u.MIMEType, Size: u.Size}
 }
 
+// uploadError is a refusal the operator should read; the message is written to
+// the error envelope as-is, so it is capitalized (ST1005 allows a custom type).
+type uploadError struct{ msg string }
+
+func (e *uploadError) Error() string { return e.msg }
+
 // validateUploadName refuses a name that could forge a header or is over the
 // builder's bound; it is the same rule the send-time validation applies.
 func validateUploadName(name string) error {
 	if hasBadHeaderBytes(name) {
-		return errors.New("That file name is not valid")
+		return &uploadError{"That file name is not valid"}
 	}
 	if len(name) > compose.MaxFilenameBytes {
-		return errors.New("That file name is too long")
+		return &uploadError{"That file name is too long"}
 	}
 	return nil
 }
@@ -314,11 +320,11 @@ func resolveAttachmentType(declared string, head []byte) string {
 // checkAttachmentType applies the deny list by extension and by MIME type.
 func checkAttachmentType(name, mimeType string) error {
 	if ext := strings.ToLower(path.Ext(name)); dangerousAttachmentExtensions[ext] {
-		return fmt.Errorf("Ivy will not send %s files", ext)
+		return &uploadError{fmt.Sprintf("Ivy will not send %s files", ext)}
 	}
 	mt, _, err := stdmime.ParseMediaType(mimeType)
 	if err == nil && dangerousAttachmentTypes[strings.ToLower(mt)] {
-		return fmt.Errorf("Ivy will not send %s files", mt)
+		return &uploadError{fmt.Sprintf("Ivy will not send %s files", mt)}
 	}
 	return nil
 }

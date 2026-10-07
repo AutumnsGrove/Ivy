@@ -39,6 +39,9 @@ export type AccountState = {
 	/** The send queue, and each queued send's original request for an undo. */
 	sends: SendStatus[];
 	sendDrafts: Map<string, string>;
+	/** Staged outgoing attachments, by upload id, and the id counter. */
+	uploads: Map<string, { name: string; mime: string; bytes: Buffer }>;
+	uploadSeq: number;
 };
 
 const freshState = (): AccountState => ({
@@ -52,7 +55,9 @@ const freshState = (): AccountState => ({
 	drafts: [],
 	draftBodies: new Map(),
 	sends: [],
-	sendDrafts: new Map()
+	sendDrafts: new Map(),
+	uploads: new Map(),
+	uploadSeq: 0
 });
 
 const TAG_COLORS = new Set(['sky', 'rose', 'teal', 'coral', 'lilac', 'mint', 'gold', 'sand', 'orchid', 'fern', 'slate', 'berry']);
@@ -253,6 +258,57 @@ function prefillForward(state: AccountState, id: string): Reply {
 }
 
 /** The send queue's in-memory backend: queue, read, undo. */
+/** The fixture's attachments already in the mirror, for "From your mail". */
+const MAIL_ATTACHMENTS = [
+	{ messageId: 'm1', path: '2', name: 'blog-home.png', mime: 'image/png', size: 1_100_000, inline: false },
+	{ messageId: 'm2', path: '2', name: 'migration.pdf', mime: 'application/pdf', size: 240_000, inline: false }
+];
+
+/** The staged uploads and "From your mail" list, over mutable fixtures. */
+function uploadReply(state: AccountState, path: string, method: string, params: URLSearchParams, raw: Buffer | null): Reply | null {
+	const fromMail = /^\/accounts\/([^/]+)\/uploads\/from-mail$/.exec(path);
+	if (fromMail && method === 'POST') {
+		const b = jsonBody(raw);
+		const source = MAIL_ATTACHMENTS.find((a) => a.messageId === b?.messageId && a.path === b?.path) ?? MAIL_ATTACHMENTS[0];
+		const id = `up-${++state.uploadSeq}`;
+		state.uploads.set(id, { name: source.name, mime: source.mime, bytes: Buffer.from(`bytes of ${source.name}`) });
+		return { status: 201, body: { id, name: source.name, mime: source.mime, size: state.uploads.get(id)!.bytes.length } };
+	}
+	const upload = /^\/accounts\/([^/]+)\/uploads$/.exec(path);
+	if (upload && method === 'POST') {
+		const name = params.get('name') ?? 'attachment';
+		const id = `up-${++state.uploadSeq}`;
+		const bytes = raw ?? Buffer.alloc(0);
+		state.uploads.set(id, { name, mime: 'application/octet-stream', bytes });
+		return { status: 201, body: { id, name, mime: 'application/octet-stream', size: bytes.length } };
+	}
+	const one = /^\/accounts\/([^/]+)\/uploads\/([^/]+)$/.exec(path);
+	if (one) {
+		const up = state.uploads.get(one[2]);
+		if (!up) return notFound('No such upload');
+		if (method === 'GET') return { contentType: up.mime, body: up.bytes };
+		if (method === 'DELETE') {
+			state.uploads.delete(one[2]);
+			return { status: 204, body: null };
+		}
+	}
+	const list = /^\/accounts\/([^/]+)\/mail-attachments$/.exec(path);
+	if (list && method === 'GET') return { body: { attachments: MAIL_ATTACHMENTS } };
+	return null;
+}
+
+/** The staged attachments a send or draft request named, for its reply. */
+function refAttachments(state: AccountState, b: Record<string, unknown> | null): SendStatus['attachments'] {
+	const refs = Array.isArray(b?.attachments) ? (b!.attachments as { id?: string; inline?: boolean }[]) : [];
+	const out = refs
+		.map((r) => {
+			const up = typeof r.id === 'string' ? state.uploads.get(r.id) : undefined;
+			return up ? { id: r.id as string, name: up.name, size: up.bytes.length, inline: !!r.inline } : null;
+		})
+		.filter((a): a is NonNullable<typeof a> => a !== null);
+	return out.length ? out : undefined;
+}
+
 function sendReply(state: AccountState, path: string, method: string, scenario: string | null, raw: Buffer | null): Reply | null {
 	if (path === '/send' && method === 'POST') {
 		const b = jsonBody(raw);
@@ -271,7 +327,8 @@ function sendReply(state: AccountState, path: string, method: string, scenario: 
 			subject: typeof b.subject === 'string' ? b.subject : '',
 			undoDeadline: new Date(Date.now() + 10_000).toISOString(),
 			createdAt: now,
-			updatedAt: now
+			updatedAt: now,
+			attachments: refAttachments(state, b)
 		};
 		state.sends = [send, ...state.sends];
 		state.sendDrafts.set(id, JSON.stringify(b));
@@ -350,7 +407,8 @@ function draftReply(state: AccountState, path: string, method: string, raw: Buff
 			subject,
 			text: typeof b.text === 'string' ? b.text : '',
 			inReplyTo: typeof b.inReplyTo === 'string' ? b.inReplyTo : undefined,
-			references: Array.isArray(b.references) ? (b.references as string[]) : []
+			references: Array.isArray(b.references) ? (b.references as string[]) : [],
+			attachments: refAttachments(state, b)
 		};
 		state.drafts = [summary, ...state.drafts.filter((d) => d.draftId !== draftId)];
 		state.draftBodies.set(id, resume);
@@ -682,9 +740,11 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 			: prefillForward(state, prefill[1]);
 	}
 
+	const uploads = uploadReply(state, path, method, params, raw);
+	if (uploads) return uploads;
+
 	const queued = sendReply(state, path, method, scenario, raw);
-	if (queued) return queued;
-	const drafts = draftReply(state, path, method, raw);
+	if (queued) return queued;	const drafts = draftReply(state, path, method, raw);
 	if (drafts) return drafts;
 
 	const match = /^\/messages\/([^/]+)(\/summary|\/body)?$/.exec(path);

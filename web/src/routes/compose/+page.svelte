@@ -169,21 +169,29 @@
 				let prepared: { blob: Blob; name: string; mime: string } = { blob: file, name: file.name, mime: file.type || 'application/octet-stream' };
 				if (isImage) prepared = await prepareImage(file, { size: snap.settings.photoSize, stripLocation: snap.settings.stripLocation });
 				const up = await api.uploadAttachment(snap.accountId, prepared.name, prepared.blob);
-				att.id = up.id;
-				att.name = up.name;
-				att.size = formatSize(up.size);
-				att.pending = false;
-				att.previewUrl = isImage ? api.uploadURL(snap.accountId, up.id) : undefined;
-				if (inline && isImage) {
-					att.inline = true;
-					body = `${body}\n![${up.name}](cid:${up.id}@ivy)`;
-				}
+				const isInline = inline && isImage;
+				// Reassign through the array: only the proxy Svelte tracks is reactive,
+				// so mutating this local object would not update the list.
+				attachments = attachments.map((a) =>
+					a.tempId === tempId
+						? {
+								...a,
+								id: up.id,
+								name: up.name,
+								size: formatSize(up.size),
+								pending: false,
+								previewUrl: isImage ? api.uploadURL(snap.accountId, up.id) : undefined,
+								inline: isInline
+							}
+						: a
+				);
+				if (isInline) body = `${body}\n![${up.name}](cid:${up.id}@ivy)`;
 				touch();
 			} catch (error) {
 				attachments = attachments.filter((a) => a.tempId !== tempId);
 				toasts.push({
 					text: "Couldn't attach that file",
-					detail: error instanceof ApiError ? error.message : undefined,
+					detail: error instanceof Error ? error.message : undefined,
 					tone: 'warn'
 				});
 			}
@@ -209,14 +217,15 @@
 		} catch (error) {
 			toasts.push({
 				text: "Couldn't attach that",
-				detail: error instanceof ApiError ? error.message : undefined,
+				detail: error instanceof Error ? error.message : undefined,
 				tone: 'warn'
 			});
 		}
 	}
 
 	function remove(att: Att) {
-		attachments = attachments.filter((a) => a !== att);
+		const key = att.tempId ?? att.id;
+		attachments = attachments.filter((a) => (a.tempId ?? a.id) !== key);
 		if (att.id) void api.deleteUpload(snap.accountId, att.id).catch(() => {});
 		if (att.inline && att.id) {
 			const ref = `cid:${att.id}@ivy`;
