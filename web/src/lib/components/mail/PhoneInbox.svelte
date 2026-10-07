@@ -7,6 +7,7 @@
 	import { PenLine, Search } from '#lib/icons.js';
 	import { folderTitle } from '#lib/folders.js';
 	import type { Account, FolderView, Inbox } from '#lib/types.js';
+	import { Selection } from '#lib/selection.svelte.js';
 	import { ui } from '#lib/ui.svelte.js';
 	import { outbox } from '#lib/outbox.svelte.js';
 	import Drawer from '../shell/Drawer.svelte';
@@ -17,6 +18,7 @@
 	import IconButton from '../ui/IconButton.svelte';
 	import LargeHeader from '../ui/LargeHeader.svelte';
 	import AccountButton from './AccountButton.svelte';
+	import BulkBar from './BulkBar.svelte';
 	import EmptyInbox from './EmptyInbox.svelte';
 	import EmptyTrashButton from './EmptyTrashButton.svelte';
 	import FolderEmpty from './FolderEmpty.svelte';
@@ -46,6 +48,12 @@
 	);
 	$effect.pre(() => pager.reset({ items: inbox.items, nextCursor: inbox.nextCursor }));
 	const visible = $derived(pager.items.filter((m) => !outbox.hidden(m.id)));
+
+	// Choosing several to act on together (issue #11). A message that leaves the list
+	// (acted on, or hidden by a live op) leaves the selection with it.
+	const selection = new Selection();
+	const loaded = $derived(visible.map((m) => m.id));
+	$effect(() => selection.prune(loaded));
 </script>
 
 <Page>
@@ -64,6 +72,7 @@
 		<LargeHeader title={folderTitle(folder)} subtitle={folder === 'inbox' ? subtitle : undefined}>
 			{#snippet trailing()}
 				{#if folder === 'trash'}<EmptyTrashButton ids={visible.map((m) => m.id)} />{/if}
+				{#if !selection.on}<Button size="sm" variant="tonal" onclick={() => selection.start()}>Select</Button>{/if}
 			{/snippet}
 		</LargeHeader>
 	{/if}
@@ -84,6 +93,7 @@
 				items={visible}
 				{accounts}
 				hrefFor={(m) => withScenario(`/m/${m.id}`, scenario)}
+				{selection}
 			/>
 			{#if pager.cursor}
 				<div class="more">
@@ -98,7 +108,11 @@
 	</div>
 </Page>
 
-<Fab label="Compose" href="/compose"><PenLine /></Fab>
+{#if selection.on}
+	<BulkBar {selection} {loaded} hasMore={!!pager.cursor} {tags} floating />
+{:else}
+	<Fab label="Compose" href="/compose"><PenLine /></Fab>
+{/if}
 
 <Drawer bind:open={ui.drawerOpen}>
 	<NavPanel {accounts} selectedId={accountId} {tags} {folder} />

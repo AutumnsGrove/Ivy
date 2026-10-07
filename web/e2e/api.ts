@@ -738,7 +738,8 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	const identities = identityReply(state, path, method, raw);
 	if (identities) return identities;
 
-	const outboxMatch = /^\/outbox\/([^/]+)(\/retry)?$/.exec(path);
+	// "batch" is a route of its own (below), not an op id.
+	const outboxMatch = /^\/outbox\/(?!batch$)([^/]+)(\/retry)?$/.exec(path);
 	if (outboxMatch) {
 		const [, id, kind] = outboxMatch;
 		const item = state.outbox.find((o) => o.id === id);
@@ -767,6 +768,31 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 			}
 		}
 		return null;
+	}
+
+	if (path === '/outbox/batch' && method === 'POST') {
+		const body = jsonBody(raw) as { messageIds?: string[]; action?: string; destinationFolderId?: string; tagId?: string } | null;
+		if (!body?.messageIds?.length || !body.action) return badRequest('Nothing is selected');
+		if (body.messageIds.length > 200) return { status: 400, body: { code: 'batch_too_large', message: 'Select fewer messages at once' } };
+		// A full queue takes none of the batch, like the gateway.
+		if (scenario === 'batch-full') return { status: 409, body: { code: 'outbox_full', message: 'There are too many unsent actions; wait for them to finish' } };
+		const ops: OutboxItem[] = [];
+		const skipped: { messageId: string; code: string; message: string }[] = [];
+		for (const messageId of [...new Set(body.messageIds)]) {
+			if (!mock.inbox.some((m) => m.id === messageId)) {
+				skipped.push({ messageId, code: 'not_found', message: 'That message is gone' });
+				continue;
+			}
+			const item = mockOutboxItem(state, { messageId, action: body.action, destinationFolderId: body.destinationFolderId, tagId: body.tagId });
+			if (!('kind' in item)) {
+				skipped.push({ messageId, code: 'unknown_tag', message: 'That tag no longer exists' });
+				continue;
+			}
+			item.id = `op-${state.outbox.length + 1}`;
+			state.outbox = [...state.outbox, item];
+			ops.push(item);
+		}
+		return { status: 202, body: { ops, skipped } };
 	}
 
 	const prefill = /^\/messages\/([^/]+)\/(reply|forward)$/.exec(path);

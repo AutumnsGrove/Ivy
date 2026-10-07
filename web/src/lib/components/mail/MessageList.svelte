@@ -3,6 +3,8 @@
 	import { formatMessageTime } from '#lib/time.js';
 	import { outbox } from '#lib/outbox.svelte.js';
 	import type { Account, MailSummary } from '#lib/types.js';
+	import { MAX_SELECTION, type Selection } from '#lib/selection.svelte.js';
+	import { toasts } from '#lib/toast.js';
 	import MessageCard from './MessageCard.svelte';
 
 	type Props = {
@@ -13,8 +15,16 @@
 		hrefFor?: (m: MailSummary) => string;
 		/** Desktop: a card fills the reading pane instead. */
 		onselect?: (m: MailSummary) => void;
+		/** While choosing several, cards toggle instead of opening. */
+		selection?: Selection;
 	};
-	let { items, accounts, selectedId, hrefFor, onselect }: Props = $props();
+	let { items, accounts, selectedId, hrefFor, onselect, selection }: Props = $props();
+
+	function toggle(id: string) {
+		if (!selection?.toggle(id) && !selection?.has(id)) {
+			toasts.push({ text: `You can choose up to ${MAX_SELECTION} messages at once`, tone: 'warn' });
+		}
+	}
 </script>
 
 <ul class="list">
@@ -34,6 +44,9 @@
 				selected={m.id === selectedId}
 				href={hrefFor?.(m)}
 				onselect={() => onselect?.(m)}
+				choosing={selection?.on}
+				checked={selection?.has(m.id)}
+				ontoggle={() => toggle(m.id)}
 			/>
 		</li>
 	{/each}

@@ -41,3 +41,14 @@ for (const [name, path] of Object.entries(SCREENS)) {
 		expect(summary).toEqual([]);
 	});
 }
+
+// Issue #11: the chooser is its own state of the inbox, with checkboxes and a toolbar.
+test('choosing several messages has no accessibility violations', async ({ page }) => {
+	await page.goto('/');
+	await page.getByRole('button', { name: 'Select', exact: true }).click();
+	await page.getByRole('checkbox').first().click();
+	await page.getByRole('toolbar', { name: 'Selection' }).getByRole('button', { name: 'More' }).click();
+	await page.getByRole('dialog', { name: 'More actions for the selection' }).waitFor();
+	const results = await new AxeBuilder({ page }).exclude('iframe').analyze();
+	expect(results.violations.map((v) => ({ id: v.id, targets: v.nodes.map((n) => n.target.join(' ')) }))).toEqual([]);
+});
