@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OutboxItem } from './types.js';
 
-const mocks = vi.hoisted(() => ({ enqueueAction: vi.fn(), listOutbox: vi.fn() }));
+const mocks = vi.hoisted(() => ({ enqueueAction: vi.fn(), listOutbox: vi.fn(), push: vi.fn() }));
 vi.mock('./api/client', () => ({ api: { enqueueAction: mocks.enqueueAction, listOutbox: mocks.listOutbox } }));
+vi.mock('./toast.js', () => ({ toasts: { push: mocks.push } }));
 
 const { outbox } = await import('./outbox.svelte.js');
 
@@ -24,6 +25,39 @@ beforeEach(() => {
 	outbox.clear();
 	mocks.enqueueAction.mockReset();
 	mocks.listOutbox.mockReset();
+	mocks.push.mockReset();
+});
+
+describe('a live op that fails', () => {
+	it('says so, once, instead of the message quietly reappearing (issue #10)', async () => {
+		outbox.remember(op({ kind: 'move', state: 'pending' }));
+		const failed = op({
+			kind: 'move',
+			state: 'failed',
+			lastErrorCode: 'message_gone',
+			lastErrorDetail: 'the message is no longer on the server: a Message-ID search of the folder found 0 messages'
+		});
+		mocks.listOutbox.mockResolvedValue({ active: [], recent: [failed] });
+
+		await outbox.refresh();
+		expect(outbox.hidden('m1')).toBe(false);
+		expect(mocks.push).toHaveBeenCalledTimes(1);
+		expect(mocks.push.mock.calls[0][0]).toMatchObject({ tone: 'danger', text: "Couldn't move it" });
+
+		// The same terminal op seen again by the next hub-driven refresh stays quiet.
+		await outbox.refresh();
+		expect(mocks.push).toHaveBeenCalledTimes(1);
+	});
+
+	it('stays quiet for an op that finished or was never live here', async () => {
+		outbox.remember(op({ id: 'a', kind: 'move', state: 'pending' }));
+		mocks.listOutbox.mockResolvedValue({
+			active: [],
+			recent: [op({ id: 'a', state: 'done' }), op({ id: 'b', state: 'failed', lastErrorCode: 'message_gone' })]
+		});
+		await outbox.refresh();
+		expect(mocks.push).not.toHaveBeenCalled();
+	});
 });
 
 describe('outbox overlay', () => {

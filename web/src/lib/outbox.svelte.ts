@@ -3,7 +3,14 @@
 // terminal, so an invalidateAll refetch (the hub hints on every change) does not
 // flash the old state back. A move hides its message; a flag shows its new value.
 import { api } from './api/client.js';
+import { toasts } from './toast.js';
 import type { OutboxAction, OutboxItem } from './types.js';
+
+const FAILURE_TEXT: Record<OutboxItem['kind'], string> = {
+	move: "Couldn't move it",
+	flags: "Couldn't change the flag",
+	expunge: "Couldn't delete it"
+};
 
 // Module-level so the overlay outlives any one screen and its reload.
 let live = $state<OutboxItem[]>([]);
@@ -76,7 +83,15 @@ export const outbox = {
 	/** Replace the overlay from the server, for a screen that just became visible. */
 	async refresh(accountId?: string) {
 		const list = await api.listOutbox(accountId);
+		const before = live;
 		live = list.active;
+		// An op this screen saw live that ended failed is the only moment the
+		// operator can be told; once it leaves `active` its message just reappears.
+		for (const op of before) {
+			if (live.some((o) => o.id === op.id)) continue;
+			const ended = list.recent.find((o) => o.id === op.id);
+			if (ended?.state === 'failed') toasts.push({ text: FAILURE_TEXT[ended.kind], detail: "It's back where it was.", tone: 'danger' });
+		}
 	},
 
 	/** Queue an action; the caller decides what to do with a rejection. */
