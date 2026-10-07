@@ -26,6 +26,22 @@ type Address struct {
 	Address string
 }
 
+// Attachment is one file or inline part of an outgoing message. The bytes are
+// bounded by MaxAttachmentBytes before the builder is called; the name, type
+// and CID are header-bound and validated like every other header value, never
+// concatenated into a header.
+type Attachment struct {
+	Filename string
+	MIMEType string
+	Content  []byte
+	// Inline marks a part placed in the body, referenced by CID. A non-inline
+	// part is a normal attachment.
+	Inline bool
+	// CID is the content id without angle brackets, required when Inline. The
+	// builder wraps it as the Content-ID header.
+	CID string
+}
+
 // Message is everything needed to build one outgoing message. The two instants
 // and the id are injected, never generated here, so a retry and the Sent copy
 // reuse them (CHUNK4-BRIEF section 3).
@@ -52,6 +68,11 @@ type Message struct {
 	// MessageID and Date are required and must be injected.
 	MessageID string
 	Date      time.Time
+
+	// Attachments are file parts and inline images. Each is validated before
+	// the message is built, and the total is bounded by
+	// MaxTotalAttachmentsBytes.
+	Attachments []Attachment
 
 	// KeepBcc adds a Bcc header to the output. The copy handed to SMTP leaves it
 	// false, so no Bcc recipient ever appears in a transmitted header; only the
@@ -82,6 +103,18 @@ const (
 	MaxReferences = 20
 	// MaxMessageIDBytes bounds one message-id, angle brackets included.
 	MaxMessageIDBytes = 320
+	// MaxAttachments bounds the number of file and inline parts on one message.
+	MaxAttachments = 20
+	// MaxAttachmentBytes bounds one attachment's raw bytes before encoding. The
+	// base64 inflation keeps the built message well under a provider's 48 MiB.
+	MaxAttachmentBytes = 25 << 20
+	// MaxTotalAttachmentsBytes bounds every attachment together, so one message
+	// cannot grow past what the provider will accept (round 65).
+	MaxTotalAttachmentsBytes = 25 << 20
+	// MaxFilenameBytes bounds one attachment's file name.
+	MaxFilenameBytes = 255
+	// MaxMIMEBytes bounds one attachment's content type.
+	MaxMIMEBytes = 255
 )
 
 // ValidationError is a refused field. Field is a stable lowercase name ("from",
@@ -131,6 +164,15 @@ func Build(m Message) ([]byte, Envelope, error) {
 	// the builder accept a Bcc-only message.
 	if m.KeepBcc && len(m.Bcc) > 0 {
 		b = b.Header("Bcc", joinAddresses(m.Bcc))
+	}
+	// Attachment and inline parts are added after the body so the tree reads
+	// text/html, then inlines (multipart/related), then files (multipart/mixed).
+	for _, a := range m.Attachments {
+		if a.Inline {
+			b = b.AddInline(a.Content, a.MIMEType, a.Filename, a.CID)
+		} else {
+			b = b.AddAttachment(a.Content, a.MIMEType, a.Filename)
+		}
 	}
 
 	part, err := b.Build()

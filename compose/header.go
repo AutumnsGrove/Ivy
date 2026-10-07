@@ -85,6 +85,45 @@ func validate(m Message) error {
 			return err
 		}
 	}
+	return validateAttachments(m.Attachments)
+}
+
+// validateAttachments checks every file and inline part before the message is
+// built: a CR, LF or NUL in a name or type is refused, never stripped, and a
+// count, one file or the total over its bound is refused rather than silently
+// dropped (4g).
+func validateAttachments(atts []Attachment) error {
+	if len(atts) > MaxAttachments {
+		return invalid("attachments", fmt.Sprintf("%d attachments, the maximum is %d", len(atts), MaxAttachments))
+	}
+	var total int64
+	for _, a := range atts {
+		switch {
+		case a.Filename == "":
+			return invalid("attachment", "name is empty")
+		case hasBadBytes(a.Filename):
+			return invalid("attachment", "name contains CR, LF or NUL")
+		case len(a.Filename) > MaxFilenameBytes:
+			return invalid("attachment", fmt.Sprintf("name is %d bytes, the maximum is %d", len(a.Filename), MaxFilenameBytes))
+		case a.MIMEType == "":
+			return invalid("attachment", "mime type is empty")
+		case hasBadBytes(a.MIMEType):
+			return invalid("attachment", "mime type contains CR, LF or NUL")
+		case len(a.MIMEType) > MaxMIMEBytes:
+			return invalid("attachment", fmt.Sprintf("mime type is %d bytes, the maximum is %d", len(a.MIMEType), MaxMIMEBytes))
+		case int64(len(a.Content)) > MaxAttachmentBytes:
+			return invalid("attachment", fmt.Sprintf("file is %d bytes, the maximum is %d", len(a.Content), MaxAttachmentBytes))
+		}
+		if a.Inline {
+			if err := validateMessageID("attachment", "<"+a.CID+">", true); err != nil {
+				return err
+			}
+		}
+		total += int64(len(a.Content))
+	}
+	if total > MaxTotalAttachmentsBytes {
+		return invalid("attachments", fmt.Sprintf("attachments total %d bytes, the maximum is %d", total, MaxTotalAttachmentsBytes))
+	}
 	return nil
 }
 

@@ -35,7 +35,9 @@ func newOutgoingPolicy() *bluemonday.Policy {
 	p.AllowAttrs("src", "alt", "title").OnElements("img")
 	p.RequireParseableURLs(true)
 	p.AllowRelativeURLs(false)
-	p.AllowURLSchemes("http", "https", "mailto")
+	// cid: is allowed so an inline image's <img src> survives; a cid: on a link
+	// is harmless because no recipient can resolve it.
+	p.AllowURLSchemes("http", "https", "mailto", "cid")
 	return p
 }
 

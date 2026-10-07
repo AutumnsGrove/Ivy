@@ -252,6 +252,13 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | Outgoing plain-text body (`compose.MaxBodyBytes`) | 1 MiB | refused with 400 `invalid_message` |
 | `References` ids on an outgoing message (`compose.MaxReferences`) | 20 | refused with 400 `invalid_message` |
 | One outgoing `<message-id>` (`compose.MaxMessageIDBytes`) | 320 bytes | refused with 400 `invalid_message`; a CR, LF or NUL in any header value is refused, never stripped |
+| Attachments on one outgoing message (`compose.MaxAttachments`) | 20 | refused with 400 `invalid_message` before the build |
+| One attachment's raw bytes (`compose.MaxAttachmentBytes`) | 25 MiB | refused with 400 `invalid_message`; the upload endpoint's 413 is the earlier stop |
+| All attachments together (`compose.MaxTotalAttachmentsBytes`) | 25 MiB | refused with 400 `invalid_message` |
+| One attachment name (`compose.MaxFilenameBytes`) | 255 bytes | refused with 400 `invalid_message`; a CR, LF or NUL is refused, never stripped |
+| One attachment content type (`compose.MaxMIMEBytes`) | 255 bytes | refused with 400 `invalid_message`; a CR, LF or NUL is refused |
+| One staged upload (`compose.MaxAttachmentBytes`) | 25 MiB | refused with 413 `too_large`; nothing is staged |
+| Staged uploads with no terminal owner (`store.MaxUploadAge`) | 7 days | swept; resume and undo re-materialise from the stored MIME |
 | Outgoing addr-specs | ASCII only (no `SMTPUTF8`) | refused with 400 `invalid_message`; a non-ASCII display name is RFC 2047 encoded |
 | SMTP dial and implicit-TLS handshake (`smtp.DefaultDialTimeout`) | 15 s | `SendError` `unreachable`, transient |
 | One SMTP command reply (`smtp.DefaultCommandTimeout`) | 30 s | `SendError` `timeout`, transient |
