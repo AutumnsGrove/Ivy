@@ -1422,6 +1422,8 @@ export interface components {
             undoDeadline?: string;
             /** @description The original request JSON, returned by undo so the screen can restore it. */
             draft?: string;
+            /** @description The staged attachments the draft carries, so undo and the send screen can restore them with their names and sizes. */
+            attachments?: components["schemas"]["AttachmentInfo"][];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */

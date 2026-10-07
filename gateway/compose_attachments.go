@@ -3,6 +3,7 @@ package gateway
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -141,4 +142,35 @@ func (s *Server) stagePart(ctx context.Context, accountID string, raw []byte, p 
 		return "", copyErr
 	}
 	return up.ID, nil
+}
+
+// sendAttachments exposes a send row's draft attachments with their names and
+// sizes. It reads the staged rows while they exist and re-materialises from the
+// stored Sent copy only if staging was swept, so undo never loses an attachment
+// and a polled send screen never stages anything new.
+func (s *Server) sendAttachments(ctx context.Context, m store.SendMessage) []api.AttachmentInfo {
+	var req api.SendRequest
+	if len(m.Draft) == 0 || json.Unmarshal(m.Draft, &req) != nil {
+		return nil
+	}
+	refs := composeAttachments(req.Attachments)
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]api.AttachmentInfo, 0, len(refs))
+	for _, ref := range refs {
+		up, err := s.dbs.GetUpload(ctx, m.AccountID, ref.Id)
+		if err != nil {
+			atts, merr := s.materializeAttachments(ctx, m.AccountID, m.SentBody)
+			if merr != nil {
+				return nil
+			}
+			return atts
+		}
+		id := up.ID
+		out = append(out, api.AttachmentInfo{
+			Id: &id, Name: up.Name, Size: up.Size, Inline: ref.Inline != nil && *ref.Inline,
+		})
+	}
+	return out
 }

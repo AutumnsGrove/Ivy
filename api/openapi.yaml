@@ -2574,6 +2574,13 @@ components:
         draft:
           type: string
           description: The original request JSON, returned by undo so the screen can restore it.
+        attachments:
+          type: array
+          description: >
+            The staged attachments the draft carries, so undo and the send
+            screen can restore them with their names and sizes.
+          items:
+            $ref: "#/components/schemas/AttachmentInfo"
         createdAt:
           type: string
           format: date-time

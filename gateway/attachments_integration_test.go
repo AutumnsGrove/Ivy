@@ -171,3 +171,28 @@ func TestUndoKeepsAttachments(t *testing.T) {
 		t.Errorf("staged upload after undo = %d, want 200", code)
 	}
 }
+
+// One send exposes its attachments' metadata, so the undo screen can restore
+// them with their names and sizes.
+func TestGetSendExposesAttachmentInfo(t *testing.T) {
+	t.Parallel()
+	srv, dbs, _, _ := sendServer(t)
+	stageUpload(t, dbs, "up-1", "note.txt", "text/plain", "attached")
+
+	req := sendRequest("s1")
+	req.Attachments = &[]api.ComposeAttachment{{Id: "up-1"}}
+	if code := postJSON(t, srv.URL+"/api/v1/send", req, nil); code != http.StatusAccepted {
+		t.Fatalf("send status = %d, want 202", code)
+	}
+	var st api.SendStatus
+	if code := getJSON(t, srv.URL+"/api/v1/send/s1", &st); code != http.StatusOK {
+		t.Fatalf("get status = %d, want 200", code)
+	}
+	if st.Attachments == nil || len(*st.Attachments) != 1 {
+		t.Fatalf("attachments = %v, want one", st.Attachments)
+	}
+	att := (*st.Attachments)[0]
+	if att.Name != "note.txt" || att.Size != int64(len("attached")) || att.Id == nil || *att.Id != "up-1" {
+		t.Errorf("attachment = %+v, want the staged row", att)
+	}
+}

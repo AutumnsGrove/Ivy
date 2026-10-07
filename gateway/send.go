@@ -188,7 +188,11 @@ func (s *Server) handleUndoSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.hintSend(cancelled.AccountID)
-	writeJSON(w, http.StatusOK, s.sendStatus(cancelled))
+	st := s.sendStatus(cancelled)
+	if atts := s.sendAttachments(r.Context(), cancelled); len(atts) > 0 {
+		st.Attachments = &atts
+	}
+	writeJSON(w, http.StatusOK, st)
 }
 
 // handleListSends serves the live sends (the undo overlay) and recent terminal
@@ -226,7 +230,11 @@ func (s *Server) handleGetSend(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.sendStatus(m))
+	st := s.sendStatus(m)
+	if atts := s.sendAttachments(r.Context(), m); len(atts) > 0 {
+		st.Attachments = &atts
+	}
+	writeJSON(w, http.StatusOK, st)
 }
 
 // sendStatus maps a stored row to the contract. Subject and draft come from the

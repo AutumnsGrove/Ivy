@@ -1202,10 +1202,13 @@ type SendRequest struct {
 
 // SendStatus One outgoing message and where it is in the queue
 type SendStatus struct {
-	AccountId   string     `json:"accountId"`
-	Attempts    *int       `json:"attempts,omitempty"`
-	CompletedAt *time.Time `json:"completedAt,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
+	AccountId string `json:"accountId"`
+
+	// Attachments The staged attachments the draft carries, so undo and the send screen can restore them with their names and sizes.
+	Attachments *[]AttachmentInfo `json:"attachments,omitempty"`
+	Attempts    *int              `json:"attempts,omitempty"`
+	CompletedAt *time.Time        `json:"completedAt,omitempty"`
+	CreatedAt   time.Time         `json:"createdAt"`
 
 	// Draft The original request JSON, returned by undo so the screen can restore it.
 	Draft           *string         `json:"draft,omitempty"`
