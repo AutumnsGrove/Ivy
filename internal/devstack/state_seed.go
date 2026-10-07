@@ -18,9 +18,9 @@ const seededKey = "dev.state_seeded"
 
 // profiles are the names and icons the dev accounts get, in config order.
 var profiles = []struct{ name, icon string }{
-	{"Personal", "🌿"},
-	{"Studio", "🪴"},
-	{"Projects", "🌙"},
+	{"Personal", "leaf"},
+	{"Studio", "sprout"},
+	{"Projects", "moon"},
 }
 
 // devTags are the operator's labels, with the colour names the frontend uses.

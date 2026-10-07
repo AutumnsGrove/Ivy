@@ -54,21 +54,21 @@ func TestUpdateAccountProfile(t *testing.T) {
 	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com", SortOrder: 0})
 
 	name := "Autumn"
-	icon := "🌿"
+	icon := "leaf"
 	var got api.Account
 	code := doJSON(t, http.MethodPatch, srv.URL+"/api/v1/accounts/acct-1",
 		api.AccountProfile{DisplayName: &name, Icon: &icon}, &got, nil)
 	if code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", code)
 	}
-	if got.Name != "Autumn" || got.Icon != "🌿" || got.Initial != "A" {
+	if got.Name != "Autumn" || got.Icon != "leaf" || got.Initial != "A" {
 		t.Errorf("account = %+v, want renamed Autumn with the leaf icon", got)
 	}
 
 	// The change is durable, not just echoed.
 	var accounts []api.Account
 	getJSON(t, srv.URL+"/api/v1/accounts", &accounts)
-	if len(accounts) != 1 || accounts[0].Name != "Autumn" || accounts[0].Icon != "🌿" {
+	if len(accounts) != 1 || accounts[0].Name != "Autumn" || accounts[0].Icon != "leaf" {
 		t.Errorf("accounts = %+v, want the rename to persist", accounts)
 	}
 }
@@ -78,13 +78,13 @@ func TestUpdateAccountProfilePartial(t *testing.T) {
 	srv, dbs := newSeededServer(t)
 	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com", DisplayName: "Autumn"})
 
-	icon := "📬"
+	icon := "mail"
 	var got api.Account
 	if code := doJSON(t, http.MethodPatch, srv.URL+"/api/v1/accounts/acct-1",
 		api.AccountProfile{Icon: &icon}, &got, nil); code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", code)
 	}
-	if got.Name != "Autumn" || got.Icon != "📬" {
+	if got.Name != "Autumn" || got.Icon != "mail" {
 		t.Errorf("account = %+v, want the name kept and the icon set", got)
 	}
 }
@@ -302,5 +302,33 @@ func TestAPIRejectsUnknownHosts(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Errorf("static shell with a foreign Host: status = %d, want 200", rec.Code)
+	}
+}
+
+// Issue #14: the icon is a Lucide name from a closed list, because it is drawn
+// on every screen. Anything else is refused, and clearing it still works.
+func TestUpdateAccountProfileIconIsAClosedList(t *testing.T) {
+	t.Parallel()
+	srv, dbs := newSeededServer(t)
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	patch := func(icon string) (int, api.Account) {
+		var got api.Account
+		code := doJSON(t, http.MethodPatch, srv.URL+"/api/v1/accounts/acct-1", api.AccountProfile{Icon: &icon}, &got, nil)
+		return code, got
+	}
+
+	for _, bad := range []string{"🌿", "not-an-icon", "Leaf", "leaf ", "<script>", "../leaf"} {
+		if bad == "leaf " {
+			continue // surrounding space is trimmed, so this is the valid "leaf"
+		}
+		if code, _ := patch(bad); code != http.StatusBadRequest {
+			t.Errorf("icon %q: status = %d, want 400", bad, code)
+		}
+	}
+	if code, got := patch("tree-deciduous"); code != http.StatusOK || got.Icon != "tree-deciduous" {
+		t.Errorf("a listed icon: status %d icon %q, want 200 tree-deciduous", code, got.Icon)
+	}
+	if code, got := patch(""); code != http.StatusOK || got.Icon != "" {
+		t.Errorf("clearing: status %d icon %q, want 200 and empty", code, got.Icon)
 	}
 }

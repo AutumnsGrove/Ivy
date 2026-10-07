@@ -955,7 +955,7 @@ export interface components {
             initial: string;
             /** @description The account's display name, empty when it has none */
             name: string;
-            /** @description A chosen emoji or glyph, empty when it has none */
+            /** @description A Lucide icon name from the closed list the server accepts (store.AccountIcons), empty when it has none. A name the client does not know is drawn as the initial. */
             icon: string;
             /** @description Whether GET /accounts/{id}/photo serves a photo */
             photo: boolean;
@@ -976,6 +976,7 @@ export interface components {
         /** @description A partial rename; omitted fields keep their current value */
         AccountProfile: {
             displayName?: string;
+            /** @description A Lucide icon name from the closed list, or empty to clear it. Anything else is a 400. */
             icon?: string;
         };
         Identity: {

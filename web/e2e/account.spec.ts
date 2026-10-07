@@ -19,10 +19,11 @@ test.describe('account customization', () => {
 
 	test('choosing an icon shows it on the badge', async ({ page }) => {
 		await page.goto('/settings/account/a1');
-		await page.getByRole('button', { name: 'Icon 🌿' }).click();
+		await page.getByRole('button', { name: 'Icon Leaf' }).click();
 		await page.getByRole('button', { name: 'Save changes' }).click();
 		await expect(toast(page, 'Account saved')).toBeVisible();
-		await expect(page.locator('.head .av')).toHaveText('🌿');
+		await expect(page.locator('.head .av svg.lucide-leaf')).toBeVisible();
+		await expect(page.locator('.head .av')).not.toHaveText('🌿');
 	});
 
 	test('a photo uploads, previews, and can be removed', async ({ page }) => {

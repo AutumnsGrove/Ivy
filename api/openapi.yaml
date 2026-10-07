@@ -1614,7 +1614,7 @@ components:
           description: The account's display name, empty when it has none
         icon:
           type: string
-          description: A chosen emoji or glyph, empty when it has none
+          description: A Lucide icon name from the closed list the server accepts (store.AccountIcons), empty when it has none. A name the client does not know is drawn as the initial.
         photo:
           type: boolean
           description: Whether GET /accounts/{id}/photo serves a photo
@@ -1654,6 +1654,7 @@ components:
         icon:
           type: string
           maxLength: 16
+          description: A Lucide icon name from the closed list, or empty to clear it. Anything else is a 400.
     Identity:
       type: object
       required: [id, accountId, address, name, signature, primary]

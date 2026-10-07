@@ -44,3 +44,17 @@ export { default as SearchX } from '@lucide/svelte/icons/search-x';
 export { default as ChevronLeft } from '@lucide/svelte/icons/chevron-left';
 export { default as Forward } from '@lucide/svelte/icons/forward';
 export { default as Clock } from '@lucide/svelte/icons/clock';
+
+// The account badge picker (accountIcons.ts). A small curated set, not the library.
+export { default as Leaf } from '@lucide/svelte/icons/leaf';
+export { default as Moon } from '@lucide/svelte/icons/moon';
+export { default as Sun } from '@lucide/svelte/icons/sun';
+export { default as Flower } from '@lucide/svelte/icons/flower';
+export { default as Flower2 } from '@lucide/svelte/icons/flower-2';
+export { default as Sprout } from '@lucide/svelte/icons/sprout';
+export { default as TreeDeciduous } from '@lucide/svelte/icons/tree-deciduous';
+export { default as Bird } from '@lucide/svelte/icons/bird';
+export { default as Mail } from '@lucide/svelte/icons/mail';
+export { default as Droplets } from '@lucide/svelte/icons/droplets';
+export { default as Cloud } from '@lucide/svelte/icons/cloud';
+export { default as Star } from '@lucide/svelte/icons/star';

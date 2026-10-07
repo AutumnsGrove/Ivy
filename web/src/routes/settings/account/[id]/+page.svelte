@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
+	import { ACCOUNT_ICONS, accountIcon } from '#lib/accountIcons.js';
 	import { accountAvatar, accountPhotoUrl } from '#lib/accounts.js';
 	import { api, ApiError } from '#lib/api/client.js';
 	import { Check, Trash2 } from '#lib/icons.js';
@@ -24,7 +25,8 @@
 	let icon = $state('');
 	$effect.pre(() => {
 		name = data.account.name;
-		icon = data.account.icon;
+		// A name this build does not know shows as None, so saving cannot send the server one it refuses.
+		icon = accountIcon(data.account.icon) ? data.account.icon : '';
 	});
 	let busy = $state(false);
 	// The identity form: null closed, otherwise the draft being edited. `existing`
@@ -33,8 +35,6 @@
 	let editing = $state<IdentityDraft | null>(null);
 	// The photo URL is stable, so a bump forces the preview past its cached bytes.
 	let photoNonce = $state(0);
-	// The server bounds the icon at 16 runes; these are all one grapheme.
-	const ICONS = ['🌿', '🌙', '🌻', '📬', '🌊', '🍂', '🪴', '☀️', '🌸', '🐦'];
 
 	const photoSrc = $derived(
 		data.account.photo ? `${accountPhotoUrl(data.account.id)}?v=${photoNonce}` : undefined
@@ -158,14 +158,14 @@
 				aria-pressed={icon === ''}
 				onclick={() => (icon = '')}>None</button
 			>
-			{#each ICONS as choice (choice)}
+			{#each ACCOUNT_ICONS as choice (choice.name)}
 				<button
 					type="button"
 					class="ico"
-					class:on={icon === choice}
-					aria-label="Icon {choice}"
-					aria-pressed={icon === choice}
-					onclick={() => (icon = choice)}>{choice}</button
+					class:on={icon === choice.name}
+					aria-label="Icon {choice.label}"
+					aria-pressed={icon === choice.name}
+					onclick={() => (icon = choice.name)}><choice.icon /></button
 				>
 			{/each}
 		</Glass>

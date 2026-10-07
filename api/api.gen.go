@@ -554,7 +554,7 @@ type Account struct {
 	// Hidden Mail the mirror keeps but does not show (ARCHITECTURE.md 4)
 	Hidden *HiddenMail `json:"hidden,omitempty"`
 
-	// Icon A chosen emoji or glyph, empty when it has none
+	// Icon A Lucide icon name from the closed list the server accepts (store.AccountIcons), empty when it has none. A name the client does not know is drawn as the initial.
 	Icon    string `json:"icon"`
 	Id      string `json:"id"`
 	Initial string `json:"initial"`
@@ -581,7 +581,9 @@ type Account struct {
 // AccountProfile A partial rename; omitted fields keep their current value
 type AccountProfile struct {
 	DisplayName *string `json:"displayName,omitempty"`
-	Icon        *string `json:"icon,omitempty"`
+
+	// Icon A Lucide icon name from the closed list, or empty to clear it. Anything else is a 400.
+	Icon *string `json:"icon,omitempty"`
 }
 
 // AccountSlot defines model for AccountSlot.

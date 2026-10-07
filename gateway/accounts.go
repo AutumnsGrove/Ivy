@@ -60,6 +60,10 @@ func (s *Server) handleUpdateAccountProfile(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, "bad_request", "That name or icon is too long")
 		return
 	}
+	if body.Icon != nil && !store.ValidAccountIcon(icon) {
+		writeError(w, http.StatusBadRequest, "bad_request", "That icon is not one Ivy offers")
+		return
+	}
 
 	if err := s.dbs.SetAccountProfile(r.Context(), id, displayName, icon); err != nil {
 		s.serverError(w, r, err)

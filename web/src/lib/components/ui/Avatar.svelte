@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { accountIcon } from '#lib/accountIcons.js';
+
 	type Props = {
 		initials: string;
 		/** Any CSS colour, usually an account or tag token such as `var(--acct-2)`. */
@@ -6,16 +8,19 @@
 		size?: 'sm' | 'md' | 'lg' | 'xl' | 'hero';
 		/** A stored photo; takes precedence over `icon` and `initials`. */
 		src?: string;
-		/** A chosen emoji or glyph, shown when there is no photo. */
+		/** A stored Lucide icon name, shown when there is no photo. One we do not know shows the initials. */
 		icon?: string;
 	};
 	let { initials, color, size = 'md', src, icon }: Props = $props();
+	const Icon = $derived(accountIcon(icon));
 </script>
 
 {#if src}
 	<img class="av {size}" style:--c={color} {src} alt="" />
 {:else}
-	<span class="av {size}" style:--c={color} aria-hidden="true">{icon ?? initials}</span>
+	<span class="av {size}" style:--c={color} aria-hidden="true">
+		{#if Icon}<Icon size="55%" />{:else}{initials}{/if}
+	</span>
 {/if}
 
 <style>

@@ -867,6 +867,32 @@ var stateMigrations = []migration{
 			`ALTER TABLE send_queue ADD COLUMN sent_hash TEXT NOT NULL DEFAULT ''`,
 		},
 	},
+	{
+		version: 18,
+		statements: []string{
+			// The account icon was one of ten emoji; it is now a Lucide icon name from a
+			// closed list (store.AccountIcons). The ten the picker offered are renamed, and
+			// anything else that is not already a listed name is cleared, so the badge
+			// falls back to the initial instead of drawing a glyph the server would refuse.
+			// ☀️ is stored with and without its variation selector, so both are mapped.
+			`UPDATE account_profiles SET icon = CASE icon
+				WHEN '🌿' THEN 'leaf'
+				WHEN '🌙' THEN 'moon'
+				WHEN '🌻' THEN 'flower-2'
+				WHEN '📬' THEN 'mail'
+				WHEN '🌊' THEN 'droplets'
+				WHEN '🍂' THEN 'tree-deciduous'
+				WHEN '🪴' THEN 'sprout'
+				WHEN '☀️' THEN 'sun'
+				WHEN '☀' THEN 'sun'
+				WHEN '🌸' THEN 'flower'
+				WHEN '🐦' THEN 'bird'
+				ELSE icon END`,
+			`UPDATE account_profiles SET icon = '' WHERE icon NOT IN (
+				'', 'leaf', 'moon', 'sun', 'flower', 'flower-2', 'sprout',
+				'tree-deciduous', 'bird', 'mail', 'droplets', 'cloud', 'star')`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state

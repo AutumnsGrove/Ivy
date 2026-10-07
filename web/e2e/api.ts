@@ -449,6 +449,8 @@ function draftReply(state: AccountState, path: string, method: string, raw: Buff
 	return null;
 }
 
+const ACCOUNT_ICON_NAMES = ['leaf', 'moon', 'sun', 'flower', 'flower-2', 'sprout', 'tree-deciduous', 'bird', 'mail', 'droplets', 'cloud', 'star'];
+
 function updateProfile(state: AccountState, id: string, body: { displayName?: string; icon?: string }): Reply {
 	const account = state.accounts.find((a) => a.id === id);
 	if (!account) return notFound('No such account');
@@ -458,6 +460,8 @@ function updateProfile(state: AccountState, id: string, body: { displayName?: st
 	}
 	if (body.icon !== undefined) {
 		if ([...body.icon].length > 16) return badRequest('That icon is too long');
+		// The gateway's closed list (store.AccountIcons); accountIcons.test.ts keeps the app's copy honest.
+		if (body.icon.trim() !== '' && !ACCOUNT_ICON_NAMES.includes(body.icon.trim())) return badRequest('That icon is not one Ivy offers');
 		account.icon = body.icon.trim();
 	}
 	return { body: account };
