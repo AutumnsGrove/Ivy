@@ -92,21 +92,33 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		fromName = fromRef.DisplayName
 	}
 
+	atts, err := s.resolveComposeAttachments(ctx, acct.ID, composeAttachments(req.Attachments))
+	if err != nil {
+		var ae *attachmentError
+		if errors.As(err, &ae) {
+			writeError(w, http.StatusBadRequest, "invalid_message", ae.Error())
+			return
+		}
+		s.serverError(w, r, err)
+		return
+	}
+
 	now := s.now().UTC()
 	msgID := s.newMessageID(req.From)
 	msg := compose.Message{
-		From:       compose.Address{Name: fromName, Address: req.From},
-		To:         composeAddresses(req.To),
-		Cc:         composeAddresses(stringsOr(req.Cc)),
-		Bcc:        composeAddresses(stringsOr(req.Bcc)),
-		ReplyTo:    composeAddresses(stringsOr(req.ReplyTo)),
-		Subject:    req.Subject,
-		Text:       req.Text,
-		Markdown:   boolOr(req.Markdown, false),
-		InReplyTo:  stringOr(req.InReplyTo, ""),
-		References: stringsOr(req.References),
-		MessageID:  msgID,
-		Date:       now,
+		From:        compose.Address{Name: fromName, Address: req.From},
+		To:          composeAddresses(req.To),
+		Cc:          composeAddresses(stringsOr(req.Cc)),
+		Bcc:         composeAddresses(stringsOr(req.Bcc)),
+		ReplyTo:     composeAddresses(stringsOr(req.ReplyTo)),
+		Subject:     req.Subject,
+		Text:        req.Text,
+		Markdown:    boolOr(req.Markdown, false),
+		InReplyTo:   stringOr(req.InReplyTo, ""),
+		References:  stringsOr(req.References),
+		MessageID:   msgID,
+		Date:        now,
+		Attachments: atts,
 	}
 	raw, env, err := compose.Build(msg)
 	if err != nil {

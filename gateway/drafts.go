@@ -115,6 +115,16 @@ func (s *Server) handleSaveDraft(w http.ResponseWriter, r *http.Request) {
 	if fromName == "" {
 		fromName = fromRef.DisplayName
 	}
+	atts, err := s.resolveComposeAttachments(ctx, acct.ID, composeAttachments(req.Attachments))
+	if err != nil {
+		var ae *attachmentError
+		if errors.As(err, &ae) {
+			writeError(w, http.StatusBadRequest, "invalid_message", ae.Error())
+			return
+		}
+		s.serverError(w, r, err)
+		return
+	}
 	draftsFolder, err := s.dbs.FolderByRole(ctx, acct.ID, store.RoleDrafts)
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusConflict, "no_drafts_folder", "This mailbox has no Drafts folder")
@@ -130,19 +140,20 @@ func (s *Server) handleSaveDraft(w http.ResponseWriter, r *http.Request) {
 	// A draft keeps Bcc so it round-trips through the server copy; the wire copy
 	// built at send time is the one that strips it.
 	raw, _, err := compose.Build(compose.Message{
-		From:       compose.Address{Name: fromName, Address: req.From},
-		To:         composeAddresses(req.To),
-		Cc:         composeAddresses(stringsOr(req.Cc)),
-		Bcc:        composeAddresses(stringsOr(req.Bcc)),
-		ReplyTo:    composeAddresses(stringsOr(req.ReplyTo)),
-		Subject:    stringOr(req.Subject, ""),
-		Text:       req.Text,
-		Markdown:   boolOr(req.Markdown, false),
-		InReplyTo:  stringOr(req.InReplyTo, ""),
-		References: stringsOr(req.References),
-		MessageID:  msgID,
-		Date:       now,
-		KeepBcc:    true,
+		From:        compose.Address{Name: fromName, Address: req.From},
+		To:          composeAddresses(req.To),
+		Cc:          composeAddresses(stringsOr(req.Cc)),
+		Bcc:         composeAddresses(stringsOr(req.Bcc)),
+		ReplyTo:     composeAddresses(stringsOr(req.ReplyTo)),
+		Subject:     stringOr(req.Subject, ""),
+		Text:        req.Text,
+		Markdown:    boolOr(req.Markdown, false),
+		InReplyTo:   stringOr(req.InReplyTo, ""),
+		References:  stringsOr(req.References),
+		MessageID:   msgID,
+		Date:        now,
+		KeepBcc:     true,
+		Attachments: atts,
 	})
 	if err != nil {
 		var ve *compose.ValidationError
@@ -175,7 +186,12 @@ func (s *Server) handleSaveDraft(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, store.ErrDraftConflict):
 		// stored is the current head; the loser is given the newer content.
-		writeJSON(w, http.StatusConflict, s.draftResume(stored))
+		res, rerr := s.draftResume(ctx, stored)
+		if rerr != nil {
+			s.serverError(w, r, rerr)
+			return
+		}
+		writeJSON(w, http.StatusConflict, res)
 		return
 	case errors.Is(err, store.ErrOutboxFull):
 		writeError(w, http.StatusConflict, "outbox_full", "There is too much waiting to save this draft; try again shortly")
@@ -198,7 +214,12 @@ func (s *Server) handleGetDraft(w http.ResponseWriter, r *http.Request) {
 		head, err := s.dbs.DraftHead(ctx, accountID, id)
 		switch {
 		case err == nil && head.State != store.DraftDiscarded && head.State != store.DraftSent:
-			writeJSON(w, http.StatusOK, s.draftResume(head))
+			res, err := s.draftResume(ctx, head)
+			if err != nil {
+				s.serverError(w, r, err)
+				return
+			}
+			writeJSON(w, http.StatusOK, res)
 			return
 		case err != nil && !errors.Is(err, store.ErrNotFound):
 			s.serverError(w, r, err)
@@ -303,8 +324,9 @@ func draftSummaryServer(row store.DraftServerRow) api.DraftSummary {
 }
 
 // draftResume rebuilds a resume payload from a local version. The stored compose
-// request is returned verbatim, so nothing the operator typed is re-derived.
-func (s *Server) draftResume(d store.Draft) api.DraftResume {
+// request is returned verbatim, so nothing the operator typed is re-derived;
+// attachments are re-staged from the stored body so the screen gets fresh ids.
+func (s *Server) draftResume(ctx context.Context, d store.Draft) (api.DraftResume, error) {
 	id, draftID := d.DraftID, d.DraftID
 	res := api.DraftResume{
 		Id: id, DraftId: &draftID, AccountId: d.AccountID, Version: d.Version,
@@ -330,7 +352,14 @@ func (s *Server) draftResume(d store.Draft) api.DraftResume {
 		res.References = req.References
 		res.Text = req.Text
 	}
-	return res
+	atts, err := s.materializeAttachments(ctx, d.AccountID, d.Body)
+	if err != nil {
+		return api.DraftResume{}, err
+	}
+	if len(atts) > 0 {
+		res.Attachments = &atts
+	}
+	return res, nil
 }
 
 // draftResumeServer parses a mirrored draft back into compose fields. Headers
@@ -377,6 +406,13 @@ func (s *Server) draftResumeServer(ctx context.Context, msg store.Message) (api.
 		}
 	}
 	res.Text = mime.Parse(raw).Text
+	atts, err := s.materializeAttachments(ctx, msg.AccountID, raw)
+	if err != nil {
+		return api.DraftResume{}, err
+	}
+	if len(atts) > 0 {
+		res.Attachments = &atts
+	}
 	return res, nil
 }
 

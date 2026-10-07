@@ -166,6 +166,9 @@ func (w *OutboxWorker) Run(ctx context.Context) error {
 			if _, err := w.fetcher.dbs.PruneDrafts(ctx, w.fetcher.now()); err != nil {
 				slog.WarnContext(ctx, "outbox: draft prune failed", "account", w.acct.ID, "error", err)
 			}
+			if _, err := w.fetcher.dbs.SweepUploads(ctx, w.fetcher.now().Add(-store.MaxUploadAge)); err != nil {
+				slog.WarnContext(ctx, "outbox: upload sweep failed", "account", w.acct.ID, "error", err)
+			}
 			lastPrune = w.fetcher.now()
 		}
 		if w.conn != nil && w.fetcher.now().Sub(w.lastBusy) > w.idleClose {
