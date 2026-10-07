@@ -1530,3 +1530,26 @@ synthetic, non-deletable primary identity merged at read time (no seed migration
 live in the rebuildable mirror); direct reply goes to `Reply-To` then `From`; reply-all adds the
 original To/Cc minus every one of the operator's addresses; `List-Post` and other list semantics stay
 out of v1; a reply body is empty and a forward body is the attribution block plus the original text.
+
+## Round 64 — 4f compose screen, the three scope questions (2026-10-06, agent; three answers)
+
+4f has no escalation gate, but three choices the docs left open changed the size of the stage enough
+to put them to the operator before any code.
+
+- **Drafts: autosave plus a drafts screen.** The operator chose both halves: the compose screen
+autosaves to the server's Drafts folder, and a new `/drafts` screen lists and resumes a draft. The
+screen has no canvas design, so it follows the existing list patterns (the same rows as tags/People,
+with an empty state) and is reached from the shell's folder list.
+- **Autosave cadence: debounced and on leave.** A few seconds after typing stops, and once more when
+leaving compose. A send failure leaves the server draft in place, so the Not-sent sheet's "safe in
+Drafts" is literally true.
+- **Attachments stay a preview; Send is blocked while any are attached.** `SendRequest` has no
+attachment field until 4g, so the attach sheet still opens and lists picks (the designed canvas), but
+the message cannot be sent with them yet. Nothing is silently dropped.
+
+Related choices settled here rather than asked: undo keeps the canvas flow (the tap leaves compose
+and the inbox shows a toast with Undo and the server's countdown; Undo returns the stored draft); a
+permanent failure shows the Not-sent sheet over compose; `unconfirmed` is a persistent, plain notice
+("This may have been sent. Check Sent.") that never offers a resend; the format bar stays but the four
+markdown buttons remain inert until 4h (rich text); two tabs race on the optimistic draft version and
+the loser is told.

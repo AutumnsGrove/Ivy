@@ -5,7 +5,12 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-06. **4a-4e are done** (`compose/` + `smtp/`, the `send_queue` +
+last updated: 2026-10-06. **4f is done** (the compose screen; round 64): the client calls and the new
+`/drafts` screen, the From picker over the real identities, People autocomplete, reply/forward
+prefills, debounced autosave to the server's Drafts folder (and once on leave), the Sending/Undo
+toast, the Not-sent sheet and the resend-free `unconfirmed` notice. The operator chose autosave plus
+the new screen, saves debounced and on leave, and the attach sheet kept as a preview that blocks send
+until 4g. **4a-4e are done** (`compose/` + `smtp/`, the `send_queue` +
 Sent copy, then the send API and undo). `POST /send` builds both copies and queues with a server-side
 undo deadline; `POST /send/{id}/undo` cancels before it and hands the draft back. **4d (drafts) is
 done** and **4e (identities and reply logic) is done**: the addresses an account may send as and
@@ -52,16 +57,16 @@ screens**.
 | 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
 | 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, rules, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; 3e done; 3f done; 3g done; **3h done** |
-| 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | **in progress, split into 4a-4h** (round 60; see "Chunk 4 stages" and `docs/CHUNK4-BRIEF.md`); **4a-4e done**, 4f is next |
+| 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | **in progress, split into 4a-4h** (round 60; see "Chunk 4 stages" and `docs/CHUNK4-BRIEF.md`); **4a-4f done**, 4g is next |
 | 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | not started |
 
-Frontend: SvelteKit 3 app in `web/`, 32 screens. The reader endpoints (`/accounts`, `/inbox`,
+Frontend: SvelteKit 3 app in `web/`. The reader endpoints (`/accounts`, `/inbox`,
 `/messages/{id}`, `/summary`, `/mirror/health`, account profile and photo), tags (`/tags`, the
-`tag`/`untag` outbox actions) and **search (`/search`)** are real behind
-`web/src/lib/api/http.ts`; ask, rules, people, checks and reading stay mock-backed until chunk 5,
-and the mock E2E suite fakes the real requests at the network boundary (`e2e/api.ts`). Archive,
-delete, flag, junk and tag are real writes through the outbox; save rule and send only toast until
-3g and chunk 4.
+`tag`/`untag` outbox actions), **search (`/search`)**, **send and its undo (`/send`)**, **drafts
+(`/drafts`)** and **identities** are real behind `web/src/lib/api/http.ts`; ask and checks stay
+mock-backed until chunk 5, and the mock E2E suite fakes the real requests at the network boundary
+(`e2e/api.ts`). Archive, delete, flag, junk and tag are real writes through the outbox; send goes
+through the send queue with a server-side undo window; a rule's save and apply are real (3g).
 
 Backend: `store/` (two DBs plus the disabled-blob store), `config/`, `sync/` (runner, IDLE,
 QRESYNC deltas, derivation, attachment extraction), `mime/`, `render/`, `thread/`,
@@ -86,6 +91,17 @@ addresses with an unconfigured one reported for a one-tap add. `GET/PUT /account
 identity as the `From` and default its display name. The account settings screen has a "Send as"
 editor. `make check`, `pnpm test` and the account Playwright suite are green. **Next: 4f**, the
 compose screen. **The live send-as check per address is the operator's** (below).
+
+**4f is done** (2026-10-06; qa-log round 64; `docs/BUILD-LOG.md` has the entry). The compose screen is
+wired to the real send and draft APIs: identities behind the From picker, People autocomplete on
+To/Cc, reply/reply-all and forward prefills, debounced autosave to the server's Drafts folder plus a
+save on leave, and the Sending, Undo, Not-sent and `unconfirmed` states. A new `/drafts` screen lists
+and resumes a draft. The attach sheet stays a preview and blocks send until 4g; the format buttons
+stay inert until 4h. Wiring it surfaced and fixed a 4d gap: `POST /send` now records the draft
+version it came from (`draftMessageId`) so a sent copy leaves Drafts, and the reply/forward prefill
+now names its account (`accountId`) so the screen loads the right identities. `make check`, `pnpm
+test` and the mock Playwright suite (328 passed, 10 skipped, phone and desktop) are green. **Next:
+4g**, outgoing attachments and images (gate G4 before any new dependency).
 
 **4c is done** (2026-10-06). `compose.undo_delay_seconds` is a global/per-account setting (default 10,
 0 = off, clamped to 120). `POST /send` builds the wire and Sent copies, stores the original request
@@ -219,10 +235,11 @@ proved against stubs.
 
 1. **C0 canvas board** for the three 3b screens, whenever the operator is ready; the backend and API
    are already committed.
-2. **Chunk 4 (send)**, in the stages below, starting with 4a; 3g leaves the free-form rule compiler
-   for chunk 5. **The live-use issues #7-#15 wait until chunk 4 is done** (operator, 2026-10-06): file
-   new feedback, do not fix it first. The one to raise anyway if chunk 4 touches the outbox is #10 (a
-   move failing with `message_gone`).
+2. **Chunk 4 (send)**, in the stages below. **4a-4f are done**; **4g** (outgoing attachments and
+   images; gate G4 before any dependency) is next, then the deferrable 4h (rich text). 3g leaves the
+   free-form rule compiler for chunk 5. **The live-use issues #7-#15 wait until chunk 4 is done**
+   (operator, 2026-10-06): file new feedback, do not fix it first. The one to raise anyway if chunk 4
+   touches the outbox is #10 (a move failing with `message_gone`).
 
 **Deliberately deferred from 3c** (do not re-litigate):
 
@@ -453,8 +470,8 @@ T11-T13 on top of chunk 3's T1-T10) are in `docs/CHUNK4-BRIEF.md`; read it after
 Checkpoints: **G1** (4a, injection corpus failing before the builder), **G2** (4b, design before code),
 **G3** (4b, crash tests pass), **G4** (4g, before any image dependency), **G5** (end of chunk, Claude's
 Review). **4a-4e are done**: `compose/`/`smtp/`, the `send_queue` with the Sent copy, the
-send API with undo, the server Drafts folder, and the identities and reply logic. **4f** (the
-compose screen) is next.
+send API with undo, the server Drafts folder, the identities and reply logic, and the compose screen
+and `/drafts`. **4g** (outgoing attachments and images) is next.
 
 ## Operator actions still open
 
@@ -469,10 +486,10 @@ compose screen) is next.
   `ghcr.io/autumnsgrove/ivy:latest` resolves anonymously to `sha256:e6fdc57c…`, so the package is
   public and the potato needs no `docker login`. **Left:** on the board, `sudo ./install.sh` and one
   real `ivy update` end to end, recording the result.
-- Send and drafts (4a-4e): the API is real but the compose screen is wired in 4f, so the live check
-  waits on it. Then, against a mailbox the operator owns: send to self and see the Sent copy in
-  Apple Mail; save a draft and see it in Apple Mail; edit it there and resume it in Ivy; confirm a
-  sent draft leaves Drafts; and send-as per address. For 4e, add each alias on `/settings/account`
+- Send and drafts (4a-4f): the API and the compose screen are real, so the live check can run. Then,
+  against a mailbox the operator owns: send to self and see the Sent copy in
+  Apple Mail; save a draft (or let it autosave) and see it in Apple Mail; edit it there and resume it
+  in Ivy; confirm a sent draft leaves Drafts; and send-as per address. For 4e, add each alias on `/settings/account`
   and do the **live send-as check**: send from the alias to an address the operator owns and confirm
   the provider accepts the `From` (Purelymail send-as works but its scope is unprobed, spike S1c) and
   the message and Sent copy are right. An alias the provider refuses is a provider setting to fix,

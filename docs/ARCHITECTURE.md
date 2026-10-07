@@ -383,6 +383,18 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   primary; a non-empty signature is appended behind the `-- ` line. `GET /messages/{id}/reply`
   (with `?all=true`) and `GET /messages/{id}/forward` serve the prefill; the per-address send-as
   check against a real mailbox is the operator's.
+- **Compose (chunk 4f):** the compose screen is wired to all of it. The From picker offers only the
+  account's stored identities (the reply's own account, carried by the prefill's `accountId`, decides
+  which); To/Cc/Bcc are chips with People autocomplete; a reply or forward starts from the server's
+  prefill; and the draft autosaves through `/drafts` after a quiet delay and once more on leaving. The
+  Send tap flushes that save first, so the queue row records the version's `Message-ID`
+  (`SendRequest.draftMessageId`) and the worker removes exactly that copy from Drafts after the `250`;
+  a refusal before queueing shows the Not-sent sheet and keeps the draft. A send that settles to
+  `unconfirmed` is a plain "This may have been sent. Check your Sent folder before trying again"
+  notice that never offers a resend (invariant 2). The attach sheet stays a preview and blocks send
+  until 4g; the four markdown-format buttons stay inert until the rich-text editor (4h). A new
+  `/drafts` screen lists the local and mirrored heads, resumes one into the composer, and discards
+  one behind a confirmation.
 - **Auth results:** parse `Authentication-Results` (SPF/DKIM/DMARC) into a trust signal used by
   the phishing question and the spoofed-sender discount. Only the **topmost** header whose
   `authserv-id` is in the account's `trusted_authserv_ids` is believed, and **only that one

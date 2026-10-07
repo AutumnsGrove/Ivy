@@ -838,3 +838,43 @@ the four choices (surface, signature, forward, aliases) were settled in round 63
 
 
 
+## 4f Compose screen (round 64, 2026-10-06)
+
+The compose screen, wired to the send/drafts/identities APIs. The three scope questions were put to
+the operator first (round 64): **autosave plus a new `/drafts` screen**, saves **debounced and on
+leave**, and the **attach sheet kept as a preview that blocks send** until 4g.
+
+- **The draft linkage was missing from 4d.** `POST /send` never recorded which draft version it came
+  from, so a sent draft could never leave Drafts and the Not-sent promise was hollow. Fixed here:
+  `SendRequest` gained `draftMessageId` (openapi + both generated outputs), the handler stores it on
+  the queue row, and the worker's existing removal now has a source. `gateway/send_test.go`
+  (`TestSendRecordsTheDraftItCameFrom`) wrote the failure first.
+- **The prefill names its account.** `ComposePrefill` gained `accountId` (the message's account), so a
+  reply from a secondary account loads that account's identities instead of the default's. Found while
+  wiring the From picker; `prefillView` and `messagePrefill` pass it through, with the delivered-
+  identity test asserting it.
+- **Client.** `sendMessage`, `getSend`, `listSends`, `undoSend`, `listDrafts`, `saveDraft`, `getDraft`
+  and `discardDraft` over the contract; six new error codes (`invalid_message`, `send_full`,
+  `too_late`, `no_drafts_folder`, `draft_conflict`, `draft_too_large`). A stale draft save answers 409
+  with the newer `DraftResume` rather than the error envelope, so `http.ts` maps that one case to
+  `draft_conflict` and carries the body. `send.state` was added to the events client.
+- **Pure helpers (Vitest).** `compose/recipients.ts` (address extraction that rejects CR/LF/NUL before
+  trimming, comma/semicolon parsing, dedupe, People suggestions), `compose/signature.ts` (the `-- `
+  block and identity-swap), `compose/seed.ts` (prefill/draft/undo-request to one shape, corrupt JSON
+  to null), and `compose/autosave.ts` (the debounced, single-flight save with an optimistic version
+  and a revision counter so an edit during a save is not lost).
+- **The screen.** From picker over the stored identities; To/Cc/Bcc chips with autocomplete from the
+  real People data; reply/forward prefills; a one-tap add for an unconfigured Delivered-To; Send
+  flushes a draft first and records its `Message-ID`; the Sending/Undo toast, the Not-sent sheet on a
+  pre-queue refusal, and a `sends.svelte.ts` store that turns `send.state` hints into a one-time
+  failure or a persistent, resend-free `unconfirmed` notice.
+- **`/drafts`.** Local and mirrored heads newest first, resume into the composer, discard behind the
+  shared confirm; linked from the folder list.
+- **Tests.** The four helper suites (36 tests) and the sends store suite; `e2e/drafts.spec.ts` (list,
+  resume, confirm-discard, empty, and a debounced autosave that the list then shows) and the rewritten
+  `flows.spec.ts` compose block (a refused send keeps the draft, undo hands it back, People
+  autocomplete, the From picker) on phone and desktop. Full mock Playwright suite: 328 passed, 10
+  skipped. `pnpm test` 336.
+- **Left for the operator.** The live check once 4f is on the board: send to self, see the Sent copy
+  and the draft in Apple Mail, resume a draft made there, confirm a sent draft leaves Drafts, and the
+  per-address send-as check from 4e.
