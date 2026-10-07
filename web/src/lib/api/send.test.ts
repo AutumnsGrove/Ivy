@@ -126,3 +126,20 @@ describe('drafts api', () => {
 		await expect(api.getDraft('d1', 'a1')).rejects.toMatchObject({ code: 'draft_too_large' });
 	});
 });
+
+describe('uploadAttachment', () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	// A buffered copy of a 25 MiB photo doubles its footprint on the phone; the browser
+	// can stream a Blob body itself.
+	it('hands fetch the Blob itself instead of buffering a copy', async () => {
+		let sent: unknown;
+		vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
+			sent = init.body;
+			return { ok: true, status: 201, json: async () => ({ id: 'u1', name: 'a.png', mime: 'image/png', size: 3 }) };
+		});
+		const file = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' });
+		await api.uploadAttachment('a1', 'a.png', file);
+		expect(sent).toBe(file);
+	});
+});

@@ -208,7 +208,8 @@ export const api = {
 		request<Upload>(apiPath(`/accounts/${encodeURIComponent(accountId)}/uploads`, { name }), {
 			method: 'POST',
 			headers: { 'Content-Type': file.type || 'application/octet-stream' },
-			body: await file.arrayBuffer(),
+			// The Blob itself, so the browser streams it rather than holding a second copy.
+			body: file,
 			// A 25 MiB photo over Tailscale can outlast the default timeout.
 			signal: AbortSignal.timeout(120_000)
 		}),

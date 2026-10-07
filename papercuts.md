@@ -1670,3 +1670,9 @@ Baseline on `4f34628`: `go build`, `go vet` and `go test -count=1 ./...` all gre
 (v2.12.1) 0 issues, `CGO_ENABLED=1 go test -race -count=1 ./...` all packages pass, `pnpm test` (358) and
 `pnpm check` (0 errors) pass. Not run here: `govulncheck`, the Playwright suites, a smoke run of the binary, any
 real browser or the potato.
+
+## Resolution of the open items from `2cabdd0..4f34628` (operator answers, 2026-10-06)
+
+- **N51 resolved** (operator chose "pass the Blob") · `web/src/lib/api/client.ts` · `uploadAttachment` now hands `fetch` the
+  `Blob` itself. Reproduced with the `uploadAttachment` test in `send.test.ts` (the body was an `ArrayBuffer`;
+  failed before). The memory saving on a real iPhone is unmeasured and remains the operator's live check.
