@@ -1558,3 +1558,15 @@ Baseline on `4f34628`: `go build`, `go vet` and `go test -count=1 ./...` all gre
   and queued a remove op. The worker's `draftFolder` guard refuses it later (`not_drafts`), so the caller got 204
   for an op that could only fail. Reproduced with `TestDeleteDraftRefusesAMessageOutsideDrafts` (204, op queued;
   failed before). It is now 404 and nothing is queued unless the message is in the account's Drafts folder.
+
+### `0d219c2` attachment staging
+
+- **#135** · `0d219c2` · `gateway/uploads.go` · **bug** · the deny list was dodged by a trailing space, dot or tab on the
+  name (`evil.exe `, which Windows runs) and by a malformed Content-Type parameter (`text/html; =x`:
+  `ParseMediaType` returns the type with an error, and the `err == nil` guard skipped the check). Reproduced with
+  `TestAttachmentDenyListSurvivesDisguises` (five disguises allowed; failed before). The name is trimmed before
+  `path.Ext` and the media type is split on `;` by hand.
+- **#136** · `0d219c2` · `gateway/uploads.go` · **bug** · `POST .../uploads/from-mail` staged any mirrored attachment
+  without the deny list, so a received `.exe` could be forwarded though the documented policy refuses it.
+  Reproduced with `TestUploadFromMailAppliesTheDenyList` (201; failed before). It now answers 400 `bad_type`; the
+  check runs before the copy goroutine starts so an early return cannot leave it blocked on the pipe.

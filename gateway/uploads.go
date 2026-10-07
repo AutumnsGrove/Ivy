@@ -206,6 +206,13 @@ func (s *Server) handleUploadFromMail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Refuse before the copy goroutine exists: it would block on the pipe forever.
+	name := safeAttachmentName(att.Filename)
+	if err := checkAttachmentType(name, att.MIMEType); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_type", err.Error())
+		return
+	}
+
 	// CopyPart writes decoded bytes; StageUpload pulls them through a pipe, so
 	// even a large attachment is never held whole.
 	pr, pw := io.Pipe()
@@ -215,7 +222,6 @@ func (s *Server) handleUploadFromMail(w http.ResponseWriter, r *http.Request) {
 		_ = pw.CloseWithError(err)
 		done <- err
 	}()
-	name := safeAttachmentName(att.Filename)
 	staged, stageErr := s.dbs.StageUpload(ctx, store.Upload{
 		ID: s.newID(), AccountID: accountID, Name: name, MIMEType: att.MIMEType, CreatedAt: s.now().UTC(),
 	}, pr, compose.MaxAttachmentBytes)
@@ -319,11 +325,15 @@ func resolveAttachmentType(declared string, head []byte) string {
 
 // checkAttachmentType applies the deny list by extension and by MIME type.
 func checkAttachmentType(name, mimeType string) error {
-	if ext := strings.ToLower(path.Ext(name)); dangerousAttachmentExtensions[ext] {
+	// Windows drops a trailing space or dot, so "evil.exe " still runs.
+	trimmed := strings.TrimRight(name, " .\t")
+	if ext := strings.ToLower(path.Ext(trimmed)); dangerousAttachmentExtensions[ext] {
 		return &uploadError{fmt.Sprintf("Ivy will not send %s files", ext)}
 	}
-	mt, _, err := stdmime.ParseMediaType(mimeType)
-	if err == nil && dangerousAttachmentTypes[strings.ToLower(mt)] {
+	// ParseMediaType returns an error for a malformed parameter, which would
+	// skip the check for a type that is plainly text/html, so split by hand.
+	mt, _, _ := strings.Cut(mimeType, ";")
+	if mt = strings.ToLower(strings.TrimSpace(mt)); dangerousAttachmentTypes[mt] {
 		return &uploadError{fmt.Sprintf("Ivy will not send %s files", mt)}
 	}
 	return nil

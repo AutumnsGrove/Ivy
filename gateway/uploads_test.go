@@ -203,3 +203,40 @@ func TestMailAttachmentsListAndCopy(t *testing.T) {
 		t.Errorf("copy bytes = %q, want the mirrored part", got)
 	}
 }
+
+// A trailing space or dot hides the extension from path.Ext but not from the
+// systems that strip it, and a malformed Content-Type parameter makes
+// ParseMediaType report an error alongside the right media type.
+func TestAttachmentDenyListSurvivesDisguises(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, mime string }{
+		{"evil.exe ", "application/octet-stream"},
+		{"evil.exe.", "application/octet-stream"},
+		{"evil.EXE\t", "application/octet-stream"},
+		{"notes.txt", "text/html; =x"},
+		{"notes.txt", "TEXT/HTML ; charset"},
+	}
+	for _, tc := range cases {
+		if err := checkAttachmentType(tc.name, tc.mime); err == nil {
+			t.Errorf("checkAttachmentType(%q, %q) allowed it, want a refusal", tc.name, tc.mime)
+		}
+	}
+}
+
+// Copying a mirrored attachment is staging for send like any upload, so the
+// deny list applies to it.
+func TestUploadFromMailAppliesTheDenyList(t *testing.T) {
+	t.Parallel()
+	srv, dbs := newSeededServer(t)
+	seedMailWithAttachment(t, dbs)
+	if err := dbs.ReplaceMessageAttachments(context.Background(), "m1", []store.Attachment{{
+		Filename: "setup.exe", MIMEType: "application/x-msdownload", Size: 13, StoragePath: "2",
+	}}); err != nil {
+		t.Fatalf("attachments: %v", err)
+	}
+	code := doJSON(t, http.MethodPost, srv.URL+"/api/v1/accounts/acct-1/uploads/from-mail",
+		api.UploadFromMailInput{MessageId: "m1", Path: "2"}, nil, nil)
+	if code != http.StatusBadRequest {
+		t.Fatalf("copy status = %d, want 400", code)
+	}
+}
