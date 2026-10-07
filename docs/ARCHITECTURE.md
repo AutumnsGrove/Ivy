@@ -391,10 +391,23 @@ respect the potato's RAM and Purelymail's connection tolerance (verify limits li
   (`SendRequest.draftMessageId`) and the worker removes exactly that copy from Drafts after the `250`;
   a refusal before queueing shows the Not-sent sheet and keeps the draft. A send that settles to
   `unconfirmed` is a plain "This may have been sent. Check your Sent folder before trying again"
-  notice that never offers a resend (invariant 2). The attach sheet stays a preview and blocks send
-  until 4g; the four markdown-format buttons stay inert until the rich-text editor (4h). A new
-  `/drafts` screen lists the local and mirrored heads, resumes one into the composer, and discards
-  one behind a confirmation.
+  notice that never offers a resend (invariant 2). The attach sheet stages real files and photos (4g).
+  A new `/drafts` screen lists the local and mirrored heads, resumes one into the composer, and
+  discards one behind a confirmation.
+- **Rich text and outgoing HTML (chunk 4h, round 66):** compose keeps both editors and opens in rich
+text. The editor is `squire-rte` (MIT, zero dependencies, ~16 KiB brotli, loaded only with the
+`/compose` route chunk), chosen over a minimal TipTap roughly six times its size; it was built for
+mail composition, so pasted third-party HTML is its design centre, and it needs a
+`sanitizeToDOMFragment`, which the client supplies as its own small allow-list walker
+(`src/lib/compose/sanitize.ts`) rather than a DOMPurify import. A small mode pill switches a message
+to Markdown, but only while the body is empty: the format is fixed once typed, so no HTML↔Markdown
+conversion is ever attempted. `compose.Message` carries an explicit `BodyFormat` (`plain`,
+`markdown`, `html`); the API's `bodyFormat` field (with the deprecated `markdown` flag still
+accepted) resolves it, and a draft's stored `compose_json` round-trips it, so a rich draft reopens
+as HTML and a draft made in another client resumes its HTML part when `mime.Parse` finds one. The
+`html` path narrows the markup through the same compose-only `outgoingPolicy` as rendered markdown
+and derives the `text/plain` alternative from the sanitised HTML, so the two parts cannot disagree;
+the builder still validates every header and never runs an inbound reader policy over outgoing mail.
 - **Outgoing attachments (chunk 4g, round 65):** the browser prepares photos (EXIF rotation via
   `createImageBitmap`, downscale and a canvas re-encode that strips EXIF/GPS), so the server imports
   no image decoder and the HEIC question is settled. Staged bytes are content-addressed under

@@ -5,7 +5,7 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-06. **4h (rich text) is in progress**: the five design decisions are settled in qa-log round 66 and `docs/handoffs/2026-10-06-4h-richtext-design.md` (Squire, 16.1 KiB brotli / zero deps, chosen over a 98.3 KiB minimal TipTap; both modes with the mode fixed once you type; a `bodyFormat` field sanitised server-side; our own paste allow-list). **4g is done** (outgoing attachments and images; round 65): gate G4 cleared the dependency question — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4h (rich text) is next and deferrable.** **4f is done** (the compose screen; round 64): the client calls and the new
+last updated: 2026-10-06. **Chunk 4 (send) is complete: 4a-4h are done.** **4h (rich text)** landed with the decisions settled in qa-log round 66 and `docs/handoffs/2026-10-06-4h-richtext-design.md`: the editor is `squire-rte` (MIT, zero deps, 16.1 KiB brotli, chosen over a 98.3 KiB minimal TipTap), both modes stay with rich as the default and the mode fixed once typed, a `bodyFormat` field is sanitised server-side with a derived `text/plain`, and the paste walker is our own allow-list. `docs/BUILD-LOG.md` has the entry. What is left is the operator's live checks. **4g is done** (outgoing attachments and images; round 65): gate G4 cleared the dependency question — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4f is done** (the compose screen; round 64): the client calls and the new
 `/drafts` screen, the From picker over the real identities, People autocomplete, reply/forward
 prefills, debounced autosave to the server's Drafts folder (and once on leave), the Sending/Undo
 toast, the Not-sent sheet and the resend-free `unconfirmed` notice. The operator chose autosave plus
@@ -57,7 +57,7 @@ screens**.
 | 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
 | 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, rules, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; 3e done; 3f done; 3g done; **3h done** |
-| 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | **in progress, split into 4a-4h** (round 60; see "Chunk 4 stages" and `docs/CHUNK4-BRIEF.md`); **4a-4g done**, 4h (rich text, deferrable) is next |
+| 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | **done** (4a-4h; rounds 60-66; see "Chunk 4 stages" and `docs/CHUNK4-BRIEF.md`) |
 | 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | not started |
 
 Frontend: SvelteKit 3 app in `web/`. The reader endpoints (`/accounts`, `/inbox`,
@@ -80,13 +80,13 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 
 ## ▶ Now
 
-**4h (rich text) is in progress.** The five decisions are settled (qa-log round 66, design at
-`docs/handoffs/2026-10-06-4h-richtext-design.md`): the editor is `squire-rte` (MIT, zero deps,
-16.1 KiB brotli, picked over a minimal TipTap at 98.3 KiB and Quill core at 38.9), both the Markdown
-and rich-text editors stay with rich as the default, the mode is fixed once the body has content, a
-new `bodyFormat` (`markdown` | `html`) travels on the send/draft requests and is sanitised by
-`compose`'s outgoing policy with a derived `text/plain`, and the paste sanitiser is our own
-allow-list walker (no DOMPurify). Implementation follows; nothing is coded yet.
+**Chunk 4 is done.** 4h (rich text) is the last stage and landed with `squire-rte` (MIT, zero deps,
+16.1 KiB brotli, route-split to `/compose`), an explicit `bodyFormat` on the compose/API contract
+sanitised server-side with a derived `text/plain`, a mode pill fixed once the body has content, and
+our own paste allow-list walker (no DOMPurify). `docs/BUILD-LOG.md` has the entry; the five decisions
+are in qa-log round 66. The definition-of-done live checks for send, drafts, attachments and send-as
+are the operator's (below). **Next: chunk 5 (triage)** once the operator is ready, and the open
+`papercuts`/backlog items.
 
 **4e is done** (2026-10-06; design at the reply gate in
 `docs/handoffs/2026-10-06-4e-identities-design.md`, qa-log round 63). State migration 14 adds
@@ -122,8 +122,8 @@ denylist of executables and scripts; `compose` builds file and inline parts; sen
 name staged ids and a resume or undo re-materialises fresh staging from the stored MIME. The attach
 sheet opens the real pickers, lists "From your mail" and prepares photos in the browser. `make
 check`, `pnpm test` (343) and the mock Playwright suite (336 passed, phone and desktop) are green.
-**Next: 4h**, the rich-text editor (deferrable). **The live send-with-attachment check is the
-operator's** (below).
+**The live send-with-attachment check is the
+operator's** (below). **4h followed and is done** (see the top of this section).
 
 **4c is done** (2026-10-06). `compose.undo_delay_seconds` is a global/per-account setting (default 10,
 0 = off, clamped to 120). `POST /send` builds the wire and Sent copies, stores the original request
@@ -257,11 +257,11 @@ proved against stubs.
 
 1. **C0 canvas board** for the three 3b screens, whenever the operator is ready; the backend and API
    are already committed.
-2. **Chunk 4 (send)**, in the stages below. **4a-4g are done**; **4h** (rich text, deferrable) is
-   images; gate G4 before any dependency) is next, then the deferrable 4h (rich text). 3g leaves the
-   free-form rule compiler for chunk 5. **The live-use issues #7-#15 wait until chunk 4 is done**
-   (operator, 2026-10-06): file new feedback, do not fix it first. The one to raise anyway if chunk 4
-   touches the outbox is #10 (a move failing with `message_gone`).
+2. **Chunk 5 (triage)**, after chunk 4. **Chunk 4 (send) is done** (4a-4h; `docs/BUILD-LOG.md`),
+   so send can now replace the operator's mail client. 3g leaves the free-form rule compiler for chunk
+   5. The live-use issues #7-#15 are now unblocked (operator, 2026-10-06: wait until chunk 4 is
+   done): file new feedback, do not fix it first. The one to raise anyway if chunk 4 touches the
+   outbox is #10 (a move failing with `message_gone`).
 
 **Deliberately deferred from 3c** (do not re-litigate):
 
@@ -309,8 +309,11 @@ Found by the round 32 audit; each needs a home before its milestone starts.
 
 ### Frontend
 
-- Wire the remaining stub actions (Update, "Try on recent mail", send) to real calls with
-  IMAP-first writes and undo (chunks 3h and 4).
+- Rich-text follow-ups (4h): changing the From identity does not rewrite the signature in rich mode,
+  because the body is HTML and the signature swap is a plain-text one; the signature inserted when the
+  message started stays. The link button uses `window.prompt`, so a proper inline link editor is later
+  polish. A reply-in-place box in the reader is still not built.
+- Stub actions are now all real (Update in 3h, send in 4f); keep the list here only for new stubs.
 - 3g leftovers: the reader has no snooze or show-in-Reading control (rules and the API only); the
   `folder=snoozed` view and the inbox `tag=` filter are API-only with no screen; `rules/new/review`
   is now a dead mock route (the free-form compiler is chunk 5); and the rule editor, People and
@@ -487,14 +490,14 @@ T11-T13 on top of chunk 3's T1-T10) are in `docs/CHUNK4-BRIEF.md`; read it after
 | **4e Identities and reply logic** | Per-address identities and signatures in `state.db`; reply and reply-all recipient logic, `Reply-To`; forward; live send-as check per address | none | M | Low | DeepSeek, solo |
 | **4f Compose screen** | Wire the existing mock: markdown editor, People autocomplete, From picker, reply and forward, the Sending, Undo, Not-sent and `unconfirmed` states | 4c, 4d, 4e | L | Low-Medium | DeepSeek |
 | **4g Outgoing attachments and images** | Streamed uploads, size and type limits, EXIF strip, downscale, HEIC, inline `cid:`, "From your mail" copy; any new dependency is gate G4 | 4f | L | **High** | Claude leads decoders and dependencies, DeepSeek the UI |
-| **4h Rich-text editor** | The second editor after markdown; same builder and sanitiser; must work on iOS Safari. Deferrable | 4f | M | Medium | DeepSeek, later |
+| **4h Rich-text editor** | The second editor after markdown, `squire-rte` (MIT, zero deps, 16.1 KiB brotli, route-split); an explicit `bodyFormat` sanitised by the same builder; must work on iOS Safari | 4f | M | Medium | DeepSeek, later |
 
 Checkpoints: **G1** (4a, injection corpus failing before the builder), **G2** (4b, design before code),
 **G3** (4b, crash tests pass), **G4** (4g, before any image dependency), **G5** (end of chunk, Claude's
-Review). **4a-4e are done**: `compose/`/`smtp/`, the `send_queue` with the Sent copy, the
-send API with undo, the server Drafts folder, the identities and reply logic, and the compose screen
-and `/drafts`. **4g is done** (gate G4 cleared, no new dependency); **4h** (the rich-text editor) is
-the last, deferrable stage.
+Review). **4a-4h are done**: `compose/`/`smtp/`, the `send_queue` with the Sent copy, the send API
+with undo, the server Drafts folder, the identities and reply logic, the compose screen and
+`/drafts`, outgoing attachments and images, and the rich-text editor with `bodyFormat`. Chunk 4 is
+complete; what remains is the operator's live checks.
 
 ## Operator actions still open
 
@@ -509,8 +512,8 @@ the last, deferrable stage.
   `ghcr.io/autumnsgrove/ivy:latest` resolves anonymously to `sha256:e6fdc57c…`, so the package is
   public and the potato needs no `docker login`. **Left:** on the board, `sudo ./install.sh` and one
   real `ivy update` end to end, recording the result.
-- Send, drafts and attachments (4a-4g): the API and the compose screen are real, so the live check
-  can run. Then, against a mailbox the operator owns: send to self and see the Sent copy in
+- Send, drafts, attachments and rich text (4a-4h): the API and the compose screen are real, so the
+  live check can run. Then, against a mailbox the operator owns: send to self and see the Sent copy in
   Apple Mail; save a draft (or let it autosave) and see it in Apple Mail; edit it there and resume it
   in Ivy; confirm a sent draft leaves Drafts; and send-as per address. For 4e, add each alias on `/settings/account`
   and do the **live send-as check**: send from the alias to an address the operator owns and confirm
@@ -519,7 +522,10 @@ the last, deferrable stage.
   not an Ivy bug; record what each address does. **For 4g:** send a photo and a PDF (and an inline
   image) to an address the operator owns, confirm the recipient and the Sent copy carry them, confirm
   the phone picker still hands back JPEG, and check "From your mail" against the real mailbox. If the
-  deny list blocks a type the operator actually sends, that is a one-line change.
+  deny list blocks a type the operator actually sends, that is a one-line change. **For 4h:** send a
+  formatted message (bold, a list, a link) from the rich editor and confirm the recipient and the Sent
+  copy render it and the plain-text alternative reads cleanly; switch a fresh message to Markdown and
+  back; check the editor on the real iPhone (the deferrable stage's whole point).
 - Repo visibility: **public** now (was private). The remaining `docs/CI.md` 6 items (gitleaks over
   full history, branch ruleset + required checks, secret scanning) are the operator's checklist.
 - Bump the local Go toolchain off 1.26.1, which `govulncheck` flags (fixed in 1.26.2+); CI resolves

@@ -921,3 +921,42 @@ browser path; SVG and the executable/script types are refused by the server's de
 - **Left for the operator.** A live send with a photo and a PDF to an address they own, checking the
   recipient and the Sent copy; the phone picker handing back JPEG once more; "From your mail" against
   the real mailbox. A type the deny list blocks that they actually need is a one-line change.
+
+## 4h Rich-text editor (round 66, 2026-10-06)
+
+The last chunk 4 stage and the only one with a dependency decision. The four format buttons had been
+inert since 4f, and the docs never picked an editor, so five choices went to the operator before any
+code (round 66; `docs/handoffs/2026-10-06-4h-richtext-design.md`, `docs/qa-log.md`).
+
+- **The editor is `squire-rte` 2.4.9** — MIT, zero dependencies, **16.1 KiB brotli** for the whole
+  editor. It was measured against a minimal TipTap (98.3), Lexical (57), Quill core (38.9) and pell
+  (1.4), and picked because it was built for Fastmail's compose, so arbitrary pasted and quoted HTML
+  is its design centre, it avoids the deprecated `execCommand`, ships types and is actively
+  maintained. `docs/STACK.md` records it as the one deliberate runtime exception; it loads only with
+  the `/compose` route chunk, so the critical-path budget stays green (58 KiB of 80). A new
+  route-chunk budget (40 KiB, currently ~25) makes that a checked limit, and the limit was proved
+  failing when lowered.
+- **The body contract.** `compose.Message.Markdown bool` became an explicit `Format BodyFormat`
+  (`BodyPlain`, `BodyMarkdown`, `BodyHTML`). The API gains `bodyFormat` on `SendRequest`,
+  `DraftRequest` and `DraftResume`; the deprecated `markdown` flag still resolves, so older clients
+  and stored draft JSON keep working. `compose/html.go` narrows the operator's HTML through the same
+  compose-only `outgoingPolicy` as rendered markdown and derives the `text/plain` alternative with a
+  block-aware converter, so the two parts cannot disagree. Tests: `compose/html_test.go` (the
+  hostile-HTML corpus, derived text, `cid:` images, empty and tag-only bodies), plus gateway
+  round-trips in `gateway/send_test.go` and `gateway/drafts_test.go`.
+- **Drafts.** No migration: the draft's `compose_json` already stores the whole request, so
+  `bodyFormat` rides with it; resume returns it. A server-only draft made in another client resumes
+  the HTML part when `mime.Parse` finds one, so Apple Mail's formatting survives.
+- **The client.** `sanitize.ts` is the allow-list walker Squire needs as its `sanitizeToDOMFragment`
+  (no DOMPurify; Vitest corpus over scripts, handlers, frames and URL schemes). `RichEditor.svelte`
+  wraps Squire, exposes the format actions and reports the HTML and button state. Compose opens rich
+  by default, with a mode pill that is live only before the first keystroke — the format is fixed
+  once typed, so no HTML↔Markdown conversion ever runs — and a format bar that bolds, italicises,
+  links and lists. Inline images insert an `<img src="cid:…">` in rich mode and the markdown form
+  otherwise. `e2e/flows.spec.ts` covers the default, the switch, the lock and bold/list on phone and
+  desktop; the full mock suite is 342 passed (10 skipped), `pnpm test` 355, `make check` green.
+- **Known limitation.** Changing the From identity does not rewrite the signature in rich mode (the
+  body is HTML and the swap is a plain-text one); the signature inserted at the start stays. Noted in
+  `next_steps.md` as a backlog item rather than left silent.
+- **Left for the operator.** The live send-as and send/drafts/attachment checks (they cover rich
+  bodies too) and the `sudo ./install.sh` first install; both are already their own pending lines.

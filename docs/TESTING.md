@@ -128,6 +128,11 @@ actually sent:
 - **E2E (Playwright), both form factors:** inbox, combined view with badges, thread reading, compose
   and undo-send (configurable delay), search, ask account-picker, settings, stats panel, snooze,
   tags/rules, swipe gestures via touch emulation, keyboard shortcuts via the help overlay.
+- **Rich text (4h):** the client paste walker has a Vitest hostile corpus (scripts, event handlers,
+  frames, `javascript:`/`data:` URLs); Go tests cover the outgoing-HTML path (sanitisation, derived
+  `text/plain`, inline `cid:`), the legacy `markdown` flag, and a draft or server-only HTML resume;
+  Playwright checks the rich default, the mode pill switching only before the first keystroke, and
+  bold/list through the format bar on phone and desktop.
 - **Visual baselines** per screen at phone and desktop sizes; intentional redesigns update baselines
   in the same commit.
 - **Resilience:** server restart/reconnect, SSE drop, offline banner, partial sync states.
