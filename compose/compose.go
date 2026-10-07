@@ -169,6 +169,8 @@ func Build(m Message) ([]byte, Envelope, error) {
 		if m.Text != "" {
 			htmlPart = sanitizeOutgoingHTML(m.Text)
 		}
+	case BodyPlain:
+		// No HTML part; the plain text below is the whole body.
 	}
 	plain := m.Text
 	if m.Format == BodyHTML {

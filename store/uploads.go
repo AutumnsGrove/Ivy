@@ -50,17 +50,17 @@ func scanUpload(s scanner) (Upload, error) {
 	return u, nil
 }
 
-// StageUpload streams r into the upload store and records the row. At most max
-// bytes are read; anything more is ErrUploadTooLarge with nothing kept. It is
+// StageUpload streams r into the upload store and records the row. At most
+// maxBytes are read; anything more is ErrUploadTooLarge with nothing kept. It is
 // idempotent on (account, id): a retried upload returns the stored row and never
 // rewrites the bytes.
-func (d *DBs) StageUpload(ctx context.Context, up Upload, r io.Reader, max int64) (Upload, error) {
+func (d *DBs) StageUpload(ctx context.Context, up Upload, r io.Reader, maxBytes int64) (Upload, error) {
 	switch {
 	case up.ID == "", up.AccountID == "", up.Name == "":
 		return Upload{}, errors.New("stage upload: id, account and name are required")
 	case up.CreatedAt.IsZero():
 		return Upload{}, errors.New("stage upload: created_at is required")
-	case max <= 0:
+	case maxBytes <= 0:
 		return Upload{}, errors.New("stage upload: max must be positive")
 	}
 	existing, err := d.GetUpload(ctx, up.AccountID, up.ID)
@@ -71,11 +71,11 @@ func (d *DBs) StageUpload(ctx context.Context, up Upload, r io.Reader, max int64
 		return Upload{}, err
 	}
 
-	hash, size, err := d.Uploads.Put(ctx, io.LimitReader(r, max+1))
+	hash, size, err := d.Uploads.Put(ctx, io.LimitReader(r, maxBytes+1))
 	if err != nil {
 		return Upload{}, err
 	}
-	if size > max {
+	if size > maxBytes {
 		if err := d.removeUploadHash(ctx, hash); err != nil {
 			return Upload{}, err
 		}
