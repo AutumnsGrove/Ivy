@@ -56,7 +56,7 @@ func TestBuildEmitsInlineImageWithCID(t *testing.T) {
 		Filename: "chart.png", MIMEType: "image/png", Content: []byte("\x89PNG fake"),
 		Inline: true, CID: "chart@ivy",
 	})
-	m.Markdown = true
+	m.Format = compose.BodyMarkdown
 	m.Text = "Look ![chart](cid:chart@ivy) here"
 	raw, _, err := compose.Build(m)
 	if err != nil {
@@ -90,7 +90,7 @@ func TestBuildAttachmentStructure(t *testing.T) {
 		compose.Attachment{Filename: "a.txt", MIMEType: "text/plain", Content: []byte("a")},
 		compose.Attachment{Filename: "i.png", MIMEType: "image/png", Content: []byte("i"), Inline: true, CID: "i@ivy"},
 	)
-	m.Markdown = true
+	m.Format = compose.BodyMarkdown
 	raw, _, err := compose.Build(m)
 	if err != nil {
 		t.Fatalf("build: %v", err)

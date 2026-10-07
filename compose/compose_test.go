@@ -267,7 +267,7 @@ func TestBuildBccStaysOnTheEnvelopeOnly(t *testing.T) {
 func TestBuildMarkdownRendersSafeHTML(t *testing.T) {
 	t.Parallel()
 	m := base()
-	m.Markdown = true
+	m.Format = compose.BodyMarkdown
 	m.Text = "**Hi** [docs](https://example.test)\n\n<script>alert(1)</script>\n\n[bad](javascript:alert(1))"
 	raw, _, err := compose.Build(m)
 	if err != nil {
@@ -430,11 +430,14 @@ func TestBuildEncodedDisplayNamesAreNotQuoted(t *testing.T) {
 func TestBuildBodyLinesAreWireSafe(t *testing.T) {
 	t.Parallel()
 	long := strings.Repeat("word ", 400) // one 2000-byte line
-	for _, md := range []bool{false, true} {
-		t.Run(fmt.Sprintf("markdown=%v", md), func(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		format compose.BodyFormat
+	}{{"plain", compose.BodyPlain}, {"markdown", compose.BodyMarkdown}} {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			m := base()
-			m.Markdown = md
+			m.Format = tc.format
 			m.Text = "first\nsecond\rthird\r\n" + long + "\nlast"
 			raw, _, err := compose.Build(m)
 			if err != nil {

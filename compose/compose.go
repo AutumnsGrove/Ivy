@@ -42,6 +42,22 @@ type Attachment struct {
 	CID string
 }
 
+// BodyFormat selects how Message.Text is interpreted and which body parts the
+// builder emits. The zero value is BodyPlain, so a struct literal that sets only
+// Text keeps the old plain-text behaviour.
+type BodyFormat int
+
+const (
+	// BodyPlain emits one text/plain part.
+	BodyPlain BodyFormat = iota
+	// BodyMarkdown emits the operator's text as text/plain and goldmark's
+	// rendering of it as text/html.
+	BodyMarkdown
+	// BodyHTML emits the operator's HTML narrowed by outgoingPolicy as
+	// text/html, with a text/plain alternative derived from it (4h).
+	BodyHTML
+)
+
 // Message is everything needed to build one outgoing message. The two instants
 // and the id are injected, never generated here, so a retry and the Sent copy
 // reuse them (CHUNK4-BRIEF section 3).
@@ -53,12 +69,12 @@ type Message struct {
 	ReplyTo []Address
 	Subject string
 
-	// Text is the operator's message as typed, bar CRLF line breaks and a break
-	// in any line over 900 bytes (wireText). It is always the text/plain part
-	// (round 61). When Markdown is set, goldmark also renders
-	// it to the text/html part of a multipart/alternative.
-	Text     string
-	Markdown bool
+	// Text is the operator's message as typed. Its meaning is set by Format: the
+	// plain text, markdown source, or HTML. The text/plain part is always the
+	// plain text (for BodyHTML, derived from the HTML); a line over 900 bytes is
+	// broken where wireText can do so safely.
+	Text   string
+	Format BodyFormat
 
 	// InReplyTo and References are transmission headers only; the reply logic
 	// that computes them lives in reply.go. References preserves order.
@@ -136,6 +152,29 @@ func Build(m Message) ([]byte, Envelope, error) {
 	}
 	env := Envelope{From: m.From.Address, To: recipientList(m)}
 
+	// The HTML part is built first: for BodyHTML the text/plain alternative is
+	// derived from the sanitised HTML, so the two parts can never disagree about
+	// what a recipient sees.
+	var htmlPart []byte
+	switch m.Format {
+	case BodyMarkdown:
+		if m.Text != "" {
+			html, err := renderMarkdown(m.Text)
+			if err != nil {
+				return nil, Envelope{}, fmt.Errorf("compose: render markdown: %w", err)
+			}
+			htmlPart = html
+		}
+	case BodyHTML:
+		if m.Text != "" {
+			htmlPart = sanitizeOutgoingHTML(m.Text)
+		}
+	}
+	plain := m.Text
+	if m.Format == BodyHTML {
+		plain = htmlToText(string(htmlPart))
+	}
+
 	b := enmime.Builder().
 		From(m.From.Name, m.From.Address).
 		ToAddrs(mailAddresses(m.To)).
@@ -145,19 +184,15 @@ func Build(m Message) ([]byte, Envelope, error) {
 		Subject(encodeWord(m.Subject)).
 		Date(m.Date).
 		Header("Message-ID", m.MessageID).
-		Text([]byte(wireText(m.Text, true)))
+		Text([]byte(wireText(plain, true)))
 	if m.InReplyTo != "" {
 		b = b.Header("In-Reply-To", m.InReplyTo)
 	}
 	if len(m.References) > 0 {
 		b = b.Header("References", strings.Join(m.References, " "))
 	}
-	if m.Markdown && m.Text != "" {
-		html, err := renderMarkdown(m.Text)
-		if err != nil {
-			return nil, Envelope{}, fmt.Errorf("compose: render markdown: %w", err)
-		}
-		b = b.HTML([]byte(wireText(string(html), false)))
+	if len(htmlPart) > 0 {
+		b = b.HTML([]byte(wireText(string(htmlPart), false)))
 	}
 	// Invariant 7: the wire copy never carries Bcc, so it is added to the
 	// builder's header block only for the Sent copy. BCCAddrs above is what makes

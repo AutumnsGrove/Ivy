@@ -324,7 +324,7 @@ func TestSubmitComposedMessageRoundTrips(t *testing.T) {
 		Bcc:       []compose.Address{{Address: "quiet@grove.test"}},
 		Subject:   "Réunion 😀",
 		Text:      "**Hi** Mara",
-		Markdown:  true,
+		Format:    compose.BodyMarkdown,
 		MessageID: "<round-trip@example.test>",
 		Date:      time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC),
 	}
