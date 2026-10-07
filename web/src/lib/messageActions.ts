@@ -57,6 +57,25 @@ async function send(messageId: string, action: OutboxActionName, ok: string, fai
 	}
 }
 
+/** How long a message stays open before it counts as read, so a swipe past does not. */
+export const READ_DWELL_MS = 1500;
+
+/**
+ * Opening an unread message marks it read after a short dwell. It is a plain
+ * `seen` op through the outbox (IMAP first), so it needs no confirmation and no
+ * toast. A message that is already read is left alone, which keeps what another
+ * client set. If the queue refuses, the message simply stays unread, which is
+ * visible and harmless, so there is nothing to announce. Returns a cancel for
+ * when the reader closes first.
+ */
+export function markReadOnOpen(message: { id: string; unread: boolean }): () => void {
+	if (!message.unread) return () => {};
+	const timer = setTimeout(() => {
+		outbox.enqueue({ messageId: message.id, action: 'seen' }).catch(() => {});
+	}, READ_DWELL_MS);
+	return () => clearTimeout(timer);
+}
+
 /** Archive is a move to the Archive role; confirmed, since it changes the folder. */
 export async function archiveMessage(messageId: string): Promise<boolean> {
 	const ok = await confirm.ask({ title: 'Archive this message?', confirmLabel: 'Archive' });

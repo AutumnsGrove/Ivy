@@ -79,3 +79,13 @@ test.describe('Trash', () => {
 		await expect(page.getByRole('button', { name: 'Empty Trash' })).toHaveCount(0);
 	});
 });
+
+// Issue #7: reading marks the message read, through the outbox, after a dwell.
+test('opening an unread message queues a seen op after a short dwell', async ({ page }) => {
+	const seen = page.waitForRequest(
+		(r) => r.method() === 'POST' && r.url().endsWith('/api/v1/outbox') && r.postDataJSON()?.action === 'seen'
+	);
+	await page.goto('/m/m1');
+	const req = await seen;
+	expect(req.postDataJSON()).toMatchObject({ messageId: 'm1', action: 'seen' });
+});

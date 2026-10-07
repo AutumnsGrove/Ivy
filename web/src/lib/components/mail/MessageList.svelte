@@ -19,6 +19,7 @@
 
 <ul class="list">
 	{#each items as m (m.id)}
+		{@const live = outbox.flags(m.id)}
 		<li>
 			<MessageCard
 				from={m.from}
@@ -26,8 +27,8 @@
 				time={formatMessageTime(m.date)}
 				subject={m.subject}
 				preview={m.preview}
-				unread={m.unread}
-				flagged={outbox.flags(m.id)?.flagged ?? m.flagged ?? false}
+				unread={live?.seen === undefined ? m.unread : !live.seen}
+				flagged={live?.flagged ?? m.flagged ?? false}
 				needs={m.needs}
 				tag={m.tag}
 				selected={m.id === selectedId}

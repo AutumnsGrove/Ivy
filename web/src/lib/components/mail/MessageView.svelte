@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { formatMessageTime } from '#lib/time.js';
 	import { Flag } from '#lib/icons.js';
-	import { flagMessage } from '#lib/messageActions.js';
+	import { flagMessage, markReadOnOpen } from '#lib/messageActions.js';
 	import { outbox } from '#lib/outbox.svelte.js';
 	import type { MailMessage } from '#lib/types.js';
 	import Avatar from '../ui/Avatar.svelte';
@@ -16,7 +16,7 @@
 		message: Pick<
 			MailMessage,
 			'id' | 'subject' | 'from' | 'initials' | 'date' | 'toShort' | 'needs' | 'flagged' | 'tag' | 'summary' | 'html' | 'paragraphs' | 'attachments'
-		>;
+		> & { unread?: boolean };
 		/** The account colour for the sender avatar and dot. */
 		color: string;
 		/** Desktop reading pane: larger type and a bounded column. */
@@ -26,6 +26,8 @@
 	const bodySrc = $derived(`/api/v1/messages/${encodeURIComponent(message.id)}/body`);
 	// A live flag op is the optimistic truth; the loaded message is the fallback.
 	const flagged = $derived(outbox.flags(message.id)?.flagged ?? message.flagged ?? false);
+	// The cleanup is the cancel, so closing the reader inside the dwell marks nothing.
+	$effect(() => markReadOnOpen({ id: message.id, unread: message.unread ?? false }));
 </script>
 
 <article class="msg" class:wide>
