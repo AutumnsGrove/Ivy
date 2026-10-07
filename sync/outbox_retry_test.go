@@ -2,6 +2,7 @@ package sync_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -221,5 +222,111 @@ func TestOutboxMoveMirrorsTheArrivalImmediately(t *testing.T) {
 	}
 	if len(page.Items) != 1 {
 		t.Errorf("Archive lists %d messages after a sync pass, want 1", len(page.Items))
+	}
+}
+
+// Issue #10: on the real server a message archived a moment ago could not be
+// trashed from Archive (message_gone). Both orders matter: trashing straight
+// after the move (the mirror holds the row the worker wrote itself) and after
+// a sync pass has adopted it.
+func TestOutboxMoveArchivedMessageCanBeTrashed(t *testing.T) {
+	t.Parallel()
+	for _, syncBetween := range []bool{false, true} {
+		name := "straight after the move"
+		if syncBetween {
+			name = "after a sync pass"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			fx := newOutboxFixture(t)
+			for _, box := range []string{"Archive", "Trash"} {
+				if err := fx.acc.CreateMailbox(box); err != nil {
+					t.Fatalf("create %s: %v", box, err)
+				}
+			}
+			fx.acc.Deliver("INBOX", rawFor(1))
+			fx.fetch(t)
+			inbox := mustFolder(t, fx.dbs, "acct-1", "INBOX")
+			archive := mustFolder(t, fx.dbs, "acct-1", "Archive")
+			trash := mustFolder(t, fx.dbs, "acct-1", "Trash")
+
+			first := fx.enqueue(t, store.OutboxOp{
+				ID: "op-1", Kind: store.OutboxMove,
+				ContentKey: contentKeyFor(1), SourceFolderID: inbox.ID,
+				Expect: store.OutboxExpect{DestFolderID: archive.ID},
+			})
+			fx.run(t)
+			assertOutboxDone(t, fx.dbs, first.ID)
+			if syncBetween {
+				fx.fetch(t)
+			}
+
+			second := fx.enqueue(t, store.OutboxOp{
+				ID: "op-2", Kind: store.OutboxMove,
+				ContentKey: contentKeyFor(1), SourceFolderID: archive.ID,
+				Expect: store.OutboxExpect{DestFolderID: trash.ID},
+			})
+			fx.run(t)
+			assertOutboxDone(t, fx.dbs, second.ID)
+			msgs, err := fx.acc.Messages("Trash")
+			if err != nil || len(msgs) != 1 {
+				t.Fatalf("Trash holds %d messages (%v), want 1", len(msgs), err)
+			}
+		})
+	}
+}
+
+// Issue #10: "the message is no longer on the server" was the same text whether
+// the folder would not open, the search found nothing or the mirror held no
+// Message-ID, so a live failure could not be told apart. The detail now names
+// the step that came up empty.
+func TestOutboxMoveGoneNamesTheStepThatFoundNothing(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		break_ func(fx *outboxFixture, t *testing.T)
+		want   string
+	}{
+		{"search finds nothing", func(fx *outboxFixture, t *testing.T) {
+			if err := fx.acc.Expunge("INBOX", 1); err != nil {
+				t.Fatalf("expunge: %v", err)
+			}
+		}, "found 0 messages"},
+		{"folder will not open", func(fx *outboxFixture, t *testing.T) {
+			if err := fx.acc.RenameMailbox("INBOX", "Elsewhere"); err != nil {
+				t.Skipf("fake cannot rename INBOX: %v", err)
+			}
+		}, "could not open"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newOutboxFixture(t)
+			if err := fx.acc.CreateMailbox("Archive"); err != nil {
+				t.Fatalf("create Archive: %v", err)
+			}
+			fx.acc.Deliver("INBOX", rawFor(1))
+			fx.fetch(t)
+			inbox := mustFolder(t, fx.dbs, "acct-1", "INBOX")
+			archive := mustFolder(t, fx.dbs, "acct-1", "Archive")
+			op := fx.enqueue(t, store.OutboxOp{
+				ID: "op-1", Kind: store.OutboxMove,
+				ContentKey: contentKeyFor(1), SourceFolderID: inbox.ID,
+				Expect: store.OutboxExpect{DestFolderID: archive.ID},
+			})
+			tc.break_(fx, t)
+			fx.run(t)
+
+			got, err := fx.dbs.GetOutbox(fx.ctx, op.ID)
+			if err != nil {
+				t.Fatalf("get op: %v", err)
+			}
+			if got.State != store.OutboxFailed || got.LastErrorCode != "message_gone" {
+				t.Fatalf("op = %q/%q, want failed/message_gone", got.State, got.LastErrorCode)
+			}
+			if !strings.Contains(got.LastErrorDetail, tc.want) {
+				t.Errorf("detail = %q, want it to mention %q", got.LastErrorDetail, tc.want)
+			}
+		})
 	}
 }

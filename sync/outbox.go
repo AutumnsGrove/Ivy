@@ -286,7 +286,7 @@ func (w *OutboxWorker) dispatchMove(ctx context.Context, c *session, op store.Ou
 		return err
 	}
 
-	uidvalidity, uid, found, err := w.locate(c, op, src.Name, msgID)
+	uidvalidity, uid, found, miss, err := w.locate(c, op, src.Name, msgID)
 	if err != nil {
 		return w.serverError(ctx, op, err)
 	}
@@ -298,7 +298,7 @@ func (w *OutboxWorker) dispatchMove(ctx context.Context, c *session, op store.Ou
 		if inDest {
 			return w.finishMove(ctx, op, rowID)
 		}
-		return w.fail(ctx, op, "message_gone", "the message is no longer on the server")
+		return w.gone(ctx, op, src.Name, miss)
 	}
 	if err := w.fetcher.dbs.SetOutboxInFlight(ctx, op.ID, uidvalidity, uid, w.fetcher.now()); err != nil {
 		return err
@@ -351,12 +351,12 @@ func (w *OutboxWorker) dispatchFlags(ctx context.Context, c *session, op store.O
 	if !ok {
 		return w.fail(ctx, op, "message_gone", "the message is not in the mirror")
 	}
-	uidvalidity, uid, found, err := w.locate(c, op, src.Name, msgID)
+	uidvalidity, uid, found, miss, err := w.locate(c, op, src.Name, msgID)
 	if err != nil {
 		return w.serverError(ctx, op, err)
 	}
 	if !found {
-		return w.fail(ctx, op, "message_gone", "the message is no longer on the server")
+		return w.gone(ctx, op, src.Name, miss)
 	}
 	server, local := w.serverSide(op)
 	if local {
@@ -408,7 +408,7 @@ func (w *OutboxWorker) dispatchExpunge(ctx context.Context, c *session, op store
 	if err := w.requireCapability(ctx, c, imap.CapUIDPlus, op, "UIDPLUS"); err != nil {
 		return err
 	}
-	uidvalidity, uid, found, err := w.locate(c, op, folder.Name, msgID)
+	uidvalidity, uid, found, _, err := w.locate(c, op, folder.Name, msgID)
 	if err != nil {
 		return w.serverError(ctx, op, err)
 	}
@@ -674,29 +674,56 @@ func (w *OutboxWorker) appendMessage(c *session, folder string, body []byte, fla
 // Message-ID (the UID is never resolved at enqueue); for an in-flight recovery
 // it first trusts the stored (UIDVALIDITY, UID), because that is the message the
 // command actually named.
-func (w *OutboxWorker) locate(c *session, op store.OutboxOp, folder, msgID string) (uidvalidity, uid uint32, found bool, err error) {
+//
+// A miss comes with miss, the step that came up empty, because "not found" alone
+// cannot tell a folder that would not open from a search with no hits.
+func (w *OutboxWorker) locate(c *session, op store.OutboxOp, folder, msgID string) (uidvalidity, uid uint32, found bool, miss string, err error) {
 	uidvalidity, err = w.selectFolder(c, folder)
 	if err != nil {
 		if permanentIMAPError(err) {
-			return 0, 0, false, nil
+			return 0, 0, false, fmt.Sprintf("the server could not open the folder (%s)", imapReason(err)), nil
 		}
-		return 0, 0, false, err
+		return 0, 0, false, "", err
 	}
 	if op.State == store.OutboxInFlight && op.SourceUID != 0 && op.SourceUIDValidity == uidvalidity {
 		present, err := w.uidPresent(c, op.SourceUID)
 		if err != nil {
-			return 0, 0, false, err
+			return 0, 0, false, "", err
 		}
 		if present {
-			return uidvalidity, op.SourceUID, true, nil
+			return uidvalidity, op.SourceUID, true, "", nil
 		}
-		return uidvalidity, 0, false, nil
+		return uidvalidity, 0, false, "the named UID is no longer in the folder", nil
+	}
+	if msgID == "" {
+		return uidvalidity, 0, false, "the mirror holds no Message-ID for it to search by", nil
 	}
 	uid, found, err = w.searchMessageID(c, msgID)
 	if err != nil {
-		return 0, 0, false, err
+		return 0, 0, false, "", err
 	}
-	return uidvalidity, uid, found, nil
+	if !found {
+		return uidvalidity, 0, false, "a Message-ID search of the folder found 0 messages", nil
+	}
+	return uidvalidity, uid, true, "", nil
+}
+
+// imapReason is the server's own words for a failure, short enough for an op's
+// error detail. It carries the response text, never anything from a message.
+func imapReason(err error) string {
+	var imapErr *imap.Error
+	if errors.As(err, &imapErr) {
+		return fmt.Sprintf("%s %s", imapErr.Type, imapErr.Text)
+	}
+	return err.Error()
+}
+
+// gone fails an op whose message could not be found, saying which step found
+// nothing and logging it without any mail content.
+func (w *OutboxWorker) gone(ctx context.Context, op store.OutboxOp, folder, miss string) error {
+	slog.WarnContext(ctx, "outbox: the message was not found on the server",
+		"account", w.acct.ID, "op", op.ID, "kind", op.Kind, "folder", folder, "step", miss)
+	return w.fail(ctx, op, "message_gone", "the message is no longer on the server: "+miss)
 }
 
 // ---------------------------------------------------------------- recovery
