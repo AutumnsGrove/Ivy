@@ -69,11 +69,30 @@ export const READ_DWELL_MS = 1500;
  * when the reader closes first.
  */
 export function markReadOnOpen(message: { id: string; unread: boolean }): () => void {
-	if (!message.unread) return () => {};
+	// Closing the reader always releases a hold, even for a message that needed no timer.
+	const release = () => keptUnread.delete(message.id);
+	if (!message.unread) return release;
 	const timer = setTimeout(() => {
+		if (keptUnread.has(message.id)) return;
 		outbox.enqueue({ messageId: message.id, action: 'seen' }).catch(() => {});
 	}, READ_DWELL_MS);
-	return () => clearTimeout(timer);
+	return () => {
+		clearTimeout(timer);
+		release();
+	};
+}
+
+// Messages the operator marked unread while they are open, so the dwell does not
+// read them straight back. A hold lasts for that open only: closing the reader
+// releases it, and opening the message again later reads it as usual.
+const keptUnread = new Set<string>();
+
+/** Mark the open message unread (and keep it so until the reader closes). */
+export async function markUnread(messageId: string): Promise<boolean> {
+	keptUnread.add(messageId);
+	const op = await send(messageId, 'unseen', 'Marked unread', "Couldn't mark it unread");
+	if (!op) keptUnread.delete(messageId);
+	return op !== null;
 }
 
 /** Archive is a move to the Archive role; confirmed, since it changes the folder. */

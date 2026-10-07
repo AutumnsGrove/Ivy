@@ -38,6 +38,22 @@ test.describe('outbox actions', () => {
 	});
 });
 
+// A message opened by mistake, or one to come back to, can be marked unread; the
+// dwell must not read it straight back.
+test('Mark unread keeps an open message unread', async ({ page }) => {
+	const actions: string[] = [];
+	page.on('request', (r) => {
+		if (r.method() === 'POST' && r.url().endsWith('/api/v1/outbox')) actions.push(r.postDataJSON()?.action);
+	});
+	await page.goto('/m/m1');
+	await page.getByRole('button', { name: 'More' }).click();
+	await page.getByRole('button', { name: 'Mark unread' }).click();
+	await expect(toast(page, 'Marked unread')).toBeVisible();
+
+	await page.waitForTimeout(2500); // longer than the dwell
+	expect(actions).toEqual(['unseen']);
+});
+
 // Issue #9: flagging is occasional, so it lives in More with the other occasional
 // actions and the header stays about who the mail is from and when.
 test('flagging is in More, needs no confirmation and shows at once', async ({ page }) => {
