@@ -971,6 +971,14 @@ func (w *OutboxWorker) fail(ctx context.Context, op store.OutboxOp, code, detail
 	if err := w.fetcher.dbs.SetOutboxFailed(ctx, op.ID, code, detail, w.fetcher.now()); err != nil {
 		return err
 	}
+	// A save that failed for good never reached the server; say so rather than let
+	// the version read as saved. A remove op names no version.
+	if op.Kind == store.OutboxDraft && !op.Expect.Remove && op.Expect.DraftVersionID != "" {
+		err := w.fetcher.dbs.MarkDraftFailed(ctx, op.Expect.DraftVersionID, w.fetcher.now())
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			return err
+		}
+	}
 	w.notify(ctx, op.ID)
 	return nil
 }

@@ -405,3 +405,73 @@ func TestPruneDraftsRemovesOnlyOldTerminalRows(t *testing.T) {
 		t.Fatalf("rows = %+v, want only the live v2", rows)
 	}
 }
+
+// A version whose op failed for good is `failed`: still the head (it holds the
+// only copy of what the operator typed, so it is listed and never pruned by age),
+// able to be discarded or sent, and dropped once a newer save supersedes it.
+func TestFailedDraftVersionStaysTheHeadUntilSuperseded(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	if _, err := dbs.SaveDraft(ctx, newDraftSave("v1", "d1", "<m1@example.test>", 0)); err != nil {
+		t.Fatalf("save v1: %v", err)
+	}
+	if err := dbs.MarkDraftFailed(ctx, "v1", draftNow); err != nil {
+		t.Fatalf("mark failed: %v", err)
+	}
+	if err := dbs.MarkDraftFailed(ctx, "v1", draftNow); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a second MarkDraftFailed = %v, want ErrNotFound (only a saving version can fail)", err)
+	}
+	if err := dbs.MarkDraftSaved(ctx, "v1", draftNow); !errors.Is(err, ErrNotFound) {
+		t.Errorf("MarkDraftSaved on a failed version = %v, want ErrNotFound", err)
+	}
+
+	heads, err := dbs.LiveDraftHeads(ctx, "acct-1", 10)
+	if err != nil {
+		t.Fatalf("heads: %v", err)
+	}
+	if len(heads) != 1 || heads[0].State != DraftFailed {
+		t.Fatalf("heads = %+v, want the failed version listed", heads)
+	}
+	// A failed head is the operator's only copy: a retention pass leaves it.
+	if n, err := dbs.PruneDrafts(ctx, draftNow.Add(30*24*time.Hour)); err != nil || n != 0 {
+		t.Fatalf("PruneDrafts = %d, %v, want the failed head kept", n, err)
+	}
+
+	// A newer save supersedes it and the failed row is pruned with its bytes.
+	if _, err := dbs.SaveDraft(ctx, newDraftSave("v2", "d1", "<m2@example.test>", 1)); err != nil {
+		t.Fatalf("save v2: %v", err)
+	}
+	if _, err := dbs.DraftVersion(ctx, "v1"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("v1 after v2 = %v, want it pruned", err)
+	}
+}
+
+// A failed head can still be discarded (the list offers it) and a send that came
+// from it still settles it.
+func TestFailedDraftCanBeDiscardedAndSent(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	if _, err := dbs.SaveDraft(ctx, newDraftSave("v1", "d1", "<m1@example.test>", 0)); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if err := dbs.MarkDraftFailed(ctx, "v1", draftNow); err != nil {
+		t.Fatalf("mark failed: %v", err)
+	}
+	if err := dbs.MarkDraftSent(ctx, "acct-1", "<m1@example.test>", draftNow); err != nil {
+		t.Fatalf("mark sent: %v", err)
+	}
+
+	if _, err := dbs.SaveDraft(ctx, newDraftSave("v2", "d2", "<m2@example.test>", 0)); err != nil {
+		t.Fatalf("save d2: %v", err)
+	}
+	if err := dbs.MarkDraftFailed(ctx, "v2", draftNow); err != nil {
+		t.Fatalf("mark d2 failed: %v", err)
+	}
+	if _, err := dbs.DiscardDraft(ctx, "acct-1", "d2", "op-discard", draftNow); err != nil {
+		t.Fatalf("discard a failed draft: %v", err)
+	}
+}

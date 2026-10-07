@@ -52,6 +52,13 @@ test.describe('drafts', () => {
 		await expect(page.getByRole('heading', { name: 'Nothing in Drafts' })).toBeVisible();
 	});
 
+	test('a draft whose save never reached the server says so', async ({ page }) => {
+		seedDraft({ saveFailed: true });
+		await page.goto('/drafts');
+		await expect(page.getByText('A half-written note')).toBeVisible();
+		await expect(page.getByText(/Not on your mail server yet/)).toBeVisible();
+	});
+
 	test('an empty list invites a first message', async ({ page }) => {
 		await page.goto('/drafts');
 		await expect(page.getByRole('heading', { name: 'Nothing in Drafts' })).toBeVisible();

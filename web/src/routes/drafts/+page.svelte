@@ -57,6 +57,9 @@
 								<span class="subj">{title(d)}</span>
 								<span class="meta">{recipients(d)} · {formatMessageTime(d.updatedAt)}</span>
 								{#if d.source === 'server'}<span class="src">Written in another app</span>{/if}
+								{#if d.saveFailed}
+									<span class="fail">Not on your mail server yet. Change anything and it tries again.</span>
+								{/if}
 							</a>
 							<button type="button" class="trash" aria-label="Discard {title(d)}" onclick={() => void discard(d)}>
 								<Trash2 />
@@ -109,6 +112,11 @@
 		margin-top: 2px;
 		font-size: var(--fs-label);
 		color: var(--accent);
+	}
+	.fail {
+		margin-top: 2px;
+		font-size: var(--fs-label);
+		color: var(--warn);
 	}
 	.trash {
 		display: grid;

@@ -283,7 +283,8 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | `GET /drafts?limit` | default 50, max 200, applied to the merged local and server list | clamped, never an error |
 | An identity display name (`maxIdentityNameRunes`) | 120 runes, no CR, LF or NUL | rejected with 400 `bad_request` |
 | Live version rows for one draft | the head plus any `saving`; a superseded terminal row is pruned on the next save | the pruned row's bytes are no longer needed: its op is terminal |
-| Terminal draft rows kept (`store.DraftTerminalRetention`) | 7 days | pruned; the drafts table's only deletion, and only of terminal rows |
+| Terminal draft rows kept (`store.DraftTerminalRetention`) | 7 days | pruned (sent and discarded); the drafts table's only age-based deletion |
+| A draft version whose op failed for good (`failed`) | kept while it is the head, listed with `saveFailed`; dropped when a newer save supersedes it | it holds the operator's only copy, so age never prunes it; sending or discarding settles it |
 | Drafts listed (`store.MaxDraftListLimit`) | 200, default 50 | a larger `limit` is clamped; a local head and its mirrored copy count once |
 | Raw read to resume a server-only draft (`maxDraftResumeBytes`) | 2 MiB | refused with 409 `draft_too_large` |
 | Removing a superseded draft copy (a `draft` op) | UIDPLUS | the op fails `unsupported`; it never falls back to a bare `EXPUNGE` |

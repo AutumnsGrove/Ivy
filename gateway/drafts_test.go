@@ -372,3 +372,32 @@ func TestDeleteDraftRefusesAMessageOutsideDrafts(t *testing.T) {
 		t.Fatalf("ops = %+v, want none", ops)
 	}
 }
+
+// A draft whose save never reached the server says so in the list, so it does not
+// pass for one that did.
+func TestListDraftsFlagsASaveThatFailed(t *testing.T) {
+	t.Parallel()
+	srv, dbs, _ := draftServer(t)
+
+	var sum api.DraftSummary
+	if code := postJSON(t, srv.URL+"/api/v1/drafts", draftRequest("stuck"), &sum); code != http.StatusOK {
+		t.Fatalf("save status = %d, want 200", code)
+	}
+	var list api.DraftList
+	getJSON(t, srv.URL+"/api/v1/drafts?account_id=acct-1", &list)
+	if len(list.Drafts) != 1 || list.Drafts[0].SaveFailed != nil {
+		t.Fatalf("before the failure = %+v, want one draft with no failure flag", list.Drafts)
+	}
+
+	heads := draftHead(t, dbs)
+	if err := dbs.MarkDraftFailed(context.Background(), heads[0].ID, testNow); err != nil {
+		t.Fatalf("mark failed: %v", err)
+	}
+	list = api.DraftList{}
+	if code := getJSON(t, srv.URL+"/api/v1/drafts?account_id=acct-1", &list); code != http.StatusOK {
+		t.Fatalf("list status = %d, want 200", code)
+	}
+	if len(list.Drafts) != 1 || list.Drafts[0].SaveFailed == nil || !*list.Drafts[0].SaveFailed {
+		t.Fatalf("after the failure = %+v, want saveFailed true", list.Drafts)
+	}
+}

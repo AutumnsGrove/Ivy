@@ -817,6 +817,9 @@ type DraftSummary struct {
 	Id        string  `json:"id"`
 	MessageId *string `json:"messageId,omitempty"`
 
+	// SaveFailed Present and true when the last save never reached the server (the filing failed for good). The content is kept here; saving again retries it.
+	SaveFailed *bool `json:"saveFailed,omitempty"`
+
 	// Source Whether a draft is Ivy's own local version or a mirrored server copy.
 	Source    DraftSource `json:"source"`
 	Subject   string      `json:"subject"`

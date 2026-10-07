@@ -1490,6 +1490,8 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             source: components["schemas"]["DraftSource"];
+            /** @description Present and true when the last save never reached the server (the filing failed for good). The content is kept here; saving again retries it. */
+            saveFailed?: boolean;
             attachments?: components["schemas"]["AttachmentInfo"][];
         };
         /** @description The compose fields needed to resume a draft */

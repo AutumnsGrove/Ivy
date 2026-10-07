@@ -1698,3 +1698,15 @@ real browser or the potato.
   `TestSweepOrphanUploadsCollectsUnreferencedFiles` (method missing; failed to build), the stand-down test, and
   `TestOutboxRunSweepsOrphanUploads` (the orphan survived the worker's prune pass; failed before the wiring).
   Only the uploads store is swept; the disabled-message `Blobs` store stays append-only.
+- **N49 resolved** (operator chose "add a failed state") · `store/drafts.go`, `sync/outbox.go`, `api/openapi.yaml` (+ both
+  generated outputs), `gateway/drafts.go`, `web/src/routes/drafts/+page.svelte` · a draft version whose op fails for good
+  is now `failed`: the worker's `fail` marks it, `DraftSummary.saveFailed` carries it, and the Drafts list says "Not
+  on your mail server yet. Change anything and it tries again." (opening alone does not re-save; the autosaver
+  only runs after an edit). No migration: `drafts.state` has no CHECK. Reproduced with
+  `TestFailedDraftVersionStaysTheHeadUntilSuperseded` and `TestFailedDraftCanBeDiscardedAndSent` (the state did not
+  exist; failed to build), `TestOutboxDraftFailureMarksTheVersionFailed` (the version stayed `saving`; failed
+  before), `TestListDraftsFlagsASaveThatFailed` (no flag; failed before) and the Playwright case "a draft whose
+  save never reached the server says so" (failed before; passes on the phone and desktop projects).
+  **Deviation from the operator's wording:** the answer said failed rows are pruned with the other terminal rows
+  after 7 days. A failed *head* is the only copy of what was typed, so age never prunes it; only a superseded
+  failed row goes (the existing `SaveDraft` prune), and a send or discard settles it. Say if you want age pruning.

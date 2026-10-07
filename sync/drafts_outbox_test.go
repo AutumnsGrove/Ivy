@@ -203,3 +203,37 @@ func TestOutboxDraftRejectsANonDraftsFolder(t *testing.T) {
 		t.Errorf("INBOX has %d messages, want the delivered one untouched", len(msgs))
 	}
 }
+
+// A draft op that fails for good must not leave its version looking saved: the
+// version is marked failed, so the list can say it is not on the server.
+func TestOutboxDraftFailureMarksTheVersionFailed(t *testing.T) {
+	t.Parallel()
+	fx := newOutboxFixture(t)
+	fx.acc.Deliver("INBOX", rawFor(1))
+	fx.fetch(t)
+	inbox := mustFolder(t, fx.dbs, "acct-1", "INBOX")
+	// SaveDraft does not check roles; the worker's guard is what refuses this op.
+	if _, err := fx.dbs.SaveDraft(fx.ctx, store.SaveDraftInput{
+		ID: "v1", DraftID: "d1", AccountID: "acct-1", DestFolderID: inbox.ID,
+		MessageID: "<draft@example.test>", Subject: "draft", To: []string{"you@example.test"},
+		Compose: []byte(`{}`), Body: []byte("raw"), OpID: "op-v1", Now: time.Now(),
+	}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	fx.run(t)
+
+	op, err := fx.dbs.GetOutbox(fx.ctx, "op-v1")
+	if err != nil {
+		t.Fatalf("get op: %v", err)
+	}
+	if op.State != store.OutboxFailed {
+		t.Fatalf("op = %+v, want failed", op)
+	}
+	got, err := fx.dbs.DraftVersion(fx.ctx, "v1")
+	if err != nil {
+		t.Fatalf("draft version: %v", err)
+	}
+	if got.State != store.DraftFailed {
+		t.Errorf("version state = %q, want failed", got.State)
+	}
+}

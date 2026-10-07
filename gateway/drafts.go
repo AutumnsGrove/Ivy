@@ -322,6 +322,10 @@ func draftSummaryLocal(d store.Draft) api.DraftSummary {
 		mid := d.MessageID
 		sum.MessageId = &mid
 	}
+	if d.State == store.DraftFailed {
+		failed := true
+		sum.SaveFailed = &failed
+	}
 	return sum
 }
 

@@ -2703,6 +2703,11 @@ components:
           format: date-time
         source:
           $ref: "#/components/schemas/DraftSource"
+        saveFailed:
+          type: boolean
+          description: >-
+            Present and true when the last save never reached the server (the filing
+            failed for good). The content is kept here; saving again retries it.
         attachments:
           type: array
           items:

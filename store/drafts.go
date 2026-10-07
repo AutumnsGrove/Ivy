@@ -10,10 +10,13 @@ import (
 )
 
 // Draft version states. `saving` is the live one: the outbox op that files the
-// version is not terminal yet. The rest are terminal.
+// version is not terminal yet. `failed` means that op failed for good, so the
+// version never reached the server; as the head it is still the operator's only
+// copy, so it is listed and kept until a newer save, a send or a discard.
 const (
 	DraftSaving    = "saving"
 	DraftSaved     = "saved"
+	DraftFailed    = "failed"
 	DraftSent      = "sent"
 	DraftDiscarded = "discarded"
 )
@@ -364,13 +367,25 @@ func (d *DBs) MarkDraftSaved(ctx context.Context, versionID string, now time.Tim
 	return rowsAffectedOrNotFound(res, "mark draft saved")
 }
 
+// MarkDraftFailed records that the outbox op for a version failed permanently, so
+// the list can say it is not on the server. Only a saving version can fail.
+func (d *DBs) MarkDraftFailed(ctx context.Context, versionID string, now time.Time) error {
+	res, err := d.State.Write.ExecContext(ctx,
+		`UPDATE drafts SET state = ?, updated_at = ? WHERE id = ? AND state = ?`,
+		DraftFailed, formatTime(now), versionID, DraftSaving)
+	if err != nil {
+		return fmt.Errorf("mark draft failed %s: %w", versionID, err)
+	}
+	return rowsAffectedOrNotFound(res, "mark draft failed")
+}
+
 // MarkDraftSent records that the version left Drafts because the message was
 // sent. It matches on the version's Message-ID so a newer edit is never touched.
 func (d *DBs) MarkDraftSent(ctx context.Context, accountID, messageID string, now time.Time) error {
 	res, err := d.State.Write.ExecContext(ctx, `
 		UPDATE drafts SET state = ?, updated_at = ? WHERE account_id = ? AND message_id = ?
-			AND state IN (?, ?)`,
-		DraftSent, formatTime(now), accountID, messageID, DraftSaving, DraftSaved)
+			AND state IN (?, ?, ?)`,
+		DraftSent, formatTime(now), accountID, messageID, DraftSaving, DraftSaved, DraftFailed)
 	if err != nil {
 		return fmt.Errorf("mark draft sent %s: %w", messageID, err)
 	}
@@ -388,8 +403,8 @@ func (d *DBs) DiscardDraft(ctx context.Context, accountID, draftID, opID string,
 	defer func() { _ = tx.Rollback() }()
 
 	head, err := scanDraft(tx.QueryRowContext(ctx, draftSelect+`
-		WHERE account_id = ? AND draft_id = ? AND state IN (?, ?)
-		ORDER BY version DESC LIMIT 1`, accountID, draftID, DraftSaving, DraftSaved))
+		WHERE account_id = ? AND draft_id = ? AND state IN (?, ?, ?)
+		ORDER BY version DESC LIMIT 1`, accountID, draftID, DraftSaving, DraftSaved, DraftFailed))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Draft{}, ErrNotFound
 	}
@@ -429,11 +444,11 @@ func (d *DBs) LiveDraftHeads(ctx context.Context, accountID string, limit int) (
 	}
 	limit = min(limit, MaxDraftListLimit)
 	rows, err := d.State.Read.QueryContext(ctx, draftSelect+`
-		WHERE account_id = ? AND state IN (?, ?)
+		WHERE account_id = ? AND state IN (?, ?, ?)
 			AND version = (SELECT MAX(d2.version) FROM drafts d2
 				WHERE d2.account_id = drafts.account_id AND d2.draft_id = drafts.draft_id)
 		ORDER BY updated_at DESC, id DESC LIMIT ?`,
-		accountID, DraftSaving, DraftSaved, limit)
+		accountID, DraftSaving, DraftSaved, DraftFailed, limit)
 	if err != nil {
 		return nil, fmt.Errorf("draft heads for %s: %w", accountID, err)
 	}
