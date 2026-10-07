@@ -165,6 +165,51 @@ func TestPathRejectsMalformedHash(t *testing.T) {
 	}
 }
 
+// Open reads a stored blob back by its hash, and a malformed or unknown hash is
+// an error rather than a panic.
+func TestOpenReturnsStoredBytes(t *testing.T) {
+	t.Parallel()
+	s := mustOpen(t, t.TempDir())
+	hash, _, err := s.Put(context.Background(), strings.NewReader("payload"))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	f, err := s.Open(hash)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer f.Close()
+	got, err := io.ReadAll(f)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(got) != "payload" {
+		t.Errorf("bytes = %q, want the stored payload", got)
+	}
+	if _, err := s.Open(strings.Repeat("z", 64)); err == nil {
+		t.Errorf("Open accepted a malformed hash")
+	}
+}
+
+// Remove deletes a blob and is idempotent, so a retried cleanup is safe.
+func TestRemoveDeletesAndIsIdempotent(t *testing.T) {
+	t.Parallel()
+	s := mustOpen(t, t.TempDir())
+	hash, _, err := s.Put(context.Background(), strings.NewReader("payload"))
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if err := s.Remove(hash); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if s.Has(hash) {
+		t.Errorf("blob still present after Remove")
+	}
+	if err := s.Remove(hash); err != nil {
+		t.Errorf("second Remove: %v, want a no-op", err)
+	}
+}
+
 func mustOpen(t *testing.T, dir string) *Store {
 	t.Helper()
 	s, err := Open(dir)

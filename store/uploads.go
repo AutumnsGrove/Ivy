@@ -1,0 +1,222 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"io"
+	"time"
+)
+
+// MaxUploadAge is how long a staged outgoing attachment survives with no
+// terminal owner. The bytes are only staging: a built draft or send body embeds
+// them, and resume re-materialises new staging from that body, so an aged-out
+// file is invisible to the operator (docs/handoffs/2026-10-06-4g-attachments-G4.md).
+const MaxUploadAge = 7 * 24 * time.Hour
+
+// ErrUploadTooLarge reports a staged file over the caller's per-upload cap.
+// Nothing is kept: the partially copied blob is removed.
+var ErrUploadTooLarge = errors.New("upload too large")
+
+// Upload is one staged outgoing attachment. The bytes are content-addressed on
+// disk under data/uploads/<hash>; this row carries what the builder needs. It is
+// locally owned state (CLAUDE.md rule 5), scoped to one account.
+type Upload struct {
+	ID        string
+	AccountID string
+	Hash      string
+	Name      string
+	MIMEType  string
+	Size      int64
+	CreatedAt time.Time
+}
+
+const uploadSelect = `SELECT id, account_id, hash, name, mime, size, created_at FROM uploads`
+
+func scanUpload(s scanner) (Upload, error) {
+	var (
+		u       Upload
+		created string
+	)
+	if err := s.Scan(&u.ID, &u.AccountID, &u.Hash, &u.Name, &u.MIMEType, &u.Size, &created); err != nil {
+		return Upload{}, err
+	}
+	t, err := parseTime(created)
+	if err != nil {
+		return Upload{}, fmt.Errorf("upload %s created_at: %w", u.ID, err)
+	}
+	u.CreatedAt = t
+	return u, nil
+}
+
+// StageUpload streams r into the upload store and records the row. At most max
+// bytes are read; anything more is ErrUploadTooLarge with nothing kept. It is
+// idempotent on (account, id): a retried upload returns the stored row and never
+// rewrites the bytes.
+func (d *DBs) StageUpload(ctx context.Context, up Upload, r io.Reader, max int64) (Upload, error) {
+	switch {
+	case up.ID == "", up.AccountID == "", up.Name == "":
+		return Upload{}, errors.New("stage upload: id, account and name are required")
+	case up.CreatedAt.IsZero():
+		return Upload{}, errors.New("stage upload: created_at is required")
+	case max <= 0:
+		return Upload{}, errors.New("stage upload: max must be positive")
+	}
+	existing, err := d.GetUpload(ctx, up.AccountID, up.ID)
+	if err == nil {
+		return existing, nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return Upload{}, err
+	}
+
+	hash, size, err := d.Uploads.Put(ctx, io.LimitReader(r, max+1))
+	if err != nil {
+		return Upload{}, err
+	}
+	if size > max {
+		if err := d.removeUploadHash(ctx, hash); err != nil {
+			return Upload{}, err
+		}
+		return Upload{}, ErrUploadTooLarge
+	}
+	up.Hash, up.Size = hash, size
+	if _, err := d.State.Write.ExecContext(ctx, `
+		INSERT INTO uploads (id, account_id, hash, name, mime, size, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		up.ID, up.AccountID, up.Hash, up.Name, up.MIMEType, up.Size, formatTime(up.CreatedAt)); err != nil {
+		return Upload{}, fmt.Errorf("stage upload %s: %w", up.ID, err)
+	}
+	return up, nil
+}
+
+// GetUpload returns one account's staged upload, or ErrNotFound.
+func (d *DBs) GetUpload(ctx context.Context, accountID, id string) (Upload, error) {
+	row := d.State.Read.QueryRowContext(ctx, uploadSelect+` WHERE account_id = ? AND id = ?`, accountID, id)
+	u, err := scanUpload(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Upload{}, ErrNotFound
+	}
+	if err != nil {
+		return Upload{}, fmt.Errorf("get upload %s: %w", id, err)
+	}
+	return u, nil
+}
+
+// OpenUpload returns the staged bytes for a row. The caller closes it.
+func (d *DBs) OpenUpload(u Upload) (io.ReadCloser, error) {
+	return d.Uploads.Open(u.Hash)
+}
+
+// DeleteUpload removes one account's staged upload and its file once no row
+// shares the hash. A missing row is ErrNotFound.
+func (d *DBs) DeleteUpload(ctx context.Context, accountID, id string) error {
+	hash, remaining, err := d.deleteUploadRow(ctx, accountID, id)
+	if err != nil {
+		return err
+	}
+	if remaining == 0 {
+		return d.Uploads.Remove(hash)
+	}
+	return nil
+}
+
+// deleteUploadRow deletes the row and reports its hash and how many rows still
+// share that hash, in one transaction so the file decision cannot race.
+func (d *DBs) deleteUploadRow(ctx context.Context, accountID, id string) (string, int, error) {
+	tx, err := d.State.Write.BeginTx(ctx, nil)
+	if err != nil {
+		return "", 0, fmt.Errorf("delete upload %s: %w", id, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var hash string
+	err = tx.QueryRowContext(ctx, `SELECT hash FROM uploads WHERE account_id = ? AND id = ?`, accountID, id).Scan(&hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", 0, ErrNotFound
+	}
+	if err != nil {
+		return "", 0, fmt.Errorf("delete upload %s: %w", id, err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM uploads WHERE account_id = ? AND id = ?`, accountID, id); err != nil {
+		return "", 0, fmt.Errorf("delete upload %s: %w", id, err)
+	}
+	var remaining int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM uploads WHERE hash = ?`, hash).Scan(&remaining); err != nil {
+		return "", 0, fmt.Errorf("delete upload %s: %w", id, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return "", 0, fmt.Errorf("delete upload %s: %w", id, err)
+	}
+	return hash, remaining, nil
+}
+
+// SweepUploads deletes uploads staged before the cutoff and removes each file
+// once no row shares its hash. It returns how many rows went.
+func (d *DBs) SweepUploads(ctx context.Context, before time.Time) (int, error) {
+	cutoff := formatTime(before)
+	tx, err := d.State.Write.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("sweep uploads: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	rows, err := tx.QueryContext(ctx, `SELECT DISTINCT hash FROM uploads WHERE created_at < ?`, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("sweep uploads: %w", err)
+	}
+	var candidates []string
+	for rows.Next() {
+		var hash string
+		if err := rows.Scan(&hash); err != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("sweep uploads: %w", err)
+		}
+		candidates = append(candidates, hash)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return 0, fmt.Errorf("sweep uploads: %w", err)
+	}
+	_ = rows.Close()
+
+	res, err := tx.ExecContext(ctx, `DELETE FROM uploads WHERE created_at < ?`, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("sweep uploads: %w", err)
+	}
+	deleted, _ := res.RowsAffected()
+
+	var orphaned []string
+	for _, hash := range candidates {
+		var remaining int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM uploads WHERE hash = ?`, hash).Scan(&remaining); err != nil {
+			return 0, fmt.Errorf("sweep uploads: %w", err)
+		}
+		if remaining == 0 {
+			orphaned = append(orphaned, hash)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("sweep uploads: %w", err)
+	}
+	for _, hash := range orphaned {
+		if err := d.Uploads.Remove(hash); err != nil {
+			return int(deleted), err
+		}
+	}
+	return int(deleted), nil
+}
+
+// removeUploadHash drops a blob only when no row references it, so a shared file
+// is never removed out from under a live row.
+func (d *DBs) removeUploadHash(ctx context.Context, hash string) error {
+	var refs int
+	if err := d.State.Read.QueryRowContext(ctx, `SELECT count(*) FROM uploads WHERE hash = ?`, hash).Scan(&refs); err != nil {
+		return fmt.Errorf("remove upload blob: %w", err)
+	}
+	if refs > 0 {
+		return nil
+	}
+	return d.Uploads.Remove(hash)
+}

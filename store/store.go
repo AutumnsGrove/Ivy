@@ -62,6 +62,10 @@ type DBs struct {
 	// outside both databases so a mirror rebuild cannot lose them
 	// (ARCHITECTURE.md 9).
 	Blobs *blobstore.Store
+	// Uploads is the content-addressed staging store for outgoing attachments
+	// (4g). It is transient: built draft and send bodies embed the bytes, so a
+	// swept staging file is re-materialised from the stored MIME on resume.
+	Uploads *blobstore.Store
 	// Dir is the data directory holding both files, so other packages can place
 	// their own files (the message spool) beside them.
 	Dir string
@@ -89,6 +93,12 @@ func Open(ctx context.Context, dir string) (*DBs, error) {
 		return nil, fmt.Errorf("blob store: %w", err)
 	}
 	dbs.Blobs = blobs
+	uploads, err := blobstore.Open(filepath.Join(dir, "uploads"))
+	if err != nil {
+		_ = dbs.Close()
+		return nil, fmt.Errorf("upload store: %w", err)
+	}
+	dbs.Uploads = uploads
 	if err := dbs.moveLegacyProfiles(ctx); err != nil {
 		_ = dbs.Close()
 		return nil, err

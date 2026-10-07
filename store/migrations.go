@@ -818,6 +818,30 @@ var stateMigrations = []migration{
 			`CREATE UNIQUE INDEX idx_identities_account_address ON identities(account_id, address COLLATE NOCASE)`,
 		},
 	},
+	{
+		version: 15,
+		statements: []string{
+			// One staged outgoing attachment (4g). The bytes are content-addressed
+			// under data/uploads/<hash>, outside state.db, so a 25 MiB photo never
+			// bloats the backed-up database; this row carries what the builder needs
+			// and is freed when the owning draft or send reaches a terminal state.
+			// It is deliberately not the disabled-mail blob store, which is
+			// backup-mirrored and reconciled (docs/handoffs/2026-10-06-4g-attachments-G4.md).
+			`CREATE TABLE uploads (
+				id         TEXT PRIMARY KEY,
+				account_id TEXT NOT NULL,
+				hash       TEXT NOT NULL,
+				name       TEXT NOT NULL,
+				mime       TEXT NOT NULL,
+				size       INTEGER NOT NULL,
+				created_at TEXT NOT NULL
+			)`,
+			// A file is removed only when no row shares its hash, so a shared file is
+			// found by account and hash; the sweep scans by age.
+			`CREATE INDEX idx_uploads_account_hash ON uploads(account_id, hash)`,
+			`CREATE INDEX idx_uploads_created ON uploads(created_at)`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state

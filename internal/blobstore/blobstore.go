@@ -86,6 +86,34 @@ func (s *Store) Has(hash string) bool {
 	return err == nil
 }
 
+// Open returns the stored bytes for a hash, or an error when the store has
+// none. The caller closes it.
+func (s *Store) Open(hash string) (*os.File, error) {
+	p, err := s.pathFor(hash)
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Open(p) //nolint:gosec // G304: the hash was validated by pathFor
+	if err != nil {
+		return nil, fmt.Errorf("blobstore: open %s: %w", hash, err)
+	}
+	return f, nil
+}
+
+// Remove deletes one stored blob. A hash already gone is not an error, so a
+// retried cleanup is safe; the caller owns the decision that no row needs the
+// bytes any more (the disabled-message store never calls this).
+func (s *Store) Remove(hash string) error {
+	p, err := s.pathFor(hash)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("blobstore: remove %s: %w", hash, err)
+	}
+	return nil
+}
+
 // Put streams r into the store and returns the SHA-256 of its bytes, so the
 // same message stored twice costs one file. Bytes already present are discarded
 // without rewriting the existing file.
