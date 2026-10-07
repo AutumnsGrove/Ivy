@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Plus, SlidersHorizontal, Users } from '#lib/icons.js';
+	import { Plus, SlidersHorizontal } from '#lib/icons.js';
 	import NewTagSheet from '#lib/components/tags/NewTagSheet.svelte';
 	import Page from '#lib/components/shell/Page.svelte';
 	import Group from '#lib/components/ui/Group.svelte';
@@ -46,10 +46,6 @@
 				{#snippet leading()}<span class="ico"><SlidersHorizontal /></span>{/snippet}
 				Rules
 				{#snippet trailing()}<span class="cnt">{data.tags.activeRules} active</span>{/snippet}
-			</ListRow>
-			<ListRow href="/people" chevron>
-				{#snippet leading()}<span class="ico"><Users /></span>{/snippet}
-				People
 			</ListRow>
 		</Group>
 	</div>

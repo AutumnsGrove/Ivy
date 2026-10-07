@@ -12,10 +12,12 @@
 	];
 
 	// Inbox owns "/" and the message routes under it; other tabs own their sub-routes.
+	// People is a way to search your mail (the Search switch), so Search owns it.
+	const owns = (href: string, path: string) => path === href || path.startsWith(href + '/');
 	const active = (href: string) =>
 		href === '/'
 			? current === '/' || current.startsWith('/m/') || current.startsWith('/compose')
-			: current === href || current.startsWith(href + '/');
+			: owns(href, current) || (href === '/search' && owns('/people', current));
 </script>
 
 <nav class="bar" aria-label="Main">

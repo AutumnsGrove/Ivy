@@ -21,6 +21,18 @@ test('Often in touch keeps each name inside its own avatar column', async ({ pag
 	}
 });
 
+// Issue #13: People is a way to search your mail, not a kind of tag.
+test('People is reached from the Search switch, not from Tags', async ({ page }) => {
+	await page.goto('/tags');
+	await expect(page.getByRole('link', { name: 'People' })).toHaveCount(0);
+
+	await page.goto('/search');
+	await page.getByRole('link', { name: 'People' }).click();
+	await expect(page).toHaveURL(/\/people$/);
+	await expect(page.getByRole('link', { name: 'Search', exact: true }).first()).toBeVisible();
+	await expect(page.getByPlaceholder('Find someone')).toBeVisible();
+});
+
 test('the full name is still reachable in the list below', async ({ page }) => {
 	await page.goto('/people?scenario=hostile-names');
 	await expect(page.locator('.row').getByText('AutumnsGrove/Lattice')).toBeVisible();

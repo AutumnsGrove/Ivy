@@ -11,7 +11,7 @@
 	import Dot from '#lib/components/ui/Dot.svelte';
 	import Glass from '#lib/components/ui/Glass.svelte';
 	import GroupLabel from '#lib/components/ui/GroupLabel.svelte';
-	import TopBar from '#lib/components/ui/TopBar.svelte';
+	import SearchSwitch from '#lib/components/mail/SearchSwitch.svelte';
 
 	let { data } = $props();
 	let q = $state('');
@@ -22,9 +22,10 @@
 	const often = $derived(pager.items.slice(0, 5));
 </script>
 
-<TopBar title="People" backHref="/tags" />
-
 <Page>
+	<h1 class="sr-only">People</h1>
+	<div class="switch"><SearchSwitch current="people" /></div>
+
 	<Glass variant="strong" radius="bar" class="find">
 		<Search />
 		<input bind:value={q} placeholder="Find someone" aria-label="Find someone" />
@@ -85,6 +86,10 @@
 		color: var(--text);
 		font: 400 var(--fs-ui-lg) var(--font-ui);
 		outline: none;
+	}
+	.switch {
+		padding-top: var(--sp-16);
+		margin-bottom: var(--sp-12);
 	}
 	.often {
 		display: flex;

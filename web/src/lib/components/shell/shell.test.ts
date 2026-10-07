@@ -20,6 +20,13 @@ describe('TabBar', () => {
 		expect(screen.getByRole('link', { name: 'Tags' })).toHaveAttribute('aria-current', 'page');
 	});
 
+	// Issue #13: People is reached from Search, so Search is the tab that stays lit.
+	it.each(['/people', '/people/p-ml'])('lights Search on %s', (path) => {
+		render(TabBar, { current: path });
+		expect(screen.getByRole('link', { name: 'Search' })).toHaveAttribute('aria-current', 'page');
+		expect(screen.getByRole('link', { name: 'Tags' })).not.toHaveAttribute('aria-current');
+	});
+
 	it('is a named navigation landmark', () => {
 		render(TabBar, { current: '/' });
 		expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
