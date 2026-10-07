@@ -173,3 +173,43 @@ func readEnvelope(t *testing.T, raw []byte) *enmime.Envelope {
 	}
 	return env
 }
+
+// TestBuildHTMLBodyKeepsDivParagraphsApart: Apple Notes and Safari paste div
+// blocks, and a policy that strips the tag with no separator ran them together.
+func TestBuildHTMLBodyKeepsDivParagraphsApart(t *testing.T) {
+	t.Parallel()
+	m := base()
+	m.Format = compose.BodyHTML
+	m.Text = `<div>one</div><div>two</div>`
+	raw, _, err := compose.Build(m)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	env := readEnvelope(t, raw)
+	if text := strings.ReplaceAll(env.Text, "\r\n", "\n"); !strings.Contains(text, "one\n") || !strings.Contains(text, "\ntwo") {
+		t.Errorf("text/plain part = %q, want one and two on separate lines", env.Text)
+	}
+	if strings.Contains(env.HTML, "onetwo") {
+		t.Errorf("text/html part = %q ran the blocks together", env.HTML)
+	}
+}
+
+// TestBuildHTMLBodyPlainTextKeepsLinkTargets: a text-only recipient must still
+// be able to see where a link goes.
+func TestBuildHTMLBodyPlainTextKeepsLinkTargets(t *testing.T) {
+	t.Parallel()
+	m := base()
+	m.Format = compose.BodyHTML
+	m.Text = `<p>See <a href="https://example.test/plan">the plan</a> and <a href="https://example.test/x">https://example.test/x</a></p>`
+	raw, _, err := compose.Build(m)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	env := readEnvelope(t, raw)
+	if !strings.Contains(env.Text, "the plan (https://example.test/plan)") {
+		t.Errorf("text/plain part = %q, want the link target after its text", env.Text)
+	}
+	if strings.Count(env.Text, "https://example.test/x") != 1 {
+		t.Errorf("text/plain part = %q, want a bare URL link shown once", env.Text)
+	}
+}

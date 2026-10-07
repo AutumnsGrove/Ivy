@@ -23,7 +23,7 @@ var outgoingPolicy = newOutgoingPolicy()
 func newOutgoingPolicy() *bluemonday.Policy {
 	p := bluemonday.NewPolicy()
 	p.AllowElements(
-		"p", "br", "hr",
+		"p", "div", "br", "hr",
 		"strong", "em", "b", "i", "u", "s", "del", "mark",
 		"ul", "ol", "li",
 		"blockquote", "pre", "code",

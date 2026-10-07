@@ -1570,3 +1570,33 @@ Baseline on `4f34628`: `go build`, `go vet` and `go test -count=1 ./...` all gre
   without the deny list, so a received `.exe` could be forwarded though the documented policy refuses it.
   Reproduced with `TestUploadFromMailAppliesTheDenyList` (201; failed before). It now answers 400 `bad_type`; the
   check runs before the copy goroutine starts so an early return cannot leave it blocked on the pipe.
+
+### `c16a0fc`, `53a2ff7` rich-text bodies
+
+- **#137** · `c16a0fc` · `compose/markdown.go`, `web/src/lib/compose/sanitize.ts` · **bug** · `div` was off the outgoing
+  allow-list on both the server and the paste walker, and a stripped tag leaves no separator, so
+  `<div>one</div><div>two</div>` (what Apple Notes and Safari paste) was sent as "onetwo" in both parts. Reproduced
+  with `TestBuildHTMLBodyKeepsDivParagraphsApart` (failed before). `div` is now allowed on both sides and is a block
+  in `htmlToText`. The editor itself uses `blockTag: 'P'`, so typed text was never affected.
+- **#138** · `c16a0fc` · `compose/html.go` · **bug** · the text/plain alternative dropped every link target, so a
+  text-only recipient got "the plan" with no URL. Reproduced with `TestBuildHTMLBodyPlainTextKeepsLinkTargets`
+  (failed before). `htmlToText` now appends ` (url)` after the link text unless the text already is the address.
+  Verified by `vitest` (47 pass) for the walker; the editor in a real browser is unverified here.
+
+### Open items from the store and attachment review
+
+- **N46 (open, needs a design decision)** · `67cfb5e`, `0d219c2` · `store/uploads.go` · uploads are content-addressed, and
+  `StageUpload` writes the blob (`Uploads.Put`) before it inserts the row, while `DeleteUpload` and `SweepUploads`
+  decide to remove a blob by counting rows. A delete or sweep that runs between another stage's `Put` and its
+  insert sees zero rows, removes the shared file and leaves the new row pointing at nothing. Not reproduced
+  deterministically (the window is two statements wide), so not changed. Recommend one `sync.Mutex` in `DBs`
+  held across Put-to-insert and across the count-then-remove in delete and sweep.
+- **N47 (open, needs a decision)** · `67cfb5e` · `store/uploads.go`, `internal/blobstore` · nothing collects a blob that never
+  got a row (a crash or failed insert after `Put`) or a stale `.tmp` from an interrupted `Put`; `SweepUploads` only
+  walks rows. Disk use of hostile or crashed uploads grows without bound. Recommend a sweep that lists
+  `data/uploads`, skips files younger than an hour, and removes any hash with no row.
+- **N48 (open, measure first)** · `05d3fb2`, `2c47e8e` · `store/drafts.go` · every autosave stores the whole built MIME,
+  attachments included (up to about 33 MiB base64), as a new `drafts.body` BLOB in `state.db`, which is the file
+  that is backed up daily and kept 15 days. An autosave every few seconds with a large attachment is heavy write
+  amplification and backup growth on the potato's storage. Recommend measuring a 25 MiB attachment draft on the
+  board, then keeping bodies in the blob store by hash with the row holding only the key.

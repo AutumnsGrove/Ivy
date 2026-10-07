@@ -4,8 +4,11 @@
 // Squire refuses to load HTML without one of these, and STACK.md rules out
 // importing DOMPurify, so the rules are kept here and corpus-tested.
 
+// `div` stays a block: Apple Notes and Safari paste paragraphs as divs, and
+// unwrapping them would run the lines together. It matches the server policy.
 const ALLOWED_TAGS = new Set([
 	'p',
+	'div',
 	'br',
 	'hr',
 	'strong',

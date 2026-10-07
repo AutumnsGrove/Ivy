@@ -27,6 +27,8 @@ func htmlToText(s string) string {
 	// the next ordered number; a malformed list falls back to a bullet.
 	var ordered []bool
 	var counters []int
+	var hrefs []string
+	var linkStarts []int
 	skip := 0
 	for {
 		tt := z.Next()
@@ -38,11 +40,25 @@ func htmlToText(s string) string {
 				b.Write(z.Text())
 			}
 		case html.StartTagToken, html.SelfClosingTagToken:
-			name, _ := z.TagName()
-			switch string(name) {
+			name, hasAttr := z.TagName()
+			tag := string(name)
+			switch tag {
 			case "script", "style", "head", "title", "template":
 				if tt == html.StartTagToken {
 					skip++
+				}
+			case "a":
+				if tt == html.StartTagToken {
+					href := ""
+					for hasAttr {
+						var k, v []byte
+						k, v, hasAttr = z.TagAttr()
+						if string(k) == "href" {
+							href = string(v)
+						}
+					}
+					hrefs = append(hrefs, href)
+					linkStarts = append(linkStarts, b.Len())
 				}
 			case "br":
 				b.WriteByte('\n')
@@ -70,6 +86,16 @@ func htmlToText(s string) string {
 			case "script", "style", "head", "title", "template":
 				if skip > 0 {
 					skip--
+				}
+			case "a":
+				if n := len(hrefs); n > 0 {
+					// A text-only reader cannot follow a link, so show where it goes
+					// unless the link text already is the address.
+					href, start := hrefs[n-1], linkStarts[n-1]
+					hrefs, linkStarts = hrefs[:n-1], linkStarts[:n-1]
+					if !strings.Contains(b.String()[start:], strings.TrimPrefix(href, "mailto:")) && href != "" {
+						b.WriteString(" (" + href + ")")
+					}
 				}
 			case "p", "div", "blockquote", "pre", "tr", "li", "h1", "h2", "h3", "h4", "h5", "h6":
 				b.WriteByte('\n')
