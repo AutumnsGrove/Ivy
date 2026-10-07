@@ -1,45 +1,110 @@
 <script lang="ts">
+	import { api } from '#lib/api/client.js';
 	import { Camera, FileText, FolderOpen, ImageIcon } from '#lib/icons.js';
+	import type { MailAttachment } from '#lib/types.js';
 	import GroupLabel from '../ui/GroupLabel.svelte';
 	import Sheet from '../ui/Sheet.svelte';
 
-	let { open = $bindable(), onpick }: { open: boolean; onpick: (name: string) => void } = $props();
+	let {
+		open = $bindable(),
+		accountId,
+		photoSize = 'large',
+		stripLocation = true,
+		onfiles,
+		onmail
+	}: {
+		open: boolean;
+		accountId: string;
+		photoSize: string;
+		stripLocation: boolean;
+		onfiles: (files: File[]) => void;
+		onmail: (attachment: MailAttachment) => void;
+	} = $props();
 
-	const sources = [
-		{ label: 'Photos', icon: ImageIcon },
-		{ label: 'Camera', icon: Camera },
-		{ label: 'Files', icon: FolderOpen }
-	];
-	const recent = [
-		{ name: 'blog-home.png', from: 'Mara Linden · today', image: true },
-		{ name: 'migration.pdf', from: 'You sent · last week', image: false },
-		{ name: 'invoice-0412.pdf', from: 'Cloudflare · Oct', image: false }
-	];
+	let photoInput!: HTMLInputElement;
+	let cameraInput!: HTMLInputElement;
+	let filesInput!: HTMLInputElement;
+
+	let mail = $state<MailAttachment[]>([]);
+	let loaded = $state(false);
+	let failed = $state(false);
+
+	// Load "From your mail" on first open, once; a re-open keeps the list.
+	$effect(() => {
+		if (open && accountId && !loaded) void loadMail();
+	});
+
+	async function loadMail() {
+		loaded = true;
+		try {
+			mail = (await api.listMailAttachments(accountId)).attachments;
+		} catch {
+			failed = true;
+		}
+	}
+
+	const pick = (input: HTMLInputElement) => {
+		input.value = '';
+		input.click();
+	};
+	const chosen = (input: HTMLInputElement) => {
+		const files = Array.from(input.files ?? []);
+		if (files.length) {
+			open = false;
+			onfiles(files);
+		}
+	};
+
+	const SIZE_LABEL: Record<string, string> = { small: 'Small', medium: 'Medium', large: 'Large', original: 'Original' };
+	const isImage = (a: MailAttachment) => (a.mime ?? '').startsWith('image/');
+	const formatSize = (bytes: number) =>
+		bytes >= 1 << 20 ? `${(bytes / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 </script>
 
 <Sheet bind:open title="Add to message">
 	<h2>Add to message</h2>
 	<div class="opts">
-		{#each sources as s (s.label)}
-			<button type="button" class="opt" onclick={() => ((open = false), onpick(`${s.label.toLowerCase()}.jpg`))}>
-				<s.icon />{s.label}
-			</button>
-		{/each}
+		<button type="button" class="opt" onclick={() => pick(photoInput)}><ImageIcon />Photos</button>
+		<button type="button" class="opt" onclick={() => pick(cameraInput)}><Camera />Camera</button>
+		<button type="button" class="opt" onclick={() => pick(filesInput)}><FolderOpen />Files</button>
 	</div>
+	<input bind:this={photoInput} class="sr" type="file" accept="image/*" multiple aria-label="Photos" onchange={() => chosen(photoInput)} />
+	<input bind:this={cameraInput} class="sr" type="file" accept="image/*" capture="environment" aria-label="Camera" onchange={() => chosen(cameraInput)} />
+	<input bind:this={filesInput} class="sr" type="file" multiple aria-label="Files" onchange={() => chosen(filesInput)} />
 
 	<GroupLabel>From your mail</GroupLabel>
-	<ul class="recent">
-		{#each recent as r (r.name)}
-			<li>
-				<button type="button" class="r" onclick={() => ((open = false), onpick(r.name))}>
-					<span class="th" class:img={r.image}>{#if !r.image}<FileText />{/if}</span>
-					<span class="m"><span class="ell n">{r.name}</span><span class="f">{r.from}</span></span>
-				</button>
-			</li>
-		{/each}
-	</ul>
+	{#if mail.length}
+		<ul class="recent">
+			{#each mail as r (`${r.messageId}:${r.path}`)}
+				<li>
+					<button
+						type="button"
+						class="r"
+						onclick={() => {
+							open = false;
+							onmail(r);
+						}}
+					>
+						<span class="th" class:img={isImage(r)}>{#if !isImage(r)}<FileText />{/if}</span>
+						<span class="m">
+							<span class="ell n">{r.name || 'attachment'}</span>
+							<span class="f">{formatSize(r.size)}</span>
+						</span>
+					</button>
+				</li>
+			{/each}
+		</ul>
+	{:else}
+		<p class="empty">{failed ? "Couldn't load attachments from your mail." : 'No attachments in your mail yet.'}</p>
+	{/if}
 
-	<div class="size"><span><span class="t">Photo size</span><span class="s">Location is removed from photos</span></span><span class="v">Large</span></div>
+	<div class="size">
+		<span>
+			<span class="t">Photo size</span>
+			<span class="s">{stripLocation ? 'Location is removed from photos' : 'Location is kept'}</span>
+		</span>
+		<span class="v">{SIZE_LABEL[photoSize] ?? 'Large'}</span>
+	</div>
 </Sheet>
 
 <style>
@@ -69,6 +134,21 @@
 		width: var(--sp-24);
 		height: var(--sp-24);
 		color: var(--accent);
+	}
+	/* The file inputs are driven by the buttons above; keep them reachable to
+	   assistive tech without showing the native control. */
+	.sr {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+	.empty {
+		margin: 0 var(--sp-4);
+		font-size: var(--fs-meta);
+		color: var(--faint);
 	}
 	.recent {
 		display: flex;

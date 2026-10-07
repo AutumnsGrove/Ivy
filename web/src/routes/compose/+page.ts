@@ -38,7 +38,8 @@ export const load: PageLoad = async ({ url }) => {
 	} else if (undoId) {
 		const send = await guard(api.getSend(undoId));
 		accountId = send.accountId || accountId;
-		seed = (send.draft && seedFromSendRequest(send.draft)) || seed;
+		const fromSend = send.draft ? seedFromSendRequest(send.draft) : null;
+		seed = fromSend ? { ...fromSend, attachments: send.attachments ?? [] } : seed;
 	}
 
 	const [identities, people, settings] = await Promise.all([
@@ -60,6 +61,7 @@ export const load: PageLoad = async ({ url }) => {
 		forwardId,
 		backHref: replyId ? `/m/${replyId}` : forwardId ? `/m/${forwardId}` : '/',
 		attach: url.searchParams.has('attach'),
-		undoSeconds: settings.undoSendSeconds
+		undoSeconds: settings.undoSendSeconds,
+		settings
 	};
 };

@@ -24,6 +24,7 @@ import type {
 	Inbox,
 	MailMessage,
 	MailSummary,
+	MailAttachmentList,
 	OutboxAction,
 	OutboxItem,
 	OutboxList,
@@ -48,6 +49,7 @@ import type {
 	TagsOverview,
 	TagUpdate,
 	UpdateStatus,
+	Upload,
 	UserTag,
 	Version
 } from '../types';
@@ -198,6 +200,43 @@ export const api = {
 	deleteIdentity: (accountId: string, identityId: string): Promise<void> =>
 		request<void>(`/accounts/${encodeURIComponent(accountId)}/identities/${encodeURIComponent(identityId)}`, {
 			method: 'DELETE'
+		}),
+
+	// --- outgoing attachments (4g): staged files and inline images ----------
+	/** Stage an attachment; the raw bytes stream to the server. */
+	uploadAttachment: async (accountId: string, name: string, file: Blob): Promise<Upload> =>
+		request<Upload>(apiPath(`/accounts/${encodeURIComponent(accountId)}/uploads`, { name }), {
+			method: 'POST',
+			headers: { 'Content-Type': file.type || 'application/octet-stream' },
+			body: await file.arrayBuffer(),
+			// A 25 MiB photo over Tailscale can outlast the default timeout.
+			signal: AbortSignal.timeout(120_000)
+		}),
+
+	/** Where a staged attachment's bytes are served from, for a thumbnail. */
+	uploadURL: (accountId: string, uploadId: string): string =>
+		apiPath(`/accounts/${encodeURIComponent(accountId)}/uploads/${encodeURIComponent(uploadId)}`),
+
+	deleteUpload: (accountId: string, uploadId: string): Promise<void> =>
+		request<void>(`/accounts/${encodeURIComponent(accountId)}/uploads/${encodeURIComponent(uploadId)}`, {
+			method: 'DELETE'
+		}),
+
+	/** Attachments already in the mirror, for "From your mail". */
+	listMailAttachments: (accountId: string, q?: string, limit?: number): Promise<MailAttachmentList> =>
+		request<MailAttachmentList>(
+			apiPath(`/accounts/${encodeURIComponent(accountId)}/mail-attachments`, {
+				q,
+				limit: limit ? String(limit) : undefined
+			})
+		),
+
+	/** Copy a mirrored attachment into staging server-side, with no browser upload. */
+	uploadFromMail: (accountId: string, messageId: string, path: string): Promise<Upload> =>
+		request<Upload>(`/accounts/${encodeURIComponent(accountId)}/uploads/from-mail`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ messageId, path })
 		}),
 
 	/** The recipients, subject and body a reply starts from, computed server-side. */

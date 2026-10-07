@@ -30,6 +30,8 @@ const CODES = new Set<string>([
 	'unknown_tag',
 	'too_many_tags',
 	'bad_from',
+	'bad_type',
+	'message_gone',
 	'too_many_identities',
 	'primary_identity',
 	'invalid_message',

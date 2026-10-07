@@ -1,7 +1,7 @@
 // One shape for whatever starts a compose: a reply or forward prefill, a resumed
 // draft, or the request JSON an undo handed back. Keeping the mapping here (rather
 // than in the screen) makes the four sources and their absent fields table-tested.
-import type { ComposePrefill, DraftResume } from '#lib/types.js';
+import type { AttachmentInfo, ComposePrefill, DraftResume } from '#lib/types.js';
 
 export type ComposeSeed = {
 	from?: string;
@@ -13,6 +13,8 @@ export type ComposeSeed = {
 	text: string;
 	inReplyTo?: string;
 	references: string[];
+	/** Attachments already staged for this compose, from a resumed draft or undo. */
+	attachments?: AttachmentInfo[];
 	/** The direct recipient, for the "Replying to …" note. */
 	replyTarget?: string;
 	/** A delivered-to address with no configured identity, offered for a one-tap add. */
@@ -49,7 +51,8 @@ export function seedFromDraft(draft: DraftResume): ComposeSeed {
 		subject: draft.subject ?? '',
 		text: draft.text,
 		inReplyTo: draft.inReplyTo,
-		references: draft.references ?? []
+		references: draft.references ?? [],
+		attachments: draft.attachments ?? []
 	};
 }
 

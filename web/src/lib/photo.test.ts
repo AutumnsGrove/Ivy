@@ -75,3 +75,73 @@ describe('squarePhoto', () => {
 		expect(d.close).toHaveBeenCalledOnce();
 	});
 });
+
+import { prepareImage, PREPARE_EDGE, type PrepareDeps } from './photo';
+
+const file = (name: string, type: string) => new File(['x'], name, { type });
+
+function prepDeps(width: number, height: number, out: Blob | null = blob('image/jpeg')): PrepareDeps & { close: ReturnType<typeof vi.fn> } {
+	const close = vi.fn();
+	return {
+		close,
+		decode: vi.fn(async () => ({ width, height, close })),
+		encode: vi.fn(async () => out)
+	};
+}
+
+describe('prepareImage', () => {
+	it('downscales to the chosen size, keeping the aspect ratio', async () => {
+		const d = prepDeps(4000, 3000);
+		const out = await prepareImage(file('IMG_1.HEIC', 'image/heic'), { size: 'medium', stripLocation: true }, d);
+		expect(d.encode).toHaveBeenCalledWith(expect.anything(), PREPARE_EDGE.medium, 1200, 'image/jpeg');
+		expect(out.name).toBe('IMG_1.jpg');
+		expect(out.mime).toBe('image/jpeg');
+	});
+
+	it('re-encodes a photo already under the edge, to strip its metadata', async () => {
+		const d = prepDeps(800, 600);
+		await prepareImage(file('a.jpg', 'image/jpeg'), { size: 'large', stripLocation: true }, d);
+		expect(d.encode).toHaveBeenCalledWith(expect.anything(), 800, 600, 'image/jpeg');
+	});
+
+	it('keeps the original bytes at Original size when location removal is off', async () => {
+		const original = file('a.jpg', 'image/jpeg');
+		const d = prepDeps(800, 600);
+		const out = await prepareImage(original, { size: 'original', stripLocation: false }, d);
+		expect(d.decode).not.toHaveBeenCalled();
+		expect(out.blob).toBe(original);
+		expect(out.name).toBe('a.jpg');
+	});
+
+	it('re-encodes at native size at Original size when location removal is on', async () => {
+		const d = prepDeps(800, 600);
+		await prepareImage(file('a.heic', 'image/heic'), { size: 'original', stripLocation: true }, d);
+		expect(d.encode).toHaveBeenCalledWith(expect.anything(), 800, 600, 'image/jpeg');
+	});
+
+	it('keeps transparency by encoding a PNG source as PNG', async () => {
+		const d = prepDeps(2000, 2000, blob('image/png'));
+		const out = await prepareImage(file('logo.png', 'image/png'), { size: 'medium', stripLocation: true }, d);
+		expect(d.encode).toHaveBeenCalledWith(expect.anything(), PREPARE_EDGE.medium, PREPARE_EDGE.medium, 'image/png');
+		expect(out.name).toBe('logo.png');
+	});
+
+	it('leaves a non-image and an animated GIF untouched', async () => {
+		for (const [name, type] of [
+			['doc.pdf', 'application/pdf'],
+			['anim.gif', 'image/gif']
+		]) {
+			const original = file(name, type);
+			const d = prepDeps(100, 100);
+			const out = await prepareImage(original, { size: 'medium', stripLocation: true }, d);
+			expect(out.blob).toBe(original);
+			expect(d.decode).not.toHaveBeenCalled();
+		}
+	});
+
+	it('releases the decoded image even when encoding fails', async () => {
+		const d = prepDeps(600, 600, null);
+		await expect(prepareImage(file('a.jpg', 'image/jpeg'), { size: 'medium', stripLocation: true }, d)).rejects.toBeInstanceOf(PhotoError);
+		expect(d.close).toHaveBeenCalledOnce();
+	});
+});

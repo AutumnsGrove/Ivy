@@ -7,9 +7,10 @@
 	import { createAutosaver } from '#lib/compose/autosave.js';
 	import { applySignature } from '#lib/compose/signature.js';
 	import { Bold, ChevronDown, FileText, ImageIcon, Italic, Link, List, Paperclip, Send, X } from '#lib/icons.js';
+	import { prepareImage } from '#lib/photo.js';
 	import { sends } from '#lib/sends.svelte.js';
 	import { toasts } from '#lib/toast.js';
-	import type { DraftResume, Identity } from '#lib/types.js';
+	import type { DraftResume, Identity, MailAttachment } from '#lib/types.js';
 	import AttachSheet from '#lib/components/compose/AttachSheet.svelte';
 	import NotSentSheet from '#lib/components/compose/NotSentSheet.svelte';
 	import RecipientField from '#lib/components/compose/RecipientField.svelte';
@@ -35,12 +36,41 @@
 		forwardId: data.forwardId,
 		backHref: data.backHref,
 		attach: data.attach,
-		undoSeconds: data.undoSeconds
+		undoSeconds: data.undoSeconds,
+		settings: data.settings
 	}));
 
-	type Att = { id: string; name: string; size: string; image: boolean };
-	let attachments = $state<Att[]>([]);
+	const IMAGE_NAME = /\.(png|jpe?g|webp|gif|heic|heif|avif)$/i;
+	const formatSize = (bytes: number) =>
+		bytes >= 1 << 20 ? `${(bytes / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
+	type Att = {
+		id: string;
+		tempId?: string;
+		name: string;
+		size: string;
+		image: boolean;
+		inline: boolean;
+		pending?: boolean;
+		previewUrl?: string;
+	};
+	let attachments = $state<Att[]>(
+		(snap.seed.attachments ?? []).map((a) => {
+			const image = IMAGE_NAME.test(a.name);
+			return {
+				id: a.id ?? '',
+				name: a.name,
+				size: formatSize(a.size),
+				image,
+				inline: a.inline,
+				previewUrl: a.id && image ? api.uploadURL(snap.accountId, a.id) : undefined
+			};
+		})
+	);
 	let attachOpen = $state(snap.attach);
+	// The image button uploads the next pick as an inline part and drops a cid
+	// reference into the body; the paperclip attaches it as a file.
+	let inlineNext = $state(false);
 
 	let identities = $state<Identity[]>([...snap.identities]);
 	const people = snap.people;
@@ -75,7 +105,7 @@
 	const fromOptions = $derived(
 		identities.map((i) => ({ value: i.address, label: i.name ? `${i.name} <${i.address}>` : i.address }))
 	);
-	const blocked = $derived(attachments.length > 0);
+	const blocked = $derived(attachments.some((a) => a.pending || !a.id));
 
 	// The autosave owns the optimistic draft version: every edit calls touch(),
 	// leaving the screen and sending flush it, and a stale save is told and retried
@@ -96,7 +126,8 @@
 				text: body,
 				markdown: true,
 				inReplyTo,
-				references
+				references,
+				attachments: attachments.filter((a) => a.id).map((a) => ({ id: a.id, inline: a.inline }))
 			}),
 		onSaved: (saved) => {
 			if (saved.messageId) draftMessageId = saved.messageId;
@@ -126,9 +157,76 @@
 		auto.dispose();
 	});
 
-	const add = (name: string) =>
-		(attachments = [...attachments, { id: crypto.randomUUID(), name, size: '', image: /\.(png|jpe?g|webp|gif)$/i.test(name) }]);
-	const remove = (id: string) => (attachments = attachments.filter((a) => a.id !== id));
+	async function addFiles(files: File[]) {
+		const inline = inlineNext;
+		inlineNext = false;
+		for (const file of files) {
+			const isImage = (file.type || '').startsWith('image/');
+			const tempId = crypto.randomUUID();
+			const att: Att = { id: '', tempId, name: file.name, size: formatSize(file.size), image: isImage, inline: false, pending: true };
+			attachments = [...attachments, att];
+			try {
+				let prepared: { blob: Blob; name: string; mime: string } = { blob: file, name: file.name, mime: file.type || 'application/octet-stream' };
+				if (isImage) prepared = await prepareImage(file, { size: snap.settings.photoSize, stripLocation: snap.settings.stripLocation });
+				const up = await api.uploadAttachment(snap.accountId, prepared.name, prepared.blob);
+				att.id = up.id;
+				att.name = up.name;
+				att.size = formatSize(up.size);
+				att.pending = false;
+				att.previewUrl = isImage ? api.uploadURL(snap.accountId, up.id) : undefined;
+				if (inline && isImage) {
+					att.inline = true;
+					body = `${body}\n![${up.name}](cid:${up.id}@ivy)`;
+				}
+				touch();
+			} catch (error) {
+				attachments = attachments.filter((a) => a.tempId !== tempId);
+				toasts.push({
+					text: "Couldn't attach that file",
+					detail: error instanceof ApiError ? error.message : undefined,
+					tone: 'warn'
+				});
+			}
+		}
+	}
+
+	async function addFromMail(m: MailAttachment) {
+		try {
+			const up = await api.uploadFromMail(snap.accountId, m.messageId, m.path);
+			const isImage = (up.mime ?? '').startsWith('image/');
+			attachments = [
+				...attachments,
+				{
+					id: up.id,
+					name: up.name,
+					size: formatSize(up.size),
+					image: isImage,
+					inline: false,
+					previewUrl: isImage ? api.uploadURL(snap.accountId, up.id) : undefined
+				}
+			];
+			touch();
+		} catch (error) {
+			toasts.push({
+				text: "Couldn't attach that",
+				detail: error instanceof ApiError ? error.message : undefined,
+				tone: 'warn'
+			});
+		}
+	}
+
+	function remove(att: Att) {
+		attachments = attachments.filter((a) => a !== att);
+		if (att.id) void api.deleteUpload(snap.accountId, att.id).catch(() => {});
+		if (att.inline && att.id) {
+			const ref = `cid:${att.id}@ivy`;
+			body = body
+				.split('\n')
+				.filter((line) => !line.includes(ref))
+				.join('\n');
+		}
+		touch();
+	}
 
 	function chooseFrom(address: string) {
 		if (address === from) return;
@@ -197,7 +295,8 @@
 				markdown: true,
 				inReplyTo,
 				references: references.length ? references : undefined,
-				draftMessageId
+				draftMessageId,
+				attachments: attachments.filter((a) => a.id).map((a) => ({ id: a.id, inline: a.inline }))
 			});
 			sends.track(status);
 			auto.dispose();
@@ -224,7 +323,7 @@
 	back="close"
 >
 	{#snippet trailing()}
-		<IconButton label="Attach" onclick={() => (attachOpen = true)}><Paperclip /></IconButton>
+		<IconButton label="Attach" onclick={() => ((inlineNext = false), (attachOpen = true))}><Paperclip /></IconButton>
 		<Button variant="primary" size="sm" disabled={blocked || sending || to.length === 0} onclick={() => void send()}>
 			<Send />Send
 		</Button>
@@ -276,17 +375,19 @@
 		{#if attachments.length}
 			<div class="atts">
 				<ul>
-					{#each attachments as a (a.id)}
-						<li class="att" class:file={!a.image}>
-							{#if a.image}<span class="img"></span>{:else}<FileText /><span class="m"><span class="ell n">{a.name}</span><span class="s">{a.size || 'preview'}</span></span>{/if}
-							<button type="button" class="x" aria-label="Remove {a.name}" onclick={() => remove(a.id)}><X /></button>
+					{#each attachments as a (a.tempId ?? a.id)}
+						<li class="att" class:file={!a.image} class:pending={a.pending}>
+							{#if a.image}
+								<span class="img" style={a.previewUrl ? `background-image:url(${a.previewUrl})` : null}></span>
+							{:else}
+								<FileText /><span class="m"><span class="ell n">{a.name}</span><span class="s">{a.size}</span></span>
+							{/if}
+							{#if a.inline}<span class="ib">Inline</span>{/if}
+							<button type="button" class="x" aria-label="Remove {a.name}" onclick={() => remove(a)}><X /></button>
 						</li>
 					{/each}
 				</ul>
-				<p class="cnt">
-					{attachments.length} attachment{attachments.length === 1 ? '' : 's'} · sending with attachments arrives in a
-					later update
-				</p>
+				<p class="cnt">{attachments.length} attachment{attachments.length === 1 ? '' : 's'}</p>
 			</div>
 		{/if}
 	</Glass>
@@ -296,13 +397,20 @@
 		<IconButton label="Italic (coming soon)" disabled><Italic /></IconButton>
 		<IconButton label="Link (coming soon)" disabled><Link /></IconButton>
 		<IconButton label="List (coming soon)" disabled><List /></IconButton>
-		<IconButton label="Insert image" tone="accent" onclick={() => (attachOpen = true)}><ImageIcon /></IconButton>
+		<IconButton label="Insert image" tone="accent" onclick={() => ((inlineNext = true), (attachOpen = true))}><ImageIcon /></IconButton>
 		<span class="grow"></span>
 		<span class="undo">{snap.undoSeconds > 0 ? `Sends after ${snap.undoSeconds} s` : 'Sends immediately'}</span>
 	</Glass>
 </div>
 
-<AttachSheet bind:open={attachOpen} onpick={add} />
+<AttachSheet
+	bind:open={attachOpen}
+	accountId={snap.accountId}
+	photoSize={snap.settings.photoSize}
+	stripLocation={snap.settings.stripLocation}
+	onfiles={(files) => void addFiles(files)}
+	onmail={(m) => void addFromMail(m)}
+/>
 <NotSentSheet bind:open={notSentOpen} to={to[0] ?? ''} reason={notSentReason} />
 
 <style>
@@ -417,6 +525,21 @@
 		position: absolute;
 		inset: 0;
 		background: var(--attach-a);
+		background-size: cover;
+		background-position: center;
+	}
+	.att.pending {
+		opacity: 0.6;
+	}
+	.ib {
+		position: absolute;
+		left: var(--sp-4);
+		bottom: var(--sp-4);
+		padding: 0 var(--sp-6);
+		border-radius: var(--radius-sm);
+		background: var(--scrim);
+		color: var(--text);
+		font-size: var(--fs-label);
 	}
 	.att.file {
 		width: var(--sp-132);
