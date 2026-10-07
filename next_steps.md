@@ -80,6 +80,12 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 
 ## ▶ Now
 
+**Waiting at G1 (chunk 5, 5a.1: generalising the gate).** The design is drafted in
+`docs/handoffs/2026-10-07-G1-gate-design.md` and needs the operator's answers to its six questions
+before any code. Its main finding: today's gate trusts the caller for the opt-in and the cap, and
+the caller owns the provider client, so the "one chokepoint" is not enforced by the code. Chunk 5
+work stops here until G1 is cleared.
+
 **Chunk 4 is done.** 4h (rich text) is the last stage and landed with `squire-rte` (MIT, zero deps,
 16.1 KiB brotli, route-split to `/compose`), an explicit `bodyFormat` on the compose/API contract
 sanitised server-side with a derived `text/plain`, a mode pill fixed once the body has content, and
