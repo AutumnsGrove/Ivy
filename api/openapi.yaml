@@ -2438,7 +2438,10 @@ components:
           description: The message exactly as typed; it is the text/plain part.
         markdown:
           type: boolean
-          description: Render `text` through goldmark into the text/html part.
+          deprecated: true
+          description: "Legacy flag; `bodyFormat: markdown` replaces it. True means markdown."
+        bodyFormat:
+          $ref: "#/components/schemas/BodyFormat"
         inReplyTo:
           type: string
         references:
@@ -2470,6 +2473,15 @@ components:
         inline:
           type: boolean
           description: "Place the image in the body as a cid: part."
+    BodyFormat:
+      type: string
+      description: >
+        How `text` is interpreted. `plain` is a text/plain part only;
+        `markdown` renders the text with goldmark into a text/html part;
+        `html` treats the text as HTML, narrows it with the compose-only policy
+        and derives a text/plain alternative. Absent means `markdown` when the
+        legacy `markdown: true` flag is set, else `plain`.
+      enum: [plain, markdown, html]
     Upload:
       type: object
       description: One staged outgoing attachment.
@@ -2650,6 +2662,10 @@ components:
           description: The message exactly as typed; it is the text/plain part.
         markdown:
           type: boolean
+          deprecated: true
+          description: "Legacy flag; `bodyFormat: markdown` replaces it."
+        bodyFormat:
+          $ref: "#/components/schemas/BodyFormat"
         inReplyTo:
           type: string
         references:
@@ -2734,6 +2750,10 @@ components:
           type: string
         markdown:
           type: boolean
+          deprecated: true
+          description: Legacy flag, set when the draft was saved before `bodyFormat`.
+        bodyFormat:
+          $ref: "#/components/schemas/BodyFormat"
         inReplyTo:
           type: string
         references:

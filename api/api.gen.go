@@ -91,6 +91,27 @@ func (e AttachmentTone) Valid() bool {
 	}
 }
 
+// Defines values for BodyFormat.
+const (
+	Html     BodyFormat = "html"
+	Markdown BodyFormat = "markdown"
+	Plain    BodyFormat = "plain"
+)
+
+// Valid indicates whether the value is a known member of the BodyFormat enum.
+func (e BodyFormat) Valid() bool {
+	switch e {
+	case Html:
+		return true
+	case Markdown:
+		return true
+	case Plain:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CheckDetailSureness.
 const (
 	Balanced CheckDetailSureness = "balanced"
@@ -621,6 +642,9 @@ type AttachmentInfo struct {
 	Size   int64   `json:"size"`
 }
 
+// BodyFormat How `text` is interpreted. `plain` is a text/plain part only; `markdown` renders the text with goldmark into a text/html part; `html` treats the text as HTML, narrows it with the compose-only policy and derives a text/plain alternative. Absent means `markdown` when the legacy `markdown: true` flag is set, else `plain`.
+type BodyFormat string
+
 // Check defines model for Check.
 type Check struct {
 	BuiltIn     bool   `json:"builtIn"`
@@ -722,7 +746,10 @@ type DraftRequest struct {
 	// BaseVersion The version the caller last saw; 0 for a new draft. A stale value is `draft_conflict`.
 	BaseVersion *int      `json:"baseVersion,omitempty"`
 	Bcc         *[]string `json:"bcc,omitempty"`
-	Cc          *[]string `json:"cc,omitempty"`
+
+	// BodyFormat How `text` is interpreted. `plain` is a text/plain part only; `markdown` renders the text with goldmark into a text/html part; `html` treats the text as HTML, narrows it with the compose-only policy and derives a text/plain alternative. Absent means `markdown` when the legacy `markdown: true` flag is set, else `plain`.
+	BodyFormat *BodyFormat `json:"bodyFormat,omitempty"`
+	Cc         *[]string   `json:"cc,omitempty"`
 
 	// DraftId The stable draft identity; omit on the first save.
 	DraftId *string `json:"draftId,omitempty"`
@@ -732,8 +759,11 @@ type DraftRequest struct {
 	FromName *string `json:"fromName,omitempty"`
 
 	// Id Optional version-row idempotency key; a retried save returns the stored version.
-	Id         *string   `json:"id,omitempty"`
-	InReplyTo  *string   `json:"inReplyTo,omitempty"`
+	Id        *string `json:"id,omitempty"`
+	InReplyTo *string `json:"inReplyTo,omitempty"`
+
+	// Markdown Legacy flag; `bodyFormat: markdown` replaces it.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	Markdown   *bool     `json:"markdown,omitempty"`
 	References *[]string `json:"references,omitempty"`
 	ReplyTo    *[]string `json:"replyTo,omitempty"`
@@ -749,16 +779,22 @@ type DraftResume struct {
 	AccountId   string            `json:"accountId"`
 	Attachments *[]AttachmentInfo `json:"attachments,omitempty"`
 	Bcc         *[]string         `json:"bcc,omitempty"`
-	Cc          *[]string         `json:"cc,omitempty"`
-	DraftId     *string           `json:"draftId,omitempty"`
-	From        *string           `json:"from,omitempty"`
-	FromName    *string           `json:"fromName,omitempty"`
-	Id          string            `json:"id"`
-	InReplyTo   *string           `json:"inReplyTo,omitempty"`
-	Markdown    *bool             `json:"markdown,omitempty"`
-	MessageId   *string           `json:"messageId,omitempty"`
-	References  *[]string         `json:"references,omitempty"`
-	ReplyTo     *[]string         `json:"replyTo,omitempty"`
+
+	// BodyFormat How `text` is interpreted. `plain` is a text/plain part only; `markdown` renders the text with goldmark into a text/html part; `html` treats the text as HTML, narrows it with the compose-only policy and derives a text/plain alternative. Absent means `markdown` when the legacy `markdown: true` flag is set, else `plain`.
+	BodyFormat *BodyFormat `json:"bodyFormat,omitempty"`
+	Cc         *[]string   `json:"cc,omitempty"`
+	DraftId    *string     `json:"draftId,omitempty"`
+	From       *string     `json:"from,omitempty"`
+	FromName   *string     `json:"fromName,omitempty"`
+	Id         string      `json:"id"`
+	InReplyTo  *string     `json:"inReplyTo,omitempty"`
+
+	// Markdown Legacy flag, set when the draft was saved before `bodyFormat`.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
+	Markdown   *bool     `json:"markdown,omitempty"`
+	MessageId  *string   `json:"messageId,omitempty"`
+	References *[]string `json:"references,omitempty"`
+	ReplyTo    *[]string `json:"replyTo,omitempty"`
 
 	// Source Whether a draft is Ivy's own local version or a mirrored server copy.
 	Source  DraftSource `json:"source"`
@@ -1174,7 +1210,10 @@ type SendRequest struct {
 	// Attachments Staged files and inline images, by upload id.
 	Attachments *[]ComposeAttachment `json:"attachments,omitempty"`
 	Bcc         *[]string            `json:"bcc,omitempty"`
-	Cc          *[]string            `json:"cc,omitempty"`
+
+	// BodyFormat How `text` is interpreted. `plain` is a text/plain part only; `markdown` renders the text with goldmark into a text/html part; `html` treats the text as HTML, narrows it with the compose-only policy and derives a text/plain alternative. Absent means `markdown` when the legacy `markdown: true` flag is set, else `plain`.
+	BodyFormat *BodyFormat `json:"bodyFormat,omitempty"`
+	Cc         *[]string   `json:"cc,omitempty"`
 
 	// DraftMessageId The Message-ID of the draft version this send came from, so the send worker removes exactly that server copy after the 250. Empty when the message was never autosaved.
 	DraftMessageId *string `json:"draftMessageId,omitempty"`
@@ -1189,7 +1228,8 @@ type SendRequest struct {
 	Id        *string `json:"id,omitempty"`
 	InReplyTo *string `json:"inReplyTo,omitempty"`
 
-	// Markdown Render `text` through goldmark into the text/html part.
+	// Markdown Legacy flag; `bodyFormat: markdown` replaces it. True means markdown.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	Markdown   *bool     `json:"markdown,omitempty"`
 	References *[]string `json:"references,omitempty"`
 	ReplyTo    *[]string `json:"replyTo,omitempty"`

@@ -23,6 +23,38 @@ const maxSendBodyBytes = compose.MaxBodyBytes + 64<<10
 // primary key and a URL segment.
 const maxSendIDBytes = 128
 
+// composeFormat resolves how a send or draft request's text is interpreted.
+// `bodyFormat` wins; the deprecated `markdown` flag keeps older clients and
+// draft JSON written before 4h working.
+func composeFormat(format *api.BodyFormat, markdown *bool) compose.BodyFormat {
+	if format != nil {
+		switch *format {
+		case api.Html:
+			return compose.BodyHTML
+		case api.Markdown:
+			return compose.BodyMarkdown
+		case api.Plain:
+			return compose.BodyPlain
+		}
+	}
+	if boolOr(markdown, false) {
+		return compose.BodyMarkdown
+	}
+	return compose.BodyPlain
+}
+
+// apiBodyFormat is the inverse of composeFormat, for a resume payload.
+func apiBodyFormat(f compose.BodyFormat) api.BodyFormat {
+	switch f {
+	case compose.BodyHTML:
+		return api.Html
+	case compose.BodyMarkdown:
+		return api.Markdown
+	default:
+		return api.Plain
+	}
+}
+
 // handleSendMessage queues an outgoing message. The Send button is the explicit
 // confirmation (CLAUDE.md rule 6); this handler never submits anything itself.
 // It builds the wire and Sent copies, commits the queue row (durable before the
@@ -113,7 +145,7 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		ReplyTo:     composeAddresses(stringsOr(req.ReplyTo)),
 		Subject:     req.Subject,
 		Text:        req.Text,
-		Markdown:    boolOr(req.Markdown, false),
+		Format:      composeFormat(req.BodyFormat, req.Markdown),
 		InReplyTo:   stringOr(req.InReplyTo, ""),
 		References:  stringsOr(req.References),
 		MessageID:   msgID,

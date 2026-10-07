@@ -201,6 +201,33 @@ func TestGetDraftResumesServerOnly(t *testing.T) {
 	}
 }
 
+// A rich draft created in another client resumes as html with its formatting, so
+// Apple Mail's markup is not flattened to text on open.
+func TestGetDraftResumesServerOnlyHTMLAsHTML(t *testing.T) {
+	t.Parallel()
+	srv, dbs, _ := draftServer(t)
+
+	mustMessage(t, dbs, store.Message{
+		ID: "srv-2", AccountID: "acct-1", FolderID: "drafts-1", UID: 2,
+		ContentKey: "ck:srv-2", MessageID: "<srv-2@example.test>",
+		Subject: "From Apple Mail", To: []store.Address{{Address: "them@example.com"}},
+		Date: testNow, Size: 64,
+		RawBlob: []byte("From: me@example.com\r\nTo: them@example.com\r\n" +
+			"Subject: From Apple Mail\r\nContent-Type: text/html; charset=utf-8\r\n\r\n" +
+			"<p>hello <b>from</b> mail</p>\r\n"),
+	})
+	var resume api.DraftResume
+	if code := getJSON(t, srv.URL+"/api/v1/drafts/srv-2", &resume); code != http.StatusOK {
+		t.Fatalf("resume status = %d, want 200", code)
+	}
+	if resume.BodyFormat == nil || *resume.BodyFormat != api.Html {
+		t.Fatalf("bodyFormat = %v, want html", resume.BodyFormat)
+	}
+	if !strings.Contains(resume.Text, "<b>from</b>") {
+		t.Errorf("text = %q, want the HTML preserved", resume.Text)
+	}
+}
+
 // Discarding a local draft hides it and queues the expunge of its server copy.
 func TestDeleteDraftDiscardsLocal(t *testing.T) {
 	t.Parallel()
@@ -250,3 +277,50 @@ func TestSaveDraftRejectsForeignFromAndOversize(t *testing.T) {
 }
 
 func intPtr(n int) *int { return &n }
+
+// TestDraftResumeKeepsTheBodyFormat: a draft saved as html resumes as html with
+// its markup intact, so the compose screen reopens the right editor.
+func TestDraftResumeKeepsTheBodyFormat(t *testing.T) {
+	t.Parallel()
+	srv, _, _ := draftServer(t)
+	req := draftRequest(`<p>Hi <em>there</em></p>`)
+	req.Id = strPtr("v1")
+	req.Markdown = nil
+	bf := api.Html
+	req.BodyFormat = &bf
+	var sum api.DraftSummary
+	if code := postJSON(t, srv.URL+"/api/v1/drafts", req, &sum); code != http.StatusOK {
+		t.Fatalf("save status = %d, want 200", code)
+	}
+	var res api.DraftResume
+	if code := getJSON(t, srv.URL+"/api/v1/drafts/"+*sum.DraftId+"?account_id=acct-1", &res); code != http.StatusOK {
+		t.Fatalf("resume status = %d, want 200", code)
+	}
+	if res.BodyFormat == nil || *res.BodyFormat != api.Html {
+		t.Fatalf("bodyFormat = %v, want html", res.BodyFormat)
+	}
+	if res.Text != `<p>Hi <em>there</em></p>` {
+		t.Errorf("text = %q, want the stored HTML", res.Text)
+	}
+}
+
+// TestDraftResumeLegacyMarkdownResolves: a draft saved before bodyFormat with
+// markdown: true resumes as markdown, so old rows keep working.
+func TestDraftResumeLegacyMarkdownResolves(t *testing.T) {
+	t.Parallel()
+	srv, _, _ := draftServer(t)
+	req := draftRequest("**hi**")
+	req.Id = strPtr("v1")
+	req.Markdown = boolPtr(true)
+	var sum api.DraftSummary
+	if code := postJSON(t, srv.URL+"/api/v1/drafts", req, &sum); code != http.StatusOK {
+		t.Fatalf("save status = %d, want 200", code)
+	}
+	var res api.DraftResume
+	if code := getJSON(t, srv.URL+"/api/v1/drafts/"+*sum.DraftId+"?account_id=acct-1", &res); code != http.StatusOK {
+		t.Fatalf("resume status = %d, want 200", code)
+	}
+	if res.BodyFormat == nil || *res.BodyFormat != api.Markdown {
+		t.Fatalf("bodyFormat = %v, want markdown", res.BodyFormat)
+	}
+}

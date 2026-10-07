@@ -1353,8 +1353,12 @@ export interface components {
             subject: string;
             /** @description The message exactly as typed; it is the text/plain part. */
             text: string;
-            /** @description Render `text` through goldmark into the text/html part. */
+            /**
+             * @deprecated
+             * @description Legacy flag; `bodyFormat: markdown` replaces it. True means markdown.
+             */
             markdown?: boolean;
+            bodyFormat?: components["schemas"]["BodyFormat"];
             inReplyTo?: string;
             references?: string[];
             /** @description The Message-ID of the draft version this send came from, so the send worker removes exactly that server copy after the 250. Empty when the message was never autosaved. */
@@ -1369,6 +1373,11 @@ export interface components {
             /** @description Place the image in the body as a cid: part. */
             inline?: boolean;
         };
+        /**
+         * @description How `text` is interpreted. `plain` is a text/plain part only; `markdown` renders the text with goldmark into a text/html part; `html` treats the text as HTML, narrows it with the compose-only policy and derives a text/plain alternative. Absent means `markdown` when the legacy `markdown: true` flag is set, else `plain`.
+         * @enum {string}
+         */
+        BodyFormat: "plain" | "markdown" | "html";
         /** @description One staged outgoing attachment. */
         Upload: {
             id: string;
@@ -1458,7 +1467,12 @@ export interface components {
             subject?: string;
             /** @description The message exactly as typed; it is the text/plain part. */
             text: string;
+            /**
+             * @deprecated
+             * @description Legacy flag; `bodyFormat: markdown` replaces it.
+             */
             markdown?: boolean;
+            bodyFormat?: components["schemas"]["BodyFormat"];
             inReplyTo?: string;
             references?: string[];
             attachments?: components["schemas"]["ComposeAttachment"][];
@@ -1494,7 +1508,12 @@ export interface components {
             replyTo?: string[];
             subject?: string;
             text: string;
+            /**
+             * @deprecated
+             * @description Legacy flag, set when the draft was saved before `bodyFormat`.
+             */
             markdown?: boolean;
+            bodyFormat?: components["schemas"]["BodyFormat"];
             inReplyTo?: string;
             references?: string[];
             attachments?: components["schemas"]["AttachmentInfo"][];

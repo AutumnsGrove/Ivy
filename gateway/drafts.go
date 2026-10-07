@@ -147,7 +147,7 @@ func (s *Server) handleSaveDraft(w http.ResponseWriter, r *http.Request) {
 		ReplyTo:     composeAddresses(stringsOr(req.ReplyTo)),
 		Subject:     stringOr(req.Subject, ""),
 		Text:        req.Text,
-		Markdown:    boolOr(req.Markdown, false),
+		Format:      composeFormat(req.BodyFormat, req.Markdown),
 		InReplyTo:   stringOr(req.InReplyTo, ""),
 		References:  stringsOr(req.References),
 		MessageID:   msgID,
@@ -348,6 +348,8 @@ func (s *Server) draftResume(ctx context.Context, d store.Draft) (api.DraftResum
 		res.Bcc = req.Bcc
 		res.ReplyTo = req.ReplyTo
 		res.Markdown = req.Markdown
+		bf := apiBodyFormat(composeFormat(req.BodyFormat, req.Markdown))
+		res.BodyFormat = &bf
 		res.InReplyTo = req.InReplyTo
 		res.References = req.References
 		res.Text = req.Text
@@ -405,7 +407,17 @@ func (s *Server) draftResumeServer(ctx context.Context, msg store.Message) (api.
 			return api.DraftResume{}, err
 		}
 	}
-	res.Text = mime.Parse(raw).Text
+	parsed := mime.Parse(raw)
+	if parsed.HTML != "" {
+		// A draft written by another client keeps its formatting: resume the HTML.
+		res.Text = parsed.HTML
+		bf := api.Html
+		res.BodyFormat = &bf
+	} else {
+		res.Text = parsed.Text
+		bf := api.Plain
+		res.BodyFormat = &bf
+	}
 	atts, err := s.materializeAttachments(ctx, msg.AccountID, raw)
 	if err != nil {
 		return api.DraftResume{}, err

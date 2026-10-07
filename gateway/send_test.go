@@ -312,3 +312,59 @@ func TestSendRefusesAnOversizedClientID(t *testing.T) {
 		t.Errorf("an id at the limit = %d, want 202", code)
 	}
 }
+
+// TestSendBuildsAnHTMLBody: bodyFormat: html narrows the operator's markup and
+// derives a readable text/plain alternative, so the two parts cannot disagree.
+func TestSendBuildsAnHTMLBody(t *testing.T) {
+	t.Parallel()
+	srv, dbs, _, _ := sendServer(t)
+	req := sendRequest("s1")
+	req.Markdown = nil
+	bf := api.Html
+	req.BodyFormat = &bf
+	req.Text = `<p>Hi <strong>there</strong></p><script>alert(1)</script>`
+	if code := postJSON(t, srv.URL+"/api/v1/send", req, nil); code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202", code)
+	}
+	row, err := dbs.GetSend(context.Background(), "s1")
+	if err != nil {
+		t.Fatalf("get send: %v", err)
+	}
+	wire, err := enmime.ReadEnvelope(strings.NewReader(string(row.WireBody)))
+	if err != nil {
+		t.Fatalf("parse wire body: %v", err)
+	}
+	if !strings.Contains(wire.HTML, "<strong>there</strong>") {
+		t.Errorf("html part lost bold: %q", wire.HTML)
+	}
+	if strings.Contains(strings.ToLower(wire.HTML), "<script") {
+		t.Errorf("html part kept script: %q", wire.HTML)
+	}
+	if strings.Contains(wire.Text, "<") {
+		t.Errorf("text part carries markup: %q", wire.Text)
+	}
+	if !strings.Contains(wire.Text, "Hi there") {
+		t.Errorf("text part = %q, want the derived plain text", wire.Text)
+	}
+}
+
+// TestSendLegacyMarkdownFlagStillWorks keeps older clients and stored draft JSON
+// sending the markdown they always did.
+func TestSendLegacyMarkdownFlagStillWorks(t *testing.T) {
+	t.Parallel()
+	srv, dbs, _, _ := sendServer(t)
+	if code := postJSON(t, srv.URL+"/api/v1/send", sendRequest("s1"), nil); code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202", code)
+	}
+	row, err := dbs.GetSend(context.Background(), "s1")
+	if err != nil {
+		t.Fatalf("get send: %v", err)
+	}
+	wire, err := enmime.ReadEnvelope(strings.NewReader(string(row.WireBody)))
+	if err != nil {
+		t.Fatalf("parse wire body: %v", err)
+	}
+	if !strings.Contains(wire.HTML, "<strong>hi</strong>") {
+		t.Errorf("legacy markdown flag did not render: %q", wire.HTML)
+	}
+}
