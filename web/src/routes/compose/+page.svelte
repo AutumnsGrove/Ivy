@@ -7,6 +7,7 @@
 	import { createAutosaver } from '#lib/compose/autosave.js';
 	import { applySignature } from '#lib/compose/signature.js';
 	import { textToHtml } from '#lib/compose/sanitize.js';
+	import { newId } from '#lib/ids.js';
 	import { Bold, ChevronDown, FileText, ImageIcon, Italic, Link, List, Paperclip, Send, X } from '#lib/icons.js';
 	import { prepareImage } from '#lib/photo.js';
 	import { sends } from '#lib/sends.svelte.js';
@@ -126,7 +127,7 @@
 	const auto = createAutosaver({
 		save: (state) =>
 			api.saveDraft({
-				id: crypto.randomUUID(),
+				id: newId(),
 				draftId: state.draftId,
 				baseVersion: state.version,
 				accountId: snap.accountId,
@@ -203,7 +204,7 @@
 		inlineNext = false;
 		for (const file of files) {
 			const isImage = (file.type || '').startsWith('image/');
-			const tempId = crypto.randomUUID();
+			const tempId = newId();
 			const att: Att = { id: '', tempId, name: file.name, size: formatSize(file.size), image: isImage, inline: false, pending: true };
 			attachments = [...attachments, att];
 			try {
@@ -345,7 +346,7 @@
 		sending = true;
 		try {
 			const status = await api.sendMessage({
-				id: crypto.randomUUID(),
+				id: newId(),
 				accountId: snap.accountId,
 				from,
 				fromName,

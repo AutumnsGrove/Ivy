@@ -1626,3 +1626,32 @@ Baseline on `4f34628`: `go build`, `go vet` and `go test -count=1 ./...` all gre
   becomes the Message-ID the worker searches for in Drafts, but had no maximum (only the 1 MiB body bound it;
   4a). Reproduced with `TestSendRefusesAnOversizedDraftMessageID` (a 400-byte id was accepted with 202; failed
   before). It is now refused with 400 above `compose.MaxMessageIDBytes`.
+
+### `bba47fc` compose screen
+
+- **#143** · `bba47fc` · `web/src/routes/compose/+page.svelte`, `web/src/lib/ids.ts` · **bug** · the compose screen called
+  `crypto.randomUUID()` for every draft save, send and upload handle, and that function does not exist outside a
+  secure context. `docs/DEPLOY.md` has the operator open `http://potato.<tailnet>.ts.net:8418` (plain http), so on
+  the phone every save, send and attachment would throw a `TypeError` before a request left. The Playwright runs
+  use localhost, which is a secure context, so no existing test could see it. Reproduced with `ids.test.ts`
+  ("still works when crypto.randomUUID is unavailable", with the global stubbed away); the module did not exist,
+  so the suite failed to load. All three call sites now use `newId()`, which falls back to `getRandomValues`.
+  Unverified here: Safari over http on a real tailnet host.
+- **#144** · `bba47fc` · `web/src/lib/compose/autosave.ts` · **bug** · the server minted the draft id on the first save, so a
+  first save whose reply was lost (a phone on a flaky link) was retried with no `draftId` and the server filed a
+  second draft beside the first, orphaning it in Drafts. Reproduced with the new autosave test "names the draft
+  before the first save so a retry cannot fork it" (`draftId` was `undefined` on both attempts; failed before).
+  The autosaver mints the id before the first attempt. The test that asserted `draftId: undefined` verbatim now
+  expects a string.
+- **N49 (open, needs a design decision)** · `fa052ad`, `bba47fc` · `store/drafts.go`, `sync/outbox.go` · a draft op that fails
+  permanently (over quota, `draft_gone`, `not_drafts`, no UIDPLUS) leaves its version in state `saving` for
+  good: the list shows it as saved, `MarkDraftSaved` never runs, and `SaveDraft`'s prune keeps `saving`
+  rows, so the body (up to about 33 MiB) is never freed. Nothing in the draft summary exposes the state. Recommend
+  a `failed` state set from the worker's `fail`, surfaced as a "not on the server" mark in the list, and pruned
+  with the other terminal rows.
+- **N50 (open, needs a decision)** · `bba47fc` · `web/src/routes/compose/+page.svelte` · a retried save after a lost reply
+  now keeps its draft but still meets `409 draft_conflict` against its own committed version (the retry carries
+  a fresh version id and the old base), so the operator sees "This draft changed somewhere else" for their own
+  edit. It is safe (the conflict adopts the head and saves again) but misleading. Recommend reusing one save id
+  while the revision is unchanged, and having the conflict body carry the head's version id so the client can
+  tell its own save from another tab's.

@@ -26,7 +26,26 @@ describe('createAutosaver', () => {
 		expect(save).not.toHaveBeenCalled();
 		await vi.advanceTimersByTimeAsync(2000);
 		expect(save).toHaveBeenCalledTimes(1);
-		expect(save).toHaveBeenCalledWith({ draftId: undefined, version: 0 });
+		expect(save).toHaveBeenCalledWith({ draftId: expect.any(String), version: 0 });
+		auto.dispose();
+	});
+
+	// The first save's reply can be lost after the server committed it. The retry has
+	// to name the same draft, or the server files a second draft beside the first.
+	it('names the draft before the first save so a retry cannot fork it', async () => {
+		const seen: string[] = [];
+		const save = vi.fn(async (s: AutosaveState) => {
+			seen.push(s.draftId);
+			if (seen.length === 1) throw new Error('reply lost');
+			return summary(1, s.draftId);
+		});
+		const auto = createAutosaver({ save, delayMs: 100, onError: () => {} });
+		auto.touch();
+		await vi.advanceTimersByTimeAsync(100);
+		await auto.flush();
+		expect(seen).toHaveLength(2);
+		expect(seen[0]).toBeTruthy();
+		expect(seen[1]).toBe(seen[0]);
 		auto.dispose();
 	});
 

@@ -3,10 +3,15 @@
 // quiet delay, never two at once, and an edit that lands mid-save schedules another
 // so nothing typed is lost. The server's optimistic version is adopted from each
 // reply, so a stale save is the only way the two tabs can race.
+import { newId } from '#lib/ids.js';
 import type { DraftSummary } from '#lib/types.js';
 
-/** The version a save begins from; the screen fills in the content from its own state. */
-export type AutosaveState = { draftId?: string; version: number };
+/**
+ * The version a save begins from; the screen fills in the content from its own state. The
+ * draft id is minted before the first save, so a save whose reply is lost and is retried
+ * still names the same draft instead of forking a second one.
+ */
+export type AutosaveState = { draftId: string; version: number };
 
 export type Autosaver = {
 	/** An edit happened; schedule a save after the quiet delay. */
@@ -63,6 +68,7 @@ export function createAutosaver(opts: {
 		}
 		const rev = revision;
 		let failed = false;
+		draftId ??= newId();
 		running = (async () => {
 			try {
 				const saved = await opts.save({ draftId, version });
