@@ -3,18 +3,35 @@
 	import { Flag } from '#lib/icons.js';
 	import { markReadOnOpen } from '#lib/messageActions.js';
 	import { outbox } from '#lib/outbox.svelte.js';
-	import type { MailMessage } from '#lib/types.js';
+	import type { MailMessage, MessageParty } from '#lib/types.js';
 	import Avatar from '../ui/Avatar.svelte';
 	import Dot from '../ui/Dot.svelte';
 	import Pill from '../ui/Pill.svelte';
 	import SmartChip from '../ui/SmartChip.svelte';
 	import AttachmentGroup from './AttachmentGroup.svelte';
 	import MessageBody from './MessageBody.svelte';
+	import SenderSheet from './SenderSheet.svelte';
 
 	type Props = {
 		message: Pick<
 			MailMessage,
-			'id' | 'subject' | 'from' | 'initials' | 'date' | 'toShort' | 'needs' | 'flagged' | 'tag' | 'summary' | 'html' | 'paragraphs' | 'attachments'
+			| 'id'
+			| 'subject'
+			| 'from'
+			| 'initials'
+			| 'date'
+			| 'toShort'
+			| 'needs'
+			| 'flagged'
+			| 'tag'
+			| 'summary'
+			| 'html'
+			| 'paragraphs'
+			| 'attachments'
+			| 'sender'
+			| 'to'
+			| 'cc'
+			| 'auth'
 		> & { unread?: boolean };
 		/** The account colour for the sender avatar and dot. */
 		color: string;
@@ -25,6 +42,13 @@
 	const bodySrc = $derived(`/api/v1/messages/${encodeURIComponent(message.id)}/body`);
 	// A live flag op is the optimistic truth; the loaded message is the fallback.
 	const flagged = $derived(outbox.flags(message.id)?.flagged ?? message.flagged ?? false);
+	// The sender sheet: tapping the sender, or the To line, opens it on that person.
+	let sheetOpen = $state(false);
+	let sheetParty = $state<MessageParty | null>(null);
+	function show(party: MessageParty) {
+		sheetParty = party;
+		sheetOpen = true;
+	}
 	// The cleanup is the cancel, so closing the reader inside the dwell marks nothing.
 	$effect(() => markReadOnOpen({ id: message.id, unread: message.unread ?? false }));
 </script>
@@ -42,9 +66,11 @@
 	<div class="from">
 		<Avatar initials={message.initials} {color} size="lg" />
 		<div class="who">
-			<div class="name">{message.from}</div>
+			<button type="button" class="name tap" onclick={() => show(message.sender)}>{message.from}</button>
 			<div class="to">
-				<Dot {color} />to {message.toShort} · {formatMessageTime(message.date)}
+				<Dot {color} />
+				<button type="button" class="tap" onclick={() => show(message.to[0] ?? message.sender)}>to {message.toShort}</button>
+				· {formatMessageTime(message.date)}
 				<!-- Flagging itself lives in More; this only says it is so. -->
 				{#if flagged}<span class="flagged" role="img" aria-label="Flagged"><Flag /></span>{/if}
 			</div>
@@ -67,6 +93,8 @@
 		<div class="attach"><AttachmentGroup attachments={message.attachments} {wide} /></div>
 	{/if}
 </article>
+
+<SenderSheet bind:open={sheetOpen} party={sheetParty ?? message.sender} {message} />
 
 <style>
 	.msg {
@@ -99,8 +127,26 @@
 		min-width: 0;
 	}
 	.name {
+		display: block;
 		font-size: var(--fs-ui-lg);
 		font-weight: 500;
+	}
+	/* The sender and the To line are buttons that look like the text they replace. */
+	.tap {
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		text-align: start;
+		cursor: pointer;
+		/* A sender-chosen name has no spaces to break at. */
+		max-width: 100%;
+		overflow-wrap: anywhere;
+	}
+	.tap:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
 	}
 	.to {
 		display: flex;

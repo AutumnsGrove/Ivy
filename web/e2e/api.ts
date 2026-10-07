@@ -204,8 +204,18 @@ function messageReply(id: string, scenario: string | null, tagIds: string[]): Re
 			a.id === 'f2' ? ({ ...a, failed: true } as Attachment) : a
 		);
 	}
-	return { body: { ...summary, ...body, ...(tagIds.length > 0 ? { tagIds } : {}) } satisfies MailMessage };
+	// Names the sender controls: an address that is not theirs, very long, right to left, quotes.
+	const hostile = scenario === 'hostile-sender' ? (HOSTILE_SENDERS[id] ?? HOSTILE_SENDERS.default) : null;
+	if (hostile) body.sender = { name: hostile, address: 'phish@evil.test' };
+	return {
+		body: { ...summary, ...(hostile ? { from: hostile } : {}), ...body, ...(tagIds.length > 0 ? { tagIds } : {}) } satisfies MailMessage
+	};
 }
+
+const HOSTILE_SENDERS: Record<string, string> = {
+	m1: 'security@mybank.com',
+	default: 'x'.repeat(400) + ' مرحبا "quoted"'
+};
 
 function bodyDocument(id: string): Reply | null {
 	const message = mock.inbox.find((x) => x.id === id);

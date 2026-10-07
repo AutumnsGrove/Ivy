@@ -178,6 +178,11 @@ export const inbox: MailSummary[] = [
 const maraBody: Omit<MailMessage, keyof MailSummary> = {
 	toShort: 'hello@',
 	toFull: 'hello@example.com',
+	sender: { name: 'Mara Linden', address: 'mara@example.com', personId: 'p-ml' },
+	to: [{ name: '', address: 'hello@example.com' }],
+	cc: [{ name: 'Taro Kimura', address: 'taro@example.com', personId: 'p-tk' }],
+	// Purelymail adds no verdicts today, so the honest default is "none".
+	auth: { state: 'none' },
 	summary: 'Mara wonders if she can bring her old posts and images to Grove. No rush.',
 	html: '<p>Hi there,</p><p>I found Grove through a friend, and I&#39;ve been writing on a small blog for about six years. Before I set anything up, I wanted to ask whether I can bring my old posts with me, and whether the images come along too.</p><p>No rush at all. Thank you for building something so gentle.</p><img src="/favicon.ico" alt="inline logo" width="32" height="32">',
 	paragraphs: [
@@ -198,6 +203,10 @@ export function messageBody(id: string): Omit<MailMessage, keyof MailSummary> {
 	return {
 		toShort: 'me@',
 		toFull: 'me@example.com',
+		sender: { name: m?.from ?? '', address: 'sender@example.com', personId: 'sender@example.com' },
+		to: [{ name: '', address: 'me@example.com' }],
+		cc: [],
+		auth: { state: 'none' },
 		html: `<p>${m?.preview.replace(/…$/, '.') ?? ''}</p><p>The rest of this message is a placeholder.</p>`,
 		paragraphs: [m?.preview.replace(/…$/, '.') ?? '', 'The rest of this message is a placeholder.'],
 		attachments: []

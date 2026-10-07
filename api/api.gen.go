@@ -202,6 +202,30 @@ func (e LivenessStatus) Valid() bool {
 	}
 }
 
+// Defines values for MessageAuthState.
+const (
+	Fail  MessageAuthState = "fail"
+	Mixed MessageAuthState = "mixed"
+	None  MessageAuthState = "none"
+	Pass  MessageAuthState = "pass"
+)
+
+// Valid indicates whether the value is a known member of the MessageAuthState enum.
+func (e MessageAuthState) Valid() bool {
+	switch e {
+	case Fail:
+		return true
+	case Mixed:
+		return true
+	case None:
+		return true
+	case Pass:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OutboxActionAction.
 const (
 	OutboxActionArchive OutboxActionAction = "archive"
@@ -954,6 +978,10 @@ type MailMessage struct {
 	AccountId   string       `json:"accountId"`
 	Attachments []Attachment `json:"attachments"`
 
+	// Auth What the mail provider vouched for. Only a trusted server's verdicts are believed, so a provider that adds none (Purelymail today) is `none`, which means unknown and is never shown as an all-clear.
+	Auth MessageAuth    `json:"auth"`
+	Cc   []MessageParty `json:"cc"`
+
 	// Date The message's instant, RFC 3339 in UTC (see MailSummary).
 	Date time.Time `json:"date"`
 
@@ -968,15 +996,19 @@ type MailMessage struct {
 	Needs      bool     `json:"needs"`
 	Paragraphs []string `json:"paragraphs"`
 	Preview    string   `json:"preview"`
-	Subject    string   `json:"subject"`
-	Summary    *string  `json:"summary,omitempty"`
-	Tag        *string  `json:"tag,omitempty"`
+
+	// Sender Someone on a message, exactly as the sender wrote it. The name is sender-controlled text and must be shown as plain text next to the real address, since a name that contains another address is the classic spoof.
+	Sender  MessageParty `json:"sender"`
+	Subject string       `json:"subject"`
+	Summary *string      `json:"summary,omitempty"`
+	Tag     *string      `json:"tag,omitempty"`
 
 	// TagIds Every tag the message is in, for the tag picker; `tag` is the first by name
-	TagIds  *[]string `json:"tagIds,omitempty"`
-	ToFull  string    `json:"toFull"`
-	ToShort string    `json:"toShort"`
-	Unread  bool      `json:"unread"`
+	TagIds  *[]string      `json:"tagIds,omitempty"`
+	To      []MessageParty `json:"to"`
+	ToFull  string         `json:"toFull"`
+	ToShort string         `json:"toShort"`
+	Unread  bool           `json:"unread"`
 }
 
 // MailSummary defines model for MailSummary.
@@ -996,6 +1028,31 @@ type MailSummary struct {
 	Subject  string  `json:"subject"`
 	Tag      *string `json:"tag,omitempty"`
 	Unread   bool    `json:"unread"`
+}
+
+// MessageAuth What the mail provider vouched for. Only a trusted server's verdicts are believed, so a provider that adds none (Purelymail today) is `none`, which means unknown and is never shown as an all-clear.
+type MessageAuth struct {
+	// AuthservId The server that attested the verdicts
+	AuthservId *string          `json:"authservId,omitempty"`
+	Dkim       *string          `json:"dkim,omitempty"`
+	Dmarc      *string          `json:"dmarc,omitempty"`
+	Spf        *string          `json:"spf,omitempty"`
+	State      MessageAuthState `json:"state"`
+}
+
+// MessageAuthState defines model for MessageAuth.State.
+type MessageAuthState string
+
+// MessageParty Someone on a message, exactly as the sender wrote it. The name is sender-controlled text and must be shown as plain text next to the real address, since a name that contains another address is the classic spoof.
+type MessageParty struct {
+	// Address The address, lower-cased
+	Address string `json:"address"`
+
+	// Name The display name with any wrapping quotes removed; empty when there is none
+	Name string `json:"name"`
+
+	// PersonId The People page for this address, after the operator's merges. Absent for the operator's own addresses, which People leaves out.
+	PersonId *string `json:"personId,omitempty"`
 }
 
 // OutboxAction defines model for OutboxAction.

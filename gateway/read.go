@@ -192,9 +192,17 @@ func (s *Server) messageView(r *http.Request, m store.Message) (api.MailMessage,
 	if err != nil {
 		return api.MailMessage{}, err
 	}
+	parties, err := s.partyBuilder(r.Context())
+	if err != nil {
+		return api.MailMessage{}, err
+	}
 	v := api.MailMessage{
 		Id:          m.ID,
 		AccountId:   m.AccountID,
+		Sender:      parties.one(m.From),
+		To:          parties.list(m.To),
+		Cc:          parties.list(m.CC),
+		Auth:        authView(m.AuthResults),
 		From:        displayName(m.From),
 		Initials:    initials(m.From.Name, m.From.Address),
 		Date:        m.Date.UTC(),

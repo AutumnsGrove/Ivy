@@ -1782,8 +1782,20 @@ components:
       type: object
       required:
         [id, accountId, from, initials, date, subject, preview, unread, needs,
-         toShort, toFull, paragraphs, attachments]
+         toShort, toFull, sender, to, cc, auth, paragraphs, attachments]
       properties:
+        sender:
+          $ref: "#/components/schemas/MessageParty"
+        to:
+          type: array
+          items:
+            $ref: "#/components/schemas/MessageParty"
+        cc:
+          type: array
+          items:
+            $ref: "#/components/schemas/MessageParty"
+        auth:
+          $ref: "#/components/schemas/MessageAuth"
         id:
           type: string
         accountId:
@@ -1833,6 +1845,45 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Attachment"
+    MessageParty:
+      type: object
+      description: >
+        Someone on a message, exactly as the sender wrote it. The name is
+        sender-controlled text and must be shown as plain text next to the real
+        address, since a name that contains another address is the classic spoof.
+      required: [name, address]
+      properties:
+        name:
+          type: string
+          description: The display name with any wrapping quotes removed; empty when there is none
+        address:
+          type: string
+          description: The address, lower-cased
+        personId:
+          type: string
+          description: >
+            The People page for this address, after the operator's merges. Absent
+            for the operator's own addresses, which People leaves out.
+    MessageAuth:
+      type: object
+      description: >
+        What the mail provider vouched for. Only a trusted server's verdicts are
+        believed, so a provider that adds none (Purelymail today) is `none`, which
+        means unknown and is never shown as an all-clear.
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [none, pass, fail, mixed]
+        authservId:
+          type: string
+          description: The server that attested the verdicts
+        spf:
+          type: string
+        dkim:
+          type: string
+        dmarc:
+          type: string
     ComposePrefill:
       type: object
       description: >

@@ -1042,6 +1042,10 @@ export interface components {
             tag?: string;
         };
         MailMessage: {
+            sender: components["schemas"]["MessageParty"];
+            to: components["schemas"]["MessageParty"][];
+            cc: components["schemas"]["MessageParty"][];
+            auth: components["schemas"]["MessageAuth"];
             id: string;
             accountId: string;
             from: string;
@@ -1067,6 +1071,25 @@ export interface components {
             html?: string;
             paragraphs: string[];
             attachments: components["schemas"]["Attachment"][];
+        };
+        /** @description Someone on a message, exactly as the sender wrote it. The name is sender-controlled text and must be shown as plain text next to the real address, since a name that contains another address is the classic spoof. */
+        MessageParty: {
+            /** @description The display name with any wrapping quotes removed; empty when there is none */
+            name: string;
+            /** @description The address, lower-cased */
+            address: string;
+            /** @description The People page for this address, after the operator's merges. Absent for the operator's own addresses, which People leaves out. */
+            personId?: string;
+        };
+        /** @description What the mail provider vouched for. Only a trusted server's verdicts are believed, so a provider that adds none (Purelymail today) is `none`, which means unknown and is never shown as an all-clear. */
+        MessageAuth: {
+            /** @enum {string} */
+            state: "none" | "pass" | "fail" | "mixed";
+            /** @description The server that attested the verdicts */
+            authservId?: string;
+            spf?: string;
+            dkim?: string;
+            dmarc?: string;
         };
         /** @description A ready-to-edit compose state computed from an incoming message: the recipients, subject, body and threading headers, plus the identity to send as. The compose screen may change any of it before sending. */
         ComposePrefill: {

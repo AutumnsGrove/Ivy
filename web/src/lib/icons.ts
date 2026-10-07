@@ -45,6 +45,8 @@ export { default as ChevronLeft } from '@lucide/svelte/icons/chevron-left';
 export { default as Forward } from '@lucide/svelte/icons/forward';
 export { default as Clock } from '@lucide/svelte/icons/clock';
 
+export { default as Copy } from '@lucide/svelte/icons/copy';
+
 // The account badge picker (accountIcons.ts). A small curated set, not the library.
 export { default as Leaf } from '@lucide/svelte/icons/leaf';
 export { default as Moon } from '@lucide/svelte/icons/moon';
