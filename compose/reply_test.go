@@ -272,3 +272,51 @@ func TestAppendSignature(t *testing.T) {
 		t.Errorf("trailing newlines = %q, want them collapsed before the separator", got)
 	}
 }
+
+// When Reply-To redirects the reply (a list, a contact form), reply-all must
+// still reach the person who wrote the message.
+func TestReplyAllKeepsTheOriginalSenderWhenReplyToRedirects(t *testing.T) {
+	t.Parallel()
+	in := incoming()
+	in.ReplyTo = []Address{addr("list@example.com")}
+	got := Reply(in, []IdentityRef{aliceIdentity}, aliceIdentity, true)
+	if len(got.To) != 1 || got.To[0].Address != "list@example.com" {
+		t.Fatalf("to = %v, want the Reply-To", addresses(got.To))
+	}
+	found := false
+	for _, a := range got.Cc {
+		found = found || a.Address == "mara@example.com"
+	}
+	if !found {
+		t.Errorf("cc = %v, want the original sender kept", addresses(got.Cc))
+	}
+	// A direct reply is still only the Reply-To.
+	if direct := Reply(in, []IdentityRef{aliceIdentity}, aliceIdentity, false); len(direct.Cc) != 0 {
+		t.Errorf("direct cc = %v, want none", addresses(direct.Cc))
+	}
+}
+
+// Replying to a message the operator sent goes to its recipients, not back to
+// the operator.
+func TestReplyToOwnMessageGoesToItsRecipients(t *testing.T) {
+	t.Parallel()
+	in := Incoming{
+		From:      []Address{named("Autumn", "hello@example.test")},
+		To:        []Address{addr("mara@example.com"), addr("friend@example.com")},
+		Subject:   "Moving my blog over",
+		MessageID: "<mine-1@example.test>",
+	}
+	ids := []IdentityRef{aliceIdentity, aliasIdentity}
+	got := Reply(in, ids, aliceIdentity, false)
+	if len(got.To) != 1 || got.To[0].Address != "mara@example.com" {
+		t.Fatalf("to = %v, want the original first recipient", addresses(got.To))
+	}
+	all := Reply(in, ids, aliceIdentity, true)
+	if len(all.To) != 1 || all.To[0].Address != "mara@example.com" ||
+		len(all.Cc) != 1 || all.Cc[0].Address != "friend@example.com" {
+		t.Fatalf("reply-all to=%v cc=%v, want mara to and friend cc", addresses(all.To), addresses(all.Cc))
+	}
+	if got.From.Address != "hello@example.test" {
+		t.Errorf("from = %q, want the identity that wrote it", got.From.Address)
+	}
+}

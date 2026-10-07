@@ -58,6 +58,17 @@ type Prefill struct {
 func Reply(orig Incoming, ids []IdentityRef, accountDefault IdentityRef, all bool) Prefill {
 	from, missing := chooseIdentity(orig, ids, accountDefault)
 	target := directTarget(orig)
+	if isOwnAddress(target.Address, ids, accountDefault) {
+		// The operator wrote this message, so the conversation continues with
+		// whoever it was sent to, not with the operator.
+		target = Address{}
+		for _, a := range orig.To {
+			if a.Address != "" && !isOwnAddress(a.Address, ids, accountDefault) {
+				target = a
+				break
+			}
+		}
+	}
 	p := Prefill{
 		From: asAddress(from), MissingIdentity: missing, ReplyTarget: target.Address,
 		Subject: replySubject(orig.Subject), InReplyTo: orig.MessageID,
@@ -147,6 +158,22 @@ func directTarget(orig Incoming) Address {
 	return Address{}
 }
 
+// isOwnAddress reports whether an address is one the operator sends as.
+func isOwnAddress(address string, ids []IdentityRef, accountDefault IdentityRef) bool {
+	if address == "" {
+		return false
+	}
+	if strings.EqualFold(address, accountDefault.Address) {
+		return true
+	}
+	for _, id := range ids {
+		if strings.EqualFold(address, id.Address) {
+			return true
+		}
+	}
+	return false
+}
+
 // otherRecipients is reply-all's Cc: the original To then Cc, de-duplicated
 // case-insensitively, with the operator's own addresses and the direct recipient
 // removed.
@@ -165,7 +192,13 @@ func otherRecipients(orig Incoming, ids []IdentityRef, accountDefault IdentityRe
 	}
 	seen := map[string]bool{}
 	var out []Address
-	for _, list := range [][]Address{orig.To, orig.Cc} {
+	lists := [][]Address{orig.To, orig.Cc}
+	if len(orig.ReplyTo) > 0 {
+		// Reply-To redirected the reply, so the sender is no longer the direct
+		// recipient and would drop out of the conversation.
+		lists = [][]Address{orig.From, orig.To, orig.Cc}
+	}
+	for _, list := range lists {
 		for _, a := range list {
 			key := strings.ToLower(a.Address)
 			if a.Address == "" || skip[key] || seen[key] {
@@ -204,6 +237,12 @@ func chooseIdentity(orig Incoming, ids []IdentityRef, accountDefault IdentityRef
 			}
 		}
 		return IdentityRef{}, false
+	}
+	// A message the operator wrote is continued as the identity that wrote it.
+	for _, a := range orig.From {
+		if id, ok := find(a.Address); ok && a.Address != "" {
+			return id, ""
+		}
 	}
 	var missing string
 	for _, a := range orig.DeliveredTo {

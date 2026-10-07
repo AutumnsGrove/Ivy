@@ -1607,3 +1607,15 @@ Baseline on `4f34628`: `go build`, `go vet` and `go test -count=1 ./...` all gre
   checked for CR, LF or NUL, so a name with a line break was stored (200) and then made every draft and send as
   that address fail in the builder with a message about the From header. Reproduced with
   `TestSaveIdentityRejectsAHostileName` (200; failed before). It is now a 400 `bad_request` at entry.
+
+### `0aff6ca` reply and forward prefills
+
+- **#140** · `0aff6ca` · `compose/reply.go` · **bug** · reply-all with a Reply-To (a list, a contact form) put only the
+  Reply-To in To and the original To and Cc in Cc, so the person who wrote the message dropped out of the
+  conversation. Reproduced with `TestReplyAllKeepsTheOriginalSenderWhenReplyToRedirects` (failed before).
+  `TestReplyAllPrefillKeepsTheOthers` asserted the old Cc verbatim and now expects the sender first.
+- **#141** · `0aff6ca` · `compose/reply.go` · **bug** · replying to a message the operator sent (Sent folder, or a thread
+  view) addressed the reply to the operator, because the target was From, and sent it as the account default even
+  when an alias wrote it. Reproduced with `TestReplyToOwnMessageGoesToItsRecipients` (to was the operator's own
+  address; failed before). The target is now the first recipient who is not the operator, the rest go to reply-all's
+  Cc, and a message written by one of the identities is continued as that identity.

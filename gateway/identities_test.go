@@ -190,7 +190,7 @@ func TestReplyPrefillUsesTheDeliveredIdentity(t *testing.T) {
 }
 
 // A reply-all Ccs the others, minus the operator's own addresses and the direct
-// target.
+// target. The message has a Reply-To, so the sender is one of the others.
 func TestReplyAllPrefillKeepsTheOthers(t *testing.T) {
 	t.Parallel()
 	srv, dbs := identityServer(t)
@@ -200,8 +200,8 @@ func TestReplyAllPrefillKeepsTheOthers(t *testing.T) {
 	if code := getJSON(t, srv.URL+"/api/v1/messages/m1/reply?all=true", &p); code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", code)
 	}
-	if len(p.Cc) != 1 || p.Cc[0] != "friend@example.com" {
-		t.Errorf("cc = %v, want the other Cc only", p.Cc)
+	if len(p.Cc) != 2 || p.Cc[0] != "mara@example.com" || p.Cc[1] != "friend@example.com" {
+		t.Errorf("cc = %v, want the sender then the other Cc", p.Cc)
 	}
 }
 
