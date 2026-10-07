@@ -1655,3 +1655,18 @@ Baseline on `4f34628`: `go build`, `go vet` and `go test -count=1 ./...` all gre
   edit. It is safe (the conflict adopts the head and saves again) but misleading. Recommend reusing one save id
   while the revision is unchanged, and having the conflict body carry the head's version id so the client can
   tell its own save from another tab's.
+
+### Docs and measure-first items
+
+- **#145** · `d4734d5` · `docs/STANDARDS.md` · **nit** · the 4a limits table had no rows for the draft Message-ID, the merged drafts
+  list limit or the identity name rule (#133, #139, #142); added.
+- **N51 (open, measure first)** · `6b78c73` · `web/src/lib/api/client.ts` · `uploadAttachment` reads the file with
+  `await file.arrayBuffer()` before sending, so a 25 MiB photo is held twice in the phone's memory; passing the
+  `Blob` as the body lets the browser stream it. Not changed without a number from a real iPhone.
+
+### Gate at the end of this review
+
+`go tool gofumpt -l .` clean, `go vet ./...` clean, `go tool staticcheck ./...` clean, `golangci-lint run ./...`
+(v2.12.1) 0 issues, `CGO_ENABLED=1 go test -race -count=1 ./...` all packages pass, `pnpm test` (358) and
+`pnpm check` (0 errors) pass. Not run here: `govulncheck`, the Playwright suites, a smoke run of the binary, any
+real browser or the potato.

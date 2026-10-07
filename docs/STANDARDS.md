@@ -279,6 +279,9 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | A compose request body (`maxSendBodyBytes`) | `compose.MaxBodyBytes` + 64 KiB | rejected with 400 `bad_request` |
 | A draft save request body (`maxDraftBodyBytes`) | `compose.MaxBodyBytes` + 64 KiB | rejected with 400 `bad_request` |
 | A client's draft or version id (`maxDraftIDBytes`) | 128 bytes | rejected with 400 `bad_request` |
+| The draft Message-ID a send names (`draftMessageId`) | `compose.MaxMessageIDBytes` (320) | rejected with 400 `bad_request` |
+| `GET /drafts?limit` | default 50, max 200, applied to the merged local and server list | clamped, never an error |
+| An identity display name (`maxIdentityNameRunes`) | 120 runes, no CR, LF or NUL | rejected with 400 `bad_request` |
 | Live version rows for one draft | the head plus any `saving`; a superseded terminal row is pruned on the next save | the pruned row's bytes are no longer needed: its op is terminal |
 | Terminal draft rows kept (`store.DraftTerminalRetention`) | 7 days | pruned; the drafts table's only deletion, and only of terminal rows |
 | Drafts listed (`store.MaxDraftListLimit`) | 200, default 50 | a larger `limit` is clamped; a local head and its mirrored copy count once |
