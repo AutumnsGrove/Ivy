@@ -100,7 +100,7 @@ and resumes a draft. The attach sheet stays a preview and blocks send until 4g; 
 stay inert until 4h. Wiring it surfaced and fixed a 4d gap: `POST /send` now records the draft
 version it came from (`draftMessageId`) so a sent copy leaves Drafts, and the reply/forward prefill
 now names its account (`accountId`) so the screen loads the right identities. `make check`, `pnpm
-test` and the mock Playwright suite (328 passed, 10 skipped, phone and desktop) are green. **Next:
+test` and the mock Playwright suite (330 passed, 10 skipped, phone and desktop) are green. **Next:
 4g**, outgoing attachments and images (gate G4 before any new dependency).
 
 **4c is done** (2026-10-06). `compose.undo_delay_seconds` is a global/per-account setting (default 10,

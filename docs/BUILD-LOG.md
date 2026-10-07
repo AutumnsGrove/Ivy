@@ -871,10 +871,10 @@ leave**, and the **attach sheet kept as a preview that blocks send** until 4g.
 - **`/drafts`.** Local and mirrored heads newest first, resume into the composer, discard behind the
   shared confirm; linked from the folder list.
 - **Tests.** The four helper suites (36 tests) and the sends store suite; `e2e/drafts.spec.ts` (list,
-  resume, confirm-discard, empty, and a debounced autosave that the list then shows) and the rewritten
-  `flows.spec.ts` compose block (a refused send keeps the draft, undo hands it back, People
-  autocomplete, the From picker) on phone and desktop. Full mock Playwright suite: 328 passed, 10
-  skipped. `pnpm test` 336.
+  resume, confirm-discard, empty, and a debounced autosave that the list then shows), `e2e/send.spec.ts`
+  (the unconfirmed notice, no resend control) and the rewritten `flows.spec.ts` compose block (a
+  refused send keeps the draft, undo hands it back, People autocomplete, the From picker) on phone and
+  desktop. Full mock Playwright suite: 330 passed, 10 skipped. `pnpm test` 336.
 - **Left for the operator.** The live check once 4f is on the board: send to self, see the Sent copy
   and the draft in Apple Mail, resume a draft made there, confirm a sent draft leaves Drafts, and the
   per-address send-as check from 4e.
