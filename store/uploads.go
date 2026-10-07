@@ -63,6 +63,8 @@ func (d *DBs) StageUpload(ctx context.Context, up Upload, r io.Reader, maxBytes 
 	case maxBytes <= 0:
 		return Upload{}, errors.New("stage upload: max must be positive")
 	}
+	d.uploadMu.RLock()
+	defer d.uploadMu.RUnlock()
 	existing, err := d.GetUpload(ctx, up.AccountID, up.ID)
 	if err == nil {
 		return existing, nil
@@ -112,44 +114,47 @@ func (d *DBs) OpenUpload(u Upload) (io.ReadCloser, error) {
 // DeleteUpload removes one account's staged upload and its file once no row
 // shares the hash. A missing row is ErrNotFound.
 func (d *DBs) DeleteUpload(ctx context.Context, accountID, id string) error {
-	hash, remaining, err := d.deleteUploadRow(ctx, accountID, id)
+	hash, err := d.deleteUploadRow(ctx, accountID, id)
 	if err != nil {
 		return err
 	}
-	if remaining == 0 {
-		return d.Uploads.Remove(hash)
-	}
-	return nil
+	return d.releaseUploadBlob(ctx, hash)
 }
 
-// deleteUploadRow deletes the row and reports its hash and how many rows still
-// share that hash, in one transaction so the file decision cannot race.
-func (d *DBs) deleteUploadRow(ctx context.Context, accountID, id string) (string, int, error) {
+// releaseUploadBlob removes a blob nothing references. It never waits: if a stage
+// is in flight the file may be about to gain a row, so it is left for the orphan
+// sweep. The row count is taken under the lock, after any stage has finished.
+func (d *DBs) releaseUploadBlob(ctx context.Context, hash string) error {
+	if !d.uploadMu.TryLock() {
+		return nil
+	}
+	defer d.uploadMu.Unlock()
+	return d.removeUploadHash(ctx, hash)
+}
+
+// deleteUploadRow deletes the row and returns its hash.
+func (d *DBs) deleteUploadRow(ctx context.Context, accountID, id string) (string, error) {
 	tx, err := d.State.Write.BeginTx(ctx, nil)
 	if err != nil {
-		return "", 0, fmt.Errorf("delete upload %s: %w", id, err)
+		return "", fmt.Errorf("delete upload %s: %w", id, err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
 	var hash string
 	err = tx.QueryRowContext(ctx, `SELECT hash FROM uploads WHERE account_id = ? AND id = ?`, accountID, id).Scan(&hash)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", 0, ErrNotFound
+		return "", ErrNotFound
 	}
 	if err != nil {
-		return "", 0, fmt.Errorf("delete upload %s: %w", id, err)
+		return "", fmt.Errorf("delete upload %s: %w", id, err)
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM uploads WHERE account_id = ? AND id = ?`, accountID, id); err != nil {
-		return "", 0, fmt.Errorf("delete upload %s: %w", id, err)
-	}
-	var remaining int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM uploads WHERE hash = ?`, hash).Scan(&remaining); err != nil {
-		return "", 0, fmt.Errorf("delete upload %s: %w", id, err)
+		return "", fmt.Errorf("delete upload %s: %w", id, err)
 	}
 	if err := tx.Commit(); err != nil {
-		return "", 0, fmt.Errorf("delete upload %s: %w", id, err)
+		return "", fmt.Errorf("delete upload %s: %w", id, err)
 	}
-	return hash, remaining, nil
+	return hash, nil
 }
 
 // SweepUploads deletes uploads staged before the cutoff and removes each file
@@ -187,21 +192,11 @@ func (d *DBs) SweepUploads(ctx context.Context, before time.Time) (int, error) {
 	}
 	deleted, _ := res.RowsAffected()
 
-	var orphaned []string
-	for _, hash := range candidates {
-		var remaining int
-		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM uploads WHERE hash = ?`, hash).Scan(&remaining); err != nil {
-			return 0, fmt.Errorf("sweep uploads: %w", err)
-		}
-		if remaining == 0 {
-			orphaned = append(orphaned, hash)
-		}
-	}
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("sweep uploads: %w", err)
 	}
-	for _, hash := range orphaned {
-		if err := d.Uploads.Remove(hash); err != nil {
+	for _, hash := range candidates {
+		if err := d.releaseUploadBlob(ctx, hash); err != nil {
 			return int(deleted), err
 		}
 	}

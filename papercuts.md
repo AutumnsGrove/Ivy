@@ -1682,3 +1682,11 @@ real browser or the potato.
   the stored version instead of a conflict with the operator's own save; an edit mints a new id. Reproduced with
   "reuses the save id for a retry of unchanged content" (`saveId` did not exist; failed before). The 409 body is
   unchanged, so a genuine second-tab conflict still shows its toast.
+- **N46 resolved** (operator chose "one mutex in DBs") · `store/uploads.go`, `store/store.go` · a `sync.RWMutex`: `StageUpload`
+  holds the read lock from before the blob is written until the row is inserted, and delete and sweep release a
+  blob through `releaseUploadBlob`, which takes the write lock with `TryLock` and recounts rows under it. A removal
+  that finds a stage in flight skips the file instead of waiting (a delete must not hang behind a 25 MiB phone
+  upload); the orphan sweep (N47) collects it. Reproduced with
+  `TestDeleteUploadKeepsABlobAStageIsStillUsing` (the blob was removed mid-stage; failed before). That test proves
+  the ordering the lock gives, not the two-statement window itself, which cannot be paused from a test. The
+  in-transaction row counts in delete and sweep were dropped because they went stale before the file removal.

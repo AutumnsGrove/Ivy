@@ -200,3 +200,84 @@ func TestSweepUploadsDropsOnlyTheOldAndUnshared(t *testing.T) {
 		t.Errorf("file shared with a live row was removed: %v", err)
 	}
 }
+
+// gateReader serves its first half, then blocks until the gate opens, so a test
+// can hold a stage mid-flight.
+type gateReader struct {
+	first, rest *bytes.Reader
+	started     chan struct{}
+	gate        chan struct{}
+	begun       bool
+}
+
+func (g *gateReader) Read(p []byte) (int, error) {
+	if !g.begun {
+		g.begun = true
+		close(g.started)
+	}
+	if n, err := g.first.Read(p); n > 0 || err == nil {
+		return n, nil
+	}
+	<-g.gate
+	return g.rest.Read(p)
+}
+
+// A delete that runs while another stage of the same bytes is mid-flight must not
+// remove the shared blob: the stage's row is not inserted yet, so counting rows
+// would call the file unreferenced and leave the new row pointing at nothing. The
+// delete still returns promptly (it never waits behind a slow upload); removing
+// the file is left to the orphan sweep.
+func TestDeleteUploadKeepsABlobAStageIsStillUsing(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	first, r := newUpload("b", "acct-1", "one.bin", "application/octet-stream", "same-bytes")
+	staged, err := dbs.StageUpload(ctx, first, r, 1024)
+	if err != nil {
+		t.Fatalf("stage b: %v", err)
+	}
+
+	g := &gateReader{
+		first: bytes.NewReader([]byte("same-")), rest: bytes.NewReader([]byte("bytes")),
+		started: make(chan struct{}), gate: make(chan struct{}),
+	}
+	second, _ := newUpload("a", "acct-1", "two.bin", "application/octet-stream", "")
+	stageErr := make(chan error, 1)
+	go func() {
+		_, err := dbs.StageUpload(ctx, second, g, 1024)
+		stageErr <- err
+	}()
+	<-g.started
+
+	deleted := make(chan error, 1)
+	go func() { deleted <- dbs.DeleteUpload(ctx, "acct-1", "b") }()
+	select {
+	case err := <-deleted:
+		if err != nil {
+			t.Fatalf("delete b: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("delete waited behind an in-flight upload")
+	}
+	if !dbs.Uploads.Has(staged.Hash) {
+		t.Fatal("the blob was removed while a stage of the same bytes was in flight")
+	}
+
+	close(g.gate)
+	if err := <-stageErr; err != nil {
+		t.Fatalf("stage a: %v", err)
+	}
+	got, err := dbs.GetUpload(ctx, "acct-1", "a")
+	if err != nil {
+		t.Fatalf("get a: %v", err)
+	}
+	rc, err := dbs.OpenUpload(got)
+	if err != nil {
+		t.Fatalf("open a: %v", err)
+	}
+	defer rc.Close()
+	if data, _ := io.ReadAll(rc); string(data) != "same-bytes" {
+		t.Errorf("bytes = %q, want the staged content", data)
+	}
+}

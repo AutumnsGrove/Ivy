@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 
 	_ "modernc.org/sqlite" // the pure-Go driver, registered as "sqlite"
 
@@ -66,6 +67,11 @@ type DBs struct {
 	// (4g). It is transient: built draft and send bodies embed the bytes, so a
 	// swept staging file is re-materialised from the stored MIME on resume.
 	Uploads *blobstore.Store
+	// uploadMu orders staging against blob removal. A stage holds the read lock from
+	// before it writes the blob until its row is inserted; a removal takes the write
+	// lock without waiting, so a file another stage may be about to point a row at is
+	// never deleted (the orphan sweep collects it later).
+	uploadMu sync.RWMutex
 	// Dir is the data directory holding both files, so other packages can place
 	// their own files (the message spool) beside them.
 	Dir string
