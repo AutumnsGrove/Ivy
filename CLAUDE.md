@@ -41,7 +41,9 @@ self-hosted runners) · `docs/DEV.md` the offline seeded local dev stack (`make 
 engine · `docs/qa-log.md` every decision, in order · `docs/BUILD-LOG.md` what each finished chunk
 delivered · `next_steps.md` live status and the one backlog · `papercuts.md` review findings ·
 `docs/CHUNK3-BRIEF.md` standing instructions and stop-gates for chunk 3 · `docs/CHUNK4-BRIEF.md` the
-same for chunk 4 (send; read chunk 3's too) · `docs/handoffs/` committed checkpoint and stop notes.
+same for chunk 4 (send; read chunk 3's too) · `docs/CHUNK5-BRIEF.md` the same for chunk 5 (the LLM
+layer; read 3's and 4's too) with one plan per feature in `docs/chunk5/` (start at its `README.md`) ·
+`docs/handoffs/` committed checkpoint and stop notes.
 
 All development and UI iteration happens against the local dev stack and mailworld, never a real
 mailbox. Real credentials live only in a git-ignored `.env` and are used only by `live` tests.

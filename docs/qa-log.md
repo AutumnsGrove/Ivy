@@ -1641,3 +1641,26 @@ there.
   copy is never derived by splicing a header, so the Bcc invariant is untouched.
 - **Found on the way and fixed with it:** nothing called `PruneSendQueue`, so terminal sends were never deleted; the
   send worker now prunes on its first pass and hourly.
+
+## Chunk 5 planning (2026-10-07)
+
+Chunk 4 (send) closed with the second review pass (`papercuts.md`). The operator asked for chunk 5
+to be written up in dedicated plan files, because most of it is specific extras (Jev classifiers,
+summaries and so on) layered on a finished backend.
+
+- **Layout: a brief plus one plan per feature.** `docs/CHUNK5-BRIEF.md` holds the standing rules
+  (invariants, settled decisions, traps, escalation gates G1-G6 and triggers T14-T18, definition of
+  done), as chunks 3 and 4 did. `docs/chunk5/` has `README.md` (order, dependencies, what is real
+  today) and ten plans, 5a to 5j. Each can be built and reviewed on its own.
+- **Order: foundation first.** 5a (the gate generalised beyond embeddings, the ledger made readable,
+  the spend API replacing the mock) and 5b (the Jev layer) before any feature plan. The rest is a
+  recommended order, not a rule.
+- **Unsettled decisions are open questions, asked in batches.** A plan states only what the docs
+  already settle; every other choice is listed under its "Open questions", asked in the session and
+  recorded here before that stage starts. A stage with an unanswered question is not ready to build.
+- **Baseline checked against the code, not the docs.** Drafting the plans found several things the
+  docs implied but the code does not have: `X-Spam-Status`, `List-Id` and `List-Unsubscribe` are not
+  parsed; Ivy makes no outbound fetches yet; there is no server-side image decoding; there is no spend
+  endpoint in the contract; the existing `/messages/{id}/summary` is not an LLM summary; and the
+  `needs_me` table already exists with the inbox query reading `verdict = 'needs'`. The README's
+  "what is real and what is mocked today" table records them.
