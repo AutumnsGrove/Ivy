@@ -58,6 +58,12 @@ func (s *Server) handleSaveIdentity(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "That name is too long")
 		return
 	}
+	// The builder refuses these at send time; refusing here keeps a bad name from
+	// being saved and then breaking every send as this address.
+	if hasBadHeaderBytes(name) {
+		writeError(w, http.StatusBadRequest, "bad_request", "That name is not valid")
+		return
+	}
 	stored, err := s.dbs.UpsertIdentity(ctx, store.IdentityInput{
 		ID: s.newID(), AccountID: acct.ID, Address: strings.TrimSpace(body.Address),
 		DisplayName: name, Signature: stringOr(body.Signature, ""), Now: s.now().UTC(),

@@ -252,3 +252,17 @@ func TestReplyPrefillUnknownMessageIsNotFound(t *testing.T) {
 		t.Errorf("status = %d, want 404", code)
 	}
 }
+
+// A display name with a line break would be saved and then fail every send as
+// that address, so it is refused when it is entered.
+func TestSaveIdentityRejectsAHostileName(t *testing.T) {
+	t.Parallel()
+	srv, _ := identityServer(t)
+
+	name := "Autumn\r\nBcc: x@example.com"
+	code := doJSON(t, http.MethodPut, srv.URL+"/api/v1/accounts/acct-1/identities",
+		api.IdentityInput{Address: "alias@example.com", Name: &name}, nil, nil)
+	if code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", code)
+	}
+}

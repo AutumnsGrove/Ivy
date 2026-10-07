@@ -1600,3 +1600,10 @@ Baseline on `4f34628`: `go build`, `go vet` and `go test -count=1 ./...` all gre
   that is backed up daily and kept 15 days. An autosave every few seconds with a large attachment is heavy write
   amplification and backup growth on the potato's storage. Recommend measuring a 25 MiB attachment draft on the
   board, then keeping bodies in the blob store by hash with the row holding only the key.
+
+### `919588b` identities
+
+- **#139** · `919588b` · `gateway/identities.go` · **risk** · an identity display name was bounded in length but not
+  checked for CR, LF or NUL, so a name with a line break was stored (200) and then made every draft and send as
+  that address fail in the builder with a message about the From header. Reproduced with
+  `TestSaveIdentityRejectsAHostileName` (200; failed before). It is now a 400 `bad_request` at entry.
