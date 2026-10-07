@@ -324,3 +324,51 @@ func TestDraftResumeLegacyMarkdownResolves(t *testing.T) {
 		t.Fatalf("bodyFormat = %v, want markdown", res.BodyFormat)
 	}
 }
+
+// ?limit bounds the merged list, not each source: one local and two server
+// drafts with limit=1 must return one row.
+func TestListDraftsLimitBoundsTheMergedList(t *testing.T) {
+	t.Parallel()
+	srv, dbs, _ := draftServer(t)
+
+	var local api.DraftSummary
+	if code := postJSON(t, srv.URL+"/api/v1/drafts", draftRequest("local"), &local); code != http.StatusOK {
+		t.Fatalf("save status = %d, want 200", code)
+	}
+	for i, id := range []string{"srv-1", "srv-2"} {
+		mustMessage(t, dbs, store.Message{
+			ID: id, AccountID: "acct-1", FolderID: "drafts-1", UID: uint32(i + 1),
+			ContentKey: "ck:" + id, MessageID: "<" + id + "@example.test>",
+			Subject: id, Date: testNow.Add(time.Duration(i+1) * time.Hour),
+		})
+	}
+	var list api.DraftList
+	if code := getJSON(t, srv.URL+"/api/v1/drafts?account_id=acct-1&limit=1", &list); code != http.StatusOK {
+		t.Fatalf("list status = %d, want 200", code)
+	}
+	if len(list.Drafts) != 1 {
+		t.Fatalf("drafts = %d rows, want 1 for limit=1", len(list.Drafts))
+	}
+}
+
+// DELETE /drafts/{id} on a message that is not in Drafts must not queue an op
+// that can only fail later behind a 204.
+func TestDeleteDraftRefusesAMessageOutsideDrafts(t *testing.T) {
+	t.Parallel()
+	srv, dbs, _ := draftServer(t)
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox})
+	mustMessage(t, dbs, store.Message{
+		ID: "in-1", AccountID: "acct-1", FolderID: "inbox-1", UID: 1,
+		ContentKey: "ck:in-1", MessageID: "<in-1@example.test>", Subject: "not a draft", Date: testNow,
+	})
+	if code := doJSON(t, http.MethodDelete, srv.URL+"/api/v1/drafts/in-1", nil, nil, nil); code != http.StatusNotFound {
+		t.Fatalf("delete status = %d, want 404", code)
+	}
+	ops, err := dbs.OutboxByAccount(context.Background(), "acct-1")
+	if err != nil {
+		t.Fatalf("outbox: %v", err)
+	}
+	if len(ops) != 0 {
+		t.Fatalf("ops = %+v, want none", ops)
+	}
+}

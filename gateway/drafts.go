@@ -62,8 +62,12 @@ func (s *Server) handleListDrafts(w http.ResponseWriter, r *http.Request) {
 	sort.SliceStable(out.Drafts, func(i, j int) bool {
 		return out.Drafts[i].UpdatedAt.After(out.Drafts[j].UpdatedAt)
 	})
-	if len(out.Drafts) > store.MaxDraftListLimit {
-		out.Drafts = out.Drafts[:store.MaxDraftListLimit]
+	// Each source was bounded on its own, so the merge can hold twice the page.
+	if limit <= 0 {
+		limit = store.DefaultDraftListLimit
+	}
+	if limit = min(limit, store.MaxDraftListLimit); len(out.Drafts) > limit {
+		out.Drafts = out.Drafts[:limit]
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -268,6 +272,17 @@ func (s *Server) handleDeleteDraft(w http.ResponseWriter, r *http.Request) {
 	msg, err := s.dbs.GetMessage(ctx, id)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
+		s.notFound(w, r, "draft")
+		return
+	case err != nil:
+		s.serverError(w, r, err)
+		return
+	}
+	// The worker refuses a remove outside Drafts, so refuse here rather than
+	// answer 204 for an op that can only fail later.
+	draftsFolder, err := s.dbs.FolderByRole(ctx, msg.AccountID, store.RoleDrafts)
+	switch {
+	case errors.Is(err, store.ErrNotFound) || (err == nil && draftsFolder.ID != msg.FolderID):
 		s.notFound(w, r, "draft")
 		return
 	case err != nil:

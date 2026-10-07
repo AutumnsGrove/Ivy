@@ -1543,3 +1543,18 @@ Baseline at `839bf05`: `go build`, `go vet`, `staticcheck`, `gofumpt -l` clean a
   `store/accountconfigs.go` · the four findings above are fixed: `//nolint:contextcheck` with the reason on both
   `Supervisor.Start` calls, and explicit discarded closes on the two read-only defers. `golangci-lint run` at
   v2.12.1 now reports 0 issues.
+
+## Review of `2cabdd0..4f34628` (chunk 4d-4h: drafts, identities, attachments, rich text; 2026-10-06)
+
+Baseline on `4f34628`: `go build`, `go vet` and `go test -count=1 ./...` all green; nothing pre-broken.
+
+### `8d637d3`..`fa052ad` drafts
+
+- **#133** · `fa052ad` · `gateway/drafts.go` · **bug** · `GET /drafts?limit=N` bounded the local heads and the mirrored
+  Drafts rows each to N and truncated the merge only at the 200 maximum, so `limit=1` could return two rows.
+  Reproduced with `TestListDraftsLimitBoundsTheMergedList` (2 rows for limit=1; failed before). The merged list is
+  now cut to the same effective limit (default 50, max 200).
+- **#134** · `fa052ad` · `gateway/drafts.go` · **risk** · `DELETE /drafts/{id}` accepted the id of any visible message
+  and queued a remove op. The worker's `draftFolder` guard refuses it later (`not_drafts`), so the caller got 204
+  for an op that could only fail. Reproduced with `TestDeleteDraftRefusesAMessageOutsideDrafts` (204, op queued;
+  failed before). It is now 404 and nothing is queued unless the message is in the account's Drafts folder.
