@@ -5,7 +5,6 @@
 package send
 
 import (
-	"bytes"
 	"context"
 	crand "crypto/rand"
 	"errors"
@@ -147,6 +146,9 @@ func (w *Worker) Run(ctx context.Context) error {
 			if _, err := w.dbs.PruneSendQueue(ctx, w.now()); err != nil {
 				slog.WarnContext(ctx, "send: prune failed", "account", w.acct.ID, "error", err)
 			}
+			if _, err := w.dbs.SweepOrphanSendBodies(ctx); err != nil {
+				slog.WarnContext(ctx, "send: orphan body sweep failed", "account", w.acct.ID, "error", err)
+			}
 			lastPrune = w.now()
 		}
 		if !sleep(ctx, w.poll) {
@@ -200,8 +202,20 @@ func (w *Worker) attempt(ctx context.Context, m store.SendMessage) error {
 		Username: w.acct.Username, Password: w.acct.Password, Insecure: w.acct.Insecure,
 	}
 	env := smtp.Envelope{From: m.EnvelopeFrom, To: m.Recipients}
-	err := w.submitter.Submit(ctx, acct, env, bytes.NewReader(m.WireBody), int64(len(m.WireBody)),
+	// The body goes from disk to the socket; a message with attachments is never
+	// held whole here.
+	wire, size, err := w.dbs.OpenSendWire(ctx, m.ID)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		// The stored message is gone (a restore without the body files, a manual
+		// clean). It cannot be sent, and sending nothing would be worse.
+		return w.fail(ctx, m, "send_gone", errors.New("the stored message is gone"))
+	case err != nil:
+		return w.retry(ctx, m, "read_body", err)
+	}
+	err = w.submitter.Submit(ctx, acct, env, wire, size,
 		smtp.WithBeforeData(func() error { return w.dbs.SetSendSubmitting(ctx, m.ID, w.now()) }))
+	_ = wire.Close()
 	if err == nil {
 		return w.submitted(ctx, m)
 	}

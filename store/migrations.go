@@ -854,6 +854,19 @@ var stateMigrations = []migration{
 			`ALTER TABLE drafts ADD COLUMN body_hash TEXT NOT NULL DEFAULT ''`,
 		},
 	},
+	{
+		version: 17,
+		statements: []string{
+			// The same move for the send queue: the wire and Sent bodies (each up to tens
+			// of MiB with attachments) go to data/sendbodies by hash, and a read of the
+			// row no longer loads them. A row queued before this has empty hashes and
+			// keeps its inline bodies, which reads still honour; new rows store them
+			// empty because the columns are NOT NULL. With no Bcc the two bodies are the
+			// same bytes and share one file, so a file is released by counting both columns.
+			`ALTER TABLE send_queue ADD COLUMN wire_hash TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE send_queue ADD COLUMN sent_hash TEXT NOT NULL DEFAULT ''`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state

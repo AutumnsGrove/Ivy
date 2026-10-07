@@ -161,7 +161,11 @@ func (s *Server) sendAttachments(ctx context.Context, m store.SendMessage) []api
 	for _, ref := range refs {
 		up, err := s.dbs.GetUpload(ctx, m.AccountID, ref.Id)
 		if err != nil {
-			atts, merr := s.materializeAttachments(ctx, m.AccountID, m.SentBody)
+			sent, serr := s.dbs.SendBodyForAppend(ctx, m.ID)
+			if serr != nil {
+				return nil
+			}
+			atts, merr := s.materializeAttachments(ctx, m.AccountID, sent.Body)
 			if merr != nil {
 				return nil
 			}

@@ -1630,3 +1630,14 @@ there.
 - **Draft bodies live in a content-addressed store, not in `state.db` (N48).** Not backed up, like uploads.
 - **The upload sends the Blob itself, not a buffered copy (N51).** Memory on a real iPhone is the operator's live
   check.
+
+## The send queue's bodies, N44 (2026-10-07)
+
+- **Send bodies live in a content-addressed store, and no read of a send row loads them.** The wire and Sent copies
+  are on disk by hash; the SMTP copy streams from disk. A missing file fails the send `send_gone`.
+- **Accepted: send bodies are not in the `state.db` backup.** Like draft bodies and uploads; an in-flight send is
+  minutes long, and the typed text survives in `compose_json`.
+- **Both copies stay as separate files.** One file when there is no Bcc (identical bytes share a hash); the Sent
+  copy is never derived by splicing a header, so the Bcc invariant is untouched.
+- **Found on the way and fixed with it:** nothing called `PruneSendQueue`, so terminal sends were never deleted; the
+  send worker now prunes on its first pass and hourly.

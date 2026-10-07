@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -541,5 +543,72 @@ func TestRunPrunesOldTerminalSends(t *testing.T) {
 	}
 	if _, err := fx.dbs.GetSend(fx.ctx, "recent"); err != nil {
 		t.Errorf("the recent terminal send = %v, want it kept", err)
+	}
+}
+
+// What reaches the SMTP server is the stored wire copy, byte for byte. The worker
+// streams it from disk; a worker that submitted an empty body would still settle
+// the row, so the bytes themselves are what is asserted.
+func TestSendSubmitsTheStoredWireBytes(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t, true)
+	fx.enqueue(t, "send-1")
+	fx.runSend(t)
+
+	sent := fx.w.Sent()
+	if len(sent) != 1 {
+		t.Fatalf("SMTP accepted %d messages, want 1", len(sent))
+	}
+	raw := string(sent[0].Raw)
+	for _, want := range []string{"Subject: hi", "Message-Id: <send-1@example.test>", "hello"} {
+		if !strings.Contains(strings.ToLower(raw), strings.ToLower(want)) {
+			t.Errorf("SMTP received %q, want it to contain %q", raw, want)
+		}
+	}
+}
+
+// If the wire file is gone (a restore without the body files, a manual clean) the
+// send fails visibly: it never submits an empty message.
+func TestSendFailsWhenItsBodyFileIsGone(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t, true)
+	fx.enqueue(t, "send-1")
+	var hash string
+	if err := fx.dbs.State.Read.QueryRowContext(fx.ctx, `SELECT wire_hash FROM send_queue WHERE id = 'send-1'`).Scan(&hash); err != nil {
+		t.Fatalf("hash: %v", err)
+	}
+	if err := os.Remove(fx.dbs.SendBodies.Path(hash)); err != nil {
+		t.Fatalf("remove body: %v", err)
+	}
+	fx.runSend(t)
+
+	if got := fx.row(t, "send-1"); got.State != store.SendFailed || got.LastErrorCode != "send_gone" {
+		t.Errorf("row = %s/%s, want failed send_gone", got.State, got.LastErrorCode)
+	}
+	if n := len(fx.w.Sent()); n != 0 {
+		t.Errorf("SMTP accepted %d messages, want none", n)
+	}
+}
+
+// The worker's prune pass also collects body files no send row references, so a
+// crash between writing a body and queueing its row cannot leak tens of MiB.
+func TestRunSweepsOrphanSendBodies(t *testing.T) {
+	fx := newFixture(t, true)
+	orphan, _, err := fx.dbs.SendBodies.Put(fx.ctx, strings.NewReader("a body no row names"))
+	if err != nil {
+		t.Fatalf("put orphan: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(fx.ctx)
+	done := make(chan error, 1)
+	go func() { done <- fx.worker.Run(ctx) }()
+	deadline := time.Now().Add(10 * time.Second)
+	for fx.dbs.SendBodies.Has(orphan) && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	if fx.dbs.SendBodies.Has(orphan) {
+		t.Fatal("the orphan send body survived the worker's prune pass")
 	}
 }

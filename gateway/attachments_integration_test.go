@@ -46,11 +46,7 @@ func TestSendWithAttachmentBuildsBothCopies(t *testing.T) {
 	if code := postJSON(t, srv.URL+"/api/v1/send", req, nil); code != http.StatusAccepted {
 		t.Fatalf("status = %d, want 202", code)
 	}
-	row, err := dbs.GetSend(context.Background(), "s1")
-	if err != nil {
-		t.Fatalf("get send: %v", err)
-	}
-	for name, body := range map[string][]byte{"wire": row.WireBody, "sent": row.SentBody} {
+	for name, body := range map[string][]byte{"wire": storedWire(t, dbs, "s1"), "sent": storedSent(t, dbs, "s1")} {
 		env := parseParts(t, body)
 		if len(env.Attachments) != 1 {
 			t.Fatalf("%s copy attachments = %d, want 1", name, len(env.Attachments))

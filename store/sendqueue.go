@@ -1,11 +1,14 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -84,8 +87,11 @@ type SendMessage struct {
 	ContentKey   string
 	EnvelopeFrom string
 	Recipients   []string
-	WireBody     []byte
-	SentBody     []byte
+	// WireBody and SentBody are input to EnqueueSend only. The bodies are large, so
+	// they live on disk and no read of a row fills them: use OpenSendWire for the
+	// SMTP copy and SendBodyForAppend for the Sent copy.
+	WireBody []byte
+	SentBody []byte
 	// Draft is the original compose request, kept so undo can hand it back.
 	Draft           []byte
 	State           string
@@ -106,7 +112,7 @@ type SendMessage struct {
 }
 
 const sendSelect = `SELECT id, account_id, seq, message_id, content_key, envelope_from,
-	recipients, wire_body, sent_body, compose_json, state, attempts, next_attempt_at,
+	recipients, compose_json, state, attempts, next_attempt_at,
 	last_error_code, last_error_detail, undo_deadline, sent_append_id,
 	draft_message_id, draft_remove_id,
 	created_at, updated_at, completed_at FROM send_queue`
@@ -123,7 +129,7 @@ func scanSend(s scanner) (SendMessage, error) {
 	)
 	if err := s.Scan(
 		&m.ID, &m.AccountID, &m.Seq, &m.MessageID, &m.ContentKey, &m.EnvelopeFrom,
-		&recipients, &m.WireBody, &m.SentBody, &m.Draft, &m.State, &m.Attempts, &next,
+		&recipients, &m.Draft, &m.State, &m.Attempts, &next,
 		&m.LastErrorCode, &m.LastErrorDetail, &undo, &m.SentAppendID,
 		&m.DraftMessageID, &m.DraftRemoveID,
 		&created, &updated, &completed,
@@ -182,6 +188,31 @@ func (d *DBs) EnqueueSend(ctx context.Context, m SendMessage) (SendMessage, bool
 		return SendMessage{}, false, fmt.Errorf("enqueue send: recipients: %w", err)
 	}
 
+	// Held from before the bodies are written until the row is committed, so a
+	// sweep never sees a file whose row is about to be inserted as an orphan.
+	d.sendMu.RLock()
+	defer d.sendMu.RUnlock()
+
+	// A repeat of the same row id is answered before any body is written, so a
+	// double tap leaves no second copy on disk. The transaction checks again.
+	switch prior, err := d.GetSend(ctx, m.ID); {
+	case err == nil:
+		if prior.AccountID != m.AccountID {
+			return SendMessage{}, false, fmt.Errorf("enqueue send: id %s belongs to another account", m.ID)
+		}
+		return prior, false, nil
+	case !errors.Is(err, ErrNotFound):
+		return SendMessage{}, false, err
+	}
+	wireHash, _, err := d.SendBodies.Put(ctx, bytes.NewReader(m.WireBody))
+	if err != nil {
+		return SendMessage{}, false, fmt.Errorf("enqueue send %s: wire body: %w", m.ID, err)
+	}
+	sentHash, _, err := d.SendBodies.Put(ctx, bytes.NewReader(m.SentBody))
+	if err != nil {
+		return SendMessage{}, false, fmt.Errorf("enqueue send %s: sent body: %w", m.ID, err)
+	}
+
 	tx, err := d.State.Write.BeginTx(ctx, nil)
 	if err != nil {
 		return SendMessage{}, false, fmt.Errorf("enqueue send: %w", err)
@@ -233,12 +264,12 @@ func (d *DBs) EnqueueSend(ctx context.Context, m SendMessage) (SendMessage, bool
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO send_queue (
 			id, account_id, seq, message_id, content_key, envelope_from, recipients,
-			wire_body, sent_body, compose_json, state, attempts, next_attempt_at, last_error_code,
+			wire_body, sent_body, wire_hash, sent_hash, compose_json, state, attempts, next_attempt_at, last_error_code,
 			last_error_detail, undo_deadline, sent_append_id, draft_message_id, draft_remove_id,
 			created_at, updated_at, completed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.ID, m.AccountID, m.Seq, m.MessageID, m.ContentKey, m.EnvelopeFrom, string(recipients),
-		m.WireBody, m.SentBody, m.Draft, m.State, m.Attempts, nullableTime(m.NextAttemptAt),
+		[]byte{}, []byte{}, wireHash, sentHash, m.Draft, m.State, m.Attempts, nullableTime(m.NextAttemptAt),
 		m.LastErrorCode, m.LastErrorDetail, nullableTime(m.UndoDeadline), m.SentAppendID,
 		m.DraftMessageID, m.DraftRemoveID,
 		formatTime(m.CreatedAt), formatTime(m.UpdatedAt), nullableTime(m.CompletedAt)); err != nil {
@@ -247,6 +278,8 @@ func (d *DBs) EnqueueSend(ctx context.Context, m SendMessage) (SendMessage, bool
 	if err := tx.Commit(); err != nil {
 		return SendMessage{}, false, fmt.Errorf("enqueue send %s: %w", m.ID, err)
 	}
+	// Like every read, the returned row carries no bodies.
+	m.WireBody, m.SentBody = nil, nil
 	return m, true, nil
 }
 
@@ -518,7 +551,35 @@ func (d *DBs) RecoverSubmittingSends(ctx context.Context, accountID string, now 
 // queue's only deletion and never touches a live row.
 func (d *DBs) PruneSendQueue(ctx context.Context, now time.Time) (int, error) {
 	cutoff := formatTime(now.Add(-MaxSendTerminalRetention))
-	res, err := d.State.Write.ExecContext(ctx, `
+	tx, err := d.State.Write.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("prune send queue: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// The files of the rows going are released after the commit.
+	rows, err := tx.QueryContext(ctx, `
+		SELECT wire_hash, sent_hash FROM send_queue
+		WHERE state IN (?, ?, ?, ?, ?) AND completed_at IS NOT NULL AND completed_at < ?`,
+		SendAppended, SendDone, SendFailed, SendUnconfirmed, SendCancelled, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("prune send queue: %w", err)
+	}
+	var hashes []string
+	for rows.Next() {
+		var wire, sent string
+		if err := rows.Scan(&wire, &sent); err != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("prune send queue: %w", err)
+		}
+		hashes = append(hashes, wire, sent)
+	}
+	err = rows.Err()
+	_ = rows.Close()
+	if err != nil {
+		return 0, fmt.Errorf("prune send queue: %w", err)
+	}
+	res, err := tx.ExecContext(ctx, `
 		DELETE FROM send_queue
 		WHERE state IN (?, ?, ?, ?, ?) AND completed_at IS NOT NULL AND completed_at < ?`,
 		SendAppended, SendDone, SendFailed, SendUnconfirmed, SendCancelled, cutoff)
@@ -529,7 +590,81 @@ func (d *DBs) PruneSendQueue(ctx context.Context, now time.Time) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("prune send queue: %w", err)
 	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("prune send queue: %w", err)
+	}
+	d.releaseSendBodies(ctx, hashes)
 	return int(n), nil
+}
+
+// releaseSendBodies removes body files no row references any more. It never waits:
+// while an enqueue is in flight a file may be about to gain a row, so it is left
+// for the orphan sweep. Both hash columns are counted, because identical bodies
+// share one file.
+func (d *DBs) releaseSendBodies(ctx context.Context, hashes []string) {
+	if len(hashes) == 0 || !d.sendMu.TryLock() {
+		return
+	}
+	defer d.sendMu.Unlock()
+	for _, hash := range hashes {
+		if hash == "" {
+			continue
+		}
+		var refs int
+		if err := d.State.Read.QueryRowContext(ctx,
+			`SELECT count(*) FROM send_queue WHERE wire_hash = ? OR sent_hash = ?`, hash, hash).Scan(&refs); err != nil || refs > 0 {
+			continue
+		}
+		// A failed removal is only a leftover file; the orphan sweep retries it.
+		_ = d.SendBodies.Remove(hash)
+	}
+}
+
+// SweepOrphanSendBodies removes body files no send row references: a file left by
+// a crash between the write and the insert, a refused enqueue, or an interrupted
+// write. It stands down while an enqueue is in flight.
+func (d *DBs) SweepOrphanSendBodies(ctx context.Context) (int, error) {
+	return sweepOrphanBlobs(ctx, &d.sendMu, d.SendBodies, d.State.Read, `
+		SELECT wire_hash FROM send_queue WHERE wire_hash != ''
+		UNION SELECT sent_hash FROM send_queue WHERE sent_hash != ''`)
+}
+
+// MaxStoredSendBytes bounds a send body read back from disk, as for a draft.
+const MaxStoredSendBytes = MaxStoredDraftBytes
+
+// OpenSendWire opens the SMTP copy of a queued send for streaming and reports its
+// size, so a large message goes from disk to the socket without being held whole.
+// A missing row, or a file that is gone, is ErrNotFound.
+func (d *DBs) OpenSendWire(ctx context.Context, sendID string) (io.ReadCloser, int64, error) {
+	var (
+		inline []byte
+		hash   string
+	)
+	err := d.State.Read.QueryRowContext(ctx,
+		`SELECT wire_body, wire_hash FROM send_queue WHERE id = ?`, sendID).Scan(&inline, &hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, 0, ErrNotFound
+	}
+	if err != nil {
+		return nil, 0, fmt.Errorf("open send wire %s: %w", sendID, err)
+	}
+	if hash == "" {
+		// A row queued before bodies moved to disk keeps its bytes inline.
+		return io.NopCloser(bytes.NewReader(inline)), int64(len(inline)), nil
+	}
+	f, err := d.SendBodies.Open(hash)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, 0, ErrNotFound
+	}
+	if err != nil {
+		return nil, 0, fmt.Errorf("open send wire %s: %w", sendID, err)
+	}
+	st, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, 0, fmt.Errorf("open send wire %s: %w", sendID, err)
+	}
+	return f, st.Size(), nil
 }
 
 // SendBody is the material an append op files: the account, the Message-ID the
@@ -543,16 +678,39 @@ type SendBody struct {
 // SendBodyForAppend returns the copy a send's append op should file. A missing
 // row is ErrNotFound; the op then fails rather than appending nothing.
 func (d *DBs) SendBodyForAppend(ctx context.Context, sendID string) (SendBody, error) {
-	var b SendBody
+	var (
+		b    SendBody
+		hash string
+	)
 	err := d.State.Read.QueryRowContext(ctx,
-		`SELECT account_id, message_id, sent_body FROM send_queue WHERE id = ?`, sendID).
-		Scan(&b.AccountID, &b.MessageID, &b.Body)
+		`SELECT account_id, message_id, sent_body, sent_hash FROM send_queue WHERE id = ?`, sendID).
+		Scan(&b.AccountID, &b.MessageID, &b.Body, &hash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SendBody{}, ErrNotFound
 	}
 	if err != nil {
 		return SendBody{}, fmt.Errorf("send body for append %s: %w", sendID, err)
 	}
+	if hash == "" {
+		// A row queued before bodies moved to disk keeps its bytes inline.
+		return b, nil
+	}
+	f, err := d.SendBodies.Open(hash)
+	if errors.Is(err, os.ErrNotExist) {
+		return SendBody{}, ErrNotFound
+	}
+	if err != nil {
+		return SendBody{}, fmt.Errorf("send body for append %s: %w", sendID, err)
+	}
+	defer func() { _ = f.Close() }()
+	body, err := io.ReadAll(io.LimitReader(f, MaxStoredSendBytes+1))
+	if err != nil {
+		return SendBody{}, fmt.Errorf("send body for append %s: %w", sendID, err)
+	}
+	if len(body) > MaxStoredSendBytes {
+		return SendBody{}, fmt.Errorf("send body for append %s: over %d bytes", sendID, MaxStoredSendBytes)
+	}
+	b.Body = body
 	return b, nil
 }
 

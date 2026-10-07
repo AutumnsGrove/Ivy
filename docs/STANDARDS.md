@@ -268,7 +268,8 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
 | SMTP attempts per send (`store.MaxSendAttempts`) | 8 | the send is `failed` (`retries_exhausted`); a dial, timeout or 4xx counts, and a crash does not |
 | Send row age (`store.MaxSendAge`) | 24 h | the send is `failed` (`expired`) |
 | Live send rows per account (`store.MaxQueuedSends`) | 500 | the enqueue is refused (`send_full`); the body is never stored |
-| Terminal send rows kept (`store.MaxSendTerminalRetention`) | 7 days | pruned; the send queue's only deletion, and only of terminal rows |
+| Terminal send rows kept (`store.MaxSendTerminalRetention`) | 7 days | pruned by the send worker on its first pass and then hourly; the send queue's only deletion, and only of terminal rows |
+| A queued send's wire and Sent bodies (`store.MaxStoredSendBytes`) | on disk under `data/sendbodies` by hash, read back at most 64 MiB; never loaded by a list or status read | the SMTP copy streams from disk; a missing file fails the send `send_gone`; files go with their last row, and a sweep collects orphans; not in the `state.db` backup |
 | Send error detail (`store.MaxSendErrorDetail`) | 500 bytes | truncated on the rune boundary |
 | An ambiguous send (`smtp.SendError.Ambiguous`) | one message | the row is `unconfirmed`, never auto-resent; the operator sends again explicitly |
 | Send retry backoff | 5 s doubling to 15 min, ±20% jitter | the send waits; a not-yet-due send (backoff or undo window) is skipped, so it never blocks a due one behind it; due sends go lowest sequence first |

@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -66,11 +67,7 @@ func TestSendQueuesAMessageWithAnUndoDeadline(t *testing.T) {
 		t.Errorf("messageId = %v, want an injected <...>", st.MessageId)
 	}
 
-	row, err := dbs.GetSend(context.Background(), "s1")
-	if err != nil {
-		t.Fatalf("get send: %v", err)
-	}
-	wire, err := enmime.ReadEnvelope(strings.NewReader(string(row.WireBody)))
+	wire, err := enmime.ReadEnvelope(strings.NewReader(string(storedWire(t, dbs, "s1"))))
 	if err != nil {
 		t.Fatalf("parse wire body: %v", err)
 	}
@@ -326,11 +323,7 @@ func TestSendBuildsAnHTMLBody(t *testing.T) {
 	if code := postJSON(t, srv.URL+"/api/v1/send", req, nil); code != http.StatusAccepted {
 		t.Fatalf("status = %d, want 202", code)
 	}
-	row, err := dbs.GetSend(context.Background(), "s1")
-	if err != nil {
-		t.Fatalf("get send: %v", err)
-	}
-	wire, err := enmime.ReadEnvelope(strings.NewReader(string(row.WireBody)))
+	wire, err := enmime.ReadEnvelope(strings.NewReader(string(storedWire(t, dbs, "s1"))))
 	if err != nil {
 		t.Fatalf("parse wire body: %v", err)
 	}
@@ -356,11 +349,7 @@ func TestSendLegacyMarkdownFlagStillWorks(t *testing.T) {
 	if code := postJSON(t, srv.URL+"/api/v1/send", sendRequest("s1"), nil); code != http.StatusAccepted {
 		t.Fatalf("status = %d, want 202", code)
 	}
-	row, err := dbs.GetSend(context.Background(), "s1")
-	if err != nil {
-		t.Fatalf("get send: %v", err)
-	}
-	wire, err := enmime.ReadEnvelope(strings.NewReader(string(row.WireBody)))
+	wire, err := enmime.ReadEnvelope(strings.NewReader(string(storedWire(t, dbs, "s1"))))
 	if err != nil {
 		t.Fatalf("parse wire body: %v", err)
 	}
@@ -383,4 +372,30 @@ func TestSendRefusesAnOversizedDraftMessageID(t *testing.T) {
 	if rows, _ := dbs.SendsByAccount(context.Background(), "", 0); len(rows) != 0 {
 		t.Errorf("%d rows queued for a refused draft id, want none", len(rows))
 	}
+}
+
+// storedWire reads a queued send's SMTP copy back from the body store, since no
+// read of the row itself carries the bodies.
+func storedWire(t *testing.T, dbs *store.DBs, id string) []byte {
+	t.Helper()
+	rc, _, err := dbs.OpenSendWire(context.Background(), id)
+	if err != nil {
+		t.Fatalf("open wire body of %s: %v", id, err)
+	}
+	defer func() { _ = rc.Close() }()
+	b, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatalf("read wire body of %s: %v", id, err)
+	}
+	return b
+}
+
+// storedSent reads a queued send's Sent copy (Bcc kept) the same way.
+func storedSent(t *testing.T, dbs *store.DBs, id string) []byte {
+	t.Helper()
+	sb, err := dbs.SendBodyForAppend(context.Background(), id)
+	if err != nil {
+		t.Fatalf("sent body of %s: %v", id, err)
+	}
+	return sb.Body
 }

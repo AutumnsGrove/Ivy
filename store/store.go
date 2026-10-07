@@ -80,6 +80,14 @@ type DBs struct {
 	// draftMu orders a draft save against releasing and sweeping body files, the
 	// same way uploadMu does for staging.
 	draftMu sync.RWMutex
+	// SendBodies holds each queued send's wire and Sent copies by content hash, for
+	// the same reason as DraftBodies. A queued send has no server copy until it is
+	// sent, so a state.db restored without these files fails an in-flight send; the
+	// operator accepted that (sends are in flight for minutes, and the compose text
+	// survives in compose_json).
+	SendBodies *blobstore.Store
+	// sendMu orders an enqueue against releasing and sweeping body files.
+	sendMu sync.RWMutex
 	// Dir is the data directory holding both files, so other packages can place
 	// their own files (the message spool) beside them.
 	Dir string
@@ -119,6 +127,12 @@ func Open(ctx context.Context, dir string) (*DBs, error) {
 		return nil, fmt.Errorf("draft body store: %w", err)
 	}
 	dbs.DraftBodies = draftBodies
+	sendBodies, err := blobstore.Open(filepath.Join(dir, "sendbodies"))
+	if err != nil {
+		_ = dbs.Close()
+		return nil, fmt.Errorf("send body store: %w", err)
+	}
+	dbs.SendBodies = sendBodies
 	if err := dbs.moveLegacyProfiles(ctx); err != nil {
 		_ = dbs.Close()
 		return nil, err

@@ -1746,3 +1746,27 @@ real browser or the potato.
   change (`TestSendDeliversAndFilesTheSentCopy`, `TestSendCrashAfterSubmitBeforeAppend`,
   `TestSendRemovesTheDraftItCameFrom`). Reproduced with `worker.go` reverted (still red). The outbox worker now
   shares the fixture's clock through `ivysync.WithClock`. The rest of the suite is unaffected (full run green).
+- **N44 resolved** (operator chose "blob store + split reads", "accept it, like drafts", "keep both files") ·
+  `store/sendqueue.go`, `store/store.go`, `store/migrations.go` (17), `send/worker.go`, `gateway/compose_attachments.go` ·
+  the wire and Sent bodies move to the content-addressed `data/sendbodies` store (hashes in `wire_hash` and
+  `sent_hash`; rows queued earlier keep their inline bodies and still read). No read of a row loads a body:
+  `SendMessage.WireBody` and `SentBody` are now input to `EnqueueSend` only. The worker streams the SMTP copy from
+  disk through `OpenSendWire` (size from `Stat`), so a message with attachments is never held whole on the way to
+  the socket, and a vanished file fails the send `send_gone` instead of submitting an empty message. The Sent copy
+  is read by `SendBodyForAppend` for the append op and for re-materialising attachments on undo. A `sendMu`
+  read/write lock orders an enqueue against release and sweep (as `uploadMu` and `draftMu`), identical bodies share
+  one file so release counts both columns, and `SweepOrphanSendBodies` runs in the send worker's prune pass.
+  `compose_json` stays inline: it is the typed request, bounded by the 1 MiB request cap, and the status and list
+  reads need it. Reproduced with `TestEnqueueSendKeepsBodiesOutOfTheDatabase` (no `wire_hash` column; failed to
+  run), `TestSendBodiesShareFilesAndGoWithTheirLastRow`, `TestSendBodiesReadALegacyInlineRow`,
+  `TestSweepOrphanSendBodies`, `TestSendSubmitsTheStoredWireBytes` (SMTP received `"\r\n"`; failed before the
+  worker change), `TestSendFailsWhenItsBodyFileIsGone` (the send was submitted anyway; failed before), and
+  `TestRunSweepsOrphanSendBodies` (failed before the wiring). Measured small, on a laptop (the potato will be
+  slower in absolute terms): 10 sends with two 1 MiB bodies each took 21.8 MiB of `state.db` files and 70.9 ms per
+  `SendsByAccount` read before, and 518 KiB and 0.1 ms after.
+  **Found on the way:** no existing worker test checked the bytes the SMTP server received, which is how a worker
+  that submitted an empty body would have passed (now covered). The bodies are not in the `state.db` backup: after
+  a restore without them an in-flight send fails `send_gone`, a send already made is on the server, and the typed
+  text survives in `compose_json`.
+- **Gate after N44:** `golangci-lint` 0 issues, `go vet`, `staticcheck`, `gofumpt` clean, `make drift` clean,
+  `CGO_ENABLED=1 go test -race -count=1 ./...` all packages pass. No web code changed in this item.

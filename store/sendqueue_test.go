@@ -1,8 +1,10 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"strconv"
 	"testing"
 	"time"
@@ -499,5 +501,169 @@ func TestSendCarriesTheDraftItCameFrom(t *testing.T) {
 	}
 	if got.DraftRemoveID != "op-remove" {
 		t.Fatalf("draft remove id = %q, want op-remove", got.DraftRemoveID)
+	}
+}
+
+// A send's two bodies (tens of MiB with attachments) live on disk under their
+// hashes, not in the backed-up database, and a read of the row never loads them.
+func TestEnqueueSendKeepsBodiesOutOfTheDatabase(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	m := newSend("send-1", "<m1@example.test>")
+	m.WireBody = bytes.Repeat([]byte("w"), 1<<20)
+	m.SentBody = append([]byte("Bcc: hidden@example.test\r\n"), m.WireBody...)
+	if _, _, err := dbs.EnqueueSend(ctx, m); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	var wireInline, sentInline int
+	var wireHash, sentHash string
+	if err := dbs.State.Read.QueryRowContext(ctx,
+		`SELECT length(wire_body), length(sent_body), wire_hash, sent_hash FROM send_queue WHERE id = 'send-1'`).
+		Scan(&wireInline, &sentInline, &wireHash, &sentHash); err != nil {
+		t.Fatalf("read row: %v", err)
+	}
+	if wireInline != 0 || sentInline != 0 || wireHash == "" || sentHash == "" || wireHash == sentHash {
+		t.Fatalf("row holds %d+%d inline bytes and hashes %q/%q, want none inline and two different hashes",
+			wireInline, sentInline, wireHash, sentHash)
+	}
+	if !dbs.SendBodies.Has(wireHash) || !dbs.SendBodies.Has(sentHash) {
+		t.Fatal("a body is missing from the send body store")
+	}
+
+	got, err := dbs.GetSend(ctx, "send-1")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.WireBody != nil || got.SentBody != nil {
+		t.Errorf("GetSend loaded %d+%d body bytes, want none", len(got.WireBody), len(got.SentBody))
+	}
+	list, err := dbs.SendsByAccount(ctx, "acct-1", 10)
+	if err != nil || len(list) != 1 || list[0].WireBody != nil || list[0].SentBody != nil {
+		t.Errorf("SendsByAccount = %+v, %v, want one row with no bodies", list, err)
+	}
+
+	rc, size, err := dbs.OpenSendWire(ctx, "send-1")
+	if err != nil {
+		t.Fatalf("open wire: %v", err)
+	}
+	defer func() { _ = rc.Close() }()
+	wire, _ := io.ReadAll(rc)
+	if size != int64(len(m.WireBody)) || !bytes.Equal(wire, m.WireBody) {
+		t.Errorf("wire = %d bytes (size %d), want the %d enqueued", len(wire), size, len(m.WireBody))
+	}
+	sent, err := dbs.SendBodyForAppend(ctx, "send-1")
+	if err != nil || !bytes.Equal(sent.Body, m.SentBody) {
+		t.Errorf("sent body = %d bytes, %v, want the %d enqueued", len(sent.Body), err, len(m.SentBody))
+	}
+}
+
+// With no Bcc the two bodies are the same bytes and share one file, and two sends
+// of identical bytes do too; a file goes only when its last row does.
+func TestSendBodiesShareFilesAndGoWithTheirLastRow(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	one := newSend("send-1", "<m1@example.test>")
+	one.WireBody, one.SentBody = []byte("same bytes"), []byte("same bytes")
+	two := newSend("send-2", "<m2@example.test>")
+	two.WireBody, two.SentBody = []byte("same bytes"), []byte("same bytes")
+	for _, m := range []SendMessage{one, two} {
+		if _, _, err := dbs.EnqueueSend(ctx, m); err != nil {
+			t.Fatalf("enqueue %s: %v", m.ID, err)
+		}
+	}
+	var hash, other string
+	if err := dbs.State.Read.QueryRowContext(ctx,
+		`SELECT wire_hash, sent_hash FROM send_queue WHERE id = 'send-1'`).Scan(&hash, &other); err != nil || hash != other {
+		t.Fatalf("hashes = %q/%q, %v, want one shared file for identical bodies", hash, other, err)
+	}
+
+	finish := func(id string, at time.Time) {
+		t.Helper()
+		if err := dbs.SetSendSubmitting(ctx, id, at); err != nil {
+			t.Fatalf("submitting %s: %v", id, err)
+		}
+		if err := dbs.MarkSendSubmitted(ctx, id, at); err != nil {
+			t.Fatalf("submitted %s: %v", id, err)
+		}
+		if err := dbs.MarkSendDone(ctx, id, "", "", at); err != nil {
+			t.Fatalf("done %s: %v", id, err)
+		}
+	}
+	old := sendNow.Add(-MaxSendTerminalRetention - time.Hour)
+	finish("send-1", old)
+	if n, err := dbs.PruneSendQueue(ctx, sendNow); err != nil || n != 1 {
+		t.Fatalf("prune = %d, %v, want the finished row", n, err)
+	}
+	if !dbs.SendBodies.Has(hash) {
+		t.Fatal("the shared file went while another row still references it")
+	}
+	finish("send-2", old)
+	if n, err := dbs.PruneSendQueue(ctx, sendNow); err != nil || n != 1 {
+		t.Fatalf("second prune = %d, %v, want the last row", n, err)
+	}
+	if dbs.SendBodies.Has(hash) {
+		t.Error("the file survived its last row")
+	}
+}
+
+// Rows queued before bodies moved to disk keep their inline bytes and still read.
+func TestSendBodiesReadALegacyInlineRow(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	if _, err := dbs.State.Write.ExecContext(ctx, `
+		INSERT INTO send_queue (id, account_id, seq, message_id, content_key, envelope_from, recipients,
+			wire_body, sent_body, state, created_at, updated_at)
+		VALUES ('old', 'acct-1', 1, '<old@example.test>', 'ck', 'me@example.test', '["you@example.test"]',
+			?, ?, 'queued', ?, ?)`,
+		[]byte("legacy wire"), []byte("legacy sent"), formatTime(sendNow), formatTime(sendNow)); err != nil {
+		t.Fatalf("insert legacy row: %v", err)
+	}
+	rc, size, err := dbs.OpenSendWire(ctx, "old")
+	if err != nil {
+		t.Fatalf("open wire: %v", err)
+	}
+	defer func() { _ = rc.Close() }()
+	if wire, _ := io.ReadAll(rc); string(wire) != "legacy wire" || size != int64(len("legacy wire")) {
+		t.Errorf("wire = %q (size %d), want the inline bytes", wire, size)
+	}
+	sent, err := dbs.SendBodyForAppend(ctx, "old")
+	if err != nil || string(sent.Body) != "legacy sent" {
+		t.Errorf("sent body = %q, %v, want the inline bytes", sent.Body, err)
+	}
+}
+
+// A file whose row never arrived (a crash between the write and the insert, a
+// refused enqueue) is collected; a referenced one is kept.
+func TestSweepOrphanSendBodies(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	if _, _, err := dbs.EnqueueSend(ctx, newSend("send-1", "<m1@example.test>")); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	var wire, sent string
+	if err := dbs.State.Read.QueryRowContext(ctx,
+		`SELECT wire_hash, sent_hash FROM send_queue WHERE id = 'send-1'`).Scan(&wire, &sent); err != nil {
+		t.Fatalf("hashes: %v", err)
+	}
+	orphan, _, err := dbs.SendBodies.Put(ctx, bytes.NewReader([]byte("never recorded")))
+	if err != nil {
+		t.Fatalf("put orphan: %v", err)
+	}
+	n, err := dbs.SweepOrphanSendBodies(ctx)
+	if err != nil || n != 1 {
+		t.Fatalf("sweep = %d, %v, want the orphan only", n, err)
+	}
+	if dbs.SendBodies.Has(orphan) || !dbs.SendBodies.Has(wire) || !dbs.SendBodies.Has(sent) {
+		t.Errorf("orphan present = %v, wire kept = %v, sent kept = %v",
+			dbs.SendBodies.Has(orphan), dbs.SendBodies.Has(wire), dbs.SendBodies.Has(sent))
 	}
 }
