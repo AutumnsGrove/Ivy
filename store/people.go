@@ -66,8 +66,8 @@ func (d *DBs) RebuildPeople(ctx context.Context, accountID string) error {
 				e = &agg{}
 				people[addr] = e
 			}
-			if e.name == "" && a.Name != "" {
-				e.name = a.Name
+			if name := CleanName(a.Name); e.name == "" && name != "" {
+				e.name = name
 			}
 			e.count++
 			if at.IsZero() {

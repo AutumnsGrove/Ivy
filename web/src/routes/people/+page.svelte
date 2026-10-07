@@ -36,7 +36,7 @@
 			{#each often as p (p.id)}
 				<a href="/people/{p.id}" class="top">
 					<Avatar initials={p.initials} color={slotColor(p.slot)} size="xl" />
-					<span>{p.name.split(' ')[0]}</span>
+					<span class="label">{p.name.split(' ')[0]}</span>
 				</a>
 			{/each}
 		</div>
@@ -98,8 +98,18 @@
 		align-items: center;
 		gap: var(--sp-6);
 		width: var(--sp-56);
+		/* The strip scrolls sideways, so a column must never be squeezed by a long name. */
+		flex: none;
 		font-size: var(--fs-meta);
 		color: var(--muted);
+	}
+	.label {
+		max-width: 100%;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		/* One line of any script; the full name is in the list below. */
+		unicode-bidi: plaintext;
 	}
 	:global(.all) {
 		padding: var(--sp-3) var(--sp-14);

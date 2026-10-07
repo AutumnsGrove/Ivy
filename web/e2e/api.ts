@@ -147,6 +147,26 @@ function paged<T>(rows: T[], scenario: string | null, cursor: string | null, siz
 	return cursor ? { rows: rows.slice(size) } : { rows: rows.slice(0, size), nextCursor: 'next-page' };
 }
 
+/** Names a sender controls: no spaces, very long, an address, emoji, right to left and quotes (issue #12). */
+function hostilePeople() {
+	const names = [
+		'claude[bot]',
+		'AutumnsGrove/Lattice',
+		'dev@grove.place',
+		'Wolfeschlegelsteinhausenbergerdorff-Hubert Sr.',
+		'🌿🌿🌿🌿🌿🌿🌿🌿🌿🌿🌿🌿',
+		'مرحبا بالعالم كله والجميع',
+		'"Quoted \\"Name\\""'
+	];
+	return names.map((name, i) => ({
+		...mock.people[0],
+		id: `hostile-${i}`,
+		name,
+		email: `hostile${i}@example.com`,
+		addresses: [`hostile${i}@example.com`]
+	}));
+}
+
 function inboxReply(accountId: string | null, scenario: string | null, folder: string | null, cursor: string | null): Reply {
 	if (folder === 'trash') {
 		// Two fixtures stand in for trashed mail; the other folder views are empty.
@@ -612,6 +632,7 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 		return { body: { ...mock.reading, issues: page.rows, nextCursor: page.nextCursor } };
 	}
 	if (path === '/people' && method === 'GET') {
+		if (scenario === 'hostile-names') return { body: { items: hostilePeople() } };
 		const page = paged(mock.people, scenario, params.get('cursor'), 4);
 		return { body: { items: page.rows, nextCursor: page.nextCursor } };
 	}

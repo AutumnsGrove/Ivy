@@ -342,8 +342,8 @@ func syncState(st store.AccountStat) (api.SyncState, string, float64) {
 }
 
 func displayName(a store.Address) string {
-	if a.Name != "" {
-		return a.Name
+	if name := store.CleanName(a.Name); name != "" {
+		return name
 	}
 	return a.Address
 }

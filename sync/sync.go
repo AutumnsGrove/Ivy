@@ -1396,7 +1396,7 @@ func addressOf(a imap.Address) store.Address {
 	if a.IsGroupStart() || a.IsGroupEnd() {
 		return store.Address{}
 	}
-	return store.Address{Name: a.Name, Address: a.Addr()}
+	return store.Address{Name: store.CleanName(a.Name), Address: a.Addr()}
 }
 
 // wrapMessageID restores the angle brackets ENVELOPE strips, so the stored

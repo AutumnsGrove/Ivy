@@ -161,3 +161,28 @@ func TestLinkingToAMergedPersonFollowsToTheCanonicalAddress(t *testing.T) {
 		t.Errorf("a links to %q, want the canonical c@example.com (links %v)", links["a@example.com"], links)
 	}
 }
+
+// Issue #12: mail already mirrored with the header's quotes on the name must
+// not show them in People, without waiting for a re-sync.
+func TestRebuildPeopleDropsQuotesAroundAStoredName(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct-1")
+	seedFolder(t, dbs, "acct-1", "inbox-1")
+	seedPersonMessage(t, dbs, "acct-1", "inbox-1", "m1", time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC),
+		Address{Name: `"claude[bot]"`, Address: "noreply@github.com"}, []Address{{Address: "acct-1@example.test"}}, nil)
+
+	if err := dbs.RebuildPeople(ctx, "acct-1"); err != nil {
+		t.Fatalf("RebuildPeople: %v", err)
+	}
+	rows, err := dbs.ListPeople(ctx)
+	if err != nil {
+		t.Fatalf("ListPeople: %v", err)
+	}
+	for _, r := range rows {
+		if r.Address == "noreply@github.com" && r.Name != "claude[bot]" {
+			t.Errorf("name = %q, want claude[bot]", r.Name)
+		}
+	}
+}
