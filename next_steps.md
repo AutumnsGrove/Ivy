@@ -5,7 +5,7 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-06. **4g is done** (outgoing attachments and images; round 65): gate G4 cleared the dependency question — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4h (rich text) is next and deferrable.** **4f is done** (the compose screen; round 64): the client calls and the new
+last updated: 2026-10-06. **4h (rich text) is in progress**: the five design decisions are settled in qa-log round 66 and `docs/handoffs/2026-10-06-4h-richtext-design.md` (Squire, 16.1 KiB brotli / zero deps, chosen over a 98.3 KiB minimal TipTap; both modes with the mode fixed once you type; a `bodyFormat` field sanitised server-side; our own paste allow-list). **4g is done** (outgoing attachments and images; round 65): gate G4 cleared the dependency question — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4h (rich text) is next and deferrable.** **4f is done** (the compose screen; round 64): the client calls and the new
 `/drafts` screen, the From picker over the real identities, People autocomplete, reply/forward
 prefills, debounced autosave to the server's Drafts folder (and once on leave), the Sending/Undo
 toast, the Not-sent sheet and the resend-free `unconfirmed` notice. The operator chose autosave plus
@@ -79,6 +79,14 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 `cmd/` (`ivy`, `ivy-dev`, `ivy-assets`). No `Dockerfile` or image-publish workflow yet.
 
 ## ▶ Now
+
+**4h (rich text) is in progress.** The five decisions are settled (qa-log round 66, design at
+`docs/handoffs/2026-10-06-4h-richtext-design.md`): the editor is `squire-rte` (MIT, zero deps,
+16.1 KiB brotli, picked over a minimal TipTap at 98.3 KiB and Quill core at 38.9), both the Markdown
+and rich-text editors stay with rich as the default, the mode is fixed once the body has content, a
+new `bodyFormat` (`markdown` | `html`) travels on the send/draft requests and is sanitised by
+`compose`'s outgoing policy with a derived `text/plain`, and the paste sanitiser is our own
+allow-list walker (no DOMPurify). Implementation follows; nothing is coded yet.
 
 **4e is done** (2026-10-06; design at the reply gate in
 `docs/handoffs/2026-10-06-4e-identities-design.md`, qa-log round 63). State migration 14 adds

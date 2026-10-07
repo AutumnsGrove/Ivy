@@ -1575,3 +1575,41 @@ Related choices settled in the design file rather than asked: uploads are conten
 under `data/uploads/` (not the disabled-mail blob store) with a `state.db` metadata table; resume and
 undo re-materialise attachments from the stored MIME, so a swept staging file is invisible to the
 operator; "Original" size still re-encodes so location is removed, unless "Remove location" is off.
+
+## Round 66 — 4h rich text, the editor and body-format questions (2026-10-06, agent; five answers)
+
+4h is the last, deferrable chunk 4 stage. The four format buttons are still inert and the docs never
+picked an editor, so the choices that decide the whole stage went to the operator before any code.
+They are settled here and in `docs/handoffs/2026-10-06-4h-richtext-design.md`.
+
+- **Squire, not TipTap.** The operator first picked TipTap, then opened the door to alternatives
+  while the measured cost came back. The measured options were `squire-rte` **16.1 KiB brotli with
+  zero dependencies**, Quill core 38.9, Lexical 57, and minimal TipTap (`@tiptap/core` +
+  `@tiptap/pm` + nine extensions for four buttons) **98.3 KiB brotli**. Squire is the HTML editor
+  built for Fastmail's compose (used by Proton, StartMail, Tutanota, Zoho, Superhuman), so arbitrary
+  pasted HTML is its design centre, it avoids `execCommand` entirely, ships types and is actively
+  maintained (2.4.9, 2026-09-15). MIT. It is in `STACK.md` as the one runtime exception and loads
+  only with the `/compose` route chunk. Building our own (~2–4 KiB) was rejected: it means owning
+  selection, paste cleaning, block/whitespace normalisation and the iOS Safari quirks Squire
+  already handles.
+- **Both editors stay; rich text is the default.** A small mode pill switches a message between
+  Markdown and rich text. Existing drafts reopen in the format they were saved with.
+- **The mode is fixed once you type.** The pill is only active while the body is empty; after that
+  the message's format is settled. This keeps the stored draft JSON exact and avoids an HTML↔Markdown
+  converter pair and the round-trip fidelity risk it would carry.
+- **`bodyFormat` on the wire, sanitised server-side.** `SendRequest`, `DraftRequest` and
+  `DraftResume` gain `bodyFormat: "markdown" | "html"` (`markdown` when absent/`markdown: true`, so
+  older clients and stored draft JSON keep working). The operator's HTML is stored verbatim as the
+  draft; at build time `compose` narrows it through the existing compose-only `outgoingPolicy` and
+  derives the `text/plain` alternative by converting the HTML to readable text. No migration: the
+  draft's `compose_json` already carries the request, so the format round-trips with it.
+- **A small allow-list paste sanitiser, no DOMPurify.** Squire refuses to load HTML without a
+  `sanitizeToDOMFragment`; rather than add a client sanitizer library (STACK says none), we supply
+  our own DOM walker over the same tag/attribute set as the outgoing HTML policy, with a hostile
+  corpus in Vitest. It protects the editing surface; the authoritative sanitiser remains the
+  server's `outgoingPolicy`.
+
+Related choices settled here rather than asked: an HTML draft created in another client (Apple Mail)
+resumes as `bodyFormat: html` (the mirror parser prefers the HTML part when one exists) so its
+formatting survives; a draft with no usable body stays `markdown`; the four format buttons only act
+in rich mode and are disabled in Markdown mode.

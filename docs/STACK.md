@@ -65,6 +65,7 @@ rule from `PLAN.md` section 6: verify before pinning). The constraint: **pure Go
 | API types | `openapi-typescript` | Generated from `api/openapi.yaml` into `src/lib/api/schema.d.ts`; `src/lib/types.ts` re-exports it |
 | Build | Vite (via SvelteKit); `make web-assets` copies the output into `internal/webui/build` and `cmd/ivy-assets` precompresses it (brotli 11 / zstd / gzip 9) |
 | Sanitised mail view | Sandboxed iframe fed by server-sanitised HTML (no client sanitiser library) |
+| Rich text (compose) | `squire-rte` v2.4.9 (**settled**, round 66; the one deliberate runtime exception) | The rich-text editor after markdown (chunk 4h). MIT, **zero dependencies**, 16.1 KiB brotli for the whole editor — measured against TipTap's 98.3 KiB minimal set, Quill core's 38.9 and Lexical's 57. It was built for Fastmail's mail compose, so arbitrary pasted/quoted HTML is its design centre, it uses its own formatting engine rather than the deprecated `execCommand`, ships TypeScript types and is used in production by Proton, StartMail, Tutanota, Zoho and Superhuman. It is loaded only by the `/compose` route chunk, so the critical-path budget is untouched. It needs a `sanitizeToDOMFragment`; we supply our own allow-list walker (`src/lib/compose/sanitize.ts`) rather than import DOMPurify (`ARCHITECTURE.md` 5). |
 
 Pinned in `web/package.json` (2026-10-02, all dev dependencies; the shipped bundle is Svelte's
 compiled output plus fonts and icons, about 100 KB gzip for every route together):
@@ -79,9 +80,11 @@ compiled output plus fonts and icons, about 100 KB gzip for every route together
 | `vitest`, `jsdom`, `@testing-library/svelte`, `@testing-library/jest-dom` | Unit and component tests |
 | `@playwright/test` | E2E on WebKit (iPhone) and Chromium (desktop) |
 | `@axe-core/playwright` | Accessibility assertions in E2E (STANDARDS.md 5); the shell landmarks the pass required were added in 2g |
+| `squire-rte` 2.4.9 | The compose rich-text editor (chunk 4h). Runtime, MIT, zero deps, 16.1 KiB brotli, route-split to `/compose`; see the Rich text row above |
 
-Frontend dependency policy: the runtime dependency list should stay near-empty (Svelte plus icons).
-Anything else is justified here with its compressed size.
+Frontend dependency policy: the runtime dependency list should stay near-empty (Svelte plus icons),
+with `squire-rte` the single deliberate exception. Anything else is justified here with its
+compressed size.
 
 ## Open verifications (each becomes a spike or a pinned fact)
 
