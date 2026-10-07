@@ -497,7 +497,8 @@ Checkpoints: **G1** (4a, injection corpus failing before the builder), **G2** (4
 Review). **4a-4h are done**: `compose/`/`smtp/`, the `send_queue` with the Sent copy, the send API
 with undo, the server Drafts folder, the identities and reply logic, the compose screen and
 `/drafts`, outgoing attachments and images, and the rich-text editor with `bodyFormat`. Chunk 4 is
-complete; what remains is the operator's live checks.
+complete; **G5 (the end-of-chunk review by a fresh session) is the one process step still open**, and
+what remains besides it is the operator's live checks.
 
 ## Operator actions still open
 
