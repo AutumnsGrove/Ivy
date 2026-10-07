@@ -1710,3 +1710,25 @@ real browser or the potato.
   **Deviation from the operator's wording:** the answer said failed rows are pruned with the other terminal rows
   after 7 days. A failed *head* is the only copy of what was typed, so age never prunes it; only a superseded
   failed row goes (the existing `SaveDraft` prune), and a send or discard settles it. Say if you want age pruning.
+- **N48 resolved** (operator chose "bodies to the blob store") · `store/drafts.go`, `store/store.go`, `store/migrations.go` (16),
+  `store/uploads.go`, `sync/outbox.go`, `gateway/drafts.go` · a draft version's built MIME is written to the
+  content-addressed `data/draftbodies` store before the transaction and the row keeps only `body_hash`
+  (`body` is stored empty because the column is NOT NULL; rows saved earlier keep their inline body and still
+  read). List queries no longer select the body at all, which also removes the cost of `LiveDraftHeads` loading up
+  to 200 full bodies. A superseded or aged row releases its file after the commit; `SweepOrphanDraftBodies` (run by
+  the outbox worker beside the uploads sweep, via the shared `sweepOrphanBlobs`) collects files left by a crash or a
+  refused save. A `draftMu` read/write lock orders saves against release and sweep, as `uploadMu` does for
+  staging. Reproduced with `TestSaveDraftKeepsTheBodyOutOfTheDatabase` (no `body_hash` column; failed),
+  `TestDraftBodiesAreReleasedWithTheirRows`, `TestDraftBodyForOpReadsALegacyInlineRow`,
+  `TestSweepOrphanDraftBodies` (failed to build before), `TestOutboxRunSweepsOrphanDraftBodies` (orphan survived;
+  failed before the wiring) and `TestGetDraftResumesWhenTheBodyFileIsGone` (mutation-checked: 500 with the guard
+  broken). Measured small, not extrapolated blindly: 6 autosaves of a 2 MiB body left about 10 MiB in the
+  `state.db` files on the old code and 567 KiB on the new (1.9 MiB on disk, the live head only).
+  **Consequences to know:** draft bodies are not in the daily `state.db` backup (like uploads); a restored
+  `state.db` whose body files are gone fails the pending op `draft_gone` and resumes without attachments, and the
+  typed text survives in `compose_json`. `send_queue` still holds `wire_body`, `sent_body` and `compose_json` inline
+  (N44, still open, measure first).
+- **Gate after the resolutions:** `golangci-lint` 0 issues, `go vet`, `staticcheck` and `gofumpt` clean, `make drift`
+  clean, `CGO_ENABLED=1 go test -race -count=1 ./...` all packages pass, `pnpm test` (360) and `pnpm check` pass,
+  Playwright `drafts.spec.ts` passes on the phone (WebKit) and desktop projects. Still not run: `govulncheck`, the
+  other Playwright specs, a real iPhone, the potato.

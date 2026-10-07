@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -373,7 +374,15 @@ func (s *Server) draftResume(ctx context.Context, d store.Draft) (api.DraftResum
 		res.References = req.References
 		res.Text = req.Text
 	}
-	atts, err := s.materializeAttachments(ctx, d.AccountID, d.Body)
+	built, err := s.dbs.DraftBodyForOp(ctx, d.ID)
+	if errors.Is(err, store.ErrNotFound) {
+		// The built message is gone (a restore, a manual clean) but the compose
+		// request above still has everything typed; only the attachments are lost.
+		slog.WarnContext(ctx, "gateway: draft body missing on resume", "draft", d.DraftID, "version", d.Version)
+	} else if err != nil {
+		return api.DraftResume{}, err
+	}
+	atts, err := s.materializeAttachments(ctx, d.AccountID, built.Body)
 	if err != nil {
 		return api.DraftResume{}, err
 	}

@@ -842,6 +842,18 @@ var stateMigrations = []migration{
 			`CREATE INDEX idx_uploads_created ON uploads(created_at)`,
 		},
 	},
+	{
+		version: 16,
+		statements: []string{
+			// A draft version's built MIME moves out of the backed-up database into the
+			// content-addressed data/draftbodies store, because every autosave wrote the
+			// whole message (attachments included, up to tens of MiB) into state.db. The
+			// hash names the file; a row saved before this migration has an empty hash and
+			// keeps its inline body, which reads still honour. New rows store an empty
+			// body, since the column is NOT NULL and cannot be relaxed in place.
+			`ALTER TABLE drafts ADD COLUMN body_hash TEXT NOT NULL DEFAULT ''`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state

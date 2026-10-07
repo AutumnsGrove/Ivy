@@ -72,6 +72,14 @@ type DBs struct {
 	// lock without waiting, so a file another stage may be about to point a row at is
 	// never deleted (the orphan sweep collects it later).
 	uploadMu sync.RWMutex
+	// DraftBodies holds each draft version's built MIME by content hash, outside
+	// state.db so an autosave with a 25 MiB attachment never grows the backed-up
+	// file. A version is recoverable from the server copy once filed; until then
+	// the row's op is its only reader, as with uploads this store is not backed up.
+	DraftBodies *blobstore.Store
+	// draftMu orders a draft save against releasing and sweeping body files, the
+	// same way uploadMu does for staging.
+	draftMu sync.RWMutex
 	// Dir is the data directory holding both files, so other packages can place
 	// their own files (the message spool) beside them.
 	Dir string
@@ -105,6 +113,12 @@ func Open(ctx context.Context, dir string) (*DBs, error) {
 		return nil, fmt.Errorf("upload store: %w", err)
 	}
 	dbs.Uploads = uploads
+	draftBodies, err := blobstore.Open(filepath.Join(dir, "draftbodies"))
+	if err != nil {
+		_ = dbs.Close()
+		return nil, fmt.Errorf("draft body store: %w", err)
+	}
+	dbs.DraftBodies = draftBodies
 	if err := dbs.moveLegacyProfiles(ctx); err != nil {
 		_ = dbs.Close()
 		return nil, err

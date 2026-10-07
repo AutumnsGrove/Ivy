@@ -1,11 +1,14 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"time"
 )
 
@@ -34,7 +37,9 @@ var ErrDraftConflict = errors.New("draft changed elsewhere")
 
 // Draft is one saved compose version. The head is the highest live version of a
 // draft_id; the body is immutable so a live op always files the bytes it was
-// committed with (docs/handoffs/2026-10-06-4d-drafts-design.md).
+// committed with (docs/handoffs/2026-10-06-4d-drafts-design.md). The built MIME
+// is not on this struct: it is large, so it is read by DraftBodyForOp only by the
+// callers that need it, never by a list.
 type Draft struct {
 	ID           string
 	DraftID      string
@@ -47,7 +52,6 @@ type Draft struct {
 	To           []string
 	DestFolderID string
 	Compose      []byte
-	Body         []byte
 	State        string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
@@ -80,7 +84,7 @@ type DraftBody struct {
 }
 
 const draftSelect = `SELECT id, draft_id, account_id, version, message_id, content_key,
-	supersedes, subject, to_addrs, dest_folder_id, compose_json, body, state,
+	supersedes, subject, to_addrs, dest_folder_id, compose_json, state,
 	created_at, updated_at FROM drafts`
 
 func scanDraft(s scanner) (Draft, error) {
@@ -92,7 +96,7 @@ func scanDraft(s scanner) (Draft, error) {
 	)
 	if err := s.Scan(
 		&d.ID, &d.DraftID, &d.AccountID, &d.Version, &d.MessageID, &d.ContentKey,
-		&d.Supersedes, &d.Subject, &toAddrs, &d.DestFolderID, &d.Compose, &d.Body,
+		&d.Supersedes, &d.Subject, &toAddrs, &d.DestFolderID, &d.Compose,
 		&d.State, &created, &updated,
 	); err != nil {
 		return Draft{}, err
@@ -179,38 +183,82 @@ const DraftTerminalRetention = 7 * 24 * time.Hour
 // the row: it carries the Message-ID itself.
 func (d *DBs) PruneDrafts(ctx context.Context, now time.Time) (int, error) {
 	cutoff := formatTime(now.Add(-DraftTerminalRetention))
-	res, err := d.State.Write.ExecContext(ctx,
-		`DELETE FROM drafts WHERE state IN (?, ?) AND updated_at < ?`, DraftSent, DraftDiscarded, cutoff)
+	tx, err := d.State.Write.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("prune drafts: %w", err)
 	}
-	n, err := res.RowsAffected()
+	defer func() { _ = tx.Rollback() }()
+	var n int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT count(*) FROM drafts WHERE state IN (?, ?) AND updated_at < ?`,
+		DraftSent, DraftDiscarded, cutoff).Scan(&n); err != nil {
+		return 0, fmt.Errorf("prune drafts: %w", err)
+	}
+	hashes, err := deleteDraftRowsTx(ctx, tx,
+		`SELECT body_hash FROM drafts WHERE state IN (?, ?) AND updated_at < ? AND body_hash != ''`,
+		`DELETE FROM drafts WHERE state IN (?, ?) AND updated_at < ?`,
+		DraftSent, DraftDiscarded, cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("prune drafts: %w", err)
 	}
-	return int(n), nil
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("prune drafts: %w", err)
+	}
+	d.releaseDraftBodies(ctx, hashes)
+	return n, nil
 }
 
 // SaveDraft commits a new version and the outbox op that files it in one
 // transaction, so a version is never durable without the op that will reach the
 // server. A stale BaseVersion is ErrDraftConflict carrying the current head.
 func (d *DBs) SaveDraft(ctx context.Context, in SaveDraftInput) (Draft, error) {
+	draft, pruned, err := d.saveDraft(ctx, in)
+	// The files of the rows this save dropped go once the save no longer holds the
+	// lock that stops a sweep deleting a body whose row is not inserted yet.
+	d.releaseDraftBodies(ctx, pruned)
+	return draft, err
+}
+
+// saveDraft is SaveDraft's body. It also returns the body hashes of the rows it
+// pruned so the caller can release their files.
+func (d *DBs) saveDraft(ctx context.Context, in SaveDraftInput) (Draft, []string, error) {
 	switch {
 	case in.ID == "", in.DraftID == "", in.AccountID == "", in.MessageID == "", in.DestFolderID == "":
-		return Draft{}, errors.New("save draft: id, draft id, account, message id and destination are required")
+		return Draft{}, nil, errors.New("save draft: id, draft id, account, message id and destination are required")
 	case in.OpID == "":
-		return Draft{}, errors.New("save draft: an op id is required")
+		return Draft{}, nil, errors.New("save draft: an op id is required")
 	case in.Now.IsZero():
-		return Draft{}, errors.New("save draft: no timestamp")
+		return Draft{}, nil, errors.New("save draft: no timestamp")
 	}
 	toAddrs, err := json.Marshal(in.To)
 	if err != nil {
-		return Draft{}, fmt.Errorf("save draft: recipients: %w", err)
+		return Draft{}, nil, fmt.Errorf("save draft: recipients: %w", err)
+	}
+
+	// Held from before the body is written until the row is committed, so a sweep
+	// can never see a body file whose row is about to be inserted as an orphan.
+	d.draftMu.RLock()
+	defer d.draftMu.RUnlock()
+
+	// A retried request is answered before the body is written, so a retry does not
+	// leave a second copy on disk. The transaction below checks again for a racer.
+	switch prior, err := d.DraftVersion(ctx, in.ID); {
+	case err == nil:
+		if prior.AccountID != in.AccountID {
+			return Draft{}, nil, fmt.Errorf("save draft: id %s belongs to another account", in.ID)
+		}
+		return prior, nil, nil
+	case !errors.Is(err, ErrNotFound):
+		return Draft{}, nil, err
+	}
+	bodyHash, _, err := d.DraftBodies.Put(ctx, bytes.NewReader(in.Body))
+	if err != nil {
+		return Draft{}, nil, fmt.Errorf("save draft %s: body: %w", in.ID, err)
 	}
 
 	tx, err := d.State.Write.BeginTx(ctx, nil)
 	if err != nil {
-		return Draft{}, fmt.Errorf("save draft: %w", err)
+		return Draft{}, nil, fmt.Errorf("save draft: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -219,11 +267,11 @@ func (d *DBs) SaveDraft(ctx context.Context, in SaveDraftInput) (Draft, error) {
 	switch {
 	case err == nil:
 		if existing.AccountID != in.AccountID {
-			return Draft{}, fmt.Errorf("save draft: id %s belongs to another account", in.ID)
+			return Draft{}, nil, fmt.Errorf("save draft: id %s belongs to another account", in.ID)
 		}
-		return existing, tx.Commit()
+		return existing, nil, tx.Commit()
 	case !errors.Is(err, sql.ErrNoRows):
-		return Draft{}, fmt.Errorf("save draft: %w", err)
+		return Draft{}, nil, fmt.Errorf("save draft: %w", err)
 	}
 
 	// The current head, whatever its state, decides the version and what the new
@@ -235,35 +283,36 @@ func (d *DBs) SaveDraft(ctx context.Context, in SaveDraftInput) (Draft, error) {
 	switch {
 	case headErr == nil:
 		if head.Version != in.BaseVersion {
-			return head, ErrDraftConflict
+			return head, nil, ErrDraftConflict
 		}
 		version = head.Version + 1
 		supersedes = head.MessageID
 	case errors.Is(headErr, ErrNotFound):
 		if in.BaseVersion != 0 {
-			return Draft{}, ErrDraftConflict
+			return Draft{}, nil, ErrDraftConflict
 		}
 	default:
-		return Draft{}, headErr
+		return Draft{}, nil, headErr
 	}
 
 	draft := Draft{
 		ID: in.ID, DraftID: in.DraftID, AccountID: in.AccountID, Version: version,
 		MessageID: in.MessageID, ContentKey: ContentKey(in.MessageID, nil),
 		Supersedes: supersedes, Subject: in.Subject, To: in.To,
-		DestFolderID: in.DestFolderID, Compose: in.Compose, Body: in.Body,
+		DestFolderID: in.DestFolderID, Compose: in.Compose,
 		State: DraftSaving, CreatedAt: in.Now, UpdatedAt: in.Now,
 	}
+	// The body column is NOT NULL, so a row whose body is on disk stores it empty.
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO drafts (
 			id, draft_id, account_id, version, message_id, content_key, supersedes,
-			subject, to_addrs, dest_folder_id, compose_json, body, state, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			subject, to_addrs, dest_folder_id, compose_json, body, body_hash, state, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		draft.ID, draft.DraftID, draft.AccountID, draft.Version, draft.MessageID,
 		draft.ContentKey, draft.Supersedes, draft.Subject, string(toAddrs),
-		draft.DestFolderID, draft.Compose, draft.Body, draft.State,
+		draft.DestFolderID, draft.Compose, []byte{}, bodyHash, draft.State,
 		formatTime(draft.CreatedAt), formatTime(draft.UpdatedAt)); err != nil {
-		return Draft{}, fmt.Errorf("save draft %s: %w", in.ID, err)
+		return Draft{}, nil, fmt.Errorf("save draft %s: %w", in.ID, err)
 	}
 
 	supersedesList := []string{}
@@ -283,22 +332,73 @@ func (d *DBs) SaveDraft(ctx context.Context, in SaveDraftInput) (Draft, error) {
 		CreatedAt: in.Now,
 	}); err != nil {
 		// Includes ErrOutboxFull: the whole save rolls back, so nothing is
-		// durable without the op that will file it.
-		return Draft{}, err
+		// durable without the op that will file it. The body file is left for the
+		// orphan sweep.
+		return Draft{}, nil, err
 	}
 
 	// A superseded version whose op is terminal is no longer needed; a saving one
 	// still has a live op that needs its bytes.
-	if _, err := tx.ExecContext(ctx, `
-		DELETE FROM drafts WHERE account_id = ? AND draft_id = ? AND version < ? AND state != ?`,
-		in.AccountID, in.DraftID, version, DraftSaving); err != nil {
-		return Draft{}, fmt.Errorf("save draft %s: prune: %w", in.ID, err)
+	pruned, err := deleteDraftRowsTx(ctx, tx,
+		`SELECT body_hash FROM drafts
+			WHERE account_id = ? AND draft_id = ? AND version < ? AND state != ? AND body_hash != ''`,
+		`DELETE FROM drafts WHERE account_id = ? AND draft_id = ? AND version < ? AND state != ?`,
+		in.AccountID, in.DraftID, version, DraftSaving)
+	if err != nil {
+		return Draft{}, nil, fmt.Errorf("save draft %s: prune: %w", in.ID, err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return Draft{}, fmt.Errorf("save draft %s: %w", in.ID, err)
+		return Draft{}, nil, fmt.Errorf("save draft %s: %w", in.ID, err)
 	}
-	return draft, nil
+	return draft, pruned, nil
+}
+
+// deleteDraftRowsTx runs a literal SELECT of the body hashes and the matching
+// literal DELETE with the same arguments, and returns the hashes so the caller
+// can release the files after the commit. Whole statements are passed in, never
+// assembled, so no SQL is built from strings.
+func deleteDraftRowsTx(ctx context.Context, tx *sql.Tx, selectHashes, deleteRows string, args ...any) ([]string, error) {
+	rows, err := tx.QueryContext(ctx, selectHashes, args...)
+	if err != nil {
+		return nil, err
+	}
+	var hashes []string
+	for rows.Next() {
+		var h string
+		if err := rows.Scan(&h); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		hashes = append(hashes, h)
+	}
+	err = rows.Err()
+	_ = rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, deleteRows, args...); err != nil {
+		return nil, err
+	}
+	return hashes, nil
+}
+
+// releaseDraftBodies removes body files no row references any more. It never
+// waits: while a save is in flight a file may be about to gain a row, so it is
+// left for the orphan sweep. The reference count is taken under the lock.
+func (d *DBs) releaseDraftBodies(ctx context.Context, hashes []string) {
+	if len(hashes) == 0 || !d.draftMu.TryLock() {
+		return
+	}
+	defer d.draftMu.Unlock()
+	for _, hash := range hashes {
+		var refs int
+		if err := d.State.Read.QueryRowContext(ctx, `SELECT count(*) FROM drafts WHERE body_hash = ?`, hash).Scan(&refs); err != nil || refs > 0 {
+			continue
+		}
+		// A failed removal is only a leftover file; the orphan sweep retries it.
+		_ = d.DraftBodies.Remove(hash)
+	}
 }
 
 func draftHeadTx(ctx context.Context, tx *sql.Tx, accountID, draftID string) (Draft, error) {
@@ -342,17 +442,55 @@ func (d *DBs) DraftVersion(ctx context.Context, id string) (Draft, error) {
 // DraftBodyForOp returns the bytes a draft op should file for one version. A
 // missing row is ErrNotFound; the op then fails rather than appending nothing.
 func (d *DBs) DraftBodyForOp(ctx context.Context, versionID string) (DraftBody, error) {
-	var b DraftBody
+	var (
+		b    DraftBody
+		hash string
+	)
 	err := d.State.Read.QueryRowContext(ctx,
-		`SELECT account_id, message_id, body FROM drafts WHERE id = ?`, versionID).
-		Scan(&b.AccountID, &b.MessageID, &b.Body)
+		`SELECT account_id, message_id, body, body_hash FROM drafts WHERE id = ?`, versionID).
+		Scan(&b.AccountID, &b.MessageID, &b.Body, &hash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return DraftBody{}, ErrNotFound
 	}
 	if err != nil {
 		return DraftBody{}, fmt.Errorf("draft body %s: %w", versionID, err)
 	}
+	if hash == "" {
+		// A row saved before bodies moved to disk keeps its bytes inline.
+		return b, nil
+	}
+	f, err := d.DraftBodies.Open(hash)
+	if errors.Is(err, os.ErrNotExist) {
+		// The file is gone (a restore, a manual clean): the op fails rather than
+		// appending nothing.
+		return DraftBody{}, ErrNotFound
+	}
+	if err != nil {
+		return DraftBody{}, fmt.Errorf("draft body %s: %w", versionID, err)
+	}
+	defer func() { _ = f.Close() }()
+	body, err := io.ReadAll(io.LimitReader(f, MaxStoredDraftBytes+1))
+	if err != nil {
+		return DraftBody{}, fmt.Errorf("draft body %s: %w", versionID, err)
+	}
+	if len(body) > MaxStoredDraftBytes {
+		return DraftBody{}, fmt.Errorf("draft body %s: over %d bytes", versionID, MaxStoredDraftBytes)
+	}
+	b.Body = body
 	return b, nil
+}
+
+// MaxStoredDraftBytes bounds a draft body read back from disk: the 25 MiB
+// attachment cap inflates by a third in base64, plus the text and headers.
+const MaxStoredDraftBytes = 64 << 20
+
+// SweepOrphanDraftBodies removes body files no draft row references: a file left
+// by a crash between the write and the insert, by a refused save, or an
+// interrupted write. It stands down while a save is in flight (see
+// SweepOrphanUploads for why the lock makes an age threshold unnecessary).
+func (d *DBs) SweepOrphanDraftBodies(ctx context.Context) (int, error) {
+	return sweepOrphanBlobs(ctx, &d.draftMu, d.DraftBodies, d.State.Read,
+		`SELECT DISTINCT body_hash FROM drafts WHERE body_hash != ''`)
 }
 
 // MarkDraftSaved records that the outbox op filed the version. Only a saving

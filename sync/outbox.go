@@ -172,6 +172,9 @@ func (w *OutboxWorker) Run(ctx context.Context) error {
 			if _, err := w.fetcher.dbs.SweepOrphanUploads(ctx); err != nil {
 				slog.WarnContext(ctx, "outbox: orphan upload sweep failed", "account", w.acct.ID, "error", err)
 			}
+			if _, err := w.fetcher.dbs.SweepOrphanDraftBodies(ctx); err != nil {
+				slog.WarnContext(ctx, "outbox: orphan draft body sweep failed", "account", w.acct.ID, "error", err)
+			}
 			lastPrune = w.fetcher.now()
 		}
 		if w.conn != nil && w.fetcher.now().Sub(w.lastBusy) > w.idleClose {

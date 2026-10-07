@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -399,5 +400,32 @@ func TestListDraftsFlagsASaveThatFailed(t *testing.T) {
 	}
 	if len(list.Drafts) != 1 || list.Drafts[0].SaveFailed == nil || !*list.Drafts[0].SaveFailed {
 		t.Fatalf("after the failure = %+v, want saveFailed true", list.Drafts)
+	}
+}
+
+// If the built message's file is gone (a restore, a manual clean), resuming still
+// returns everything typed; only the attachments are lost.
+func TestGetDraftResumesWhenTheBodyFileIsGone(t *testing.T) {
+	t.Parallel()
+	srv, dbs, _ := draftServer(t)
+
+	var sum api.DraftSummary
+	if code := postJSON(t, srv.URL+"/api/v1/drafts", draftRequest("what I typed"), &sum); code != http.StatusOK {
+		t.Fatalf("save status = %d, want 200", code)
+	}
+	var hash string
+	if err := dbs.State.Read.QueryRowContext(context.Background(), `SELECT body_hash FROM drafts LIMIT 1`).Scan(&hash); err != nil {
+		t.Fatalf("hash: %v", err)
+	}
+	if err := os.Remove(dbs.DraftBodies.Path(hash)); err != nil {
+		t.Fatalf("remove body file: %v", err)
+	}
+
+	var got api.DraftResume
+	if code := getJSON(t, srv.URL+"/api/v1/drafts/"+*sum.DraftId+"?account_id=acct-1", &got); code != http.StatusOK {
+		t.Fatalf("resume status = %d, want 200", code)
+	}
+	if got.Text != "what I typed" {
+		t.Errorf("text = %q, want what was typed", got.Text)
 	}
 }

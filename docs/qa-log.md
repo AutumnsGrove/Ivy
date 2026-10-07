@@ -1613,3 +1613,20 @@ Related choices settled here rather than asked: an HTML draft created in another
 resumes as `bodyFormat: html` (the mirror parser prefers the HTML part when one exists) so its
 formatting survives; a draft with no usable body stays `markdown`; the four format buttons only act
 in rich mode and are disabled in Markdown mode.
+
+## Review of chunk 4d-4h: the open items (2026-10-07)
+
+Operator answers to the six open items from `papercuts.md` (`2cabdd0..4f34628`); each is recorded as resolved
+there.
+
+- **A permanent draft failure is a `failed` state (N49).** The worker marks the version, the list shows "Not on
+  your mail server yet", and a newer save, a send or a discard settles it. A failed head is never pruned by age
+  because it is the only copy of what was typed (a deviation from "pruned after 7 days", flagged to the operator).
+- **One lock orders upload staging against blob removal (N46).** A stage holds a read lock; removal takes the write
+  lock without waiting and leaves the file to the sweep if a stage is running.
+- **Orphan staging files are swept with the other prune steps (N47),** with no age threshold, because the lock
+  proves nothing is mid-flight.
+- **A retry of unchanged content reuses its save id (N50).** The 409 contract is unchanged.
+- **Draft bodies live in a content-addressed store, not in `state.db` (N48).** Not backed up, like uploads.
+- **The upload sends the Blob itself, not a buffered copy (N51).** Memory on a real iPhone is the operator's live
+  check.

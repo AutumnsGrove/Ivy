@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strconv"
@@ -473,5 +474,137 @@ func TestFailedDraftCanBeDiscardedAndSent(t *testing.T) {
 	}
 	if _, err := dbs.DiscardDraft(ctx, "acct-1", "d2", "op-discard", draftNow); err != nil {
 		t.Fatalf("discard a failed draft: %v", err)
+	}
+}
+
+// A draft's built MIME (attachments included, tens of MiB) lives on disk under its
+// hash, not in the backed-up state database, so an autosave never grows state.db by
+// the size of a photo.
+func TestSaveDraftKeepsTheBodyOutOfTheDatabase(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	body := bytes.Repeat([]byte("x"), 1<<20)
+	in := newDraftSave("v1", "d1", "<m1@example.test>", 0)
+	in.Body = body
+	if _, err := dbs.SaveDraft(ctx, in); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	var inline int
+	var hash string
+	if err := dbs.State.Read.QueryRowContext(ctx,
+		`SELECT length(body), body_hash FROM drafts WHERE id = 'v1'`).Scan(&inline, &hash); err != nil {
+		t.Fatalf("read row: %v", err)
+	}
+	if inline != 0 || hash == "" {
+		t.Fatalf("row holds %d inline bytes and hash %q, want none inline and a body hash", inline, hash)
+	}
+	if !dbs.DraftBodies.Has(hash) {
+		t.Fatal("the body is not in the draft body store")
+	}
+	got, err := dbs.DraftBodyForOp(ctx, "v1")
+	if err != nil {
+		t.Fatalf("body for op: %v", err)
+	}
+	if !bytes.Equal(got.Body, body) {
+		t.Errorf("body for op = %d bytes, want the %d saved", len(got.Body), len(body))
+	}
+}
+
+// A superseded version and an aged terminal one release their body files with
+// their rows.
+func TestDraftBodiesAreReleasedWithTheirRows(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	hashOf := func(id string) string {
+		t.Helper()
+		var h string
+		if err := dbs.State.Read.QueryRowContext(ctx, `SELECT body_hash FROM drafts WHERE id = ?`, id).Scan(&h); err != nil {
+			t.Fatalf("hash of %s: %v", id, err)
+		}
+		return h
+	}
+	one := newDraftSave("v1", "d1", "<m1@example.test>", 0)
+	one.Body = []byte("first body")
+	if _, err := dbs.SaveDraft(ctx, one); err != nil {
+		t.Fatalf("save v1: %v", err)
+	}
+	h1 := hashOf("v1")
+	if err := dbs.MarkDraftSaved(ctx, "v1", draftNow); err != nil {
+		t.Fatalf("mark saved: %v", err)
+	}
+	two := newDraftSave("v2", "d1", "<m2@example.test>", 1)
+	two.Body = []byte("second body")
+	if _, err := dbs.SaveDraft(ctx, two); err != nil {
+		t.Fatalf("save v2: %v", err)
+	}
+	if dbs.DraftBodies.Has(h1) {
+		t.Error("the superseded version's body survived its row")
+	}
+	h2 := hashOf("v2")
+	if !dbs.DraftBodies.Has(h2) {
+		t.Fatal("the head's body is missing")
+	}
+
+	if err := dbs.MarkDraftSent(ctx, "acct-1", "<m2@example.test>", draftNow); err != nil {
+		t.Fatalf("mark sent: %v", err)
+	}
+	if n, err := dbs.PruneDrafts(ctx, draftNow.Add(DraftTerminalRetention+time.Hour)); err != nil || n != 1 {
+		t.Fatalf("PruneDrafts = %d, %v, want the sent row", n, err)
+	}
+	if dbs.DraftBodies.Has(h2) {
+		t.Error("a pruned row's body survived")
+	}
+}
+
+// Rows saved before bodies moved to disk keep their inline bytes and still read.
+func TestDraftBodyForOpReadsALegacyInlineRow(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	if _, err := dbs.State.Write.ExecContext(ctx, `
+		INSERT INTO drafts (id, draft_id, account_id, version, message_id, content_key, body, state, created_at, updated_at)
+		VALUES ('old', 'dold', 'acct-1', 1, '<old@example.test>', 'ck', ?, 'saved', ?, ?)`,
+		[]byte("legacy raw mime"), formatTime(draftNow), formatTime(draftNow)); err != nil {
+		t.Fatalf("insert legacy row: %v", err)
+	}
+	got, err := dbs.DraftBodyForOp(ctx, "old")
+	if err != nil {
+		t.Fatalf("body for op: %v", err)
+	}
+	if string(got.Body) != "legacy raw mime" {
+		t.Errorf("body = %q, want the inline bytes", got.Body)
+	}
+}
+
+// A body file with no row (a crash between the write and the insert, or a refused
+// save) is collected; a referenced one is kept.
+func TestSweepOrphanDraftBodies(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	if _, err := dbs.SaveDraft(ctx, newDraftSave("v1", "d1", "<m1@example.test>", 0)); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	var kept string
+	if err := dbs.State.Read.QueryRowContext(ctx, `SELECT body_hash FROM drafts WHERE id = 'v1'`).Scan(&kept); err != nil {
+		t.Fatalf("hash: %v", err)
+	}
+	orphan, _, err := dbs.DraftBodies.Put(ctx, bytes.NewReader([]byte("never recorded")))
+	if err != nil {
+		t.Fatalf("put orphan: %v", err)
+	}
+	n, err := dbs.SweepOrphanDraftBodies(ctx)
+	if err != nil || n != 1 {
+		t.Fatalf("sweep = %d, %v, want the orphan only", n, err)
+	}
+	if dbs.DraftBodies.Has(orphan) || !dbs.DraftBodies.Has(kept) {
+		t.Errorf("orphan present = %v, referenced present = %v", dbs.DraftBodies.Has(orphan), dbs.DraftBodies.Has(kept))
 	}
 }

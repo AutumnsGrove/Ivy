@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
+
+	"github.com/AutumnsGrove/Ivy/internal/blobstore"
 )
 
 // MaxUploadAge is how long a staged outgoing attachment survives with no
@@ -210,42 +213,51 @@ func (d *DBs) SweepUploads(ctx context.Context, before time.Time) (int, error) {
 // mid-flight and any unreferenced file is stale; if a stage is running it stands
 // down and the next pass tries again.
 func (d *DBs) SweepOrphanUploads(ctx context.Context) (int, error) {
-	if !d.uploadMu.TryLock() {
+	return sweepOrphanBlobs(ctx, &d.uploadMu, d.Uploads, d.State.Read, `SELECT DISTINCT hash FROM uploads`)
+}
+
+// sweepOrphanBlobs removes the temp files and the blobs whose hash the query does
+// not return. It holds the write lock, taken without waiting: the writers of this
+// store hold the read lock from before they write a file until its row is in, so
+// under the write lock nothing is mid-flight and every unreferenced file is stale.
+// If a writer is running it stands down and the next pass tries again.
+func sweepOrphanBlobs(ctx context.Context, mu *sync.RWMutex, blobs *blobstore.Store, db *sql.DB, referencedQuery string) (int, error) {
+	if !mu.TryLock() {
 		return 0, nil
 	}
-	defer d.uploadMu.Unlock()
+	defer mu.Unlock()
 
-	removed, err := d.Uploads.RemoveTemps()
+	removed, err := blobs.RemoveTemps()
 	if err != nil {
 		return removed, err
 	}
-	hashes, err := d.Uploads.Hashes()
+	hashes, err := blobs.Hashes()
 	if err != nil {
 		return removed, err
 	}
-	rows, err := d.State.Read.QueryContext(ctx, `SELECT DISTINCT hash FROM uploads`)
+	rows, err := db.QueryContext(ctx, referencedQuery)
 	if err != nil {
-		return removed, fmt.Errorf("sweep orphan uploads: %w", err)
+		return removed, fmt.Errorf("sweep orphan blobs: %w", err)
 	}
 	referenced := map[string]bool{}
 	for rows.Next() {
 		var hash string
 		if err := rows.Scan(&hash); err != nil {
 			_ = rows.Close()
-			return removed, fmt.Errorf("sweep orphan uploads: %w", err)
+			return removed, fmt.Errorf("sweep orphan blobs: %w", err)
 		}
 		referenced[hash] = true
 	}
 	err = rows.Err()
 	_ = rows.Close()
 	if err != nil {
-		return removed, fmt.Errorf("sweep orphan uploads: %w", err)
+		return removed, fmt.Errorf("sweep orphan blobs: %w", err)
 	}
 	for _, hash := range hashes {
 		if referenced[hash] {
 			continue
 		}
-		if err := d.Uploads.Remove(hash); err != nil {
+		if err := blobs.Remove(hash); err != nil {
 			return removed, err
 		}
 		removed++
