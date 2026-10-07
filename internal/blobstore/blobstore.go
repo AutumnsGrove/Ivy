@@ -114,6 +114,52 @@ func (s *Store) Remove(hash string) error {
 	return nil
 }
 
+// Hashes lists every blob in the store. A file that is not a well-formed hash in
+// its own shard is not ours and is skipped.
+func (s *Store) Hashes() ([]string, error) {
+	shards, err := os.ReadDir(s.dir)
+	if err != nil {
+		return nil, fmt.Errorf("blobstore: list %s: %w", s.dir, err)
+	}
+	var out []string
+	for _, shard := range shards {
+		if !shard.IsDir() || len(shard.Name()) != 2 {
+			continue
+		}
+		files, err := os.ReadDir(filepath.Join(s.dir, shard.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("blobstore: list shard %s: %w", shard.Name(), err)
+		}
+		for _, f := range files {
+			if _, err := s.pathFor(f.Name()); err == nil && strings.HasPrefix(f.Name(), shard.Name()) {
+				out = append(out, f.Name())
+			}
+		}
+	}
+	return out, nil
+}
+
+// RemoveTemps deletes the temp files an interrupted Put left in the root and
+// returns how many went. The caller must know no Put is running: a live write
+// owns its temp file until it renames it.
+func (s *Store) RemoveTemps() (int, error) {
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return 0, fmt.Errorf("blobstore: list %s: %w", s.dir, err)
+	}
+	removed := 0
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasPrefix(e.Name(), tempPre) {
+			continue
+		}
+		if err := os.Remove(filepath.Join(s.dir, e.Name())); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return removed, fmt.Errorf("blobstore: remove temp %s: %w", e.Name(), err)
+		}
+		removed++
+	}
+	return removed, nil
+}
+
 // Put streams r into the store and returns the SHA-256 of its bytes, so the
 // same message stored twice costs one file. Bytes already present are discarded
 // without rewriting the existing file.

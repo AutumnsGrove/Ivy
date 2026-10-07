@@ -281,3 +281,81 @@ func TestDeleteUploadKeepsABlobAStageIsStillUsing(t *testing.T) {
 		t.Errorf("bytes = %q, want the staged content", data)
 	}
 }
+
+// A blob with no row (a crash or failed insert after the write) and a stale temp
+// file from an interrupted write are collected; a referenced blob is kept.
+func TestSweepOrphanUploadsCollectsUnreferencedFiles(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	up, r := newUpload("keep", "acct-1", "keep.bin", "application/octet-stream", "referenced")
+	kept, err := dbs.StageUpload(ctx, up, r, 1024)
+	if err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	orphan, _, err := dbs.Uploads.Put(ctx, bytes.NewReader([]byte("no row points here")))
+	if err != nil {
+		t.Fatalf("put orphan: %v", err)
+	}
+	stale := dbs.Uploads.Dir() + "/.tmp-interrupted"
+	if err := os.WriteFile(stale, []byte("half"), 0o600); err != nil {
+		t.Fatalf("write temp: %v", err)
+	}
+
+	n, err := dbs.SweepOrphanUploads(ctx)
+	if err != nil {
+		t.Fatalf("sweep orphans: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("removed %d files, want the orphan blob and the temp", n)
+	}
+	if dbs.Uploads.Has(orphan) {
+		t.Error("the unreferenced blob survived")
+	}
+	if _, err := os.Stat(stale); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the stale temp survived: %v", err)
+	}
+	if !dbs.Uploads.Has(kept.Hash) {
+		t.Error("the referenced blob was removed")
+	}
+}
+
+// While a stage is mid-flight its blob has no row yet and its temp file is live, so
+// the sweep stands down instead of waiting or deleting.
+func TestSweepOrphanUploadsStandsDownDuringAStage(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	orphan, _, err := dbs.Uploads.Put(ctx, bytes.NewReader([]byte("an orphan")))
+	if err != nil {
+		t.Fatalf("put orphan: %v", err)
+	}
+	g := &gateReader{
+		first: bytes.NewReader([]byte("in-")), rest: bytes.NewReader([]byte("flight")),
+		started: make(chan struct{}), gate: make(chan struct{}),
+	}
+	up, _ := newUpload("a", "acct-1", "a.bin", "application/octet-stream", "")
+	done := make(chan error, 1)
+	go func() {
+		_, err := dbs.StageUpload(ctx, up, g, 1024)
+		done <- err
+	}()
+	<-g.started
+
+	n, err := dbs.SweepOrphanUploads(ctx)
+	if err != nil {
+		t.Fatalf("sweep orphans: %v", err)
+	}
+	if n != 0 || !dbs.Uploads.Has(orphan) {
+		t.Errorf("removed %d with a stage in flight, want the sweep to stand down", n)
+	}
+	close(g.gate)
+	if err := <-done; err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	if got, err := dbs.GetUpload(ctx, "acct-1", "a"); err != nil || !dbs.Uploads.Has(got.Hash) {
+		t.Errorf("the in-flight stage lost its blob: %v", err)
+	}
+}

@@ -1690,3 +1690,11 @@ real browser or the potato.
   `TestDeleteUploadKeepsABlobAStageIsStillUsing` (the blob was removed mid-stage; failed before). That test proves
   the ordering the lock gives, not the two-statement window itself, which cannot be paused from a test. The
   in-transaction row counts in delete and sweep were dropped because they went stale before the file removal.
+- **N47 resolved** (operator chose "sweep alongside SweepUploads") · `store/uploads.go`, `internal/blobstore/blobstore.go`,
+  `sync/outbox.go` · `SweepOrphanUploads` takes the write lock from N46 without waiting (it stands down while a stage
+  is in flight), removes every `.tmp-*` leftover and every blob no `uploads` row references, and the outbox worker
+  runs it with the other prune steps. Because a stage holds the read lock from before its write until its insert,
+  nothing is mid-flight under the write lock, so no age threshold is needed. Reproduced with
+  `TestSweepOrphanUploadsCollectsUnreferencedFiles` (method missing; failed to build), the stand-down test, and
+  `TestOutboxRunSweepsOrphanUploads` (the orphan survived the worker's prune pass; failed before the wiring).
+  Only the uploads store is swept; the disabled-message `Blobs` store stays append-only.

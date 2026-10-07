@@ -203,6 +203,56 @@ func (d *DBs) SweepUploads(ctx context.Context, before time.Time) (int, error) {
 	return int(deleted), nil
 }
 
+// SweepOrphanUploads removes staging files no row references: a blob left by a
+// crash or a failed insert after the write, and a temp file from an interrupted
+// write. It returns how many files went. A stage holds the read lock from before
+// it writes until its row is inserted, so with the write lock in hand nothing is
+// mid-flight and any unreferenced file is stale; if a stage is running it stands
+// down and the next pass tries again.
+func (d *DBs) SweepOrphanUploads(ctx context.Context) (int, error) {
+	if !d.uploadMu.TryLock() {
+		return 0, nil
+	}
+	defer d.uploadMu.Unlock()
+
+	removed, err := d.Uploads.RemoveTemps()
+	if err != nil {
+		return removed, err
+	}
+	hashes, err := d.Uploads.Hashes()
+	if err != nil {
+		return removed, err
+	}
+	rows, err := d.State.Read.QueryContext(ctx, `SELECT DISTINCT hash FROM uploads`)
+	if err != nil {
+		return removed, fmt.Errorf("sweep orphan uploads: %w", err)
+	}
+	referenced := map[string]bool{}
+	for rows.Next() {
+		var hash string
+		if err := rows.Scan(&hash); err != nil {
+			_ = rows.Close()
+			return removed, fmt.Errorf("sweep orphan uploads: %w", err)
+		}
+		referenced[hash] = true
+	}
+	err = rows.Err()
+	_ = rows.Close()
+	if err != nil {
+		return removed, fmt.Errorf("sweep orphan uploads: %w", err)
+	}
+	for _, hash := range hashes {
+		if referenced[hash] {
+			continue
+		}
+		if err := d.Uploads.Remove(hash); err != nil {
+			return removed, err
+		}
+		removed++
+	}
+	return removed, nil
+}
+
 // removeUploadHash drops a blob only when no row references it, so a shared file
 // is never removed out from under a live row.
 func (d *DBs) removeUploadHash(ctx context.Context, hash string) error {
