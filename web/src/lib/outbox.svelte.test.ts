@@ -49,6 +49,21 @@ describe('a live op that fails', () => {
 		expect(mocks.push).toHaveBeenCalledTimes(1);
 	});
 
+	// Issue #11: a batch multiplies failures, and fourteen toasts would bury the
+	// screen. They are one toast with the count.
+	it('reports several failures of one kind as one toast with the count', async () => {
+		const ids = ['a', 'b', 'c'];
+		for (const id of ids) outbox.remember(op({ id, messageId: id, kind: 'move', state: 'pending' }));
+		mocks.listOutbox.mockResolvedValue({
+			active: [],
+			recent: ids.map((id) => op({ id, messageId: id, kind: 'move', state: 'failed', lastErrorCode: 'message_gone' }))
+		});
+
+		await outbox.refresh();
+		expect(mocks.push).toHaveBeenCalledTimes(1);
+		expect(mocks.push.mock.calls[0][0]).toMatchObject({ tone: 'danger', text: "Couldn't move 3 messages" });
+	});
+
 	it('stays quiet for an op that finished or was never live here', async () => {
 		outbox.remember(op({ id: 'a', kind: 'move', state: 'pending' }));
 		mocks.listOutbox.mockResolvedValue({

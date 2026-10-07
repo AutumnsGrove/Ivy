@@ -12,6 +12,12 @@ const FAILURE_TEXT: Record<OutboxItem['kind'], string> = {
 	expunge: "Couldn't delete it"
 };
 
+const FAILURE_MANY: Record<OutboxItem['kind'], (n: number) => string> = {
+	move: (n) => `Couldn't move ${n} messages`,
+	flags: (n) => `Couldn't change ${n} messages`,
+	expunge: (n) => `Couldn't delete ${n} messages`
+};
+
 // Module-level so the overlay outlives any one screen and its reload.
 let live = $state<OutboxItem[]>([]);
 
@@ -87,10 +93,19 @@ export const outbox = {
 		live = list.active;
 		// An op this screen saw live that ended failed is the only moment the
 		// operator can be told; once it leaves `active` its message just reappears.
+		// A batch can fail many at once; one toast per kind keeps the screen readable.
+		const failed: Partial<Record<OutboxItem['kind'], number>> = {};
 		for (const op of before) {
 			if (live.some((o) => o.id === op.id)) continue;
 			const ended = list.recent.find((o) => o.id === op.id);
-			if (ended?.state === 'failed') toasts.push({ text: FAILURE_TEXT[ended.kind], detail: "It's back where it was.", tone: 'danger' });
+			if (ended?.state === 'failed') failed[ended.kind] = (failed[ended.kind] ?? 0) + 1;
+		}
+		for (const [kind, n] of Object.entries(failed) as [OutboxItem['kind'], number][]) {
+			toasts.push({
+				text: n === 1 ? FAILURE_TEXT[kind] : FAILURE_MANY[kind](n),
+				detail: n === 1 ? "It's back where it was." : 'They are back where they were.',
+				tone: 'danger'
+			});
 		}
 	},
 

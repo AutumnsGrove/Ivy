@@ -26,6 +26,8 @@ import type {
 	MailSummary,
 	MailAttachmentList,
 	OutboxAction,
+	OutboxBatch,
+	OutboxBatchResult,
 	OutboxItem,
 	OutboxList,
 	PeoplePage,
@@ -108,6 +110,14 @@ export const api = {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(action)
+		}),
+
+	/** One action on a selection: all queued together or, when the queue is full, none. */
+	enqueueBatch: (batch: OutboxBatch): Promise<OutboxBatchResult> =>
+		request<OutboxBatchResult>('/outbox/batch', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(batch)
 		}),
 
 	/** Live ops (the overlay) and recent terminal ones (history and retry). */
