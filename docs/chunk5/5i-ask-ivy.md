@@ -8,7 +8,7 @@ highest-risk consumer of untrusted mail, because a model reads many messages and
 
 ## Depends on
 
-5a (the gate, caps, ask-selection rule), 5d (withheld mail is invisible to the tools), 3f search
+5a (the gate, caps, ask-selection rule), 5c.0 (withheld mail is invisible to the tools), 3f search
 (already real). 5e's thread help and 5h's image text enrich it but are not required.
 
 ## Where we start

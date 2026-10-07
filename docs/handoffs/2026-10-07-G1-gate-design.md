@@ -92,7 +92,7 @@ type Vetting interface { Vetted(ctx context.Context, accountID, contentKey strin
 
 "Vetted" means the tripwire and sensitive checks have run **and** did not withhold the message. 5a
 ships the default implementation, which returns `false` for everything, so every feature that needs
-vetted mail is refused until 5d provides the real one. That is the fail-closed rule (5d decision 2)
+vetted mail is refused until 5c.0 provides the real one (decision 6). That is the fail-closed rule (5d decision 2)
 holding by construction rather than by remembering to check. The error path also fails closed.
 
 ### Ask selection
@@ -186,7 +186,24 @@ The Jev request/response parsing (5b), the model registry's contents and the set
 5a.3 once this is cleared), the spend API, the per-feature model override UI, the estimate helper for
 bulk actions. G1 only fixes the shape so they fit.
 
-## Questions for the reviewer
+## Decisions (operator, 2026-10-07): G1 is cleared
+
+All six questions were answered as recommended. 5a.1 may start, tests first.
+
+1. **The gate owns the providers.** `NewOpenRouter`, `NewOllama` and the `Embedder` interface leave the
+   public API; callers name a provider kind. The architecture test's second assertion enforces it.
+2. **One process.** Reservations are in memory under a mutex; no database reservation table.
+3. **Ask cost is attributed in equal shares** across the selected accounts, one ledger row per account
+   with a shared `call_id`.
+4. **The global cap default lives in settings with a built-in default;** no new `ivy.yaml` key. The
+   existing `llm.monthly_cap_usd` stays as the default per-account cap.
+5. **The breaker refuses all calls** with `ledger_unwritable` until a probe write succeeds.
+6. **The vetting machinery is built early, as the first step of 5c (5c.0),** not left to 5d: the
+   tripwire and sensitive checks, the withheld fact and the real `Vetting` implementation. The rest of
+   5d (categories, junk rescue, banners, mail types) stays in 5d. Until 5c.0 lands, the default `Vetting`
+   refuses every vetted-mail feature, which is the intended fail-closed state.
+
+## The questions as asked
 
 1. **Providers owned by the gate** removes `NewOpenRouter`/`NewOllama`/`Embedder` from the public API
    and touches `cmd/embed.go` and `search`. Agreed, or keep the constructors and rely on review?

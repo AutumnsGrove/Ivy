@@ -8,8 +8,9 @@ the whole layer, so its evaluation is the template for every classifier.
 
 ## Depends on
 
-5a, 5b. Uses `is_automated` and the safety flags from 5d (withheld mail never reaches stage 2); can
-ship first with `is_automated` alone.
+5a, 5b. **Builds the vetting machinery itself as 5c.0** (the tripwire, the sensitive check and the real
+`Vetting`, moved here from 5d by the G1 decision), so withheld mail never reaches stage 2. Uses
+`is_automated` from 5d's classifiers; can ship first with `is_automated` alone.
 
 ## Where we start
 
@@ -37,6 +38,11 @@ ship first with `is_automated` alone.
 
 ## Scope
 
+0. **5c.0 The vetting machinery (moved here from 5d by the G1 decision).** The `injection_tripwire`
+   and `sensitive_content` questions, the withheld fact on the content key (a mirror migration), the
+   real `llm.Vetting` implementation replacing the gate's refuse-everything default, and the quiet
+   withheld marker with its per-message override. Without it the gate refuses stage 2 by design, so it
+   comes first; the OTP regex and the rest of 5d's classifiers stay in 5d.
 1. **5c.1 Stage 1 question** `needs_me` plus companions in the registry, with instructions written as
    what does not count, then the exceptions; the quiet option is `none`.
 2. **5c.2 Stage 2.** The chat-model verdict and reason via `Complete` with a JSON schema, validated;

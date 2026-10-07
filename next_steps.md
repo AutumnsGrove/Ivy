@@ -80,11 +80,13 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 
 ## ▶ Now
 
-**Waiting at G1 (chunk 5, 5a.1: generalising the gate).** The design is drafted in
-`docs/handoffs/2026-10-07-G1-gate-design.md` and needs the operator's answers to its six questions
-before any code. Its main finding: today's gate trusts the caller for the opt-in and the cap, and
-the caller owns the provider client, so the "one chokepoint" is not enforced by the code. Chunk 5
-work stops here until G1 is cleared.
+**G1 is cleared (chunk 5, 5a.1: generalising the gate), 2026-10-07.** The design is
+`docs/handoffs/2026-10-07-G1-gate-design.md` and the operator answered its six questions as
+recommended. Its main finding: today's gate trusts the caller for the opt-in and the cap, and the
+caller owns the provider client, so the "one chokepoint" is not enforced by the code. **Next: 5a.1,
+tests first** (the nine listed in the design, each seen failing). One reordering came out of the
+questions: the vetting machinery (tripwire, sensitive check, real `Vetting`) is built as 5c.0, the
+first step of 5c, not in 5d. The next gate is **G2**, before the first live Jev call in 5b.
 
 **Chunk 4 is done.** 4h (rich text) is the last stage and landed with `squire-rte` (MIT, zero deps,
 16.1 KiB brotli, route-split to `/compose`), an explicit `bodyFormat` on the compose/API contract

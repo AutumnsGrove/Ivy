@@ -26,13 +26,13 @@ as the audit trail. A few small items are marked "assumed, confirm at build".
                          │                      ├─► 5f newsletters and digest ◄──┤ (uses 5d category)
                          │                      ├─► 5g receipts and ledger ◄─────┤ (uses 5d category)
                          │                      └─► 5j rule compiler, smart checks
-                         └─► 5h vision (needs 5d safety flags) ──► 5i Ask Ivy (needs 5d withheld rules, 5e)
+                         └─► 5h vision (needs 5c.0 vetting) ──► 5i Ask Ivy (needs 5c.0 vetting, 5e)
 ```
 
 **Foundation first.** 5a and 5b are the prerequisite for everything, and the stats screens and the
 odds sheet are how every later stage is measured. After them the order is a recommendation, not a
-rule: 5c is the feature the operator will feel first; 5d's safety flags (withheld mail) must exist
-before 5h and 5i; 5j needs 5b's registry and the existing rules engine (3g).
+rule: 5c is the feature the operator will feel first, and its first step (5c.0) builds the vetting
+machinery (withheld mail) that 5h and 5i also need; 5j needs 5b's registry and the existing rules engine (3g).
 
 ## Status
 

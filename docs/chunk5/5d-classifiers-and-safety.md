@@ -9,7 +9,8 @@ types real: contact-form submissions, security and abuse reports, and protected 
 
 ## Depends on
 
-5a, 5b. 5h and 5i depend on this plan's **withheld-mail** rules.
+5a, 5b, and 5c.0 for the vetting machinery (the withheld-mail rules moved there by the G1 decision;
+5h and 5i depend on 5c.0, not on this plan).
 
 ## Where we start
 
@@ -45,9 +46,10 @@ types real: contact-form submissions, security and abuse reports, and protected 
 
 1. **5d.1 Tier A questions** with instructions, thresholds and the odds visible; `category` drives
    routing to the Reading feed (5f) and the ledger (5g) and the inline markers.
-2. **5d.2 Withheld-mail plumbing.** A `withheld` fact on the content key, written by the tripwire and
-   sensitive check, read by the gate's policy check so stage 2, vision and ask cannot see the message.
-   This is built **before** any feature that sends mail text to a chat or vision model.
+2. **5d.2 Withheld-mail plumbing: moved to 5c.0** (G1 decision 6): the `withheld` fact, the tripwire
+   and sensitive checks and the real `Vetting` implementation are built as the first step of 5c, so
+   stage 2 can run for real. What stays here is the local OTP regex, the per-address mail types and
+   the withheld marker's wording review.
 3. **5d.3 Local signals.** Parse and store `X-Spam-Status` (a `mime/` change and a mirror migration,
    with the usual rederive path for existing mail), then show the spam score and the auth verdicts
    on the message, no model.

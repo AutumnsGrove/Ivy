@@ -1712,3 +1712,19 @@ Items marked "assumed, confirm at build" in the plans (a snoozed message keeps i
 tag-removal-equals-dismiss rule, the neutral tone for "Suggest a reply", the decorative-image filter,
 the Jev model id living in the registry, dropping the mock fixtures) were not asked directly and are
 the first things to confirm when their stage starts.
+
+## Gate G1 answered (2026-10-07)
+
+The operator cleared G1 (`docs/handoffs/2026-10-07-G1-gate-design.md`) by taking every recommendation.
+
+- **The gate owns its providers.** `NewOpenRouter`, `NewOllama` and the `Embedder` interface leave the
+  public API; the architecture test fails on any exported provider constructor or client interface. The
+  review found that today's gate trusts the caller for `Enabled` and `CapUSD` and the caller holds the
+  client, so the one-chokepoint rule was not enforced by the code.
+- **One process, in-memory reservations** close the cap race; no reservation table.
+- **Ask cost is split in equal shares** across the selected accounts.
+- **The global cap default lives in settings** with a built-in default; no new `ivy.yaml` key.
+- **A ledger write failure refuses all calls** (`ledger_unwritable`) until a probe write succeeds.
+- **The vetting machinery moves into 5c as 5c.0.** The tripwire, the sensitive check, the withheld fact and
+  the real `Vetting` are built first inside 5c so stage 2 can run for real; until then the gate refuses every
+  vetted-mail feature by default (fail closed). The rest of 5d is unchanged.

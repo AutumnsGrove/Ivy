@@ -9,7 +9,8 @@ device.
 
 ## Depends on
 
-5a (the `See` request type, the vision switch), 5d (withheld mail and `attachment_worth_reading`).
+5a (the `See` request type, the vision switch), 5c.0 (the vetting machinery: withheld mail), 5d
+(`attachment_worth_reading`).
 Receipts (5g) and Ask Ivy (5i) can consume its output.
 
 ## Where we start
