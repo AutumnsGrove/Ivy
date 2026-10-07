@@ -9,6 +9,9 @@ export default defineConfig({
 	// against this Vite + mock server.
 	testIgnore: ['smoke.spec.ts'],
 	fullyParallel: true,
+	// Each worker is a whole browser against a dev server on the same machine; the
+	// default (half the cores) made a laptop crawl. CI keeps the default.
+	workers: process.env.CI ? undefined : 2,
 	reporter: 'list',
 	use: { baseURL: `http://localhost:${PORT}`, trace: 'retain-on-failure' },
 	webServer: {

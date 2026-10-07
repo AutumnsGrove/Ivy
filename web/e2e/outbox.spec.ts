@@ -38,11 +38,18 @@ test.describe('outbox actions', () => {
 	});
 });
 
-test('flagging needs no confirmation and shows at once', async ({ page }) => {
+// Issue #9: flagging is occasional, so it lives in More with the other occasional
+// actions and the header stays about who the mail is from and when.
+test('flagging is in More, needs no confirmation and shows at once', async ({ page }) => {
 	await page.goto('/m/m1');
-	await page.getByRole('button', { name: 'Flag' }).click();
+	await expect(page.locator('article.msg').getByRole('button', { name: /^(Flag|Unflag)$/ })).toHaveCount(0);
+
+	await page.getByRole('button', { name: 'More' }).click();
+	await page.getByRole('button', { name: 'Flag', exact: true }).click();
 	await expect(toast(page, 'Flagged')).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Unflag' })).toBeVisible();
+
+	await page.getByRole('button', { name: 'More' }).click();
+	await expect(page.getByRole('button', { name: 'Remove flag' })).toBeVisible();
 });
 
 test('the queue shows an action while it is waiting', async ({ page }) => {

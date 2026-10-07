@@ -57,6 +57,20 @@ describe('prefs', () => {
 		expect(document.documentElement.dataset.theme).toBe('day');
 	});
 
+	// The message body frame is a separate document and needs the theme that is
+	// really showing, not the 'auto' setting (issue #9).
+	it('exposes the theme that is showing, following the system under auto', async () => {
+		const prefs = await load();
+		prefs.set('theme', 'day');
+		expect(prefs.resolved).toBe('day');
+
+		prefs.set('theme', 'auto');
+		expect(prefs.resolved).toBe('night');
+		dark = false;
+		listeners.forEach((l) => l());
+		expect(prefs.resolved).toBe('day');
+	});
+
 	it('ignores corrupt stored values instead of breaking the page', async () => {
 		localStorage.setItem('ivy.prefs', '{"theme":"neon","accent":42');
 		const prefs = await load();

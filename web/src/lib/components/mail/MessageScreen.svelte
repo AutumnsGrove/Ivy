@@ -2,8 +2,9 @@
 	import { goto } from '$app/navigation';
 	import { ArrowLeft, Archive, Ellipsis, Reply, Tag, Trash2 } from '#lib/icons.js';
 	import { withScenario, type Scenario } from '#lib/api/scenario.js';
-	import { archiveMessage, deleteMessage, markNotJunk, markSpam } from '#lib/messageActions.js';
-	import type { Account } from '#lib/types.js';
+	import { archiveMessage, deleteMessage, flagMessage, markNotJunk, markSpam } from '#lib/messageActions.js';
+	import { outbox } from '#lib/outbox.svelte.js';
+	import type { Account, MailMessage } from '#lib/types.js';
 	import Button from '../ui/Button.svelte';
 	import Glass from '../ui/Glass.svelte';
 	import IconButton from '../ui/IconButton.svelte';
@@ -16,6 +17,9 @@
 	const back = $derived(withScenario('/', scenario));
 	let more = $state(false);
 	let tagging = $state(false);
+	// A live flag op is the optimistic truth; the loaded message is the fallback.
+	let loaded = $state<MailMessage | null>(null);
+	const flagged = $derived(outbox.flags(id)?.flagged ?? (loaded?.id === id ? loaded.flagged : false) ?? false);
 
 	async function archive() {
 		if (await archiveMessage(id)) await goto(back);
@@ -36,7 +40,7 @@
 	</header>
 
 	<Glass variant="panel" radius="panel" as="section" class="reader" aria-label="Message">
-		<MessageLoader {id} {accounts} {scenario} />
+		<MessageLoader {id} {accounts} {scenario} onloaded={(m) => (loaded = m)} />
 	</Glass>
 
 	<Glass variant="strong" radius="bar" class="reply">
@@ -48,6 +52,7 @@
 
 	<Sheet bind:open={more} title="More actions">
 		<h2 class="sheet-title">More actions</h2>
+		<Button block onclick={async () => { more = false; await flagMessage(id, !flagged); }}>{flagged ? 'Remove flag' : 'Flag'}</Button>
 		<Button block onclick={async () => { more = false; await markSpam(id); }}>Mark as spam</Button>
 		<Button block onclick={async () => { more = false; await markNotJunk(id); }}>Not junk</Button>
 	</Sheet>

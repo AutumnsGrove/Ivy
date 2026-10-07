@@ -32,6 +32,8 @@ class Prefs {
 	theme = $state<Theme>(DEFAULTS.theme);
 	accent = $state<Accent>(DEFAULTS.accent);
 	motion = $state<Motion>(DEFAULTS.motion);
+	/** The theme that is showing: `theme`, with 'auto' settled by the system. */
+	resolved = $state<'night' | 'day'>('night');
 	#watching = false;
 
 	constructor() {
@@ -52,7 +54,8 @@ class Prefs {
 	/** Writes the current choices onto <html>; call once at startup and after any change. */
 	apply() {
 		const root = document.documentElement;
-		root.dataset.theme = this.theme === 'auto' ? (this.#systemDark().matches ? 'night' : 'day') : this.theme;
+		this.resolved = this.theme === 'auto' ? (this.#systemDark().matches ? 'night' : 'day') : this.theme;
+		root.dataset.theme = this.resolved;
 		root.dataset.accent = this.accent;
 		root.dataset.motion = this.motion;
 

@@ -29,16 +29,52 @@ func (s *Server) handleMessageBody(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", render.ContentSecurityPolicy(render.Options{}))
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(bodyDocument(m)))
+	_, _ = w.Write([]byte(bodyDocument(m, bodyThemeOf(r.URL.Query().Get("theme")))))
 }
+
+// bodyTheme is the colours of the reader card the body document sits in. The
+// document is its own page and cannot see the app's CSS variables, so the
+// values are repeated here from tokens.css (--text in each theme).
+type bodyTheme struct {
+	name string
+	text string
+}
+
+var (
+	nightBody = bodyTheme{name: "night", text: "#f2eddc"}
+	dayBody   = bodyTheme{name: "day", text: "#2a2014"}
+)
+
+// bodyThemeOf matches the query value against the two themes; anything else,
+// hostile or merely absent, is night (the app's default) and is never echoed.
+func bodyThemeOf(v string) bodyTheme {
+	if v == dayBody.name {
+		return dayBody
+	}
+	return nightBody
+}
+
+// paperSheet is the page rich HTML mail is drawn on. HTML mail assumes a light
+// canvas, so inverting it would break the mail it was written for; a rounded
+// light sheet looks chosen rather than pasted in, in either theme.
+const paperSheet = "body{margin:12px;padding:16px;border-radius:12px;background:#fbf8ef;color:#1f1b14}"
 
 // bodyDocument wraps the stored sanitised HTML, or the plain text, in a small
 // document. The HTML is not re-parsed or re-sanitised: sync stored the result
-// of render/, and the response policy is the second layer.
-func bodyDocument(m store.Message) string {
+// of render/, and the response policy is the second layer. Plain text and
+// Ivy's own notes take the reader's colours; rich HTML sits on the paper sheet.
+func bodyDocument(m store.Message, theme bodyTheme) string {
 	var b strings.Builder
 	b.WriteString("<!doctype html><html><head><meta charset=\"utf-8\">")
-	b.WriteString("<style>body{margin:0;font-family:system-ui,-apple-system,sans-serif;line-height:1.6;word-wrap:break-word}img{max-width:100%;height:auto}table{max-width:100%}a{color:inherit}</style>")
+	// The root keeps the app's colour-scheme: a frame whose scheme differs from its
+	// page is painted opaque, which is the white box this replaces.
+	b.WriteString("<style>html{color-scheme:" + theme.name + ";background:transparent}")
+	if m.BodyHTML != "" {
+		b.WriteString(paperSheet)
+	} else {
+		b.WriteString("body{margin:0;background:transparent;color:" + theme.text + "}")
+	}
+	b.WriteString("body{font-family:system-ui,-apple-system,sans-serif;line-height:1.6;word-wrap:break-word}img{max-width:100%;height:auto}table{max-width:100%}a{color:inherit}</style>")
 	b.WriteString("</head><body>")
 	switch {
 	case m.BodyHTML != "":

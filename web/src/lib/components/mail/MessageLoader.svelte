@@ -2,13 +2,20 @@
 	import { api } from '#lib/api/client.js';
 	import type { Scenario } from '#lib/api/scenario.js';
 	import { colorFor } from '#lib/accounts.js';
-	import type { Account } from '#lib/types.js';
+	import type { Account, MailMessage } from '#lib/types.js';
 	import Skeleton from '../ui/Skeleton.svelte';
 	import MessageFetchError from './MessageFetchError.svelte';
 	import MessageView from './MessageView.svelte';
 
-	type Props = { id: string; accounts: Account[]; scenario: Scenario | null; wide?: boolean };
-	let { id, accounts, scenario, wide = false }: Props = $props();
+	type Props = {
+		id: string;
+		accounts: Account[];
+		scenario: Scenario | null;
+		wide?: boolean;
+		/** Called with the message once it loads, for the screen's More menu (flag state). */
+		onloaded?: (message: MailMessage) => void;
+	};
+	let { id, accounts, scenario, wide = false, onloaded }: Props = $props();
 
 	let attempt = $state(0);
 
@@ -18,7 +25,10 @@
 		return Promise.all([
 			api.getSummary(id),
 			api.getMessage(id, { scenario }).then(
-				(message) => ({ ok: true as const, message }),
+				(message) => {
+					onloaded?.(message);
+					return { ok: true as const, message };
+				},
 				() => ({ ok: false as const })
 			)
 		]);

@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { Archive, Ellipsis, Reply, Tag, Trash2 } from '#lib/icons.js';
-	import { archiveMessage, deleteMessage, markNotJunk, markSpam } from '#lib/messageActions.js';
+	import { archiveMessage, deleteMessage, flagMessage, markNotJunk, markSpam } from '#lib/messageActions.js';
+	import { outbox } from '#lib/outbox.svelte.js';
 	import type { Scenario } from '#lib/api/scenario.js';
-	import type { Account } from '#lib/types.js';
+	import type { Account, MailMessage } from '#lib/types.js';
 	import Button from '../ui/Button.svelte';
 	import Glass from '../ui/Glass.svelte';
 	import IconButton from '../ui/IconButton.svelte';
@@ -14,6 +15,9 @@
 	let { id, accounts, scenario }: Props = $props();
 	let more = $state(false);
 	let tagging = $state(false);
+	// A live flag op is the optimistic truth; the loaded message is the fallback.
+	let loaded = $state<MailMessage | null>(null);
+	const flagged = $derived(outbox.flags(id)?.flagged ?? (loaded?.id === id ? loaded.flagged : false) ?? false);
 
 	async function archive() {
 		await archiveMessage(id);
@@ -33,7 +37,7 @@
 	</div>
 	<div class="scroll">
 		{#key id}
-			<MessageLoader {id} {accounts} {scenario} wide />
+			<MessageLoader {id} {accounts} {scenario} wide onloaded={(m) => (loaded = m)} />
 		{/key}
 		<div class="reply">
 			<Button variant="primary" href="/compose?reply={id}"><Reply />Reply</Button>
@@ -45,6 +49,7 @@
 
 	<Sheet bind:open={more} title="More actions">
 		<h2 class="sheet-title">More actions</h2>
+		<Button block onclick={async () => { more = false; await flagMessage(id, !flagged); }}>{flagged ? 'Remove flag' : 'Flag'}</Button>
 		<Button block onclick={async () => { more = false; await markSpam(id); }}>Mark as spam</Button>
 		<Button block onclick={async () => { more = false; await markNotJunk(id); }}>Not junk</Button>
 	</Sheet>

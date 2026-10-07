@@ -1,12 +1,11 @@
 <script lang="ts">
 	import { formatMessageTime } from '#lib/time.js';
 	import { Flag } from '#lib/icons.js';
-	import { flagMessage, markReadOnOpen } from '#lib/messageActions.js';
+	import { markReadOnOpen } from '#lib/messageActions.js';
 	import { outbox } from '#lib/outbox.svelte.js';
 	import type { MailMessage } from '#lib/types.js';
 	import Avatar from '../ui/Avatar.svelte';
 	import Dot from '../ui/Dot.svelte';
-	import IconButton from '../ui/IconButton.svelte';
 	import Pill from '../ui/Pill.svelte';
 	import SmartChip from '../ui/SmartChip.svelte';
 	import AttachmentGroup from './AttachmentGroup.svelte';
@@ -44,15 +43,12 @@
 		<Avatar initials={message.initials} {color} size="lg" />
 		<div class="who">
 			<div class="name">{message.from}</div>
-			<div class="to"><Dot {color} />to {message.toShort} · {formatMessageTime(message.date)}</div>
+			<div class="to">
+				<Dot {color} />to {message.toShort} · {formatMessageTime(message.date)}
+				<!-- Flagging itself lives in More; this only says it is so. -->
+				{#if flagged}<span class="flagged" role="img" aria-label="Flagged"><Flag /></span>{/if}
+			</div>
 		</div>
-		<IconButton
-			label={flagged ? 'Unflag' : 'Flag'}
-			tone={flagged ? 'accent' : 'plain'}
-			onclick={() => void flagMessage(message.id, !flagged)}
-		>
-			<Flag />
-		</IconButton>
 	</div>
 
 	{#if message.summary}
@@ -113,6 +109,11 @@
 		margin-top: 2px;
 		font-size: var(--fs-note);
 		color: var(--muted);
+	}
+	.flagged {
+		display: inline-flex;
+		color: var(--accent);
+		font-size: var(--fs-note);
 	}
 	.chip {
 		margin-top: var(--sp-16);
