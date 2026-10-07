@@ -35,7 +35,7 @@ rule from `PLAN.md` section 6: verify before pinning). The constraint: **pure Go
 | Embeddings | OpenRouter `/embeddings` (default, `perplexity/pplx-embed-v1-0.6b`) and the Ollama HTTP API (optional, `nomic-embed-text`) behind an `Embedder` interface (**settled**, round 30) | Hosted by default because the potato embeds at 17 s per chunk (S8); every call goes through the gate and is ledgered. |
 | LLM calls | stdlib `net/http` client in `llm/` and `jev/` | One gate, one chokepoint (**settled**). No vendor SDK needed. |
 | Attachment text | `archive/zip` + `encoding/xml` (OOXML, stdlib), and `github.com/ledongthuc/pdf` for a PDF text layer (**settled**, round 54) | Spike S6 picked `ledongthuc`: pure Go, cgo-free, 5.7 s for 212 pages on the potato, ~15 MiB, ~97% of `pdftotext`'s words. `dslipak` glues words and `pdfium`-in-wasm costs ~31 s start-up and ~300 MiB on the board, so neither is adopted. Every call is wrapped in `recover` plus a caller timeout in `extract/`. |
-| Images | stdlib `image/*`, `golang.org/x/image` | Downscale and EXIF strip in pure Go. **HEIC is the open C-free question:** iOS Safari normally hands back JPEG for `accept="image/*"`; verify on the real phone before adding any decoder (a WASM-based one via `wazero` is the pure-Go fallback). |
+| Images | none on the server; prepared in the browser | Outgoing photos are prepared in the browser: `createImageBitmap` applies EXIF rotation and Safari decodes HEIC, then a canvas re-encode downscales and strips EXIF/GPS by construction. The server only sniffs, bounds and streams the bytes, so no image decoder is imported and the HEIC question is settled (round 65, gate G4). |
 | Process mgmt | `golang.org/x/sync/errgroup` | Goroutine ownership and shutdown. |
 | Dev QR | `rsc.io/qr` | `ivy-dev up --expose` prints a scannable terminal QR of the tailnet URL; pure Go, no transitive deps, dev-only. |
 | Frontend embedding | `go:embed` of `internal/webui/build` with precompressed brotli/zstd/gzip variants | Built by `make web-assets` (and inside the CI Docker build), never committed; `internal/webui/build/.gitkeep` is the only committed file there (**settled**, round 29). `cmd/ivy-assets` writes the variants. |
@@ -94,5 +94,5 @@ Anything else is justified here with its compressed size.
 3. Safari zstd `Content-Encoding` support on the operator's iOS/iPadOS versions (brotli is the
    Safari default; see `PERFORMANCE.md`).
 4. Pure-Go PDF text extraction quality.
-5. HEIC need on real iOS.
+5. ~~HEIC need on real iOS.~~ Done (round 65, gate G4): the phone hands back JPEG through a web photo picker, and browser-first preparation means no server decoder is needed either way.
 6. Whether `tailscale serve` HTTPS is worth enabling (service workers/PWA need a secure context).

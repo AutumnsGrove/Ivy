@@ -5,7 +5,7 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-06. **4f is done** (the compose screen; round 64): the client calls and the new
+last updated: 2026-10-06. **4g is in progress**: gate G4 is cleared (round 65) and the design is `docs/handoffs/2026-10-06-4g-attachments-G4.md` — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4f is done** (the compose screen; round 64): the client calls and the new
 `/drafts` screen, the From picker over the real identities, People autocomplete, reply/forward
 prefills, debounced autosave to the server's Drafts folder (and once on leave), the Sending/Undo
 toast, the Not-sent sheet and the resend-free `unconfirmed` notice. The operator chose autosave plus
@@ -57,7 +57,7 @@ screens**.
 | 2g Frontend reader swap + account customization + settings + spend | done except visual baselines (need CI harness) |
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
 | 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, rules, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; 3e done; 3f done; 3g done; **3h done** |
-| 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | **in progress, split into 4a-4h** (round 60; see "Chunk 4 stages" and `docs/CHUNK4-BRIEF.md`); **4a-4f done**, 4g is next |
+| 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | **in progress, split into 4a-4h** (round 60; see "Chunk 4 stages" and `docs/CHUNK4-BRIEF.md`); **4a-4f done**, **4g in progress (G4 cleared)** |
 | 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | not started |
 
 Frontend: SvelteKit 3 app in `web/`. The reader endpoints (`/accounts`, `/inbox`,
@@ -96,12 +96,20 @@ compose screen. **The live send-as check per address is the operator's** (below)
 wired to the real send and draft APIs: identities behind the From picker, People autocomplete on
 To/Cc, reply/reply-all and forward prefills, debounced autosave to the server's Drafts folder plus a
 save on leave, and the Sending, Undo, Not-sent and `unconfirmed` states. A new `/drafts` screen lists
-and resumes a draft. The attach sheet stays a preview and blocks send until 4g; the format buttons
-stay inert until 4h. Wiring it surfaced and fixed a 4d gap: `POST /send` now records the draft
+and resumes a draft. **4g is in progress:** gate G4 is cleared (round 65,
+`docs/handoffs/2026-10-06-4g-attachments-G4.md`) — browser-first image preparation, no server decoder
+and **no new dependency**, 25 MiB limits, inline `cid:` included. The attach sheet still stands until
+the build lands; the format buttons stay inert until 4h. Wiring 4f surfaced and fixed a 4d gap: `POST /send` now records the draft
 version it came from (`draftMessageId`) so a sent copy leaves Drafts, and the reply/forward prefill
 now names its account (`accountId`) so the screen loads the right identities. `make check`, `pnpm
-test` and the mock Playwright suite (330 passed, 10 skipped, phone and desktop) are green. **Next:
-4g**, outgoing attachments and images (gate G4 before any new dependency).
+test` and the mock Playwright suite (330 passed, 10 skipped, phone and desktop) are green.
+
+**4g is in progress** (2026-10-06; gate G4 cleared, design at
+`docs/handoffs/2026-10-06-4g-attachments-G4.md`, round 65). The operator chose browser-first image
+preparation (no server decoder, no new dependency), confirmed the phone hands back JPEG, set the
+limits at 25 MiB per file / 25 MiB total / 20 files, and kept inline `cid:` images in 4g. Uploads are
+content-addressed staging under `data/uploads/` with a `state.db` metadata table; resume and undo
+re-materialise attachments from the stored MIME. Work not started yet.
 
 **4c is done** (2026-10-06). `compose.undo_delay_seconds` is a global/per-account setting (default 10,
 0 = off, clamped to 120). `POST /send` builds the wire and Sent copies, stores the original request
@@ -471,7 +479,9 @@ Checkpoints: **G1** (4a, injection corpus failing before the builder), **G2** (4
 **G3** (4b, crash tests pass), **G4** (4g, before any image dependency), **G5** (end of chunk, Claude's
 Review). **4a-4e are done**: `compose/`/`smtp/`, the `send_queue` with the Sent copy, the
 send API with undo, the server Drafts folder, the identities and reply logic, and the compose screen
-and `/drafts`. **4g** (outgoing attachments and images) is next.
+and `/drafts`. **4g** (outgoing attachments and images) is in progress; **G4 is cleared** (round 65),
+so no new dependency is imported and the work is the staged upload store, the builder's attachments,
+the API and the screen.
 
 ## Operator actions still open
 

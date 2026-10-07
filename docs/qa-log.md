@@ -1553,3 +1553,25 @@ permanent failure shows the Not-sent sheet over compose; `unconfirmed` is a pers
 ("This may have been sent. Check Sent.") that never offers a resend; the format bar stays but the four
 markdown buttons remain inert until 4h (rich text); two tabs race on the optimistic draft version and
 the loser is told.
+
+## Round 65 — 4g attachments and images, the G4 dependency gate (2026-10-06, agent; four answers)
+
+4g is "Claude leads decoders and dependencies", so the four choices that decide whether any new
+module is imported were put to the operator before code. They are settled into
+`docs/handoffs/2026-10-06-4g-attachments-G4.md`.
+
+- **Browser-first image preparation; no server decoder.** The browser decodes (Safari handles HEIC),
+  applies EXIF rotation, downscales and re-encodes via canvas, which strips EXIF/GPS by construction.
+  The server only sniffs, bounds and streams bytes, so **no new dependency** is added and the G4/T7
+  stop does not trigger. This reuses the account-photo path (`web/src/lib/photo.ts`).
+- **The phone hands back JPEG.** The operator reports iOS Safari sends a JPEG through a web photo
+  picker, so no HEIC decoder is needed; the browser decode still covers a HEIC from other sources.
+- **Limits: 25 MiB per file, 25 MiB total raw, 20 attachments.** Base64 inflation keeps the built
+  message under Purelymail's `EHLO SIZE` (~48.8 MiB) and matches the existing SendFailed canvas copy.
+- **Inline images are in 4g**, not deferred to 4h: an inline image is a `multipart/related` part with
+  `Content-ID: <uploadId@ivy>` and the body references it with `![name](cid:uploadId@ivy)`.
+
+Related choices settled in the design file rather than asked: uploads are content-addressed staging
+under `data/uploads/` (not the disabled-mail blob store) with a `state.db` metadata table; resume and
+undo re-materialise attachments from the stored MIME, so a swept staging file is invisible to the
+operator; "Original" size still re-encodes so location is removed, unless "Remove location" is off.
