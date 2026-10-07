@@ -6,7 +6,7 @@
 // throttling; both are tracked in next_steps.md.
 //
 // Usage: pnpm build && node scripts/size-budget.mjs
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { constants, brotliCompressSync } from 'node:zlib';
 
@@ -14,6 +14,10 @@ const ROOT = new URL('..', import.meta.url).pathname;
 const BUILD = join(ROOT, 'build');
 
 const BUDGETS_KIB = { js: 80, css: 20 };
+// A lazy route chunk is not on the critical path, but it is the only way a
+// single screen can regress by importing a heavy dependency (the rich-text
+// editor is the first). The largest non-preloaded node chunk is bounded.
+const ROUTE_BUDGET_KIB = 40;
 
 function brotli(bytes) {
 	return brotliCompressSync(bytes, { params: { [constants.BROTLI_PARAM_QUALITY]: 11 } }).length;
@@ -57,6 +61,28 @@ for (const [kind, budgetKiB] of Object.entries(BUDGETS_KIB)) {
 	failed ||= !ok;
 	console.log(
 		`${ok ? 'ok  ' : 'FAIL'} critical-path ${kind}: ${gotKiB.toFixed(1)} KiB (budget ${budgetKiB} KiB, brotli)`
+	);
+}
+
+// The largest lazy route chunk, so a screen that pulls in a heavy dependency has
+// to face a budget instead of only the critical path passing.
+const nodesDir = join(BUILD, '_app/immutable/nodes');
+let largest = { name: '', bytes: 0 };
+if (existsSync(nodesDir)) {
+	for (const file of readdirSync(nodesDir)) {
+		if (!file.endsWith('.js')) continue;
+		const asset = `/_app/immutable/nodes/${file}`;
+		if (assets.includes(asset)) continue; // already counted on the critical path
+		const size = brotli(readFileSync(join(nodesDir, file)));
+		if (size > largest.bytes) largest = { name: file, bytes: size };
+	}
+}
+if (largest.name) {
+	const gotKiB = largest.bytes / 1024;
+	const ok = gotKiB <= ROUTE_BUDGET_KIB;
+	failed ||= !ok;
+	console.log(
+		`${ok ? 'ok  ' : 'FAIL'} largest route chunk ${largest.name}: ${gotKiB.toFixed(1)} KiB (budget ${ROUTE_BUDGET_KIB} KiB, brotli)`
 	);
 }
 

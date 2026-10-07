@@ -83,6 +83,7 @@ Initial starting numbers, to tighten once there is something to measure:
 |---|---|
 | Critical path JS (brotli) | <= 80 KB |
 | CSS (brotli) | <= 20 KB |
+| Largest lazy route chunk (brotli) | <= 40 KB |
 | Fonts on first paint | Lexend + Newsreader subsets, WOFF2, <= 60 KB total, preloaded |
 | Inbox first paint, warm cache, simulated 4G + 4x CPU throttle | < 1.0 s |
 | Inbox first paint, cold cache, same throttle | < 2.5 s |
@@ -95,8 +96,11 @@ directly and timing budgets on Chromium.
 
 **Implemented (2026-10-02, chunk 1h).** `web/scripts/size-budget.mjs` (run by `make web-budget`,
 and by the `web` CI job after the production build) parses `build/index.html` and asserts the
-brotli size of the critical-path JS (budget 80 KiB, currently ~50) and CSS (budget 20 KiB, currently
-~6), and fails if the shell references a missing asset. The limits were proved failing when lowered.
+brotli size of the critical-path JS (budget 80 KiB, currently ~58) and CSS (budget 20 KiB, currently
+~6), and fails if the shell references a missing asset. **Extended in 4h:** it also bounds the
+largest non-preloaded route chunk (budget 40 KiB, currently ~25 — the `/compose` chunk, which is
+where `squire-rte` loads) so a single screen cannot quietly pull in a heavy dependency while the
+critical path stays green. The limits were proved failing when lowered.
 Still open: fonts are 303 KiB unsubsetted against the 60 KiB target (and not preloaded), and the
 CDP-throttled timing budgets; both tracked in `next_steps.md`.
 
