@@ -88,6 +88,26 @@ func TestSendQueuesAMessageWithAnUndoDeadline(t *testing.T) {
 	}
 }
 
+// A send that came from an autosaved draft records the draft version, so the
+// worker removes exactly that server copy after the 250.
+func TestSendRecordsTheDraftItCameFrom(t *testing.T) {
+	t.Parallel()
+	srv, dbs, _, _ := sendServer(t)
+	req := sendRequest("s1")
+	draftID := "<draft-1@example.com>"
+	req.DraftMessageId = &draftID
+	if code := postJSON(t, srv.URL+"/api/v1/send", req, nil); code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202", code)
+	}
+	row, err := dbs.GetSend(context.Background(), "s1")
+	if err != nil {
+		t.Fatalf("get send: %v", err)
+	}
+	if row.DraftMessageID != draftID {
+		t.Errorf("draftMessageID = %q, want %q", row.DraftMessageID, draftID)
+	}
+}
+
 func TestSendRejectsForeignFrom(t *testing.T) {
 	t.Parallel()
 	srv, _, _, _ := sendServer(t)

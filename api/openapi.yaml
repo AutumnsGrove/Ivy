@@ -990,8 +990,8 @@ paths:
                 $ref: "#/components/schemas/SendStatus"
         "400":
           description: >
-            `bad_request` (malformed), `bad_from` (the From is not this
-            account's address; send-as arrives in 4e), `invalid_message` (the
+            `bad_request` (malformed), `bad_from` (the From is not one of this
+            account's sending addresses), `invalid_message` (the
             builder refused a field; `detail` names it), or an over-large body.
           content:
             application/json:
@@ -1682,8 +1682,11 @@ components:
         A ready-to-edit compose state computed from an incoming message: the
         recipients, subject, body and threading headers, plus the identity to
         send as. The compose screen may change any of it before sending.
-      required: [from, to, cc, subject, text, references]
+      required: [accountId, from, to, cc, subject, text, references]
       properties:
+        accountId:
+          type: string
+          description: The account the message belongs to, so the screen uses its identities
         from:
           type: string
           description: The chosen identity's address
@@ -2252,7 +2255,7 @@ components:
           type: string
         from:
           type: string
-          description: The sending address; for now it must be this account's address.
+          description: The sending address; the account's own address or a configured identity.
         fromName:
           type: string
           description: An optional display name, RFC 2047 encoded by the builder.
@@ -2286,6 +2289,12 @@ components:
           type: array
           items:
             type: string
+        draftMessageId:
+          type: string
+          description: >
+            The Message-ID of the draft version this send came from, so the send
+            worker removes exactly that server copy after the 250. Empty when
+            the message was never autosaved.
     SendStatus:
       type: object
       description: One outgoing message and where it is in the queue
@@ -2366,7 +2375,7 @@ components:
           type: string
         from:
           type: string
-          description: The sending address; for now it must be this account's address.
+          description: The sending address; the account's own address or a configured identity.
         fromName:
           type: string
         to:

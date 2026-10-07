@@ -114,7 +114,7 @@ func (s *Server) handleDeleteIdentity(w http.ResponseWriter, r *http.Request) {
 // handleReplyPrefill computes a reply or reply-all for one message. The compose
 // screen may change any of it before sending.
 func (s *Server) handleReplyPrefill(w http.ResponseWriter, r *http.Request) {
-	p, err := s.messagePrefill(r, r.URL.Query().Get("all") == "true", false)
+	p, accountID, err := s.messagePrefill(r, r.URL.Query().Get("all") == "true", false)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		s.notFound(w, r, "message")
@@ -123,12 +123,12 @@ func (s *Server) handleReplyPrefill(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, prefillView(p))
+	writeJSON(w, http.StatusOK, prefillView(p, accountID))
 }
 
 // handleForwardPrefill computes a forward for one message.
 func (s *Server) handleForwardPrefill(w http.ResponseWriter, r *http.Request) {
-	p, err := s.messagePrefill(r, false, true)
+	p, accountID, err := s.messagePrefill(r, false, true)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		s.notFound(w, r, "message")
@@ -137,16 +137,17 @@ func (s *Server) handleForwardPrefill(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, prefillView(p))
+	writeJSON(w, http.StatusOK, prefillView(p, accountID))
 }
 
 // messagePrefill reads one message and its account's identities, then runs the
-// pure reply or forward logic.
-func (s *Server) messagePrefill(r *http.Request, all, forward bool) (compose.Prefill, error) {
+// pure reply or forward logic. It also reports the message's account, so the
+// compose screen loads that account's identities rather than the default's.
+func (s *Server) messagePrefill(r *http.Request, all, forward bool) (compose.Prefill, string, error) {
 	ctx := r.Context()
 	m, err := s.dbs.GetMessage(ctx, r.PathValue("id"))
 	if err != nil {
-		return compose.Prefill{}, err
+		return compose.Prefill{}, "", err
 	}
 	acct, err := s.dbs.GetAccount(ctx, m.AccountID)
 	switch {
@@ -155,17 +156,17 @@ func (s *Server) messagePrefill(r *http.Request, all, forward bool) (compose.Pre
 		// reply offers the account's address rather than nothing.
 		acct = store.Account{ID: m.AccountID}
 	case err != nil:
-		return compose.Prefill{}, err
+		return compose.Prefill{}, "", err
 	}
 	_, refs, def, err := s.accountIdentities(ctx, acct)
 	if err != nil {
-		return compose.Prefill{}, err
+		return compose.Prefill{}, "", err
 	}
 	in := incomingFrom(m)
 	if forward {
-		return compose.Forward(in, refs, def), nil
+		return compose.Forward(in, refs, def), m.AccountID, nil
 	}
-	return compose.Reply(in, refs, def, all), nil
+	return compose.Reply(in, refs, def, all), m.AccountID, nil
 }
 
 // accountOrNotFound loads the account in the path or writes a 404.
@@ -286,8 +287,9 @@ func storeComposeAddresses(list []store.Address) []compose.Address {
 	return out
 }
 
-func prefillView(p compose.Prefill) api.ComposePrefill {
+func prefillView(p compose.Prefill, accountID string) api.ComposePrefill {
 	v := api.ComposePrefill{
+		AccountId:  accountID,
 		From:       p.From.Address,
 		To:         prefillAddresses(p.To),
 		Cc:         prefillAddresses(p.Cc),

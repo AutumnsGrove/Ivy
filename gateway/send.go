@@ -143,6 +143,9 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		ID: id, AccountID: acct.ID, MessageID: msgID, ContentKey: store.ContentKey(msgID, nil),
 		EnvelopeFrom: env.From, Recipients: env.To, WireBody: raw, SentBody: sentRaw,
 		Draft: body, UndoDeadline: deadline, CreatedAt: now, UpdatedAt: now,
+		// The draft version this send came from, so the worker removes exactly that
+		// server copy after the 250 and a failed or undone send keeps it.
+		DraftMessageID: stringOr(req.DraftMessageId, ""),
 	})
 	switch {
 	case errors.Is(err, store.ErrSendFull):

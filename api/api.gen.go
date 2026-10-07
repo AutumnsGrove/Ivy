@@ -639,7 +639,9 @@ type CheckDetailSureness string
 
 // ComposePrefill A ready-to-edit compose state computed from an incoming message: the recipients, subject, body and threading headers, plus the identity to send as. The compose screen may change any of it before sending.
 type ComposePrefill struct {
-	Cc []string `json:"cc"`
+	// AccountId The account the message belongs to, so the screen uses its identities
+	AccountId string   `json:"accountId"`
+	Cc        []string `json:"cc"`
 
 	// From The chosen identity's address
 	From string `json:"from"`
@@ -706,7 +708,7 @@ type DraftRequest struct {
 	// DraftId The stable draft identity; omit on the first save.
 	DraftId *string `json:"draftId,omitempty"`
 
-	// From The sending address; for now it must be this account's address.
+	// From The sending address; the account's own address or a configured identity.
 	From     string  `json:"from"`
 	FromName *string `json:"fromName,omitempty"`
 
@@ -1133,7 +1135,10 @@ type SendRequest struct {
 	Bcc       *[]string `json:"bcc,omitempty"`
 	Cc        *[]string `json:"cc,omitempty"`
 
-	// From The sending address; for now it must be this account's address.
+	// DraftMessageId The Message-ID of the draft version this send came from, so the send worker removes exactly that server copy after the 250. Empty when the message was never autosaved.
+	DraftMessageId *string `json:"draftMessageId,omitempty"`
+
+	// From The sending address; the account's own address or a configured identity.
 	From string `json:"from"`
 
 	// FromName An optional display name, RFC 2047 encoded by the builder.

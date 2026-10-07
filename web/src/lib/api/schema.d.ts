@@ -991,6 +991,8 @@ export interface components {
         };
         /** @description A ready-to-edit compose state computed from an incoming message: the recipients, subject, body and threading headers, plus the identity to send as. The compose screen may change any of it before sending. */
         ComposePrefill: {
+            /** @description The account the message belongs to, so the screen uses its identities */
+            accountId: string;
             /** @description The chosen identity's address */
             from: string;
             /** @description The chosen identity's display name, empty when it has none */
@@ -1262,7 +1264,7 @@ export interface components {
             /** @description Optional client idempotency key. A repeat returns the existing send instead of queueing a second one. */
             id?: string;
             accountId: string;
-            /** @description The sending address; for now it must be this account's address. */
+            /** @description The sending address; the account's own address or a configured identity. */
             from: string;
             /** @description An optional display name, RFC 2047 encoded by the builder. */
             fromName?: string;
@@ -1277,6 +1279,8 @@ export interface components {
             markdown?: boolean;
             inReplyTo?: string;
             references?: string[];
+            /** @description The Message-ID of the draft version this send came from, so the send worker removes exactly that server copy after the 250. Empty when the message was never autosaved. */
+            draftMessageId?: string;
         };
         /** @description One outgoing message and where it is in the queue */
         SendStatus: {
@@ -1319,7 +1323,7 @@ export interface components {
             /** @description The version the caller last saw; 0 for a new draft. A stale value is `draft_conflict`. */
             baseVersion?: number;
             accountId: string;
-            /** @description The sending address; for now it must be this account's address. */
+            /** @description The sending address; the account's own address or a configured identity. */
             from: string;
             fromName?: string;
             to: string[];
@@ -2666,7 +2670,7 @@ export interface operations {
                     "application/json": components["schemas"]["SendStatus"];
                 };
             };
-            /** @description `bad_request` (malformed), `bad_from` (the From is not this account's address; send-as arrives in 4e), `invalid_message` (the builder refused a field; `detail` names it), or an over-large body. */
+            /** @description `bad_request` (malformed), `bad_from` (the From is not one of this account's sending addresses), `invalid_message` (the builder refused a field; `detail` names it), or an over-large body. */
             400: {
                 headers: {
                     [name: string]: unknown;

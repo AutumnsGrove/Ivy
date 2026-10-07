@@ -166,6 +166,9 @@ func TestReplyPrefillUsesTheDeliveredIdentity(t *testing.T) {
 	if p.From != "feedback@example.com" || p.FromName == nil || *p.FromName != "Grove" {
 		t.Errorf("from = %q/%v, want the delivered alias", p.From, p.FromName)
 	}
+	if p.AccountId != "acct-1" {
+		t.Errorf("accountId = %q, want acct-1 so the compose screen loads the right identities", p.AccountId)
+	}
 	if len(p.To) != 1 || p.To[0] != "visitor@example.com" {
 		t.Errorf("to = %v, want the Reply-To", p.To)
 	}
