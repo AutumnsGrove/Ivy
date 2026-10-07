@@ -32,6 +32,12 @@ const CODES = new Set<string>([
 	'bad_from',
 	'too_many_identities',
 	'primary_identity',
+	'invalid_message',
+	'send_full',
+	'too_late',
+	'no_drafts_folder',
+	'draft_conflict',
+	'draft_too_large',
 	'update_unavailable',
 	'update_running',
 	'auth_failed',
@@ -65,7 +71,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	} catch {
 		throw new ApiError('offline', "Can't reach Ivy");
 	}
-	if (!res.ok) throw await errorFrom(res);
+	if (!res.ok) throw await errorFrom(res, path);
 	// A 204 (a delete) has no body to read; only a 2xx that should have one and
 	// does not parse is a server fault.
 	if (res.status === 204) return undefined as T;
@@ -77,16 +83,24 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	}
 }
 
-async function errorFrom(res: Response): Promise<ApiError> {
-	let body: { code?: unknown; message?: unknown } | null = null;
+async function errorFrom(res: Response, path: string): Promise<ApiError> {
+	let body: unknown = null;
 	try {
-		body = (await res.json()) as { code?: unknown; message?: unknown };
+		body = await res.json();
 	} catch {
 		body = null;
 	}
-	const code = typeof body?.code === 'string' && CODES.has(body.code) ? (body.code as ErrorCode) : fallbackCode(res.status);
-	const message = typeof body?.message === 'string' && body.message ? body.message : 'Something went wrong';
-	return new ApiError(code, message);
+	const envelope =
+		body && typeof body === 'object' ? (body as { code?: unknown; message?: unknown }) : null;
+	const known =
+		typeof envelope?.code === 'string' && CODES.has(envelope.code)
+			? (envelope.code as ErrorCode)
+			: null;
+	// A stale draft save answers 409 with the newer DraftResume, not the error envelope.
+	const code = known ?? (res.status === 409 && path === '/drafts' ? 'draft_conflict' : fallbackCode(res.status));
+	const message =
+		typeof envelope?.message === 'string' && envelope.message ? envelope.message : 'Something went wrong';
+	return new ApiError(code, message, body ?? undefined);
 }
 
 function fallbackCode(status: number): ErrorCode {

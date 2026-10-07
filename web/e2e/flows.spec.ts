@@ -1,4 +1,4 @@
-import { expect, test } from './api';
+import { expect, state, test } from './api';
 import { toast } from './helpers';
 
 test.describe('search', () => {
@@ -57,20 +57,45 @@ test.describe('settings', () => {
 });
 
 test.describe('compose', () => {
-	test('a too-large send is refused calmly, keeps the draft, and can be fixed in one tap', async ({ page }) => {
+	test('a refused send is calm, keeps the draft, and returns to the editor', async ({ page }) => {
 		await page.goto('/compose?reply=m1&scenario=send-failed');
+		await page.getByLabel('Message body').fill('Hi Mara');
 		await page.getByRole('button', { name: 'Send' }).click();
 		const sheet = page.getByRole('dialog', { name: 'Not sent' });
 		await expect(sheet).toContainText('safe in Drafts');
-		await sheet.getByRole('button', { name: /Remove blog-export.zip and send/ }).click();
-		await expect(page).toHaveURL(/\/$/);
-		await expect(toast(page, 'Sending to')).toBeVisible();
+		await sheet.getByRole('button', { name: 'Go back and edit' }).click();
+		await expect(sheet).toBeHidden();
+		await expect(page.getByLabel('Message body')).toHaveValue('Hi Mara');
 	});
 
-	test('sending offers undo', async ({ page }) => {
+	test('sending offers undo, which hands the message back to the editor', async ({ page }) => {
 		await page.goto('/compose?reply=m1');
+		await page.getByLabel('Message body').fill('Undo me');
 		await page.getByRole('button', { name: 'Send' }).click();
-		await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
+		await expect(page).toHaveURL(/\/m\/m1/);
+		const undoT = toast(page, 'Sending to');
+		await expect(undoT).toBeVisible();
+		await undoT.getByRole('button', { name: 'Undo' }).click();
+		await expect(page).toHaveURL(/\/compose\?undo=/);
+		await expect(page.getByLabel('Message body')).toHaveValue('Undo me');
+	});
+
+	test('People autocomplete adds a recipient chip', async ({ page }) => {
+		await page.goto('/compose');
+		await page.getByLabel('To').fill('mara');
+		await page.getByRole('option', { name: /mara@example.com/ }).click();
+		await expect(page.getByRole('button', { name: 'Remove mara@example.com' })).toBeVisible();
+	});
+
+	test('the From picker offers every configured identity', async ({ page }) => {
+		state.current.identities = [
+			{ id: 'i2', accountId: 'a2', address: 'support@example.com', name: 'Support', signature: '', primary: false }
+		];
+		await page.goto('/compose?reply=m1');
+		const from = page.getByLabel('From');
+		await expect(from).toHaveValue('hello@example.com');
+		await from.selectOption('support@example.com');
+		await expect(from).toHaveValue('support@example.com');
 	});
 });
 

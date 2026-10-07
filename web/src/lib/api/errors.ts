@@ -29,6 +29,12 @@ export type ErrorCode =
 	| 'bad_from'
 	| 'too_many_identities'
 	| 'primary_identity'
+	| 'invalid_message'
+	| 'send_full'
+	| 'too_late'
+	| 'no_drafts_folder'
+	| 'draft_conflict'
+	| 'draft_too_large'
 	| 'update_unavailable'
 	| 'update_running'
 	| 'auth_failed'
@@ -41,7 +47,9 @@ export type ErrorCode =
 export class ApiError extends Error {
 	constructor(
 		readonly code: ErrorCode,
-		message: string
+		message: string,
+		/** The parsed failure body, when the endpoint answers with a payload instead of an envelope (a draft conflict). */
+		readonly body?: unknown
 	) {
 		super(message);
 		this.name = 'ApiError';

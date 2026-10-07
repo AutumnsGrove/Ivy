@@ -1,6 +1,6 @@
 import { test as base } from '@playwright/test';
 import * as mock from '../src/lib/api/mock';
-import type { Account, Attachment, Identity, MailMessage, MailSummary, OutboxItem, TagsOverview, UpdateStatus, UserTag } from '../src/lib/types';
+import type { Account, Attachment, DraftResume, DraftSummary, Identity, MailMessage, MailSummary, OutboxItem, SendStatus, TagsOverview, UpdateStatus, UserTag } from '../src/lib/types';
 
 // The reader client does real fetches, so the mock E2E suite serves the
 // contract from the same fixtures at the network boundary instead of inside
@@ -33,6 +33,12 @@ export type AccountState = {
 	tagged: Map<string, string[]>;
 	/** The self-update status the settings screen reads. */
 	update: UpdateStatus;
+	/** The Drafts screen's list (one head per draft) and each head's resumable body. */
+	drafts: DraftSummary[];
+	draftBodies: Map<string, DraftResume>;
+	/** The send queue, and each queued send's original request for an undo. */
+	sends: SendStatus[];
+	sendDrafts: Map<string, string>;
 };
 
 const freshState = (): AccountState => ({
@@ -42,7 +48,11 @@ const freshState = (): AccountState => ({
 	tags: structuredClone(mock.tags),
 	identities: [],
 	tagged: new Map(),
-	update: { unavailable: false, running: false, done: true, success: true, target: 'r1.test' }
+	update: { unavailable: false, running: false, done: true, success: true, target: 'r1.test' },
+	drafts: [],
+	draftBodies: new Map(),
+	sends: [],
+	sendDrafts: new Map()
 });
 
 const TAG_COLORS = new Set(['sky', 'rose', 'teal', 'coral', 'lilac', 'mint', 'gold', 'sand', 'orchid', 'fern', 'slate', 'berry']);
@@ -191,6 +201,174 @@ function bodyDocument(id: string): Reply | null {
 
 const escapeHTML = (s: string) =>
 	s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+/** The sender's address, which the fixtures only carry as a display name. */
+const SENDER_ADDRESS: Record<string, string> = {
+	'Mara Linden': 'mara@example.com',
+	'Takedown requests': 'legal@example.com',
+	GitHub: 'noreply@github.com',
+	Purelymail: 'billing@purelymail.com',
+	'Wildflower Weekly': 'hello@wildflower.example'
+};
+
+function prefillReply(state: AccountState, id: string, all: boolean): Reply {
+	const summary = mock.inbox.find((m) => m.id === id);
+	if (!summary) return notFound('No such message');
+	const account = state.accounts.find((a) => a.id === summary.accountId) ?? state.accounts[0];
+	const identity = state.identities.find((i) => i.accountId === account?.id);
+	const target = SENDER_ADDRESS[summary.from] ?? 'sender@example.com';
+	return {
+		body: {
+			accountId: account?.id ?? 'a1',
+			from: account?.address ?? 'me@example.com',
+			fromName: identity?.name ?? '',
+			to: [target],
+			cc: [],
+			subject: `Re: ${summary.subject}`,
+			text: '',
+			inReplyTo: `<${id}@example.com>`,
+			references: [`<${id}@example.com>`],
+			replyTarget: all ? `${target} and others` : target
+		}
+	};
+}
+
+function prefillForward(state: AccountState, id: string): Reply {
+	const summary = mock.inbox.find((m) => m.id === id);
+	if (!summary) return notFound('No such message');
+	const account = state.accounts.find((a) => a.id === summary.accountId) ?? state.accounts[0];
+	const identity = state.identities.find((i) => i.accountId === account?.id);
+	return {
+		body: {
+			accountId: account?.id ?? 'a1',
+			from: account?.address ?? 'me@example.com',
+			fromName: identity?.name ?? '',
+			to: [],
+			cc: [],
+			subject: `Fwd: ${summary.subject}`,
+			text: `\n\n---------- Forwarded message ----------\nFrom: ${summary.from}\nSubject: ${summary.subject}\n\n${summary.preview}`,
+			references: []
+		}
+	};
+}
+
+/** The send queue's in-memory backend: queue, read, undo. */
+function sendReply(state: AccountState, path: string, method: string, scenario: string | null, raw: Buffer | null): Reply | null {
+	if (path === '/send' && method === 'POST') {
+		const b = jsonBody(raw);
+		if (!b || typeof b.accountId !== 'string' || typeof b.from !== 'string') return badRequest('That message is not valid');
+		if (scenario === 'send-failed') {
+			return { status: 400, body: { code: 'invalid_message', message: 'Ivy cannot send that message: it is too large' } };
+		}
+		const id = typeof b.id === 'string' && b.id ? b.id : `send-${state.sends.length + 1}`;
+		const now = new Date().toISOString();
+		const send: SendStatus = {
+			id,
+			accountId: b.accountId,
+			state: 'queued',
+			from: b.from,
+			to: Array.isArray(b.to) ? (b.to as string[]) : [],
+			subject: typeof b.subject === 'string' ? b.subject : '',
+			undoDeadline: new Date(Date.now() + 10_000).toISOString(),
+			createdAt: now,
+			updatedAt: now
+		};
+		state.sends = [send, ...state.sends];
+		state.sendDrafts.set(id, JSON.stringify(b));
+		return { status: 202, body: send };
+	}
+	if (path === '/send' && method === 'GET') {
+		const active = state.sends.filter((s) => s.state === 'queued' || s.state === 'submitting' || s.state === 'submitted');
+		const recent = state.sends.filter((s) => !active.includes(s));
+		return { body: { active, recent } };
+	}
+	const one = /^\/send\/([^/]+)$/.exec(path);
+	if (one && method === 'GET') {
+		const send = state.sends.find((s) => s.id === one[1]);
+		return send ? { body: send } : notFound('No such send');
+	}
+	const undo = /^\/send\/([^/]+)\/undo$/.exec(path);
+	if (undo && method === 'POST') {
+		const send = state.sends.find((s) => s.id === undo[1]);
+		if (!send) return notFound('No such send');
+		if (send.state !== 'queued' && send.state !== 'submitting' && send.state !== 'submitted') {
+			return { status: 409, body: { code: 'too_late', message: 'This message can no longer be undone' } };
+		}
+		const cancelled: SendStatus = {
+			...send,
+			state: 'cancelled',
+			updatedAt: new Date().toISOString(),
+			draft: state.sendDrafts.get(send.id)
+		};
+		state.sends = state.sends.map((s) => (s.id === send.id ? cancelled : s));
+		return { body: cancelled };
+	}
+	return null;
+}
+
+/** The server Drafts folder: one head per draft, optimistic version, resume and discard. */
+function draftReply(state: AccountState, path: string, method: string, raw: Buffer | null): Reply | null {
+	if (path === '/drafts' && method === 'GET') return { body: { drafts: state.drafts } };
+	if (path === '/drafts' && method === 'POST') {
+		const b = jsonBody(raw);
+		if (!b || typeof b.accountId !== 'string' || typeof b.from !== 'string') return badRequest('That draft is not valid');
+		const draftId = typeof b.draftId === 'string' && b.draftId ? b.draftId : `draft-${Date.now()}`;
+		const head = state.drafts.find((d) => d.draftId === draftId);
+		const base = typeof b.baseVersion === 'number' ? b.baseVersion : 0;
+		if (head && base !== head.version) {
+			const newer = state.draftBodies.get(head.id);
+			if (newer) return { status: 409, body: newer };
+		}
+		const version = (head?.version ?? 0) + 1;
+		const id = `${draftId}-v${version}`;
+		const now = new Date().toISOString();
+		const subject = typeof b.subject === 'string' ? b.subject : '';
+		const to = Array.isArray(b.to) ? (b.to as string[]) : [];
+		const summary: DraftSummary = {
+			id,
+			draftId,
+			accountId: b.accountId,
+			version,
+			messageId: `<${id}@example.com>`,
+			subject,
+			to,
+			updatedAt: now,
+			source: 'local'
+		};
+		const resume: DraftResume = {
+			id,
+			draftId,
+			accountId: b.accountId,
+			version,
+			messageId: summary.messageId,
+			source: 'local',
+			from: b.from,
+			fromName: typeof b.fromName === 'string' ? b.fromName : undefined,
+			to,
+			cc: Array.isArray(b.cc) ? (b.cc as string[]) : [],
+			bcc: Array.isArray(b.bcc) ? (b.bcc as string[]) : [],
+			subject,
+			text: typeof b.text === 'string' ? b.text : '',
+			inReplyTo: typeof b.inReplyTo === 'string' ? b.inReplyTo : undefined,
+			references: Array.isArray(b.references) ? (b.references as string[]) : []
+		};
+		state.drafts = [summary, ...state.drafts.filter((d) => d.draftId !== draftId)];
+		state.draftBodies.set(id, resume);
+		return { body: summary };
+	}
+	const one = /^\/drafts\/([^/]+)$/.exec(path);
+	if (one && method === 'GET') {
+		const resume = state.draftBodies.get(one[1]);
+		return resume ? { body: resume } : notFound('No such draft');
+	}
+	if (one && method === 'DELETE') {
+		if (!state.drafts.some((d) => d.id === one[1])) return notFound('No such draft');
+		state.drafts = state.drafts.filter((d) => d.id !== one[1]);
+		state.draftBodies.delete(one[1]);
+		return { status: 204, body: null };
+	}
+	return null;
+}
 
 function updateProfile(state: AccountState, id: string, body: { displayName?: string; icon?: string }): Reply {
 	const account = state.accounts.find((a) => a.id === id);
@@ -496,6 +674,18 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 		}
 		return null;
 	}
+
+	const prefill = /^\/messages\/([^/]+)\/(reply|forward)$/.exec(path);
+	if (prefill && method === 'GET') {
+		return prefill[2] === 'reply'
+			? prefillReply(state, prefill[1], params.get('all') === 'true')
+			: prefillForward(state, prefill[1]);
+	}
+
+	const queued = sendReply(state, path, method, scenario, raw);
+	if (queued) return queued;
+	const drafts = draftReply(state, path, method, raw);
+	if (drafts) return drafts;
 
 	const match = /^\/messages\/([^/]+)(\/summary|\/body)?$/.exec(path);
 	if (match) {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Archive, Inbox, PenLine, Trash2 } from '#lib/icons.js';
+	import { Archive, FileText, Inbox, PenLine, Trash2 } from '#lib/icons.js';
 	import { accountAvatar } from '#lib/accounts.js';
 	import type { Account, FolderView } from '#lib/types.js';
 	import Avatar from '../ui/Avatar.svelte';
@@ -54,6 +54,10 @@
 	<NavRow href="/?folder=trash" on={folder === 'trash'}>
 		{#snippet leading()}<Trash2 />{/snippet}
 		Trash
+	</NavRow>
+	<NavRow href="/drafts">
+		{#snippet leading()}<FileText />{/snippet}
+		Drafts
 	</NavRow>
 
 	<GroupLabel>Tags</GroupLabel>

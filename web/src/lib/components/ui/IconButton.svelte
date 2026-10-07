@@ -7,16 +7,17 @@
 		/** `glass` floats over the scene, `plain` sits in a bar, `accent` marks the primary add action. */
 		tone?: 'glass' | 'plain' | 'accent';
 		href?: string;
+		disabled?: boolean;
 		onclick?: (e: MouseEvent) => void;
 		children: Snippet;
 	};
-	let { label, tone = 'plain', href, onclick, children }: Props = $props();
+	let { label, tone = 'plain', href, disabled = false, onclick, children }: Props = $props();
 </script>
 
 {#if href}
 	<a {href} class="ib {tone}" aria-label={label} {onclick}>{@render children()}</a>
 {:else}
-	<button type="button" class="ib {tone}" aria-label={label} {onclick}>{@render children()}</button>
+	<button type="button" class="ib {tone}" aria-label={label} {disabled} {onclick}>{@render children()}</button>
 {/if}
 
 <style>
@@ -42,5 +43,8 @@
 		color: var(--accent);
 		border-color: var(--accent-line);
 		background: var(--accent-soft);
+	}
+	.ib:disabled {
+		opacity: 0.4;
 	}
 </style>

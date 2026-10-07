@@ -12,6 +12,10 @@ import type {
 	Check,
 	CheckDetail,
 	ComposePrefill,
+	DraftList,
+	DraftRequest,
+	DraftResume,
+	DraftSummary,
 	FolderView,
 	HealthOverview,
 	Identity,
@@ -33,6 +37,9 @@ import type {
 	RuleDryRunResult,
 	RuleInput,
 	SearchResults,
+	SendList,
+	SendRequest,
+	SendStatus,
 	SnoozePreset,
 	Settings,
 	SpendPeriod,
@@ -200,6 +207,41 @@ export const api = {
 	/** The recipients, subject and body a forward starts from. */
 	forwardPrefill: (id: string): Promise<ComposePrefill> =>
 		request<ComposePrefill>(`/messages/${encodeURIComponent(id)}/forward`),
+
+	// --- send and drafts (4c/4d): the queue, undo and the server Drafts folder ---
+	/** Queue a message; the Send tap is the confirmation and the server holds it through the undo window. */
+	sendMessage: (req: SendRequest): Promise<SendStatus> =>
+		request<SendStatus>('/send', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(req)
+		}),
+
+	getSend: (id: string): Promise<SendStatus> => request<SendStatus>(`/send/${encodeURIComponent(id)}`),
+
+	listSends: (accountId?: string): Promise<SendList> =>
+		request<SendList>(apiPath('/send', { account_id: accountId })),
+
+	/** Cancel a queued send before the server's deadline; the reply carries the stored draft. */
+	undoSend: (id: string): Promise<SendStatus> =>
+		request<SendStatus>(`/send/${encodeURIComponent(id)}/undo`, { method: 'POST' }),
+
+	/** The local draft heads merged with the account's mirrored Drafts folder. */
+	listDrafts: (accountId?: string): Promise<DraftList> =>
+		request<DraftList>(apiPath('/drafts', { account_id: accountId })),
+
+	saveDraft: (req: DraftRequest): Promise<DraftSummary> =>
+		request<DraftSummary>('/drafts', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(req)
+		}),
+
+	getDraft: (id: string, accountId?: string): Promise<DraftResume> =>
+		request<DraftResume>(apiPath(`/drafts/${encodeURIComponent(id)}`, { account_id: accountId })),
+
+	discardDraft: (id: string, accountId?: string): Promise<void> =>
+		request<void>(apiPath(`/drafts/${encodeURIComponent(id)}`, { account_id: accountId }), { method: 'DELETE' }),
 
 	// --- still mock-backed until their chunks land ---------------------------
 	getSettings: (): Promise<Settings> => Promise.resolve(readSettings()),

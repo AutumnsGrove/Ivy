@@ -40,8 +40,10 @@
 		],
 		'Compose and settings': [
 			['Compose reply', '/compose?reply=m1'],
+			['New message', '/compose'],
 			['Attach sheet', '/compose?reply=m1&attach'],
 			['Send failed', '/compose?reply=m1&scenario=send-failed'],
+			['Drafts', '/drafts'],
 			['Settings', '/settings'],
 			['Mirror health', '/settings/health'],
 			['Welcome', '/welcome'],

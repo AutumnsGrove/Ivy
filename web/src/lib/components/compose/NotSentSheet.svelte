@@ -6,12 +6,11 @@
 	type Props = {
 		open: boolean;
 		to: string;
-		file: string;
-		size: string;
-		limit: string;
-		onremove: () => void;
+		/** The server's plain wording for why it was not sent. */
+		reason: string;
+		onback?: () => void;
 	};
-	let { open = $bindable(), to, file, size, limit, onremove }: Props = $props();
+	let { open = $bindable(), to, reason, onback }: Props = $props();
 </script>
 
 <Sheet bind:open title="Not sent">
@@ -19,14 +18,14 @@
 		<span class="orb"><CircleAlert /></span>
 		<div>
 			<h2>Not sent</h2>
-			<p class="to">to {to}</p>
+			<p class="to">to {to || 'your recipient'}</p>
 		</div>
 	</div>
-	<p class="why">The mail server turned this message away because it is too large: <span class="bad">{size}</span> of a <b>{limit}</b> limit.</p>
+	<p class="why">{reason}</p>
 	<p class="safe">Your message is safe in Drafts, and nothing was sent.</p>
 	<div class="acts">
-		<Button variant="primary" size="lg" block onclick={() => ((open = false), onremove())}>Remove {file} and send</Button>
-		<Button size="lg" block onclick={() => (open = false)}>Go back and edit</Button>
+		<Button variant="primary" size="lg" block onclick={() => ((open = false), onback?.())}>Go back and edit</Button>
+		<Button size="lg" block href="/drafts">Open Drafts</Button>
 	</div>
 </Sheet>
 
@@ -59,12 +58,6 @@
 		margin-top: var(--sp-18);
 		font-size: var(--fs-ui-lg);
 		line-height: 1.55;
-	}
-	.bad {
-		color: var(--danger);
-	}
-	.why b {
-		font-weight: 400;
 	}
 	.safe {
 		margin-top: var(--sp-10);

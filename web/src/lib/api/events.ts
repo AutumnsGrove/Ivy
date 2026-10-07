@@ -11,7 +11,8 @@ export const EVENT_TYPES = [
 	'sync.state',
 	'outbox.state',
 	'health.alert',
-	'update.state'
+	'update.state',
+	'send.state'
 ] as const;
 
 export type ServerEventType = (typeof EVENT_TYPES)[number];

@@ -5,6 +5,7 @@
 	import { page } from '$app/state';
 	import { connectEvents } from '#lib/api/events.js';
 	import { outbox } from '#lib/outbox.svelte.js';
+	import { sends } from '#lib/sends.svelte.js';
 	import DesktopShell from '#lib/components/shell/DesktopShell.svelte';
 	import PhoneShell from '#lib/components/shell/PhoneShell.svelte';
 	import Scene from '#lib/components/ui/Scene.svelte';
@@ -28,10 +29,14 @@
 				// An op that reached a terminal state must drop its optimistic overlay,
 				// so a failed move puts the message back.
 				if (event.type === 'outbox.state') void outbox.refresh();
+				// A send settling to failed or unconfirmed is a notice the operator
+				// needs to see wherever they are.
+				if (event.type === 'send.state') void sends.refresh();
 			},
 			() => {
 				void invalidateAll();
 				void outbox.refresh();
+				void sends.refresh();
 			}
 		)
 	);
