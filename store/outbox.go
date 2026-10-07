@@ -163,6 +163,30 @@ func (d *DBs) EnqueueOutbox(ctx context.Context, op OutboxOp) (OutboxOp, bool, e
 	return stored, created, nil
 }
 
+// EnqueueOutboxBatch enqueues every op in one transaction: all of them or, when
+// any would pass the queue cap, none, so a selection acted on together never
+// half-enqueues. The stored ops come back in the order given; a repeat of an
+// already-queued op returns that op, as a single enqueue does.
+func (d *DBs) EnqueueOutboxBatch(ctx context.Context, ops []OutboxOp) ([]OutboxOp, error) {
+	tx, err := d.State.Write.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("enqueue outbox batch: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	stored := make([]OutboxOp, 0, len(ops))
+	for _, op := range ops {
+		one, _, err := enqueueOutboxTx(ctx, tx, op)
+		if err != nil {
+			return nil, err
+		}
+		stored = append(stored, one)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("enqueue outbox batch: %w", err)
+	}
+	return stored, nil
+}
+
 // enqueueOutboxTx is enqueueOutbox's body over a caller-owned transaction, so a
 // package that must commit an op atomically with its own row (a draft save) can.
 // It never commits; the caller does. The caller also owns the rollback.

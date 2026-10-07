@@ -827,6 +827,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/outbox/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply one reader action to several messages at once
+         * @description The same write path as POST /outbox, one op per message, committed in a single transaction: when the queue has no room for all of them none is queued (`outbox_full`), so a selection never half-enqueues. A message that cannot take the action (gone, already in that folder, no folder for the role) is returned in `skipped` with its reason, and the rest are queued. At most 200 messages; more is `batch_too_large`. `expunge` is not a batch action. The UI confirms a move or delete, once, with the count.
+         */
+        post: operations["enqueueOutboxBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/outbox/{id}": {
         parameters: {
             query?: never;
@@ -1332,6 +1352,28 @@ export interface components {
             destinationFolderId?: string;
             /** @description The tag for `tag` and `untag`. Tagging is the `$ivy-<slug>` keyword written to the server; `untag` clears it from every live copy of the message. */
             tagId?: string;
+        };
+        OutboxBatch: {
+            /** @description The mirror rows to act on, in the order shown; a repeated id counts once */
+            messageIds: string[];
+            /** @enum {string} */
+            action: "archive" | "trash" | "spam" | "not_junk" | "flag" | "unflag" | "seen" | "unseen" | "move" | "tag" | "untag";
+            /** @description The destination folder for `move` */
+            destinationFolderId?: string;
+            /** @description The tag for `tag` and `untag` */
+            tagId?: string;
+        };
+        OutboxBatchResult: {
+            /** @description One op per message that was queued */
+            ops: components["schemas"]["OutboxItem"][];
+            /** @description Messages that could not take the action, each with the reason */
+            skipped: components["schemas"]["OutboxSkipped"][];
+        };
+        OutboxSkipped: {
+            messageId: string;
+            /** @description not_found, not_synced, same_folder, no_archive_folder, no_trash_folder, no_junk_folder, no_inbox_folder, bad_destination or unknown_tag */
+            code: string;
+            message: string;
         };
         /** @description One outbox op, naming a postcondition rather than a command */
         OutboxItem: {
@@ -3234,6 +3276,48 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             /** @description The action cannot be queued: `no_archive_folder` / `no_trash_folder` / `no_junk_folder` when the account has no folder for the role, `outbox_full` when the queue cap is reached, or `not_trash` when an expunge names a folder that is not the trash, or `not_synced` when the message was named by the row a finished move hid (an Undo) and sync has not yet mirrored it in its new folder. `messageId` of a hidden-by-move row is followed to the copy in the folder that move delivered it to. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    enqueueOutboxBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutboxBatch"];
+            };
+        };
+        responses: {
+            /** @description The ops are queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboxBatchResult"];
+                };
+            };
+            /** @description Not valid, or more than 200 messages (`batch_too_large`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The queue cannot hold the whole batch (`outbox_full`); nothing was queued */
             409: {
                 headers: {
                     [name: string]: unknown;

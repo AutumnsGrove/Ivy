@@ -1372,6 +1372,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OutboxList"
+  /outbox/batch:
+    post:
+      operationId: enqueueOutboxBatch
+      summary: Apply one reader action to several messages at once
+      description: >
+        The same write path as POST /outbox, one op per message, committed in a
+        single transaction: when the queue has no room for all of them none is
+        queued (`outbox_full`), so a selection never half-enqueues. A message
+        that cannot take the action (gone, already in that folder, no folder for
+        the role) is returned in `skipped` with its reason, and the rest are
+        queued. At most 200 messages; more is `batch_too_large`. `expunge` is not
+        a batch action. The UI confirms a move or delete, once, with the count.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OutboxBatch"
+      responses:
+        "202":
+          description: The ops are queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutboxBatchResult"
+        "400":
+          description: Not valid, or more than 200 messages (`batch_too_large`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The queue cannot hold the whole batch (`outbox_full`); nothing was queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /outbox/{id}:
     delete:
       operationId: dismissOutbox
@@ -2388,6 +2425,54 @@ components:
           description: >
             The tag for `tag` and `untag`. Tagging is the `$ivy-<slug>` keyword written
             to the server; `untag` clears it from every live copy of the message.
+    OutboxBatch:
+      type: object
+      required: [messageIds, action]
+      properties:
+        messageIds:
+          type: array
+          maxItems: 200
+          description: The mirror rows to act on, in the order shown; a repeated id counts once
+          items:
+            type: string
+        action:
+          type: string
+          enum: [archive, trash, spam, not_junk, flag, unflag, seen, unseen, move, tag, untag]
+          x-enum-varnames:
+            [OutboxBatchActionArchive, OutboxBatchActionTrash, OutboxBatchActionSpam, OutboxBatchActionNotJunk,
+             OutboxBatchActionFlag, OutboxBatchActionUnflag, OutboxBatchActionSeen, OutboxBatchActionUnseen,
+             OutboxBatchActionMove, OutboxBatchActionTag, OutboxBatchActionUntag]
+        destinationFolderId:
+          type: string
+          description: The destination folder for `move`
+        tagId:
+          type: string
+          description: The tag for `tag` and `untag`
+    OutboxBatchResult:
+      type: object
+      required: [ops, skipped]
+      properties:
+        ops:
+          type: array
+          description: One op per message that was queued
+          items:
+            $ref: "#/components/schemas/OutboxItem"
+        skipped:
+          type: array
+          description: Messages that could not take the action, each with the reason
+          items:
+            $ref: "#/components/schemas/OutboxSkipped"
+    OutboxSkipped:
+      type: object
+      required: [messageId, code, message]
+      properties:
+        messageId:
+          type: string
+        code:
+          type: string
+          description: not_found, not_synced, same_folder, no_archive_folder, no_trash_folder, no_junk_folder, no_inbox_folder, bad_destination or unknown_tag
+        message:
+          type: string
     OutboxItem:
       type: object
       description: One outbox op, naming a postcondition rather than a command

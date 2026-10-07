@@ -192,6 +192,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("DELETE /api/v1/rules/{id}", s.handleDeleteRule)
 	api.HandleFunc("POST /api/v1/rules/{id}/apply", s.handleApplyRule)
 	api.HandleFunc("POST /api/v1/outbox", s.handleEnqueueOutbox)
+	api.HandleFunc("POST /api/v1/outbox/batch", s.handleEnqueueOutboxBatch)
 	api.HandleFunc("POST /api/v1/send", s.handleSendMessage)
 	api.HandleFunc("GET /api/v1/send", s.handleListSends)
 	api.HandleFunc("GET /api/v1/send/{id}", s.handleGetSend)

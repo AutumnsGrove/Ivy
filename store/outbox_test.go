@@ -424,3 +424,49 @@ func TestEnqueueOutboxRequiresATimestamp(t *testing.T) {
 		t.Fatal("enqueue without a timestamp succeeded, want an error")
 	}
 }
+
+// Issue #11: a batch is one decision. Either every op is queued, or the queue
+// was too full and nothing is, so a half-enqueued selection cannot happen.
+func TestEnqueueOutboxBatchIsAllOrNothing(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	batch := func(prefix string, n int) []OutboxOp {
+		ops := make([]OutboxOp, n)
+		for i := range ops {
+			ops[i] = flagOp(prefix+itoa(i), prefix+"key-"+itoa(i), "folder-inbox")
+		}
+		return ops
+	}
+
+	stored, err := dbs.EnqueueOutboxBatch(ctx, batch("a-", 3))
+	if err != nil || len(stored) != 3 {
+		t.Fatalf("a batch with room = %d ops, %v; want 3", len(stored), err)
+	}
+	for i, op := range stored {
+		if op.ID != "a-"+itoa(i) {
+			t.Errorf("stored[%d] = %q, want the ops back in order", i, op.ID)
+		}
+	}
+
+	// Repeating the same batch is the same actions, not a second copy.
+	again, err := dbs.EnqueueOutboxBatch(ctx, batch("a-", 3))
+	if err != nil || len(again) != 3 || countOutbox(t, dbs) != 3 {
+		t.Fatalf("a repeated batch = %d ops, %d rows, %v; want 3 and 3", len(again), countOutbox(t, dbs), err)
+	}
+
+	// Fill the queue to one below the cap; a batch of two no longer fits.
+	for i := countOutbox(t, dbs); i < MaxQueuedOps-1; i++ {
+		if _, _, err := dbs.EnqueueOutbox(ctx, flagOp("fill-"+itoa(i), "fill-key-"+itoa(i), "folder-inbox")); err != nil {
+			t.Fatalf("fill %d: %v", i, err)
+		}
+	}
+	before := countOutbox(t, dbs)
+	if _, err := dbs.EnqueueOutboxBatch(ctx, batch("b-", 2)); !errors.Is(err, ErrOutboxFull) {
+		t.Fatalf("a batch past the cap = %v, want ErrOutboxFull", err)
+	}
+	if after := countOutbox(t, dbs); after != before {
+		t.Errorf("queue grew from %d to %d on a refused batch; nothing may be queued", before, after)
+	}
+}

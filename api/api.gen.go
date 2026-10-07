@@ -274,6 +274,51 @@ func (e OutboxActionAction) Valid() bool {
 	}
 }
 
+// Defines values for OutboxBatchAction.
+const (
+	OutboxBatchActionArchive OutboxBatchAction = "archive"
+	OutboxBatchActionFlag    OutboxBatchAction = "flag"
+	OutboxBatchActionMove    OutboxBatchAction = "move"
+	OutboxBatchActionNotJunk OutboxBatchAction = "not_junk"
+	OutboxBatchActionSeen    OutboxBatchAction = "seen"
+	OutboxBatchActionSpam    OutboxBatchAction = "spam"
+	OutboxBatchActionTag     OutboxBatchAction = "tag"
+	OutboxBatchActionTrash   OutboxBatchAction = "trash"
+	OutboxBatchActionUnflag  OutboxBatchAction = "unflag"
+	OutboxBatchActionUnseen  OutboxBatchAction = "unseen"
+	OutboxBatchActionUntag   OutboxBatchAction = "untag"
+)
+
+// Valid indicates whether the value is a known member of the OutboxBatchAction enum.
+func (e OutboxBatchAction) Valid() bool {
+	switch e {
+	case OutboxBatchActionArchive:
+		return true
+	case OutboxBatchActionFlag:
+		return true
+	case OutboxBatchActionMove:
+		return true
+	case OutboxBatchActionNotJunk:
+		return true
+	case OutboxBatchActionSeen:
+		return true
+	case OutboxBatchActionSpam:
+		return true
+	case OutboxBatchActionTag:
+		return true
+	case OutboxBatchActionTrash:
+		return true
+	case OutboxBatchActionUnflag:
+		return true
+	case OutboxBatchActionUnseen:
+		return true
+	case OutboxBatchActionUntag:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OutboxItemKind.
 const (
 	OutboxKindExpunge OutboxItemKind = "expunge"
@@ -1072,6 +1117,32 @@ type OutboxAction struct {
 // OutboxActionAction defines model for OutboxAction.Action.
 type OutboxActionAction string
 
+// OutboxBatch defines model for OutboxBatch.
+type OutboxBatch struct {
+	Action OutboxBatchAction `json:"action"`
+
+	// DestinationFolderId The destination folder for `move`
+	DestinationFolderId *string `json:"destinationFolderId,omitempty"`
+
+	// MessageIds The mirror rows to act on, in the order shown; a repeated id counts once
+	MessageIds []string `json:"messageIds"`
+
+	// TagId The tag for `tag` and `untag`
+	TagId *string `json:"tagId,omitempty"`
+}
+
+// OutboxBatchAction defines model for OutboxBatch.Action.
+type OutboxBatchAction string
+
+// OutboxBatchResult defines model for OutboxBatchResult.
+type OutboxBatchResult struct {
+	// Ops One op per message that was queued
+	Ops []OutboxItem `json:"ops"`
+
+	// Skipped Messages that could not take the action, each with the reason
+	Skipped []OutboxSkipped `json:"skipped"`
+}
+
 // OutboxItem One outbox op, naming a postcondition rather than a command
 type OutboxItem struct {
 	AccountId           string         `json:"accountId"`
@@ -1104,6 +1175,14 @@ type OutboxItemState string
 type OutboxList struct {
 	Active []OutboxItem `json:"active"`
 	Recent []OutboxItem `json:"recent"`
+}
+
+// OutboxSkipped defines model for OutboxSkipped.
+type OutboxSkipped struct {
+	// Code not_found, not_synced, same_folder, no_archive_folder, no_trash_folder, no_junk_folder, no_inbox_folder, bad_destination or unknown_tag
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	MessageId string `json:"messageId"`
 }
 
 // PeoplePage defines model for PeoplePage.
@@ -1547,6 +1626,9 @@ type SnoozeMessageJSONRequestBody = SnoozeRequest
 
 // EnqueueOutboxJSONRequestBody defines body for EnqueueOutbox for application/json ContentType.
 type EnqueueOutboxJSONRequestBody = OutboxAction
+
+// EnqueueOutboxBatchJSONRequestBody defines body for EnqueueOutboxBatch for application/json ContentType.
+type EnqueueOutboxBatchJSONRequestBody = OutboxBatch
 
 // LinkPersonAddressJSONRequestBody defines body for LinkPersonAddress for application/json ContentType.
 type LinkPersonAddressJSONRequestBody = PersonAddress
