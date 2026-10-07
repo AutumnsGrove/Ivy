@@ -266,6 +266,162 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /accounts/{id}/uploads:
+    post:
+      operationId: uploadAttachment
+      summary: Stage an outgoing attachment
+      description: >
+        The raw request body is streamed to disk and never read whole into
+        memory. The declared type is checked against the dangerous-type deny list
+        and the bytes are sniffed; a file over 25 MiB is 413 `too_large`. `name`
+        is the original file name, percent-encoded in the query.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "201":
+          description: The staged upload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Upload"
+        "400":
+          description: >
+            `bad_request` (missing name), `bad_type` (a dangerous attachment
+            type) or `invalid_message` (a header-hostile name).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          description: The file is over the 25 MiB cap (`too_large`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /accounts/{id}/uploads/{uploadId}:
+    get:
+      operationId: getUpload
+      summary: Stream a staged attachment's bytes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The staged bytes
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteUpload
+      summary: Free a staged attachment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Freed
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /accounts/{id}/uploads/from-mail:
+    post:
+      operationId: uploadFromMail
+      summary: Attach a mirrored attachment with no browser upload
+      description: >
+        Streams the part from the account's mirror into staging server-side, so
+        nothing is uploaded from the browser.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadFromMailInput"
+      responses:
+        "201":
+          description: The staged copy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Upload"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The part is no longer available (`message_gone`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /accounts/{id}/mail-attachments:
+    get:
+      operationId: listMailAttachments
+      summary: Recent attachments already in the mirror
+      description: The "From your mail" list; newest first, bounded.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The attachments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MailAttachmentList"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /inbox:
     get:
       operationId: listInbox
@@ -2295,6 +2451,92 @@ components:
             The Message-ID of the draft version this send came from, so the send
             worker removes exactly that server copy after the 250. Empty when
             the message was never autosaved.
+        attachments:
+          type: array
+          description: Staged files and inline images, by upload id.
+          items:
+            $ref: "#/components/schemas/ComposeAttachment"
+    ComposeAttachment:
+      type: object
+      description: >
+        One staged attachment on a send or draft save. The server resolves the id
+        to staged bytes and uses the stored name and content type; a request
+        never supplies a filename.
+      required: [id]
+      properties:
+        id:
+          type: string
+          description: A staged upload id from POST /accounts/{id}/uploads.
+        inline:
+          type: boolean
+          description: "Place the image in the body as a cid: part."
+    Upload:
+      type: object
+      description: One staged outgoing attachment.
+      required: [id, name, mime, size]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        mime:
+          type: string
+        size:
+          type: integer
+          format: int64
+    MailAttachment:
+      type: object
+      description: An attachment already in the mirror, offered for "From your mail".
+      required: [messageId, path, name, mime, size]
+      properties:
+        messageId:
+          type: string
+        path:
+          type: string
+          description: The part path, as GET /messages/{id}/attachments uses.
+        name:
+          type: string
+        mime:
+          type: string
+        size:
+          type: integer
+          format: int64
+        inline:
+          type: boolean
+    MailAttachmentList:
+      type: object
+      required: [attachments]
+      properties:
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/MailAttachment"
+    UploadFromMailInput:
+      type: object
+      description: Copy a mirrored attachment into staging with no browser upload.
+      required: [messageId, path]
+      properties:
+        messageId:
+          type: string
+        path:
+          type: string
+    AttachmentInfo:
+      type: object
+      description: An attachment on a stored draft, as the screen shows it.
+      required: [name, size, inline]
+      properties:
+        id:
+          type: string
+          description: >
+            A freshly staged id when the server re-materialised the bytes on
+            resume; empty when the attachment is not re-editable.
+        name:
+          type: string
+        size:
+          type: integer
+          format: int64
+        inline:
+          type: boolean
     SendStatus:
       type: object
       description: One outgoing message and where it is in the queue
@@ -2407,6 +2649,10 @@ components:
           type: array
           items:
             type: string
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComposeAttachment"
     DraftSummary:
       type: object
       description: One draft as the list shows it
@@ -2434,6 +2680,10 @@ components:
           format: date-time
         source:
           $ref: "#/components/schemas/DraftSource"
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttachmentInfo"
     DraftResume:
       type: object
       description: The compose fields needed to resume a draft
@@ -2483,6 +2733,10 @@ components:
           type: array
           items:
             type: string
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttachmentInfo"
     DraftList:
       type: object
       required: [drafts]

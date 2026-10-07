@@ -141,3 +141,66 @@ func TestAttachmentsSurviveADisabledMessage(t *testing.T) {
 		t.Errorf("attachments = %+v, want the row kept", got)
 	}
 }
+
+// The "From your mail" list is newest first, hides disabled mail, filters by
+// name and is bounded.
+func TestListRecentMailAttachments(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedInbox(t, dbs, "acct-1", "inbox-1")
+	seedInbox(t, dbs, "acct-2", "inbox-2")
+	seedMessage(t, dbs, "acct-1", "inbox-1", "old", time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC), false)
+	seedMessage(t, dbs, "acct-1", "inbox-1", "new", time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC), false)
+	seedDisabledMessage(t, dbs, "acct-1", "inbox-1", "gone", DisabledRemoved, 7, "")
+	seedMessage(t, dbs, "acct-2", "inbox-2", "other", time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC), false)
+
+	if err := dbs.ReplaceMessageAttachments(ctx, "old", []Attachment{attachment("2", "old.pdf", "", "h1", 10)}); err != nil {
+		t.Fatalf("old: %v", err)
+	}
+	if err := dbs.ReplaceMessageAttachments(ctx, "new", []Attachment{
+		attachment("2", "new.pdf", "", "h2", 20),
+		attachment("3", "logo.png", "logo@x", "h3", 5),
+	}); err != nil {
+		t.Fatalf("new: %v", err)
+	}
+	if err := dbs.ReplaceMessageAttachments(ctx, "gone", []Attachment{attachment("2", "hidden.pdf", "", "h4", 1)}); err != nil {
+		t.Fatalf("gone: %v", err)
+	}
+	if err := dbs.ReplaceMessageAttachments(ctx, "other", []Attachment{attachment("2", "other.pdf", "", "h5", 1)}); err != nil {
+		t.Fatalf("other: %v", err)
+	}
+
+	got, err := dbs.ListRecentMailAttachments(ctx, "acct-1", "", 10)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d attachments, want 3: %+v", len(got), got)
+	}
+	if got[0].Name != "new.pdf" || got[1].Name != "logo.png" || got[2].Name != "old.pdf" {
+		t.Errorf("order = %s, %s, %s; want newest message first", got[0].Name, got[1].Name, got[2].Name)
+	}
+	if got[1].Inline != true {
+		t.Errorf("inline = %v, want the cid part marked inline", got[1].Inline)
+	}
+	if got[0].MessageID != "new" || got[0].Path != "2" || got[0].Size != 20 {
+		t.Errorf("row = %+v, want the new message's part", got[0])
+	}
+
+	filtered, err := dbs.ListRecentMailAttachments(ctx, "acct-1", "old", 10)
+	if err != nil {
+		t.Fatalf("filtered: %v", err)
+	}
+	if len(filtered) != 1 || filtered[0].Name != "old.pdf" {
+		t.Errorf("filtered = %+v, want only old.pdf", filtered)
+	}
+
+	limited, err := dbs.ListRecentMailAttachments(ctx, "acct-1", "", 1)
+	if err != nil {
+		t.Fatalf("limited: %v", err)
+	}
+	if len(limited) != 1 {
+		t.Errorf("limited = %d rows, want 1", len(limited))
+	}
+}

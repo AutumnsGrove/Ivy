@@ -181,3 +181,51 @@ func (d *DBs) ContentRefsForAttachment(ctx context.Context, accountID, hash stri
 	}
 	return out, nil
 }
+
+// MailAttachment is one attachment already in the mirror, offered for "From
+// your mail". Path is the part path the reader's attachment endpoints use.
+type MailAttachment struct {
+	MessageID string
+	Path      string
+	Name      string
+	MIMEType  string
+	Size      int64
+	Inline    bool
+}
+
+// ListRecentMailAttachments returns an account's visible attachments, newest
+// message first, optionally filtered by a name substring. limit is a hard
+// bound; disabled mail is never offered.
+func (d *DBs) ListRecentMailAttachments(ctx context.Context, accountID, query string, limit int) ([]MailAttachment, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	rows, err := d.Mirror.Read.QueryContext(ctx, `
+		SELECT a.message_id, COALESCE(a.storage_path, ''), COALESCE(a.filename, ''),
+		       COALESCE(a.mime, ''), a.size, COALESCE(a.cid, '')
+		FROM attachments a
+		JOIN messages m ON m.id = a.message_id
+		WHERE m.account_id = ? AND m.disabled_at IS NULL AND a.storage_path IS NOT NULL
+		  AND (? = '' OR a.filename LIKE ?)
+		ORDER BY COALESCE(m.date, '') DESC, a.rowid
+		LIMIT ?`, accountID, query, "%"+query+"%", limit)
+	if err != nil {
+		return nil, fmt.Errorf("recent mail attachments: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []MailAttachment
+	for rows.Next() {
+		var a MailAttachment
+		var cid string
+		if err := rows.Scan(&a.MessageID, &a.Path, &a.Name, &a.MIMEType, &a.Size, &cid); err != nil {
+			return nil, fmt.Errorf("recent mail attachments: %w", err)
+		}
+		a.Inline = cid != ""
+		out = append(out, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("recent mail attachments: %w", err)
+	}
+	return out, nil
+}

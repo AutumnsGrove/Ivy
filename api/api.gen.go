@@ -612,6 +612,15 @@ type AttachmentKind string
 // AttachmentTone defines model for Attachment.Tone.
 type AttachmentTone string
 
+// AttachmentInfo An attachment on a stored draft, as the screen shows it.
+type AttachmentInfo struct {
+	// Id A freshly staged id when the server re-materialised the bytes on resume; empty when the attachment is not re-editable.
+	Id     *string `json:"id,omitempty"`
+	Inline bool    `json:"inline"`
+	Name   string  `json:"name"`
+	Size   int64   `json:"size"`
+}
+
 // Check defines model for Check.
 type Check struct {
 	BuiltIn     bool   `json:"builtIn"`
@@ -636,6 +645,15 @@ type CheckDetail struct {
 
 // CheckDetailSureness defines model for CheckDetail.Sureness.
 type CheckDetailSureness string
+
+// ComposeAttachment One staged attachment on a send or draft save. The server resolves the id to staged bytes and uses the stored name and content type; a request never supplies a filename.
+type ComposeAttachment struct {
+	// Id A staged upload id from POST /accounts/{id}/uploads.
+	Id string `json:"id"`
+
+	// Inline Place the image in the body as a cid: part.
+	Inline *bool `json:"inline,omitempty"`
+}
 
 // ComposePrefill A ready-to-edit compose state computed from an incoming message: the recipients, subject, body and threading headers, plus the identity to send as. The compose screen may change any of it before sending.
 type ComposePrefill struct {
@@ -698,7 +716,8 @@ type DraftList struct {
 
 // DraftRequest defines model for DraftRequest.
 type DraftRequest struct {
-	AccountId string `json:"accountId"`
+	AccountId   string               `json:"accountId"`
+	Attachments *[]ComposeAttachment `json:"attachments,omitempty"`
 
 	// BaseVersion The version the caller last saw; 0 for a new draft. A stale value is `draft_conflict`.
 	BaseVersion *int      `json:"baseVersion,omitempty"`
@@ -727,18 +746,19 @@ type DraftRequest struct {
 
 // DraftResume The compose fields needed to resume a draft
 type DraftResume struct {
-	AccountId  string    `json:"accountId"`
-	Bcc        *[]string `json:"bcc,omitempty"`
-	Cc         *[]string `json:"cc,omitempty"`
-	DraftId    *string   `json:"draftId,omitempty"`
-	From       *string   `json:"from,omitempty"`
-	FromName   *string   `json:"fromName,omitempty"`
-	Id         string    `json:"id"`
-	InReplyTo  *string   `json:"inReplyTo,omitempty"`
-	Markdown   *bool     `json:"markdown,omitempty"`
-	MessageId  *string   `json:"messageId,omitempty"`
-	References *[]string `json:"references,omitempty"`
-	ReplyTo    *[]string `json:"replyTo,omitempty"`
+	AccountId   string            `json:"accountId"`
+	Attachments *[]AttachmentInfo `json:"attachments,omitempty"`
+	Bcc         *[]string         `json:"bcc,omitempty"`
+	Cc          *[]string         `json:"cc,omitempty"`
+	DraftId     *string           `json:"draftId,omitempty"`
+	From        *string           `json:"from,omitempty"`
+	FromName    *string           `json:"fromName,omitempty"`
+	Id          string            `json:"id"`
+	InReplyTo   *string           `json:"inReplyTo,omitempty"`
+	Markdown    *bool             `json:"markdown,omitempty"`
+	MessageId   *string           `json:"messageId,omitempty"`
+	References  *[]string         `json:"references,omitempty"`
+	ReplyTo     *[]string         `json:"replyTo,omitempty"`
 
 	// Source Whether a draft is Ivy's own local version or a mirrored server copy.
 	Source  DraftSource `json:"source"`
@@ -753,8 +773,9 @@ type DraftSource string
 
 // DraftSummary One draft as the list shows it
 type DraftSummary struct {
-	AccountId string  `json:"accountId"`
-	DraftId   *string `json:"draftId,omitempty"`
+	AccountId   string            `json:"accountId"`
+	Attachments *[]AttachmentInfo `json:"attachments,omitempty"`
+	DraftId     *string           `json:"draftId,omitempty"`
 
 	// Id The local draft id, or the mirror message id for a server-only draft.
 	Id        string  `json:"id"`
@@ -869,6 +890,23 @@ type Liveness struct {
 
 // LivenessStatus defines model for Liveness.Status.
 type LivenessStatus string
+
+// MailAttachment An attachment already in the mirror, offered for "From your mail".
+type MailAttachment struct {
+	Inline    *bool  `json:"inline,omitempty"`
+	MessageId string `json:"messageId"`
+	Mime      string `json:"mime"`
+	Name      string `json:"name"`
+
+	// Path The part path, as GET /messages/{id}/attachments uses.
+	Path string `json:"path"`
+	Size int64  `json:"size"`
+}
+
+// MailAttachmentList defines model for MailAttachmentList.
+type MailAttachmentList struct {
+	Attachments []MailAttachment `json:"attachments"`
+}
 
 // MailMessage defines model for MailMessage.
 type MailMessage struct {
@@ -1131,9 +1169,12 @@ type SendList struct {
 
 // SendRequest defines model for SendRequest.
 type SendRequest struct {
-	AccountId string    `json:"accountId"`
-	Bcc       *[]string `json:"bcc,omitempty"`
-	Cc        *[]string `json:"cc,omitempty"`
+	AccountId string `json:"accountId"`
+
+	// Attachments Staged files and inline images, by upload id.
+	Attachments *[]ComposeAttachment `json:"attachments,omitempty"`
+	Bcc         *[]string            `json:"bcc,omitempty"`
+	Cc          *[]string            `json:"cc,omitempty"`
 
 	// DraftMessageId The Message-ID of the draft version this send came from, so the send worker removes exactly that server copy after the 250. Empty when the message was never autosaved.
 	DraftMessageId *string `json:"draftMessageId,omitempty"`
@@ -1247,6 +1288,20 @@ type UpdateWatcherResult struct {
 // UpdateWatcherResultStatus defines model for UpdateWatcherResult.Status.
 type UpdateWatcherResultStatus string
 
+// Upload One staged outgoing attachment.
+type Upload struct {
+	Id   string `json:"id"`
+	Mime string `json:"mime"`
+	Name string `json:"name"`
+	Size int64  `json:"size"`
+}
+
+// UploadFromMailInput Copy a mirrored attachment into staging with no browser upload.
+type UploadFromMailInput struct {
+	MessageId string `json:"messageId"`
+	Path      string `json:"path"`
+}
+
 // UserTag defines model for UserTag.
 type UserTag struct {
 	Color TagColor `json:"color"`
@@ -1280,6 +1335,17 @@ type SendID = string
 
 // NotFound defines model for NotFound.
 type NotFound = Error
+
+// ListMailAttachmentsParams defines parameters for ListMailAttachments.
+type ListMailAttachmentsParams struct {
+	Q     *string `form:"q,omitempty" json:"q,omitempty"`
+	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// UploadAttachmentParams defines parameters for UploadAttachment.
+type UploadAttachmentParams struct {
+	Name string `form:"name" json:"name"`
+}
 
 // ListDraftsParams defines parameters for ListDrafts.
 type ListDraftsParams struct {
@@ -1361,6 +1427,9 @@ type SaveIdentityJSONRequestBody = IdentityInput
 
 // UpdateAccountPasswordJSONRequestBody defines body for UpdateAccountPassword for application/json ContentType.
 type UpdateAccountPasswordJSONRequestBody = UpdatePassword
+
+// UploadFromMailJSONRequestBody defines body for UploadFromMail for application/json ContentType.
+type UploadFromMailJSONRequestBody = UploadFromMailInput
 
 // AskJSONRequestBody defines body for Ask for application/json ContentType.
 type AskJSONRequestBody = AskRequest

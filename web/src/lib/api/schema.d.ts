@@ -140,6 +140,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/{id}/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stage an outgoing attachment
+         * @description The raw request body is streamed to disk and never read whole into memory. The declared type is checked against the dangerous-type deny list and the bytes are sniffed; a file over 25 MiB is 413 `too_large`. `name` is the original file name, percent-encoded in the query.
+         */
+        post: operations["uploadAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{id}/uploads/{uploadId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream a staged attachment's bytes */
+        get: operations["getUpload"];
+        put?: never;
+        post?: never;
+        /** Free a staged attachment */
+        delete: operations["deleteUpload"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{id}/uploads/from-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attach a mirrored attachment with no browser upload
+         * @description Streams the part from the account's mirror into staging server-side, so nothing is uploaded from the browser.
+         */
+        post: operations["uploadFromMail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{id}/mail-attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent attachments already in the mirror
+         * @description The "From your mail" list; newest first, bounded.
+         */
+        get: operations["listMailAttachments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/inbox": {
         parameters: {
             query?: never;
@@ -1281,6 +1359,51 @@ export interface components {
             references?: string[];
             /** @description The Message-ID of the draft version this send came from, so the send worker removes exactly that server copy after the 250. Empty when the message was never autosaved. */
             draftMessageId?: string;
+            /** @description Staged files and inline images, by upload id. */
+            attachments?: components["schemas"]["ComposeAttachment"][];
+        };
+        /** @description One staged attachment on a send or draft save. The server resolves the id to staged bytes and uses the stored name and content type; a request never supplies a filename. */
+        ComposeAttachment: {
+            /** @description A staged upload id from POST /accounts/{id}/uploads. */
+            id: string;
+            /** @description Place the image in the body as a cid: part. */
+            inline?: boolean;
+        };
+        /** @description One staged outgoing attachment. */
+        Upload: {
+            id: string;
+            name: string;
+            mime: string;
+            /** Format: int64 */
+            size: number;
+        };
+        /** @description An attachment already in the mirror, offered for "From your mail". */
+        MailAttachment: {
+            messageId: string;
+            /** @description The part path, as GET /messages/{id}/attachments uses. */
+            path: string;
+            name: string;
+            mime: string;
+            /** Format: int64 */
+            size: number;
+            inline?: boolean;
+        };
+        MailAttachmentList: {
+            attachments: components["schemas"]["MailAttachment"][];
+        };
+        /** @description Copy a mirrored attachment into staging with no browser upload. */
+        UploadFromMailInput: {
+            messageId: string;
+            path: string;
+        };
+        /** @description An attachment on a stored draft, as the screen shows it. */
+        AttachmentInfo: {
+            /** @description A freshly staged id when the server re-materialised the bytes on resume; empty when the attachment is not re-editable. */
+            id?: string;
+            name: string;
+            /** Format: int64 */
+            size: number;
+            inline: boolean;
         };
         /** @description One outgoing message and where it is in the queue */
         SendStatus: {
@@ -1336,6 +1459,7 @@ export interface components {
             markdown?: boolean;
             inReplyTo?: string;
             references?: string[];
+            attachments?: components["schemas"]["ComposeAttachment"][];
         };
         /** @description One draft as the list shows it */
         DraftSummary: {
@@ -1350,6 +1474,7 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             source: components["schemas"]["DraftSource"];
+            attachments?: components["schemas"]["AttachmentInfo"][];
         };
         /** @description The compose fields needed to resume a draft */
         DraftResume: {
@@ -1370,6 +1495,7 @@ export interface components {
             markdown?: boolean;
             inReplyTo?: string;
             references?: string[];
+            attachments?: components["schemas"]["AttachmentInfo"][];
         };
         DraftList: {
             drafts: components["schemas"]["DraftSummary"][];
@@ -1721,6 +1847,161 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    uploadAttachment: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description The staged upload */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Upload"];
+                };
+            };
+            /** @description `bad_request` (missing name), `bad_type` (a dangerous attachment type) or `invalid_message` (a header-hostile name). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description The file is over the 25 MiB cap (`too_large`) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                uploadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The staged bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                uploadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Freed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    uploadFromMail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadFromMailInput"];
+            };
+        };
+        responses: {
+            /** @description The staged copy */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Upload"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description The part is no longer available (`message_gone`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listMailAttachments: {
+        parameters: {
+            query?: {
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The attachments */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailAttachmentList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     listInbox: {
