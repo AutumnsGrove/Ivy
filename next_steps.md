@@ -267,9 +267,15 @@ proved against stubs.
    are already committed.
 2. **Chunk 5 (triage)**, after chunk 4. **Chunk 4 (send) is done** (4a-4h; `docs/BUILD-LOG.md`),
    so send can now replace the operator's mail client. 3g leaves the free-form rule compiler for chunk
-   5. The live-use issues #7-#15 are now unblocked (operator, 2026-10-06: wait until chunk 4 is
-   done): file new feedback, do not fix it first. The one to raise anyway if chunk 4 touches the
-   outbox is #10 (a move failing with `message_gone`).
+   5. **The live-use issues #7-#15 were worked on 2026-10-07** (operator: "the core build-out is done,
+   get the extra bits in before chunk 5"). #7, #8, #9, #11, #12, #13, #14 and #15 are built and
+   closed (`docs/BUILD-LOG.md`, qa-log "Live-use issues"). **#10 stays open:** the fake mailbox cannot
+   reproduce the `message_gone` after archive-then-trash, so the failure now names the step that found
+   nothing (`lastErrorDetail` and a log line) and the UI toasts a failed op. **Operator-owned:** deploy,
+   retry archive then trash on the board, and read the detail; it says whether the folder would not
+   open, the Message-ID search found 0 messages, or the mirror held no Message-ID. Also still to look
+   at on the phone: the paper-sheet look of rich mail (#9) and bulk move to a chosen folder (#11 shipped
+   archive, delete, spam, flag, read and tag; "move to folder" has no picker yet).
 
 **Deliberately deferred from 3c** (do not re-litigate):
 

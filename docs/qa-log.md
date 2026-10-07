@@ -1728,3 +1728,17 @@ The operator cleared G1 (`docs/handoffs/2026-10-07-G1-gate-design.md`) by taking
 - **The vetting machinery moves into 5c as 5c.0.** The tripwire, the sensitive check, the withheld fact and
   the real `Vetting` are built first inside 5c so stage 2 can run for real; until then the gate refuses every
   vetted-mail feature by default (fail closed). The rest of 5d is unchanged.
+
+## Live-use issues #7-#15 (2026-10-07, agent; operator decisions)
+
+The operator lifted the "wait until chunk 4" hold: the core build-out is done, so the extra bits go in
+before chunk 5. Decisions asked and answered:
+
+- **#13 People lives under Search.** It is the third segment of the Search / Ask Ivy switch; the Search tab
+  stays lit on `/people` routes and the row in Tags is gone.
+- **#11 bulk select uses a Select button** (not long-press). **"Select all" means the loaded page**, since
+  lists are paged; the bar says "loaded messages only" when more pages exist. A batch is capped at 200.
+- Decided by the agent, not asked (revisit if wrong): opening a message marks it read after a 1.5 s dwell
+  (#7); rich HTML mail sits on a light paper sheet and plain text takes the theme's colours (#9); the account
+  icon is a Lucide name from a closed list of twelve and the ten old emoji were migrated (#14); an unknown
+  auth verdict reads "your mail provider did not check", never an all-clear (#15).

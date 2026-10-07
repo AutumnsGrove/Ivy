@@ -960,3 +960,19 @@ code (round 66; `docs/handoffs/2026-10-06-4h-richtext-design.md`, `docs/qa-log.m
   `next_steps.md` as a backlog item rather than left silent.
 - **Left for the operator.** The live send-as and send/drafts/attachment checks (they cover rich
   bodies too) and the `sudo ./install.sh` first install; both are already their own pending lines.
+
+## Live-use issues #7-#15 (2026-10-07)
+
+What each delivered, all tests first:
+
+- **#7** `markReadOnOpen` (1.5 s dwell, cancelled on close, already-read left alone); the list overlays a live `seen` op.
+- **#8** `smart` is read from `state.db` / `ivy.yaml`, not the mirror row sync creates without it.
+- **#9** the body document is themed by a validated `?theme=` value (plain text) or drawn on a paper sheet (HTML); Flag moved into More with a quiet marker.
+- **#10 (open)** a failed move names the step that found nothing; a failed queued op is toasted once per kind.
+- **#11** `POST /outbox/batch` (one transaction, 200 max, `skipped` with reasons), `Selection`, `bulkActions`, the bulk bar on both layouts, one confirmation with the count, one Undo.
+- **#12** People labels fixed-width with ellipsis; `store.CleanName` strips header quotes at ingest and read time.
+- **#13** People under the Search switch.
+- **#14** Lucide icon names, closed list, migration 18, Go/TS list drift test.
+- **#15** the sender sheet: real address, copy, Cc/To, auth line, People link via the same merge rules, spoofed-name warning.
+
+Playwright runs two workers locally (the default starved the laptop).
