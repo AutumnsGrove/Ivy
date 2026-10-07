@@ -127,7 +127,7 @@
 	const auto = createAutosaver({
 		save: (state) =>
 			api.saveDraft({
-				id: newId(),
+				id: state.saveId,
 				draftId: state.draftId,
 				baseVersion: state.version,
 				accountId: snap.accountId,

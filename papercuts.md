@@ -1676,3 +1676,9 @@ real browser or the potato.
 - **N51 resolved** (operator chose "pass the Blob") · `web/src/lib/api/client.ts` · `uploadAttachment` now hands `fetch` the
   `Blob` itself. Reproduced with the `uploadAttachment` test in `send.test.ts` (the body was an `ArrayBuffer`;
   failed before). The memory saving on a real iPhone is unmeasured and remains the operator's live check.
+- **N50 resolved** (operator chose "reuse the save id while unchanged") · `web/src/lib/compose/autosave.ts`,
+  `web/src/routes/compose/+page.svelte` · the autosaver now supplies each attempt's `saveId` and keeps it for a
+  retry of unchanged content, so the server's idempotent path (`TestSaveDraftIsIdempotentOnTheClientID`) returns
+  the stored version instead of a conflict with the operator's own save; an edit mints a new id. Reproduced with
+  "reuses the save id for a retry of unchanged content" (`saveId` did not exist; failed before). The 409 body is
+  unchanged, so a genuine second-tab conflict still shows its toast.

@@ -11,7 +11,12 @@ import type { DraftSummary } from '#lib/types.js';
  * draft id is minted before the first save, so a save whose reply is lost and is retried
  * still names the same draft instead of forking a second one.
  */
-export type AutosaveState = { draftId: string; version: number };
+export type AutosaveState = {
+	draftId: string;
+	version: number;
+	/** The version row's idempotency id; a retry of unchanged content reuses it. */
+	saveId: string;
+};
 
 export type Autosaver = {
 	/** An edit happened; schedule a save after the quiet delay. */
@@ -41,6 +46,10 @@ export function createAutosaver(opts: {
 	let savedRevision = 0;
 	let timer: ReturnType<typeof setTimeout> | null = null;
 	let running: Promise<void> | null = null;
+	// The id of the last attempt that did not succeed. A lost reply may have been committed,
+	// so retrying the same content under the same id gets the stored version back instead of
+	// a conflict with our own save; any edit makes it a different save and a new id.
+	let attempt: { rev: number; id: string } | null = null;
 	let disposed = false;
 
 	const dirty = () => revision !== savedRevision;
@@ -69,9 +78,12 @@ export function createAutosaver(opts: {
 		const rev = revision;
 		let failed = false;
 		draftId ??= newId();
+		if (attempt?.rev !== rev) attempt = { rev, id: newId() };
+		const saveId = attempt.id;
 		running = (async () => {
 			try {
-				const saved = await opts.save({ draftId, version });
+				const saved = await opts.save({ draftId, version, saveId });
+				attempt = null;
 				draftId = saved.draftId ?? draftId;
 				version = saved.version;
 				if (revision === rev) savedRevision = revision;

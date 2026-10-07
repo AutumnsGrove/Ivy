@@ -26,7 +26,7 @@ describe('createAutosaver', () => {
 		expect(save).not.toHaveBeenCalled();
 		await vi.advanceTimersByTimeAsync(2000);
 		expect(save).toHaveBeenCalledTimes(1);
-		expect(save).toHaveBeenCalledWith({ draftId: expect.any(String), version: 0 });
+		expect(save).toHaveBeenCalledWith({ draftId: expect.any(String), version: 0, saveId: expect.any(String) });
 		auto.dispose();
 	});
 
@@ -56,7 +56,7 @@ describe('createAutosaver', () => {
 		await vi.advanceTimersByTimeAsync(100);
 		auto.touch();
 		await vi.advanceTimersByTimeAsync(100);
-		expect(save).toHaveBeenLastCalledWith({ draftId: 'draft-1', version: 1 });
+		expect(save).toHaveBeenLastCalledWith({ draftId: 'draft-1', version: 1, saveId: expect.any(String) });
 		auto.dispose();
 	});
 
@@ -116,7 +116,7 @@ describe('createAutosaver', () => {
 		auto.adopt({ draftId: 'draft-9', version: 3 });
 		auto.touch();
 		await vi.advanceTimersByTimeAsync(100);
-		expect(save).toHaveBeenCalledWith({ draftId: 'draft-9', version: 3 });
+		expect(save).toHaveBeenCalledWith({ draftId: 'draft-9', version: 3, saveId: expect.any(String) });
 		auto.dispose();
 	});
 
@@ -127,5 +127,34 @@ describe('createAutosaver', () => {
 		auto.dispose();
 		await vi.advanceTimersByTimeAsync(1000);
 		expect(save).not.toHaveBeenCalled();
+	});
+});
+
+describe('createAutosaver save ids', () => {
+	beforeEach(() => vi.useFakeTimers());
+	afterEach(() => vi.useRealTimers());
+
+	// A lost reply means the server may already hold the save. Retrying the same
+	// content under the same id lets the server answer with the stored version
+	// instead of a conflict against our own save.
+	it('reuses the save id for a retry of unchanged content, and mints a new one after an edit', async () => {
+		const ids: string[] = [];
+		const save = vi.fn(async (s: AutosaveState) => {
+			ids.push(s.saveId);
+			if (ids.length <= 2) throw new Error('reply lost');
+			return summary(1, s.draftId);
+		});
+		const auto = createAutosaver({ save, delayMs: 100, onError: () => {} });
+		auto.touch();
+		await vi.advanceTimersByTimeAsync(100);
+		await auto.flush();
+		expect(ids).toHaveLength(2);
+		expect(ids[1]).toBe(ids[0]);
+
+		auto.touch();
+		await auto.flush();
+		expect(ids).toHaveLength(3);
+		expect(ids[2]).not.toBe(ids[0]);
+		auto.dispose();
 	});
 });
