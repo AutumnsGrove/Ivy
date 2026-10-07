@@ -78,7 +78,29 @@ types real: contact-form submissions, security and abuse reports, and protected 
 | Tripwire on a huge message | clipped state | clipped; fail-closed: if the tripwire cannot run, the message is **withheld** from later stages |
 | Provider down | n/a | no chips; the app is as today; withheld defaults to closed |
 
-## Open questions
+## Decisions (Q&A with the operator, 2026-10-07)
+
+1. **Auth trust: only the provider's `authserv-id`.** An `Authentication-Results` line counts only
+   when its authserv-id is the account's mail provider, taking the topmost such line; anything else
+   is ignored so a forged header cannot fake a pass. The per-provider value is set when an account
+   is added.
+2. **Fail closed.** A message is withheld from stage 2, summaries, ask and vision until the tripwire
+   and the sensitive check have run on it. A cap or an outage means less triage, never more exposure.
+3. **Mail types are a per-address setting** (normal, contact form, security/abuse). Security/abuse
+   addresses make zero model calls until switched on; contact-form addresses get the Reply-To-aware
+   handling and `contact_form_quality`.
+4. **Withheld mail shows a quiet marker with a reason** ("kept private from helpers: ...") and a
+   per-message override.
+5. **Tier B ships in this order:** `junk_rescue` first (part of 5d proper), then `phishing_risk`, then
+   `contact_form_quality`. **`cold_outreach` is deferred** (groundwork for the deferred quiet
+   auto-archive).
+6. **A category also places a local "placed for you" tag** (newsletter, receipt, ...), removable, the
+   operator's choice over routing-only. Like needs-me's tag, local and never an IMAP keyword.
+7. **Not settled here by design:** the final option sets and instruction wording for each question.
+   They are drafted from `JEV.md` at build and reviewed at gate G3 with the eval, since wording moves
+   precision a lot (S4).
+
+## The questions as asked
 
 1. **Which `authserv-id` do we trust** for `Authentication-Results` (the provider's, only)? This is
    the open design decision from the first review; the phishing banner depends on it.

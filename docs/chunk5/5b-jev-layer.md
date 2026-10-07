@@ -84,7 +84,34 @@ questions in this registry.
 | Backfill | opt-in, estimate shown, cap applies | stops at the cap, resumes next period |
 | A hostile or empty message | skipped when nothing to read | no call, no row beyond a skip record |
 
-## Open questions
+## Decisions (Q&A with the operator, 2026-10-07)
+
+1. **Eligible mail: Inbox (the normal questions) and Junk (`junk_rescue` only).** Sent, Drafts,
+   Archive, Trash and other folders are not classified automatically.
+2. **New mail only.** Turning smart features on classifies only mail that arrives afterwards.
+   **Backfill is opt-in, a button in settings next to the helper decision model,** offering 30 days,
+   90 days or everything, each with the mandatory cost estimate (5a) and the cap applying.
+3. **State: chosen headers plus the body without quotes.** From, To/Cc display names, Subject, Date,
+   List-Id and the (provider-trusted, 5d) SPF/DKIM/DMARC verdicts, then plain text with quoted replies
+   and signatures stripped, clipped. Attachments appear as filenames and types only; their extracted
+   text is not sent.
+4. **Registry: built-ins as embedded YAML; your edits and your own questions in `state.db`,** with the
+   instruction hash, so a release never overwrites your tuning and a restore keeps it.
+5. **Presets: Eager 0.65, Balanced 0.80, Careful 0.90, provisional.** The operator likes these but
+   they cannot be judged without real probability spreads, so they are re-decided after the first
+   live weeks with the odds sheet; Balanced is the default until then.
+6. **Fallback backend: interface only.** `decide()` is shaped so a chat-model implementation can be
+   added; only Jev is built.
+7. **The odds sheet is always available** on every classified message.
+8. **Model id: `jev-latest` lives in the model registry** (5a); pin a versioned id once thresholds
+   are tuned (assumed from the registry decision; confirm when pinning).
+9. **Questions per call: up to 100** (operator, with the 5j limits). Two consequences for the build:
+   the 32k-token context must hold the question text too (about 100 tokens each, so 100 questions is
+   about 10k tokens), so the state clipper subtracts the question tokens; and quality and latency are
+   only measured to about 18 to 20 questions (S4, Polaris), so a short spike at 50 and 100 runs before
+   anything relies on the larger sets.
+
+## The questions as asked
 
 1. **When it runs:** only on arrival, or also a background pass over recent mail? Which mail is
    eligible: Inbox only? Junk (for `junk_rescue` only), Sent, Drafts, Archive excluded?

@@ -69,10 +69,34 @@ Nothing. Everything else in chunk 5 depends on this.
 | State per `Decide` call | under the 32k-token context with margin, clipped by the caller | `400 max_tokens_exceeded` is `rejected`, recorded at zero cost, never retried |
 | Calls per tick, concurrency, backfill burst | stated per feature, enforced by the gate | queued, not dropped; shown on the stats panel |
 | Provider timeout / stall | a deadline on every call, cancellable by context | `error`, ledgered at zero cost, retried with backoff by the caller |
-| Spend | monthly cap per account (and global; open) | refused, recorded, surfaced as a quiet banner |
+| Spend | monthly cap per account and one global cap, plus a small per-message ceiling | paused or refused, recorded, surfaced as a quiet banner |
 | Ledger read | paged, never unbounded | cursor |
 
-## Open questions
+## Decisions (Q&A with the operator, 2026-10-07)
+
+1. **Caps: per account plus one global monthly cap;** whichever is hit first stops calls. Sensible
+   editable defaults for a new account, and a small per-message ceiling (value chosen at build, shown
+   in the limits table).
+2. **At the cap: pause and resume.** Background work stops, a quiet banner says why, nothing is
+   dropped, and it resumes when the period resets or the cap is raised. On-demand actions (Ask, read
+   this image) are refused with the reason.
+3. **The OpenRouter key lives in `data/secrets`,** like the mailbox passwords, entered in settings,
+   never in logs or API bodies. One key serves Jev, chat, vision and embeddings.
+4. **Models come from a code-defined registry, the Polaris pattern** (`Polaris/models/models.go`):
+   `llm/models.go` holds the catalog (stable id, display name, OpenRouter model, provider order,
+   temperature, max tokens, reasoning, multimodal, pricing); ids stay stable across version bumps;
+   adding a model is a code change. The **settings panel picks the default chat model,** with an
+   **optional per-feature override** (stage 2, digest, summaries, ask, extraction, compiler).
+   Pricing lives in the registry, which is also what the cost estimates use.
+5. **Ledger rows are kept forever,** with a CSV/JSON export.
+6. **The per-call log shows the question set and Jev's probability vectors** (numbers, never mail
+   text).
+7. **A cost estimate is mandatory and conservative** before any bulk action (backfill, dry run,
+   re-read after an edit): rounded up from registry pricing, a click to start, the cap still applies.
+
+In the interface Jev is called the **helper decision model;** user-facing copy uses that name.
+
+## The questions as asked
 
 1. **Cap structure:** per account, global, per feature, or a mix? What is the default for a new
    account, and is there a per-message spend ceiling as well as a monthly one?

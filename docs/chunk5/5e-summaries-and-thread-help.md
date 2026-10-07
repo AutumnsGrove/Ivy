@@ -68,7 +68,27 @@ never an action.
 | Summary length | short maximum | truncated at a word boundary |
 | Translate input | the message's clipped text | refused above the limit, shown |
 
-## Open questions
+## Decisions (Q&A with the operator, 2026-10-07)
+
+1. **The chip is in the reader, on long threads:** a quiet firefly-dot chip at the top of an opened
+   thread expands to a short plain summary; the inbox row is unchanged; nothing is labelled as AI.
+   The surface gets a new endpoint and field name chosen at build (never `/summary`).
+2. **What is auto-summarised: long multi-party threads and also single very long messages** (the
+   operator widened the recommendation). Thresholds live in the `worth_summarizing` question wording.
+   Newsletters are not summarised individually; the digest (5f) covers them.
+3. **Refresh when opened, at most once a day per thread.** Nothing is spent on threads never opened.
+4. **Follow-ups: a "Waiting on them" list after 3 days** (a setting) of silence after you sent last, in
+   the app, no notifications, nothing sent for you.
+5. **Helpers that ship:** waiting-on lists (`thread_state`), `tag_suggest`, and the translate action
+   plus the snooze suggestion. **Reply tone and identity suggestion are not shipping.**
+6. **`tag_suggest` applies a tag on its own only at the Careful preset (0.90);** below that it is a
+   chip you accept with a tap. Provisional like every threshold. It remains the one autonomous model
+   write.
+7. **Draft help is "Suggest a reply": seed only, shown first.** A preview you accept into compose with
+   one tap; it never fills the editor on its own and never sends. Because reply tone is not shipping,
+   it uses a neutral tone and the existing From picker (confirm at build).
+
+## The questions as asked
 
 1. **Name and shape of the summary surface** (a new endpoint, e.g. insight or digest-of-thread; the
    existing `/summary` must keep its meaning) and where the chip appears (reader, list row).

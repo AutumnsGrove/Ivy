@@ -64,7 +64,32 @@ no model at all.
 | Extracted text fields | length maxima | truncated, never trusted as markup |
 | Reminders | a stated horizon and count | the nearest first; the rest shown on request |
 
-## Open questions
+## Decisions (Q&A with the operator, 2026-10-07)
+
+1. **A receipt row holds vendor, amount plus currency, date and an optional renewal date.** Amount is
+   whole minor units plus an ISO currency code (no floating point). A row shows in the ledger once it
+   has at least a vendor and an amount; otherwise it waits in a "needs a look" list instead of
+   guessing.
+2. **Corrections are locally owned state in `state.db`** and always win over a later re-extraction,
+   which never overwrites a field you corrected.
+3. **Renewal reminders are both a list and an email.** An upcoming-renewals list (the next 30 days, a
+   setting) sits at the top of the ledger, **and a reminder email is appended to the account's Inbox**
+   at **7 days and 1 day before** a renewal (the operator's "dual reminders" for ADHD). The mechanism
+   is an **IMAP APPEND with a stable Message-ID** (created once; searched before each retry like the
+   Sent copy), **not SMTP: nothing is emailed to anyone,** so it does not touch the rule that only the
+   Send button sends. It shows in Apple Mail too and wakes its own notifications. It is an opt-in
+   setting and goes through the outbox like any IMAP write. The message carries an Ivy marker header
+   so the Jev layer never classifies a reminder as ordinary mail.
+4. **The ledger screen shows monthly totals by vendor and currency,** filterable by account, vendor and
+   month, with a CSV export. The view may combine accounts (it reads already-extracted rows);
+   extraction stays one account per call.
+5. **Duplicates:** an identical message (same content key) is one row; a different message with the
+   same vendor, amount and date is shown as a probable duplicate, grouped, never merged or hidden.
+6. **Both `payment_failed` and `renewal_notice` raise needs-me** (5c), in addition to the ledger and
+   the reminders.
+7. **Backfill follows 5b:** new mail only; extracting historic receipts is an opt-in with an estimate.
+
+## The questions as asked
 
 1. **Fields and types:** amount as integer minor units plus currency code? Which fields are
    required before a row is shown (vendor, amount, date)?

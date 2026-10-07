@@ -68,7 +68,25 @@ Receipts (5g) and Ask Ivy (5i) can consume its output.
 | Decode time | a deadline per image | cancelled, recorded |
 | Images per message / per day | stated | the rest waits or needs the on-demand click |
 
-## Open questions
+## Decisions (Q&A with the operator, 2026-10-07)
+
+1. **HEIC is out of scope, optional later.** The operator tested it: a photo uploaded from an iPhone
+   through Safari arrives as JPEG, so there is nothing to decode. This replaces the unverified HEIC
+   note from spike S5. In scope: JPEG, PNG, WebP and GIF; the dependency question at gate G4 now only
+   covers those.
+2. **The result is shown on the attachment tile, indexed for search and offered to receipt extraction**
+   (5g) for photographed receipts. Stored keyed by image hash.
+3. **Automatic reading: flagged mail only, bounded by the monthly cap alone** (no daily ceiling).
+4. **The on-demand button shows an estimate** ("Read this image (about $0.002)") from registry pricing,
+   a single click.
+5. **What is sent: the downscaled, metadata-stripped image plus the surrounding message text.** That
+   text is the same clipped, stripped state every model call uses (5b) and passes the same withheld,
+   opt-in and one-account rules; sensitive or withheld mail is never sent.
+6. **Decorative and tracking images are skipped** by size and repetition (assumed retained; the
+   operator's answer covered what is sent, so confirm at build).
+7. **Model: the registry's default vision-capable model** (overridable per feature).
+
+## The questions as asked
 
 1. **Dependencies:** is stdlib `image` plus `x/image` enough for JPEG/PNG/WebP/GIF, and is HEIC in
    scope (S5 is unverified on iPhone)? This is gate G4.

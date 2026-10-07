@@ -69,7 +69,26 @@ never touch personal correspondence.
 | Digest input per item | clipped text | clipped |
 | Digest build twice in a day | one artifact per day and item set | the stored one is returned, no second spend |
 
-## Open questions
+## Decisions (Q&A with the operator, 2026-10-07)
+
+1. **The digest builds early morning** (default 06:00 in the server's timezone, a setting) and shows
+   as a panel at the top of Reading, with no notification.
+2. **Newsletter detection is hybrid.** List headers are checked, **and the Jev classifier runs
+   anyway,** because junk mail often carries an unsubscribe link and is not really a newsletter. When
+   an account has smart features off, the standard header-only approach applies. Personal mail
+   (`is_automated` no) is never treated as one.
+3. **Unsubscribe: per message and per sender, with a confirm.** On success the sender is marked and
+   you choose to keep, mute or archive future mail from them. **A bulk "several senders at once"
+   action is included,** behind one confirmation that lists every sender.
+4. **`mailto:` unsubscribe goes through the normal send queue with a confirm** that shows exactly what
+   will be sent, then the undo window. Send stays an explicit click.
+5. **The digest is stored once per day and account** (a Rebuild action exists); reopening costs nothing.
+6. **Digest items:** headlines get a short summary, mentions get one line, skips are left out, and
+   duplicates of the same story (`same_topic`) are merged.
+7. **One digest per account, shown together** (stacked or switchable with the account badge). Nothing
+   mixes accounts in a model call; accounts with smart features off just have the plain feed.
+
+## The questions as asked
 
 1. **Digest cadence and delivery:** daily at what hour (the potato's local time? per account?), and
    where it appears (top of Reading only, or a notification-free "digest ready" marker)?

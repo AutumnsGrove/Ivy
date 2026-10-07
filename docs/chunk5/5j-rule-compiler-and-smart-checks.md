@@ -73,12 +73,33 @@ message ("looks like a receipt"), so a rule can say "from Cloudflare **and** loo
 | Input | Bound | Above it |
 |---|---|---|
 | Sentence length | a maximum | refused with a message |
-| Checks per account / questions per Jev call | stated maxima (Polaris ran 20) | refused at creation |
+| Clarify rounds | safety stop at 10 | the detail editor opens with what was understood |
+| Rules, checks, questions per Jev call | 500 rules, 50 checks, 100 questions per call (operator); question tokens count against the 32k context | refused at creation with a clear message |
 | Dry-run sample | 200 messages, a cost estimate shown first | stops at the cap |
 | Compiler reply | schema-validated, size-bounded | invalid → recorded error, nothing stored |
 | Backfill after an edit | opt-in with an estimate, capped | stops at the cap |
 
-## Open questions
+## Decisions (Q&A with the operator, 2026-10-07)
+
+1. **Conditions:** from address or domain, subject contains, has attachment, account and folder, and
+   smart check references. Actions stay local-only (add a tag, show in Reading, snooze).
+2. **Several rules from one sentence are allowed,** each reviewed and switched on separately.
+3. **Clarify: unlimited back and forth in practice, with a safety stop at 10 rounds** (the operator
+   accepted the stop), after which the detail editor opens with what was understood.
+4. **Built-ins are visible and tunable** on the Smart checks screen, marked built-in, with your edits
+   stored apart from shipped defaults; your own checks share the list.
+5. **Editing a check re-reads lazily;** a "Re-read recent mail" button offers a backfill with an
+   estimate. Rules using it keep working on old answers, and mail not yet re-read is "unknown", which
+   never matches.
+6. **A rule that references a check is allowed on an account with smart features off,** inactive there
+   ("needs smart features"); nothing is ever sent to a model for that account.
+7. **Limits (operator): 500 rules, 50 checks and 100 questions per Jev call.** Context budget and the
+   measured range are the build notes in 5b decision 9: the question text counts against the 32k
+   context, and a spike at 50 and 100 questions runs before the larger sets are relied on.
+8. **The mock rules and checks fixtures are removed** when the real endpoints land; the dev stack seeds
+   real rows instead (assumed; confirm at build).
+
+## The questions as asked
 
 1. **Compiler model and prompt,** and how hard the schema is (one rule per sentence, or several?).
 2. **Condition vocabulary:** exactly which fields and operators (from domain vs address, subject

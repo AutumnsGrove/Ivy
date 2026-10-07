@@ -70,7 +70,26 @@ ship first with `is_automated` alone.
 | Reason text | a short maximum, stripped to plain text | truncated at a word boundary |
 | Both stages down | n/a | the inbox is exactly as it is today |
 
-## Open questions
+## Decisions (Q&A with the operator, 2026-10-07)
+
+1. **Verdicts: `needs` / `not`.** `needs` stays the flagged value the inbox query already reads; `not`
+   is stage 2 saying no. "Waiting on me" stays a thread-level idea in 5e.
+2. **Handled or dismissed clears it.** Replying, archiving, deleting or tapping dismiss clears the
+   flag for that message, kept locally so it does not return on a re-read. Reading alone does not
+   clear it. Dismiss is per message.
+3. **Stage 2 uses the registry's default chat model** (overridable per feature in settings). The reason
+   is one short plain sentence, may name the sender, and may not quote the message.
+4. **A Needs attention view plus an inline marker with its reason;** the inbox keeps its existing
+   needs count.
+5. **It also places a "placed for you" tag** (the operator's choice, not the recommended marker-only).
+   Per `PLAN.md` 3 such tags are **local and removable, never an IMAP keyword.** Removing the tag and
+   dismissing the flag are the same action (assumed, confirm at build).
+6. **No accuracy target is fixed now.** About 100 of the operator's messages are labelled, precision
+   and recall are measured at the shipped threshold, and the operator picks the bar from real misses.
+   It ships off by default until then.
+7. **Eligible mail is the Inbox only** (5b). A snoozed message keeps its flag when it wakes (assumed).
+
+## The questions as asked
 
 1. **Verdict vocabulary:** the existing inbox query already treats `verdict = 'needs'` as the
    flagged value. Keep `needs` and one "does not" value only, or add a `waiting on me` kind

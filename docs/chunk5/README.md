@@ -12,7 +12,9 @@ the code today, so nobody assumes the wrong baseline), **Settled** (only decisio
 with where), **Scope** (the stages), **Tests and exit**, **Failure paths** (STANDARDS 4a) and **Open
 questions**. A plan states only what is settled; every unsettled choice is an open question, to be
 asked in batches in the session and recorded in `docs/qa-log.md` before the stage starts. A stage
-with an unanswered open question is not ready to build.
+with an unanswered open question is not ready to build. **All ten plans' questions were answered on
+2026-10-07;** each plan's "Decisions" section holds the answers and the original questions follow it
+as the audit trail. A few small items are marked "assumed, confirm at build".
 
 ## Order and dependencies
 
@@ -36,16 +38,16 @@ before 5h and 5i; 5j needs 5b's registry and the existing rules engine (3g).
 
 | Stage | Plan | Status |
 |---|---|---|
-| 5a | [Gate, ledger and spend](5a-gate-ledger-spend.md) | not started; open questions pending |
-| 5b | [The Jev layer](5b-jev-layer.md) | not started; open questions pending |
-| 5c | [Needs-me cascade](5c-needs-me-cascade.md) | not started; open questions pending |
-| 5d | [Classifiers and safety](5d-classifiers-and-safety.md) | not started; open questions pending |
-| 5e | [Summaries and thread help](5e-summaries-and-thread-help.md) | not started; open questions pending |
-| 5f | [Newsletters and the digest](5f-newsletters-and-digest.md) | not started; open questions pending |
-| 5g | [Receipts and the ledger view](5g-receipts-and-ledger.md) | not started; open questions pending |
-| 5h | [Vision](5h-vision.md) | not started; open questions pending |
-| 5i | [Ask Ivy](5i-ask-ivy.md) | not started; open questions pending |
-| 5j | [Rule compiler and smart checks](5j-rule-compiler-and-smart-checks.md) | not started; open questions pending |
+| 5a | [Gate, ledger and spend](5a-gate-ledger-spend.md) | planned; questions answered 2026-10-07 |
+| 5b | [The Jev layer](5b-jev-layer.md) | planned; questions answered 2026-10-07 |
+| 5c | [Needs-me cascade](5c-needs-me-cascade.md) | planned; questions answered 2026-10-07 |
+| 5d | [Classifiers and safety](5d-classifiers-and-safety.md) | planned; questions answered 2026-10-07 |
+| 5e | [Summaries and thread help](5e-summaries-and-thread-help.md) | planned; questions answered 2026-10-07 |
+| 5f | [Newsletters and the digest](5f-newsletters-and-digest.md) | planned; questions answered 2026-10-07 |
+| 5g | [Receipts and the ledger view](5g-receipts-and-ledger.md) | planned; questions answered 2026-10-07 |
+| 5h | [Vision](5h-vision.md) | planned; questions answered 2026-10-07 |
+| 5i | [Ask Ivy](5i-ask-ivy.md) | planned; questions answered 2026-10-07 |
+| 5j | [Rule compiler and smart checks](5j-rule-compiler-and-smart-checks.md) | planned; questions answered 2026-10-07 |
 
 The overall status line lives in `next_steps.md`; keep this table in step with it.
 

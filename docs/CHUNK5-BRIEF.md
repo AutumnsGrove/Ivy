@@ -91,6 +91,24 @@ before the one it depends on is finished and its checkpoint (section 5) is clear
 - **The stats panel is one place for everything the LLM layer did and cost** (PLAN.md 3): totals by
   feature, account and model; the per-call log; caps and blocked-call counts; mirror health.
 
+The operator settled every plan's open questions on 2026-10-07; each plan's "Decisions" section holds
+the answers and `docs/qa-log.md` the record. The ones that shape the whole chunk:
+
+- **Models come from a code-defined registry** (`llm/models.go`, the Polaris pattern), the settings
+  panel picks a default chat model with an optional per-feature override, and pricing lives there.
+- **Caps are per account plus one global,** work pauses at the cap and resumes next period, and a
+  cost estimate is mandatory before any bulk action. In the interface Jev is the **helper decision
+  model.**
+- **New mail only;** backfill is an opt-in button with an estimate. Eligible mail is the Inbox, plus
+  Junk for `junk_rescue` only.
+- **Thresholds (0.65 / 0.80 / 0.90) are provisional** until real probability spreads exist.
+- **Withheld mail fails closed** and shows a quiet marker; authentication verdicts are trusted only
+  from the provider's own `authserv-id`.
+- **Needs-me and categories also place local "placed for you" tags** (never IMAP keywords).
+- **Renewal reminders are IMAP-appended emails** (never SMTP) plus a ledger list.
+- **Ask Ivy has 25 steps, saved deletable history, and no per-question cost ceiling.**
+- **Limits (operator): 500 rules, 50 checks, 100 questions per Jev call,** to be spiked beyond 20.
+
 ## 3. Traps found by earlier work
 
 - **Instruction wording moves precision a lot** (S4: `needs_me` 0.73 to the 0.9s at a 0.75
@@ -159,7 +177,9 @@ one sentence to the operator. The tests are the spec, so a review is of the test
   any model-written text rendered as HTML or labelled as AI on the reading surface.
 - **T17** Any path where withheld mail (tripwire, sensitive), a security or abuse address's mail, or
   an LLM-off account's mail reaches stage 2, vision, ask or a summary.
-- **T18** Any spend path with no cap, no ledger row, or a cost that can exceed its stated worst case.
+- **T18** Any spend path that is not bounded by the monthly caps, writes no ledger row, or can exceed
+  its stated worst case. (Ask Ivy has no per-question cost ceiling by the operator's decision; its
+  bound is 25 steps, the per-step token bound and the shared caps.)
 
 **How to stop** is as in chunk 3: a handoff file that makes sense to someone who has seen none of the
 session, committed, a line in `next_steps.md`, one message beginning `STOP: this needs Claude:`, and

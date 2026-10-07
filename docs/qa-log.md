@@ -1664,3 +1664,51 @@ summaries and so on) layered on a finished backend.
   endpoint in the contract; the existing `/messages/{id}/summary` is not an LLM summary; and the
   `needs_me` table already exists with the inbox query reading `verdict = 'needs'`. The README's
   "what is real and what is mocked today" table records them.
+
+## Chunk 5 plan questions answered (2026-10-07)
+
+The operator answered every open question in `docs/chunk5/5a` to `5j` in one session. The full
+decisions are in each plan's "Decisions" section; the choices that shape the chunk, and the ones that
+differ from the recommendation:
+
+- **5a.** Caps per account plus one global; pause at the cap and resume next period; the OpenRouter
+  key in `data/secrets`; models from a code-defined registry (`llm/models.go`, the Polaris pattern)
+  with a settings-panel default and an optional per-feature override; ledger rows kept forever with an
+  export; the call log shows the question set and probabilities; cost estimates mandatory. In the
+  interface Jev is the **helper decision model.**
+- **5b.** Inbox plus Junk (junk rescue only); **new mail only, backfill an opt-in button in settings**
+  (operator's wording); chosen headers plus the body without quotes; built-ins embedded, edits in
+  `state.db`; presets 0.65 / 0.80 / 0.90 **provisional until real spreads**; fallback interface only;
+  odds sheet always available.
+- **5c.** Verdicts `needs` / `not`; handled or dismissed clears the flag; a view plus a marker; **it
+  also places a local "placed for you" tag** (operator's choice over marker-only); the accuracy bar is
+  decided from the first eval.
+- **5d.** Trust only the provider's `authserv-id`; withheld fails closed; per-address mail types; a
+  marker on withheld mail; tier B = junk rescue, phishing, contact-form quality; **categories also place
+  a local tag** (operator's choice).
+- **5e.** The chip is in the reader on long threads, **and single very long messages are summarised
+  too** (operator widened it); refresh on open, once a day; a Waiting-on-them list after 3 days; helpers:
+  waiting-on lists, tag suggestions (applied only at 0.90), translate and snooze suggestion; **reply
+  tone and identity suggestion are not shipping;** "Suggest a reply" is seed-only.
+- **5f.** Digest at 06:00 at the top of Reading; **hybrid newsletter detection (headers plus the
+  classifier, headers-only when smart features are off);** unsubscribe per message and sender **plus a
+  bulk action (operator's choice);** `mailto:` through the send queue; digest stored per day per account.
+- **5g.** Fields and corrections as proposed; **renewal reminders are a ledger list plus a reminder email
+  appended to the Inbox over IMAP at 7 days and 1 day (operator's idea, "dual reminders");** duplicates
+  grouped; **both `payment_failed` and renewal notices raise needs-me** (operator's choice).
+- **5h.** **HEIC out of scope** (iPhone Safari uploads JPEG, operator-tested); results on the tile,
+  searchable, feeding receipts; **automatic reading on flagged mail with no daily ceiling;** the
+  downscaled image **plus surrounding message text** is sent; an estimate on the button.
+- **5i.** **25 steps and no per-question cost ceiling** (the shared monthly caps are the bound; operator's
+  call, so the brief's T18 wording changed); live SSE trace; **follow-ups with saved history kept until
+  deleted;** proposed actions archive, tag, snooze, reply draft; `claim_supported` on every answer; the
+  trace shows titles only.
+- **5j.** All four condition kinds; **several rules per sentence (operator's choice);** clarify
+  effectively unlimited with a safety stop at 10 rounds; built-ins visible and tunable; lazy re-read on
+  edit; rules allowed but inactive on smart-off accounts; **limits 500 rules, 50 checks, 100 questions per
+  call (operator's numbers)**, with the context budget noted and a spike to run beyond 20 questions.
+
+Items marked "assumed, confirm at build" in the plans (a snoozed message keeps its needs-me flag, the
+tag-removal-equals-dismiss rule, the neutral tone for "Suggest a reply", the decorative-image filter,
+the Jev model id living in the registry, dropping the mock fixtures) were not asked directly and are
+the first things to confirm when their stage starts.
