@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      squire-rte:
+        specifier: 2.4.9
+        version: 2.4.9
     devDependencies:
       '@axe-core/playwright':
         specifier: ^4.13.0
@@ -810,6 +814,9 @@ packages:
   source-map-js@1.2.2:
     resolution: {integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==}
     engines: {node: '>=0.10.0'}
+
+  squire-rte@2.4.9:
+    resolution: {integrity: sha512-O3uQ6HF+rGNyQ/Hk5tyADBTnwoLzUDO7s2GTn2SInbXKAMh7aZXQ59107q9vr79vx/Pde5q0rfnHZ172C2/RIg==}
 
   std-env@4.3.0:
     resolution: {integrity: sha512-OtU/EgQ1kIm5KwqQpBC6ZEMXrZRui11w8zgfTWp8cdO9B8OaPsbA8bTHO2P+HNo1VlUTGMVBwPhydu6poeXiag==}
@@ -1635,6 +1642,8 @@ snapshots:
       totalist: 3.0.1
 
   source-map-js@1.2.2: {}
+
+  squire-rte@2.4.9: {}
 
   std-env@4.3.0: {}
 

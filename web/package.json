@@ -42,5 +42,8 @@
 		"#lib": "./src/lib/index.js",
 		"#lib/*.js": "./src/lib/*.ts",
 		"#lib/*": "./src/lib/*"
+	},
+	"dependencies": {
+		"squire-rte": "2.4.9"
 	}
 }
