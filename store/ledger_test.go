@@ -108,3 +108,71 @@ func TestCountRejectedCallsCountsCallsNotRows(t *testing.T) {
 		t.Fatalf("CountRejectedCalls = %d, %v; want 2", n, err)
 	}
 }
+
+// The cap is one budget for everything an account spends, not one per endpoint,
+// so Jev, chat and vision cannot each be given a separate allowance.
+func TestSpendSumsEveryEndpointForTheCap(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	at := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	for _, c := range []APICall{
+		{At: at, Endpoint: "embeddings", AccountID: "a", CostUSD: 0.25},
+		{At: at, Endpoint: "systemone", AccountID: "a", CostUSD: 0.5},
+		{At: at, Endpoint: "chat", AccountID: "b", CostUSD: 1},
+		{At: at.AddDate(0, 1, 0), Endpoint: "chat", AccountID: "a", CostUSD: 9},
+	} {
+		if err := dbs.RecordAPICall(ctx, c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, err := dbs.AccountSpend(ctx, "a", "2026-10"); err != nil || got.USD != 0.75 || got.Calls != 2 {
+		t.Fatalf("account a = %+v, %v; want $0.75 over 2 calls across endpoints", got, err)
+	}
+	if got, err := dbs.GlobalSpend(ctx, "2026-10"); err != nil || got.USD != 1.75 || got.Calls != 3 {
+		t.Fatalf("global = %+v, %v; want $1.75 over 3 calls, October only", got, err)
+	}
+}
+
+// A refusal records why, so the stats panel can show what the gates blocked by
+// cause rather than as one number.
+func TestRecordAPICallKeepsTheRefusalReason(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	if err := dbs.RecordAPICall(ctx, APICall{
+		At: time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC), Endpoint: "chat", AccountID: "a",
+		Outcome: "refused", Reason: "cap_account", CallID: "c1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := dbs.RecentAPICalls(ctx, "a", 10)
+	if err != nil || len(rows) != 1 || rows[0].Reason != "cap_account" {
+		t.Fatalf("rows = %+v, %v; want the refusal reason kept", rows, err)
+	}
+}
+
+// ProbeLedger answers "could a ledger row be written right now?" without leaving
+// one behind: the gate's breaker uses it to learn that a broken ledger healed.
+func TestProbeLedgerLeavesNothingBehind(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	if err := dbs.ProbeLedger(ctx); err != nil {
+		t.Fatalf("probe on a healthy ledger = %v", err)
+	}
+	if rows, _ := dbs.RecentAPICalls(ctx, "", 10); len(rows) != 0 {
+		t.Errorf("probe left %d rows", len(rows))
+	}
+	if got, _ := dbs.GlobalSpend(ctx, Period(time.Now())); got.Calls != 0 {
+		t.Errorf("probe left a counter: %+v", got)
+	}
+
+	if _, err := dbs.State.Write.ExecContext(ctx,
+		`CREATE TRIGGER block_ledger BEFORE INSERT ON api_calls BEGIN SELECT RAISE(ABORT, 'ledger broken'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if err := dbs.ProbeLedger(ctx); err == nil {
+		t.Fatal("probe succeeded although a ledger insert is blocked")
+	}
+}

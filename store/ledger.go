@@ -26,7 +26,10 @@ type APICall struct {
 	CostEstimated bool
 	LatencyMS     int
 	Outcome       string
-	CallID        string
+	// Reason is why the gate refused the call; empty for any call that reached
+	// the provider.
+	Reason string
+	CallID string
 }
 
 // Spend is a month-to-date roll-up for one account and endpoint.
@@ -63,8 +66,8 @@ func (d *DBs) RecordAPICalls(ctx context.Context, calls []APICall) error {
 	insertCall, err := tx.PrepareContext(ctx, `
 		INSERT INTO api_calls (
 			at, provider, endpoint, model, feature, account_id, content_key,
-			input_tokens, output_tokens, cost_usd, cost_estimated, latency_ms, outcome, call_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			input_tokens, output_tokens, cost_usd, cost_estimated, latency_ms, outcome, reason, call_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("record api calls: %w", err)
 	}
@@ -88,7 +91,7 @@ func (d *DBs) RecordAPICalls(ctx context.Context, calls []APICall) error {
 		if _, err := insertCall.ExecContext(ctx,
 			c.At.UTC().Format(time.RFC3339), c.Provider, c.Endpoint, c.Model, c.Feature,
 			c.AccountID, c.ContentKey, c.InputTokens, c.OutputTokens, c.CostUSD, estimated,
-			c.LatencyMS, c.Outcome, c.CallID); err != nil {
+			c.LatencyMS, c.Outcome, c.Reason, c.CallID); err != nil {
 			return fmt.Errorf("record api calls: %w", err)
 		}
 		if _, err := upsertCap.ExecContext(ctx,
@@ -117,6 +120,56 @@ func (d *DBs) MonthlySpend(ctx context.Context, accountID, period, endpoint stri
 	return s, nil
 }
 
+// AccountSpend is what one account has spent in a period across every endpoint.
+// The cap is one budget per account, so Jev, chat and vision cannot each be given
+// an allowance of their own.
+func (d *DBs) AccountSpend(ctx context.Context, accountID, period string) (Spend, error) {
+	var s Spend
+	err := d.State.Read.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(spent_usd), 0), COALESCE(SUM(calls), 0) FROM api_caps
+		WHERE account_id = ? AND period = ?`, accountID, period).Scan(&s.USD, &s.Calls)
+	if err != nil {
+		return Spend{}, fmt.Errorf("account spend: %w", err)
+	}
+	return s, nil
+}
+
+// GlobalSpend is what every account together has spent in a period, for the one
+// global cap.
+func (d *DBs) GlobalSpend(ctx context.Context, period string) (Spend, error) {
+	var s Spend
+	err := d.State.Read.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(spent_usd), 0), COALESCE(SUM(calls), 0) FROM api_caps
+		WHERE period = ?`, period).Scan(&s.USD, &s.Calls)
+	if err != nil {
+		return Spend{}, fmt.Errorf("global spend: %w", err)
+	}
+	return s, nil
+}
+
+// ProbeLedger reports whether a ledger row and its counter could be written
+// right now. It runs the real inserts and rolls them back, so it exercises the
+// same constraints and triggers a real write would without leaving a row behind.
+// The gate's breaker uses it to learn that a broken ledger has healed.
+func (d *DBs) ProbeLedger(ctx context.Context) error {
+	tx, err := d.State.Write.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("probe ledger: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO api_calls (at, outcome) VALUES (?, 'probe')`,
+		time.Now().UTC().Format(time.RFC3339)); err != nil {
+		return fmt.Errorf("probe ledger: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO api_caps (account_id, period, endpoint, spent_usd, calls)
+		VALUES ('', '', 'probe', 0, 1)
+		ON CONFLICT(account_id, period, endpoint) DO UPDATE SET calls = calls + 1`); err != nil {
+		return fmt.Errorf("probe ledger: %w", err)
+	}
+	return nil
+}
+
 // RecentAPICalls returns the newest ledger rows, optionally for one account
 // (an empty account means all). The caller pages the list, so limit is capped
 // by the caller and never unbounded here.
@@ -126,7 +179,7 @@ func (d *DBs) RecentAPICalls(ctx context.Context, accountID string, limit int) (
 	}
 	rows, err := d.State.Read.QueryContext(ctx, `
 		SELECT at, provider, endpoint, model, feature, account_id, content_key,
-		       input_tokens, output_tokens, cost_usd, cost_estimated, latency_ms, outcome, call_id
+		       input_tokens, output_tokens, cost_usd, cost_estimated, latency_ms, outcome, reason, call_id
 		FROM api_calls
 		WHERE account_id = ? OR ? = ''
 		ORDER BY id DESC
@@ -145,7 +198,7 @@ func (d *DBs) RecentAPICalls(ctx context.Context, accountID string, limit int) (
 		)
 		if err := rows.Scan(&at, &c.Provider, &c.Endpoint, &c.Model, &c.Feature,
 			&c.AccountID, &c.ContentKey, &c.InputTokens, &c.OutputTokens,
-			&c.CostUSD, &estimated, &c.LatencyMS, &c.Outcome, &c.CallID); err != nil {
+			&c.CostUSD, &estimated, &c.LatencyMS, &c.Outcome, &c.Reason, &c.CallID); err != nil {
 			return nil, fmt.Errorf("recent api calls: %w", err)
 		}
 		t, err := parseTime(at)

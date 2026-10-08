@@ -893,6 +893,15 @@ var stateMigrations = []migration{
 				'tree-deciduous', 'bird', 'mail', 'droplets', 'cloud', 'star')`,
 		},
 	},
+	{
+		version: 19,
+		statements: []string{
+			// Why the gate refused a call (not enabled, a cap, withheld mail, ...), so
+			// the stats panel can show blocked calls by cause instead of as one number.
+			// Empty for a call that reached the provider.
+			`ALTER TABLE api_calls ADD COLUMN reason TEXT NOT NULL DEFAULT ''`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state

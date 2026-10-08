@@ -12,7 +12,10 @@ import (
 func TestLegacyEmojiAccountIconsBecomeNames(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	before := len(stateMigrations) - 1 // everything up to, but not including, the icon migration
+	// Everything up to, but not including, the icon migration. It is named by
+	// version because later migrations are appended after it.
+	const iconMigration = 18
+	before := iconMigration - 1
 	old := rawPool(t, filepath.Join(dir, "state.db"))
 	if err := migrate(context.Background(), old, stateMigrations[:before]); err != nil {
 		t.Fatalf("apply old schema: %v", err)
