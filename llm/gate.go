@@ -429,6 +429,16 @@ func (g *Gate) release(r *reservation) {
 	}
 }
 
+// AccountCapUSD and GlobalCapUSD are the caps the gate is enforcing right now, for
+// the stats panel to show. They are the same lookup the admission check uses, so
+// the screen can never state a cap the gate is not applying.
+func (g *Gate) AccountCapUSD(ctx context.Context, accountID string) float64 {
+	return g.capFor(ctx, accountID)
+}
+
+// GlobalCapUSD is the one monthly cap across every account.
+func (g *Gate) GlobalCapUSD(ctx context.Context) float64 { return g.globalCap(ctx) }
+
 // capFor is an account's monthly cap: its setting, or the default. A setting that
 // does not parse falls back to the default rather than to no cap.
 func (g *Gate) capFor(ctx context.Context, accountID string) float64 {

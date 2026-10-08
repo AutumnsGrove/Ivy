@@ -112,6 +112,30 @@ func (e BodyFormat) Valid() bool {
 	}
 }
 
+// Defines values for CallRecordOutcome.
+const (
+	CallRecordOutcomeError    CallRecordOutcome = "error"
+	CallRecordOutcomeOk       CallRecordOutcome = "ok"
+	CallRecordOutcomeRefused  CallRecordOutcome = "refused"
+	CallRecordOutcomeRejected CallRecordOutcome = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the CallRecordOutcome enum.
+func (e CallRecordOutcome) Valid() bool {
+	switch e {
+	case CallRecordOutcomeError:
+		return true
+	case CallRecordOutcomeOk:
+		return true
+	case CallRecordOutcomeRefused:
+		return true
+	case CallRecordOutcomeRejected:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CheckDetailSureness.
 const (
 	Balanced CheckDetailSureness = "balanced"
@@ -589,6 +613,30 @@ func (e UpdateWatcherResultStatus) Valid() bool {
 	}
 }
 
+// Defines values for CallOutcome.
+const (
+	CallOutcomeError    CallOutcome = "error"
+	CallOutcomeOk       CallOutcome = "ok"
+	CallOutcomeRefused  CallOutcome = "refused"
+	CallOutcomeRejected CallOutcome = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the CallOutcome enum.
+func (e CallOutcome) Valid() bool {
+	switch e {
+	case CallOutcomeError:
+		return true
+	case CallOutcomeOk:
+		return true
+	case CallOutcomeRefused:
+		return true
+	case CallOutcomeRejected:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListInboxParamsFolder.
 const (
 	ListInboxParamsFolderArchive ListInboxParamsFolder = "archive"
@@ -610,6 +658,72 @@ func (e ListInboxParamsFolder) Valid() bool {
 	case ListInboxParamsFolderSnoozed:
 		return true
 	case ListInboxParamsFolderTrash:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListCallsParamsOutcome.
+const (
+	ListCallsParamsOutcomeError    ListCallsParamsOutcome = "error"
+	ListCallsParamsOutcomeOk       ListCallsParamsOutcome = "ok"
+	ListCallsParamsOutcomeRefused  ListCallsParamsOutcome = "refused"
+	ListCallsParamsOutcomeRejected ListCallsParamsOutcome = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the ListCallsParamsOutcome enum.
+func (e ListCallsParamsOutcome) Valid() bool {
+	switch e {
+	case ListCallsParamsOutcomeError:
+		return true
+	case ListCallsParamsOutcomeOk:
+		return true
+	case ListCallsParamsOutcomeRefused:
+		return true
+	case ListCallsParamsOutcomeRejected:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExportCallsParamsFormat.
+const (
+	Csv  ExportCallsParamsFormat = "csv"
+	Json ExportCallsParamsFormat = "json"
+)
+
+// Valid indicates whether the value is a known member of the ExportCallsParamsFormat enum.
+func (e ExportCallsParamsFormat) Valid() bool {
+	switch e {
+	case Csv:
+		return true
+	case Json:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExportCallsParamsOutcome.
+const (
+	ExportCallsParamsOutcomeError    ExportCallsParamsOutcome = "error"
+	ExportCallsParamsOutcomeOk       ExportCallsParamsOutcome = "ok"
+	ExportCallsParamsOutcomeRefused  ExportCallsParamsOutcome = "refused"
+	ExportCallsParamsOutcomeRejected ExportCallsParamsOutcome = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the ExportCallsParamsOutcome enum.
+func (e ExportCallsParamsOutcome) Valid() bool {
+	switch e {
+	case ExportCallsParamsOutcomeError:
+		return true
+	case ExportCallsParamsOutcomeOk:
+		return true
+	case ExportCallsParamsOutcomeRefused:
+		return true
+	case ExportCallsParamsOutcomeRejected:
 		return true
 	default:
 		return false
@@ -716,8 +830,54 @@ type AttachmentInfo struct {
 	Size   int64   `json:"size"`
 }
 
+// BlockedRow defines model for BlockedRow.
+type BlockedRow struct {
+	Calls int `json:"calls"`
+
+	// Reason Why the gate refused: feature_off, not_enabled, vision_off, cap_account, cap_global, withheld, too_large, no_provider or ledger_unwritable
+	Reason string `json:"reason"`
+}
+
 // BodyFormat How `text` is interpreted. `plain` is a text/plain part only; `markdown` renders the text with goldmark into a text/html part; `html` treats the text as HTML, narrows it with the compose-only policy and derives a text/plain alternative. Absent means `markdown` when the legacy `markdown: true` flag is set, else `plain`.
 type BodyFormat string
+
+// CallPage defines model for CallPage.
+type CallPage struct {
+	Items      []CallRecord `json:"items"`
+	NextCursor *string      `json:"nextCursor,omitempty"`
+}
+
+// CallRecord defines model for CallRecord.
+type CallRecord struct {
+	AccountId string    `json:"accountId"`
+	At        time.Time `json:"at"`
+	CallId    string    `json:"callId"`
+
+	// CostEstimated The provider reported no cost, so it was priced from the tokens
+	CostEstimated bool              `json:"costEstimated"`
+	CostUsd       float64           `json:"costUsd"`
+	Endpoint      string            `json:"endpoint"`
+	Feature       string            `json:"feature"`
+	Id            string            `json:"id"`
+	InputTokens   int               `json:"inputTokens"`
+	LatencyMs     int               `json:"latencyMs"`
+	Model         string            `json:"model"`
+	Outcome       CallRecordOutcome `json:"outcome"`
+	OutputTokens  int               `json:"outputTokens"`
+
+	// Probabilities Jev's answer, once the Jev layer records it (numbers only, never mail text)
+	Probabilities *[]struct {
+		Label string  `json:"label"`
+		P     float64 `json:"p"`
+	} `json:"probabilities,omitempty"`
+	Provider string `json:"provider"`
+
+	// Reason Why a gate refused the call; set only when outcome is `refused`
+	Reason *string `json:"reason,omitempty"`
+}
+
+// CallRecordOutcome defines model for CallRecord.Outcome.
+type CallRecordOutcome string
 
 // Check defines model for Check.
 type Check struct {
@@ -1419,6 +1579,46 @@ type SnoozeRequest struct {
 // SnoozeRequestPreset defines model for SnoozeRequest.Preset.
 type SnoozeRequestPreset string
 
+// SpendAccountRow An account's spend in the window and its calendar month against its own cap.
+type SpendAccountRow struct {
+	Calls  int     `json:"calls"`
+	CapUsd float64 `json:"capUsd"`
+
+	// Key The account id
+	Key      string  `json:"key"`
+	MonthUsd float64 `json:"monthUsd"`
+	Usd      float64 `json:"usd"`
+}
+
+// SpendRow defines model for SpendRow.
+type SpendRow struct {
+	Calls int    `json:"calls"`
+	Key   string `json:"key"`
+
+	// Usd Exact dollars from the ledger, summed in the window
+	Usd float64 `json:"usd"`
+}
+
+// SpendSummary defines model for SpendSummary.
+type SpendSummary struct {
+	Blocked []BlockedRow `json:"blocked"`
+
+	// ByAccount Only accounts with a call that reached a provider in the window
+	ByAccount []SpendAccountRow `json:"byAccount"`
+	ByFeature []SpendRow        `json:"byFeature"`
+	ByModel   []SpendRow        `json:"byModel"`
+
+	// Calls Calls that reached a provider in the window (failed ones included)
+	Calls int `json:"calls"`
+
+	// CapUsd The global monthly cap
+	CapUsd float64 `json:"capUsd"`
+
+	// MonthUsd All accounts' spend this calendar month (UTC), what the global cap counts
+	MonthUsd float64 `json:"monthUsd"`
+	TotalUsd float64 `json:"totalUsd"`
+}
+
 // SyncState defines model for SyncState.
 type SyncState string
 
@@ -1504,6 +1704,18 @@ type UserTag struct {
 type Version struct {
 	Version string `json:"version"`
 }
+
+// CallAccount defines model for CallAccount.
+type CallAccount = string
+
+// CallFeature defines model for CallFeature.
+type CallFeature = string
+
+// CallFrom defines model for CallFrom.
+type CallFrom = time.Time
+
+// CallOutcome defines model for CallOutcome.
+type CallOutcome string
 
 // DraftID defines model for DraftID.
 type DraftID = string
@@ -1602,6 +1814,47 @@ type ListSendsParams struct {
 	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
 	Limit     *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// GetSpendParams defines parameters for GetSpend.
+type GetSpendParams struct {
+	// From Start of the window, an RFC 3339 instant
+	From *time.Time `form:"from,omitempty" json:"from,omitempty"`
+}
+
+// ListCallsParams defines parameters for ListCalls.
+type ListCallsParams struct {
+	// Outcome How the call ended: `ok`, `error` (the provider failed), `rejected` (the provider declined this input) or `refused` (a gate turned it away; see `reason`)
+	Outcome   *ListCallsParamsOutcome `form:"outcome,omitempty" json:"outcome,omitempty"`
+	Feature   *CallFeature            `form:"feature,omitempty" json:"feature,omitempty"`
+	AccountId *CallAccount            `form:"account_id,omitempty" json:"account_id,omitempty"`
+
+	// From Only calls at or after this RFC 3339 instant
+	From   *CallFrom `form:"from,omitempty" json:"from,omitempty"`
+	Cursor *string   `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int      `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListCallsParamsOutcome defines parameters for ListCalls.
+type ListCallsParamsOutcome string
+
+// ExportCallsParams defines parameters for ExportCalls.
+type ExportCallsParams struct {
+	Format *ExportCallsParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+
+	// Outcome How the call ended: `ok`, `error` (the provider failed), `rejected` (the provider declined this input) or `refused` (a gate turned it away; see `reason`)
+	Outcome   *ExportCallsParamsOutcome `form:"outcome,omitempty" json:"outcome,omitempty"`
+	Feature   *CallFeature              `form:"feature,omitempty" json:"feature,omitempty"`
+	AccountId *CallAccount              `form:"account_id,omitempty" json:"account_id,omitempty"`
+
+	// From Only calls at or after this RFC 3339 instant
+	From *CallFrom `form:"from,omitempty" json:"from,omitempty"`
+}
+
+// ExportCallsParamsFormat defines parameters for ExportCalls.
+type ExportCallsParamsFormat string
+
+// ExportCallsParamsOutcome defines parameters for ExportCalls.
+type ExportCallsParamsOutcome string
 
 // ConnectAccountJSONRequestBody defines body for ConnectAccount for application/json ContentType.
 type ConnectAccountJSONRequestBody = ConnectAccount

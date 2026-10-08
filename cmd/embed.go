@@ -22,6 +22,8 @@ type Embedding struct {
 	Query gateway.QueryEmbedder
 	// Worker embeds each message once. Nil when no account has a usable provider.
 	Worker *search.EmbedWorker
+	// Caps is the gate's own view of the monthly caps, for the stats panel.
+	Caps gateway.SpendCaps
 }
 
 // NewEmbedding builds the embedding stack from the operator's config. apiKey is
@@ -40,7 +42,7 @@ func NewEmbedding(cfg *config.Config, dbs *store.DBs, apiKey string, opts ...Emb
 		llm.WithDefaultCaps(cfg.LLM.MonthlyCapUSD, llm.DefaultGlobalCapUSD),
 	)
 	providers, models := buildEmbedders(cfg, apiKey)
-	emb := &Embedding{Query: newQueryEmbedder(gate, providers, models)}
+	emb := &Embedding{Query: newQueryEmbedder(gate, providers, models), Caps: gate}
 	if accounts := embedAccounts(cfg, providers, models); len(accounts) > 0 {
 		emb.Worker = search.NewEmbedWorker(dbs, gate, accounts, search.WorkerOptions{})
 	}

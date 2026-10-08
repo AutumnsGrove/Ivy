@@ -60,6 +60,9 @@ type Server struct {
 	// from the app keep theirs in state.db and are read live, so neither needs
 	// the mirror row, which sync creates without the setting.
 	configuredSmart map[string]bool
+	// spendCaps is where the stats panel reads the caps the gate applies; nil
+	// reports the built-in defaults.
+	spendCaps SpendCaps
 }
 
 // WithConfiguredSmart sets the smart-features choice of the accounts declared
@@ -162,6 +165,9 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/inbox", s.handleInbox)
 	api.HandleFunc("GET /api/v1/reading", s.handleListReading)
 	api.HandleFunc("GET /api/v1/search", s.handleSearch)
+	api.HandleFunc("GET /api/v1/spend", s.handleSpend)
+	api.HandleFunc("GET /api/v1/spend/calls", s.handleListCalls)
+	api.HandleFunc("GET /api/v1/spend/calls/export", s.handleExportCalls)
 	api.HandleFunc("GET /api/v1/messages/{id}", s.handleMessage)
 	api.HandleFunc("GET /api/v1/messages/{id}/summary", s.handleMessageSummary)
 	api.HandleFunc("GET /api/v1/messages/{id}/reply", s.handleReplyPrefill)

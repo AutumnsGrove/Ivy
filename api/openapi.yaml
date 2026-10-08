@@ -985,6 +985,117 @@ paths:
                 $ref: "#/components/schemas/RuleApplyResult"
         "404":
           $ref: "#/components/responses/NotFound"
+  /spend:
+    get:
+      operationId: getSpend
+      summary: What the LLM layer cost, and what the gates turned away
+      description: >
+        Roll-ups over the cost ledger for calls at or after `from` (all time when
+        absent). Calls are counted once however many ledger rows they wrote, and a
+        refused call is counted under `blocked` and never as spend. `monthUsd` and
+        `capUsd` are the calendar month in UTC, which is what the gate caps against,
+        whatever the window.
+      parameters:
+        - name: from
+          in: query
+          description: Start of the window, an RFC 3339 instant
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: The roll-up
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpendSummary"
+        "400":
+          description: The window is not valid (`bad_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /spend/calls:
+    get:
+      operationId: listCalls
+      summary: The call log, newest first
+      description: >
+        One entry per ledger row. A batch (one embedding call over several inputs)
+        is several rows sharing a `callId`. Paged by an opaque cursor that stays
+        valid while new calls arrive; 25 rows by default, 100 at most per page.
+      parameters:
+        - $ref: "#/components/parameters/CallOutcome"
+        - $ref: "#/components/parameters/CallFeature"
+        - $ref: "#/components/parameters/CallAccount"
+        - $ref: "#/components/parameters/CallFrom"
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: A page of the log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallPage"
+        "400":
+          description: A filter or the cursor is not valid (`bad_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /spend/calls/export:
+    get:
+      operationId: exportCalls
+      summary: Download the call log
+      description: >
+        The same rows as the log, for the same filters, as CSV or JSON, streamed.
+        At most 200,000 rows; `X-Ivy-Rows` says how many there are and
+        `X-Ivy-Truncated: true` that the file stops short of them. A spreadsheet
+        cell that could be read as a formula is made inert.
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [csv, json]
+            default: csv
+        - $ref: "#/components/parameters/CallOutcome"
+        - $ref: "#/components/parameters/CallFeature"
+        - $ref: "#/components/parameters/CallAccount"
+        - $ref: "#/components/parameters/CallFrom"
+      responses:
+        "200":
+          description: The rows
+          headers:
+            X-Ivy-Rows:
+              schema:
+                type: integer
+            X-Ivy-Truncated:
+              schema:
+                type: string
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CallRecord"
+        "400":
+          description: A filter or the format is not valid (`bad_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /checks:
     get:
       operationId: listChecks
@@ -1529,6 +1640,32 @@ components:
       required: true
       schema:
         type: string
+    CallOutcome:
+      name: outcome
+      in: query
+      description: >
+        How the call ended: `ok`, `error` (the provider failed), `rejected` (the
+        provider declined this input) or `refused` (a gate turned it away; see `reason`)
+      schema:
+        type: string
+        enum: [ok, error, rejected, refused]
+    CallFeature:
+      name: feature
+      in: query
+      schema:
+        type: string
+    CallAccount:
+      name: account_id
+      in: query
+      schema:
+        type: string
+    CallFrom:
+      name: from
+      in: query
+      description: Only calls at or after this RFC 3339 instant
+      schema:
+        type: string
+        format: date-time
   responses:
     NotFound:
       description: No such resource
@@ -1537,6 +1674,145 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
   schemas:
+    SpendRow:
+      type: object
+      required: [key, calls, usd]
+      properties:
+        key:
+          type: string
+        calls:
+          type: integer
+        usd:
+          type: number
+          format: double
+          description: Exact dollars from the ledger, summed in the window
+    SpendAccountRow:
+      type: object
+      description: >
+        An account's spend in the window and its calendar month against its own cap.
+      required: [key, calls, usd, monthUsd, capUsd]
+      properties:
+        key:
+          type: string
+          description: The account id
+        calls:
+          type: integer
+        usd:
+          type: number
+          format: double
+        monthUsd:
+          type: number
+          format: double
+        capUsd:
+          type: number
+          format: double
+    BlockedRow:
+      type: object
+      required: [reason, calls]
+      properties:
+        reason:
+          type: string
+          description: >
+            Why the gate refused: feature_off, not_enabled, vision_off, cap_account,
+            cap_global, withheld, too_large, no_provider or ledger_unwritable
+        calls:
+          type: integer
+    SpendSummary:
+      type: object
+      required: [totalUsd, calls, monthUsd, capUsd, byFeature, byAccount, byModel, blocked]
+      properties:
+        totalUsd:
+          type: number
+          format: double
+        calls:
+          type: integer
+          description: Calls that reached a provider in the window (failed ones included)
+        monthUsd:
+          type: number
+          format: double
+          description: All accounts' spend this calendar month (UTC), what the global cap counts
+        capUsd:
+          type: number
+          format: double
+          description: The global monthly cap
+        byFeature:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpendRow"
+        byAccount:
+          type: array
+          description: Only accounts with a call that reached a provider in the window
+          items:
+            $ref: "#/components/schemas/SpendAccountRow"
+        byModel:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpendRow"
+        blocked:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlockedRow"
+    CallRecord:
+      type: object
+      required: [id, at, callId, feature, accountId, provider, endpoint, model, outcome, costUsd, costEstimated, inputTokens, outputTokens, latencyMs]
+      properties:
+        id:
+          type: string
+        at:
+          type: string
+          format: date-time
+        callId:
+          type: string
+        feature:
+          type: string
+        accountId:
+          type: string
+        provider:
+          type: string
+        endpoint:
+          type: string
+        model:
+          type: string
+        outcome:
+          type: string
+          enum: [ok, error, rejected, refused]
+        reason:
+          type: string
+          description: Why a gate refused the call; set only when outcome is `refused`
+        costUsd:
+          type: number
+          format: double
+        costEstimated:
+          type: boolean
+          description: The provider reported no cost, so it was priced from the tokens
+        inputTokens:
+          type: integer
+        outputTokens:
+          type: integer
+        latencyMs:
+          type: integer
+        probabilities:
+          type: array
+          description: Jev's answer, once the Jev layer records it (numbers only, never mail text)
+          items:
+            type: object
+            required: [label, p]
+            properties:
+              label:
+                type: string
+              p:
+                type: number
+                format: double
+    CallPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CallRecord"
+        nextCursor:
+          type: string
     Error:
       type: object
       required: [code, message]
