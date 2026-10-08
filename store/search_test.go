@@ -280,3 +280,26 @@ func TestIndexMissingSearchDocsBackfillsAnExistingMirror(t *testing.T) {
 		t.Fatalf("third batch = %d, %v; want 0 (nothing left to index)", n, err)
 	}
 }
+
+// The index size on the health page is documents, not rows written: re-indexing a
+// message replaces it.
+func TestSearchDocCountCountsDocumentsOnce(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	if n, err := dbs.SearchDocCount(ctx); err != nil || n != 0 {
+		t.Fatalf("empty index = %d, %v; want 0", n, err)
+	}
+	for _, doc := range []SearchDoc{
+		{AccountID: "a", ContentKey: "k1", Subject: "one"},
+		{AccountID: "a", ContentKey: "k2", Subject: "two"},
+		{AccountID: "a", ContentKey: "k1", Subject: "one, edited"},
+	} {
+		if err := dbs.IndexSearchDoc(ctx, doc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := dbs.SearchDocCount(ctx); err != nil || n != 2 {
+		t.Errorf("index = %d, %v; want 2 documents", n, err)
+	}
+}

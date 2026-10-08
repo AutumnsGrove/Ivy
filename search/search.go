@@ -192,6 +192,25 @@ func (w *EmbedWorker) RunOnce(ctx context.Context) (int, error) {
 	return embedded, nil
 }
 
+// Backlog is how many documents each account with a provider still has to embed,
+// for the health page. It counts what a pass would pick up, whether or not the
+// account is opted in: the caller knows the switch and reports an account that is
+// off as off, not as waiting.
+func (w *EmbedWorker) Backlog(ctx context.Context) (map[string]int, error) {
+	out := make(map[string]int, len(w.accounts))
+	for _, acct := range w.accounts {
+		if acct.Provider == "" {
+			continue
+		}
+		n, err := w.dbs.CountPendingEmbeddings(ctx, acct.ID, acct.Model)
+		if err != nil {
+			return nil, err
+		}
+		out[acct.ID] = n
+	}
+	return out, nil
+}
+
 // Run drains the queue, sleeping between passes until ctx is cancelled. A
 // provider outage is logged and retried, never fatal: search falls back to
 // keyword until it recovers (ARCHITECTURE.md 6).

@@ -103,6 +103,11 @@ func TestNewEmbeddingHasNoWorkerWhenNoAccountEmbeds(t *testing.T) {
 	if _, _, err := emb.Query.EmbedQuery(context.Background(), "a1", "q"); !errors.Is(err, llm.ErrNoProvider) {
 		t.Errorf("EmbedQuery = %v, want ErrNoProvider so search stays keyword-only", err)
 	}
+	// A nil worker must not become a non-nil interface, or Mirror health would call
+	// a method on nil instead of reporting meaning search as off.
+	if emb.Backlog() != nil {
+		t.Error("Backlog is a non-nil interface with no worker behind it")
+	}
 }
 
 // An account connected from the app follows the switch in state.db while Ivy

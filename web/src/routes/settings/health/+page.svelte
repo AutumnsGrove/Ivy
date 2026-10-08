@@ -47,6 +47,7 @@
 				<div class="srow"><span>Search index</span><span class="v">{data.health.searchIndex}</span></div>
 				<div class="srow"><span>Meaning search</span><span class="v">{data.health.meaningSearch}</span></div>
 				<div class="srow"><span>Storage used</span><span class="v">{data.health.storage}</span></div>
+				<div class="srow"><span>Memory in use</span><span class="v">{data.health.memory}</span></div>
 			</Glass>
 		</li>
 	</ul>

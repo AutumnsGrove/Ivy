@@ -151,6 +151,45 @@ func (d *DBs) PendingAttachmentRefs(ctx context.Context, accountID, model string
 	return out, nil
 }
 
+// CountPendingEmbeddings is how many documents the embed queue still has for one
+// account and model: the message bodies PendingBodyRefs would return plus the
+// attachments PendingAttachmentRefs would. It applies the same filters, so the
+// health page states what the worker will actually do.
+func (d *DBs) CountPendingEmbeddings(ctx context.Context, accountID, model string) (int, error) {
+	var bodies, attachments int
+	err := d.Mirror.Read.QueryRowContext(ctx, `
+		SELECT count(*) FROM (
+			SELECT 1 FROM messages m
+			WHERE m.disabled_at IS NULL
+			  AND COALESCE(m.body_text, '') <> ''
+			  AND m.account_id = ?
+			  AND NOT EXISTS (
+				SELECT 1 FROM embeddings e
+				WHERE e.account_id = m.account_id AND e.ref = m.content_key
+				  AND e.kind = ? AND e.model = ?)
+			GROUP BY m.content_key)`, accountID, ExtractKindBody, model).Scan(&bodies)
+	if err != nil {
+		return 0, fmt.Errorf("count pending body embeddings: %w", err)
+	}
+	err = d.Mirror.Read.QueryRowContext(ctx, `
+		SELECT count(*) FROM (
+			SELECT 1 FROM attachments a
+			JOIN messages m ON m.id = a.message_id
+			JOIN extracted_text et ON et.ref = a.content_hash AND et.kind = ?
+			WHERE et.status = 'ok' AND et.text <> ''
+			  AND m.disabled_at IS NULL
+			  AND m.account_id = ?
+			  AND NOT EXISTS (
+				SELECT 1 FROM embeddings e
+				WHERE e.account_id = m.account_id AND e.ref = a.content_hash
+				  AND e.kind = ? AND e.model = ?)
+			GROUP BY a.content_hash)`, ExtractKindAttachment, accountID, ExtractKindAttachment, model).Scan(&attachments)
+	if err != nil {
+		return 0, fmt.Errorf("count pending attachment embeddings: %w", err)
+	}
+	return bodies + attachments, nil
+}
+
 // EachEmbedding streams every vector for the given accounts and model, so a
 // brute-force scan never loads the whole table into memory (PERFORMANCE.md 1).
 // The callback sees one row at a time and must not retain the Vector slice.

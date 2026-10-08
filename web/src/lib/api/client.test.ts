@@ -78,13 +78,17 @@ describe('reader api (gateway backed)', () => {
 		route({
 			'/api/v1/mirror/health': {
 				accounts: mock.healthAccounts,
-				searchIndex: 'Not built yet',
-				meaningSearch: 'Not built yet',
-				storage: '1.8 GB'
+				searchIndex: '12,408 messages',
+				meaningSearch: '1,204 waiting',
+				embeddingQueue: 1204,
+				storage: '1.8 GB',
+				memory: '41.3 MB'
 			}
 		});
 		const health = await api.getHealth();
 		expect(health.storage).toBe('1.8 GB');
+		expect(health.embeddingQueue).toBe(1204);
+		expect(health.memory).toBe('41.3 MB');
 	});
 
 	it('searches the gateway and narrows to an account', async () => {

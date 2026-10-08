@@ -157,26 +157,80 @@ func (s *Server) handleMessageSummary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, view)
 }
 
-// handleMirrorHealth summarizes per-account sync and index state. Search and
-// meaning search report honestly that they are not built yet; storage is the
-// mirror file's size.
+// EmbedBacklog is the embed worker's queue, per account: the documents it has yet
+// to embed. The worker implements it, so the page states what the worker will do.
+type EmbedBacklog interface {
+	Backlog(ctx context.Context) (map[string]int, error)
+}
+
+// WithEmbedBacklog gives Mirror health the embed queue. Without it the page
+// reports meaning search as off.
+func (s *Server) WithEmbedBacklog(b EmbedBacklog) *Server {
+	s.embedBacklog = b
+	return s
+}
+
+// handleMirrorHealth summarizes per-account sync, the search index, the embed
+// queue, storage and the process's memory. The queue is a side figure: if it
+// cannot be counted the page still answers, because this is the page the
+// operator opens when something is wrong.
 func (s *Server) handleMirrorHealth(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	views, err := s.accountViews(r)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	size, err := s.dbs.MirrorBytes(r.Context())
+	size, err := s.dbs.MirrorBytes(ctx)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
+	docs, err := s.dbs.SearchDocCount(ctx)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	queue, meaning := s.embedQueue(ctx, views)
 	writeJSON(w, http.StatusOK, api.HealthOverview{
-		Accounts:      views,
-		SearchIndex:   "Not built yet",
-		MeaningSearch: "Not built yet",
-		Storage:       humanSize(size),
+		Accounts:       views,
+		SearchIndex:    indexLabel(docs),
+		MeaningSearch:  meaning,
+		EmbeddingQueue: queue,
+		Storage:        humanSize(size),
+		Memory:         humanSize(processMemory()),
 	})
+}
+
+// embedQueue sums the backlog of the accounts with smart features on and words
+// it. An account that is off is left out: it will never be embedded, so counting
+// it would show a queue that cannot drain.
+func (s *Server) embedQueue(ctx context.Context, views []api.Account) (int, string) {
+	if s.embedBacklog == nil {
+		return 0, "Off"
+	}
+	smart := make([]string, 0, len(views))
+	for _, v := range views {
+		if v.Smart {
+			smart = append(smart, v.Id)
+		}
+	}
+	if len(smart) == 0 {
+		return 0, "Off"
+	}
+	counts, err := s.embedBacklog.Backlog(ctx)
+	if err != nil {
+		slog.WarnContext(ctx, "gateway: cannot count the embed queue", "error", err)
+		return 0, "Unavailable"
+	}
+	queue := 0
+	for _, id := range smart {
+		queue += counts[id]
+	}
+	if queue == 0 {
+		return 0, "Up to date"
+	}
+	return queue, groupDigits(queue) + " waiting"
 }
 
 func (s *Server) messageView(r *http.Request, m store.Message) (api.MailMessage, error) {

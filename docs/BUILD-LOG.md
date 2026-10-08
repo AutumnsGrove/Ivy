@@ -1061,3 +1061,26 @@ did not touch).
 
 Verification: `llm` tests (new `models_test.go`), `-race`, `golangci-lint` clean; the rounding and the kind
 check were each shown red by mutation.
+
+## 5a.3 stage 2: Mirror health states the index, the embed queue and memory (2026-10-08)
+
+- **The stale strings are gone.** `searchIndex` and `meaningSearch` were hard-coded to "Not built yet" long
+  after 3f built both. `searchIndex` now reads the index size ("12,408 messages", or "Nothing indexed yet");
+  `meaningSearch` reads Off, Up to date, "N waiting" or Unavailable.
+- **The queue is the worker's own.** `store.CountPendingEmbeddings` applies the same filters as
+  `PendingBodyRefs` and `PendingAttachmentRefs` (a test ties the two together), `EmbedWorker.Backlog`
+  reports it per account, and the server takes it through a small `EmbedBacklog` interface. An account with
+  smart features off is left out, because it will never drain; a queue that cannot be counted degrades to
+  "Unavailable" and the page still answers.
+- **Memory** is `runtime.MemStats` (`Sys` minus what the runtime has handed back): pure Go, the same on the
+  laptop and the board.
+- **Contract.** `HealthOverview` gained required `embeddingQueue` (integer) and `memory`; the words in
+  `meaningSearch` are for display and the integer is for anything that needs the number. The page shows a
+  new "Memory in use" row.
+- **Wiring.** `ivy run` and `ivy-dev` pass `Embedding.Backlog()`, which returns a true nil when no worker
+  runs (a nil `*EmbedWorker` in an interface would pass a `== nil` check and then panic; a test covers it).
+
+Verification: `make fmt vet lint test web-check`, the touched Go packages under `-race`, `pnpm test` (397),
+and the settings, named-state, a11y and screens Playwright specs (176 passed, phone and desktop). The
+smart-only filter was shown red by mutation. **Left for the operator:** the count query scans every
+message once per health-page open; measure it on the board with a large mailbox (`docs/PERFORMANCE.md`).

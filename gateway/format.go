@@ -3,6 +3,8 @@ package gateway
 import (
 	"fmt"
 	"regexp"
+	"runtime"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -38,6 +40,36 @@ func accountShort(address string) string {
 		return address
 	}
 	return address[:at+1]
+}
+
+// groupDigits writes a count with thousands separators ("1,204").
+func groupDigits(n int) string {
+	s := strconv.Itoa(n)
+	if n < 0 {
+		return "-" + groupDigits(-n)
+	}
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return s
+}
+
+// indexLabel says how much the keyword index holds.
+func indexLabel(docs int) string {
+	if docs == 0 {
+		return "Nothing indexed yet"
+	}
+	return groupDigits(docs) + " messages"
+}
+
+// processMemory is what the Go runtime holds from the operating system and has
+// not given back: the nearest pure-Go figure to resident memory, and the same on
+// the dev laptop and the board. ReadMemStats pauses the world for a moment, which
+// a page opened by hand can afford.
+func processMemory() int64 {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return int64(m.Sys - m.HeapReleased) //nolint:gosec // G115: a process cannot hold 2^63 bytes
 }
 
 // humanSize renders an attachment size for display; the labels are the usual

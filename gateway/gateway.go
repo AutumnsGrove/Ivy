@@ -63,6 +63,9 @@ type Server struct {
 	// spendCaps is where the stats panel reads the caps the gate applies; nil
 	// reports the built-in defaults.
 	spendCaps SpendCaps
+	// embedBacklog is where Mirror health learns the embed queue; nil means no
+	// worker runs, which the page reports as meaning search being off.
+	embedBacklog EmbedBacklog
 }
 
 // WithConfiguredSmart sets the smart-features choice of the accounts declared

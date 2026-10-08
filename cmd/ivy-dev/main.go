@@ -232,7 +232,7 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool, llmKey string)
 	hub := events.New()
 	srv := &http.Server{
 		Addr:              stack.Config.Listen,
-		Handler:           gateway.New(dbs, version, webui.FS).WithSearch(embedding.Query).WithSpend(embedding.Caps).WithEvents(hub).WithAllowedHosts(stack.Config.HostAllowList()).Handler(),
+		Handler:           gateway.New(dbs, version, webui.FS).WithSearch(embedding.Query).WithSpend(embedding.Caps).WithEmbedBacklog(embedding.Backlog()).WithEvents(hub).WithAllowedHosts(stack.Config.HostAllowList()).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}

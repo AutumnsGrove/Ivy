@@ -707,9 +707,11 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 		return {
 			body: {
 				accounts: mock.healthAccounts,
-				searchIndex: 'Not built yet',
-				meaningSearch: 'Not built yet',
-				storage: '1.8 GB'
+				searchIndex: '12,408 messages',
+				meaningSearch: '1,204 waiting',
+				embeddingQueue: 1204,
+				storage: '1.8 GB',
+				memory: '41.3 MB'
 			}
 		};
 	}

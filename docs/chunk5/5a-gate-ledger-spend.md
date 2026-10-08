@@ -50,8 +50,8 @@ Nothing. Everything else in chunk 5 depends on this.
    `api_calls` / `api_caps`; the web client moves from the mock to `http.ts`; the mock spend route
    and its E2E fixtures are removed in the same change.
 3. **5a.3 Caps and settings** (four stages, 2026-10-08): (1) **done**, the model registry and the cost
-   estimate helper the later backfills reuse (`docs/BUILD-LOG.md`); (2) the mirror-health additions
-   (embedding queue, memory); (3) the caps, feature-switch and model-choice API; (4) a **Smart features**
+   estimate helper the later backfills reuse (`docs/BUILD-LOG.md`); (2) **done**, the mirror-health
+   additions (embedding queue, memory, index size); (3) the caps, feature-switch and model-choice API; (4) a **Smart features**
    screen at `/settings/smart` holding them (operator's choice of structure).
 
 ## Tests and exit

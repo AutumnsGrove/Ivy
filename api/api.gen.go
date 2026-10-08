@@ -1085,10 +1085,20 @@ type EventType string
 
 // HealthOverview defines model for HealthOverview.
 type HealthOverview struct {
-	Accounts      []Account `json:"accounts"`
-	MeaningSearch string    `json:"meaningSearch"`
-	SearchIndex   string    `json:"searchIndex"`
-	Storage       string    `json:"storage"`
+	Accounts []Account `json:"accounts"`
+
+	// EmbeddingQueue Documents still to be embedded, for accounts with smart features on. An account that is off is not counted, because it will never drain.
+	EmbeddingQueue int `json:"embeddingQueue"`
+
+	// MeaningSearch Off (no account has smart features on), Up to date, "N waiting", or Unavailable when the queue could not be counted.
+	MeaningSearch string `json:"meaningSearch"`
+
+	// Memory What the Ivy process holds in memory. The board has little to spare, so this is how the operator sees a leak coming.
+	Memory string `json:"memory"`
+
+	// SearchIndex How much the keyword index holds, for example "1,204 messages".
+	SearchIndex string `json:"searchIndex"`
+	Storage     string `json:"storage"`
 }
 
 // HiddenMail Mail the mirror keeps but does not show (ARCHITECTURE.md 4)

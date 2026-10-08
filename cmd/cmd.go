@@ -138,7 +138,7 @@ func runCmd(configPath *string, version string) *cobra.Command {
 				DBs: dbs, Supervisor: supervisor, SecretsDir: cfg.SecretsDir(), Provider: appProvider,
 				Existing: func() []config.Account { return ivyYAMLAccounts },
 			})
-			api := gateway.New(dbs, version, webui.FS).WithSearch(embedding.Query).WithSpend(embedding.Caps).WithEvents(hub).
+			api := gateway.New(dbs, version, webui.FS).WithSearch(embedding.Query).WithSpend(embedding.Caps).WithEmbedBacklog(embedding.Backlog()).WithEvents(hub).
 				WithAllowedHosts(cfg.HostAllowList()).WithBackupTargets(cfg.BackupTargets()).
 				WithAccountConnector(connector).WithConfiguredSmart(smartOf(ivyYAMLAccounts))
 

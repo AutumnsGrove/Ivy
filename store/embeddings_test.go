@@ -121,3 +121,71 @@ func TestPendingAttachmentSkipsHidden(t *testing.T) {
 		t.Fatalf("hidden attachment queued: %+v", got)
 	}
 }
+
+// The health page's queue depth must be the very set the worker will embed, so it
+// counts the same way: one per content key or attachment hash, for one model, and
+// never mail that is hidden.
+func TestCountPendingEmbeddingsMatchesWhatTheWorkerWouldDo(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedAccount(t, dbs, "acct")
+	seedFolder(t, dbs, "acct", "f1")
+	seedFolder(t, dbs, "acct", "f2")
+	put := func(id, folder, key string, uid uint32) {
+		t.Helper()
+		if err := dbs.UpsertMessage(ctx, Message{
+			ID: id, AccountID: "acct", FolderID: folder, UID: uid,
+			ContentKey: key, Subject: key, BodyText: "text " + key, Date: time.Now(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put("m1", "f1", "ck1", 1)
+	put("m2", "f1", "ck2", 2)
+	put("m2b", "f2", "ck2", 1) // the same mail in a second folder: one document
+	put("m3", "f1", "ck3", 3)
+	if err := dbs.DisableMessage(ctx, "m3", "server_removed", time.Now(), ""); err != nil {
+		t.Fatal(err)
+	}
+	// SetMessageDerived replaces the body, so it carries the body again.
+	if err := dbs.SetMessageDerived(ctx, "m1", Derived{Version: 1, BodyText: "text ck1", Attachments: []Attachment{
+		{MessageID: "m1", Filename: "a.pdf", MIMEType: "application/pdf", Size: 10, ContentHash: "h1", StoragePath: "2"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := dbs.UpsertExtractedText(ctx, ExtractedText{
+		Ref: "h1", Kind: ExtractKindAttachment, Tier: 1, Status: "ok", Text: "invoice",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	count := func(model string) int {
+		t.Helper()
+		n, err := dbs.CountPendingEmbeddings(ctx, "acct", model)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	bodies, _ := dbs.PendingBodyRefs(ctx, "acct", "model-x", 100)
+	atts, _ := dbs.PendingAttachmentRefs(ctx, "acct", "model-x", 100)
+	if got, want := count("model-x"), len(bodies)+len(atts); got != want || want != 3 {
+		t.Fatalf("pending = %d; the worker would embed %d bodies + %d attachments (want 3 in all)", got, len(bodies), len(atts))
+	}
+
+	if err := dbs.UpsertEmbeddings(ctx, []Embedding{{
+		AccountID: "acct", Ref: "ck1", Kind: ExtractKindBody, Model: "model-x", Dims: 2, Scale: 0.1, Norm: 1, Vector: []byte{1, 2},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := count("model-x"); got != 2 {
+		t.Errorf("after embedding one: %d, want 2", got)
+	}
+	if got := count("model-y"); got != 3 {
+		t.Errorf("another model starts from scratch: %d, want 3", got)
+	}
+	if n, err := dbs.CountPendingEmbeddings(ctx, "nobody", "model-x"); err != nil || n != 0 {
+		t.Errorf("an unknown account = %d, %v; want 0", n, err)
+	}
+}

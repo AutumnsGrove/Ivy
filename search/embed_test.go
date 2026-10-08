@@ -151,6 +151,41 @@ func newWorld(t *testing.T) *mailworld.World {
 	return w
 }
 
+// The queue depth on the health page is the worker's own: per account, the
+// documents it has yet to embed, falling as it works.
+func TestEmbedWorkerReportsItsBacklog(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	dbs := openStore(t)
+	optIn(t, dbs, "acct", true)
+	worker := NewEmbedWorker(dbs, gateAt(dbs, w.OpenRouterURL()), []AccountConfig{
+		hostedAccount, {ID: "no-provider"},
+	}, WorkerOptions{Batch: 32})
+
+	seedMail(t, dbs, "acct", "f1", "m1", "ck1", "Domain renewal", "Your domain invoice is attached")
+	// seedMail takes the UID from the id's length, so the ids must differ in length.
+	seedMail(t, dbs, "acct", "f1", "msg-two", "ck2", "Lunch", "Are you free on Friday")
+
+	got, err := worker.Backlog(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["acct"] != 2 {
+		t.Errorf("backlog = %v, want 2 for acct", got)
+	}
+	if _, listed := got["no-provider"]; listed {
+		t.Errorf("an account with no provider is in the backlog: %v", got)
+	}
+
+	if _, err := worker.RunOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = worker.Backlog(ctx); got["acct"] != 0 {
+		t.Errorf("backlog after a pass = %v, want 0", got)
+	}
+}
+
 func TestEmbedWorkerEmbedsOnce(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

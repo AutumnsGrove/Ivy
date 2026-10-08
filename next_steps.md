@@ -58,7 +58,7 @@ screens**.
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
 | 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, rules, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; 3e done; 3f done; 3g done; **3h done** |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | **done** (4a-4h; rounds 60-66; see "Chunk 4 stages" and `docs/CHUNK4-BRIEF.md`) |
-| 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | **planned, not started** (2026-10-07): standing rules in `docs/CHUNK5-BRIEF.md`, one plan per feature in `docs/chunk5/` (5a-5j, foundation first); every plan's questions were answered with the operator on 2026-10-07 (see each plan's Decisions section and `docs/qa-log.md`); **5a.1 (the generalised gate) and 5a.2 (the spend API) are done**; **5a.3 (caps and settings) is in progress, stage 1 of 4 done** (registry and estimate) |
+| 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | **planned, not started** (2026-10-07): standing rules in `docs/CHUNK5-BRIEF.md`, one plan per feature in `docs/chunk5/` (5a-5j, foundation first); every plan's questions were answered with the operator on 2026-10-07 (see each plan's Decisions section and `docs/qa-log.md`); **5a.1 (the generalised gate) and 5a.2 (the spend API) are done**; **5a.3 (caps and settings) is in progress, stages 1-2 of 4 done** (registry and estimate; mirror health) |
 
 Frontend: SvelteKit 3 app in `web/`. The reader endpoints (`/accounts`, `/inbox`,
 `/messages/{id}`, `/summary`, `/mirror/health`, account profile and photo), tags (`/tags`, the
@@ -95,8 +95,9 @@ now read **Done / Held back / Errors / Declined**, because the ledger cannot yet
 (qa-log "5a.2 decisions"); 5b can bring that split back when it records what a decision did.
 **5a.3 is in progress (four stages, operator-approved 2026-10-08; qa-log "5a.3: operator answers").**
 **Stage 1 is done:** the model registry and the bulk estimate (`llm/models.go`, `llm/estimate.go`;
-`Gate.ModelFor` and `Gate.Estimate`; `docs/BUILD-LOG.md`). **Next, in order:** (2) the mirror-health
-additions (embedding queue, memory, and the two stale "Not built yet" strings), (3) the caps and
+`Gate.ModelFor` and `Gate.Estimate`; `docs/BUILD-LOG.md`). **Stage 2 is done:** Mirror health states the
+index size, the embed queue (opted-in accounts only) and process memory, and the two stale "Not built yet"
+strings are gone. **Next, in order:** (3) the caps and
 switches API (read and write the settings the gate already honours, plus the model choices), (4) the
 **Smart features** screen at `/settings/smart` (global cap, per-account caps, per-feature switches, model
 pickers), reached from one row on the settings home. The next gate is **G2**, before the first live Jev

@@ -2649,7 +2649,7 @@ components:
               type: string
     HealthOverview:
       type: object
-      required: [accounts, searchIndex, meaningSearch, storage]
+      required: [accounts, searchIndex, meaningSearch, embeddingQueue, storage, memory]
       properties:
         accounts:
           type: array
@@ -2657,10 +2657,24 @@ components:
             $ref: "#/components/schemas/Account"
         searchIndex:
           type: string
+          description: How much the keyword index holds, for example "1,204 messages".
         meaningSearch:
           type: string
+          description: >
+            Off (no account has smart features on), Up to date, "N waiting", or
+            Unavailable when the queue could not be counted.
+        embeddingQueue:
+          type: integer
+          description: >
+            Documents still to be embedded, for accounts with smart features on.
+            An account that is off is not counted, because it will never drain.
         storage:
           type: string
+        memory:
+          type: string
+          description: >
+            What the Ivy process holds in memory. The board has little to spare, so
+            this is how the operator sees a leak coming.
     HiddenMail:
       type: object
       description: Mail the mirror keeps but does not show (ARCHITECTURE.md 4)

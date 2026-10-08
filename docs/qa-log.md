@@ -1805,3 +1805,16 @@ Not asked; revisit if wrong.
 - **A bad stored choice falls back to the default** with a warning rather than failing the feature.
 - **An estimate rounds up to the next cent** and assumes about 110 tokens per Jev question (the brief's
   figure), so one message shows $0.01 and not $0.00.
+
+## 5a.3 stage 2: decisions the agent made (2026-10-08)
+
+Not asked; revisit if wrong.
+
+- **An account with smart features off is not "waiting".** The queue counts only opted-in accounts, and
+  with none on the page says Off. Counting the others would show a number that can never fall.
+- **"Messages" is the index's unit** on the health page, though a document also carries attachment text;
+  the count is one per content key, so it matches what the operator thinks of as a message.
+- **Memory is the Go runtime's figure**, not the OS's resident size, to stay pure Go and portable. It runs a
+  little under what `top` shows; the point is the trend, not the byte.
+- **A failing counter never fails the page.** This is the screen the operator opens when something is
+  wrong, so the queue degrades to "Unavailable".

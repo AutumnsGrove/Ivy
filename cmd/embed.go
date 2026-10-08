@@ -49,6 +49,15 @@ func NewEmbedding(cfg *config.Config, dbs *store.DBs, apiKey string, opts ...Emb
 	return emb
 }
 
+// Backlog is the embed queue for Mirror health, or a true nil when no worker runs:
+// a nil *EmbedWorker inside the interface would not compare equal to nil.
+func (e *Embedding) Backlog() gateway.EmbedBacklog {
+	if e.Worker == nil {
+		return nil
+	}
+	return e.Worker
+}
+
 type embeddingOptions struct{ fromApp map[string]bool }
 
 // EmbeddingOption adjusts NewEmbedding.

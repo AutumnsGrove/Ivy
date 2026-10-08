@@ -1467,9 +1467,15 @@ export interface components {
         };
         HealthOverview: {
             accounts: components["schemas"]["Account"][];
+            /** @description How much the keyword index holds, for example "1,204 messages". */
             searchIndex: string;
+            /** @description Off (no account has smart features on), Up to date, "N waiting", or Unavailable when the queue could not be counted. */
             meaningSearch: string;
+            /** @description Documents still to be embedded, for accounts with smart features on. An account that is off is not counted, because it will never drain. */
+            embeddingQueue: number;
             storage: string;
+            /** @description What the Ivy process holds in memory. The board has little to spare, so this is how the operator sees a leak coming. */
+            memory: string;
         };
         /** @description Mail the mirror keeps but does not show (ARCHITECTURE.md 4) */
         HiddenMail: {

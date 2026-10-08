@@ -82,6 +82,16 @@ type SearchDoc struct {
 	Attachment string
 }
 
+// SearchDocCount is how many documents the search index holds, one per content
+// key however often it was re-indexed.
+func (d *DBs) SearchDocCount(ctx context.Context) (int, error) {
+	var n int
+	if err := d.Mirror.Read.QueryRowContext(ctx, `SELECT count(*) FROM search_docs`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count search docs: %w", err)
+	}
+	return n, nil
+}
+
 // IndexSearchDoc writes a content key's document: it allocates the
 // search_docs row once and replaces the FTS row, so a re-index cannot leave a
 // stale copy behind. An empty document is still stored; it simply never

@@ -2,9 +2,11 @@ package gateway
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -41,6 +43,100 @@ func TestMirrorHealthShowsHiddenCount(t *testing.T) {
 	got := *health.Accounts[0].Hidden
 	if got.Total != 4 || got.Removed != 2 || got.Moved != 1 || got.Pending != 1 {
 		t.Errorf("hidden = %+v, want total 4 removed 2 moved 1 pending 1", got)
+	}
+}
+
+// fakeBacklog stands in for the embed worker's queue report.
+type fakeBacklog struct {
+	counts map[string]int
+	err    error
+}
+
+func (f fakeBacklog) Backlog(context.Context) (map[string]int, error) { return f.counts, f.err }
+
+func getHealth(t *testing.T, url string) api.HealthOverview {
+	t.Helper()
+	var health api.HealthOverview
+	if code := getJSON(t, url+"/api/v1/mirror/health", &health); code != http.StatusOK {
+		t.Fatalf("health status = %d, want 200", code)
+	}
+	return health
+}
+
+var humanBytes = regexp.MustCompile(`^\d+(\.\d)? (B|KB|MB|GB)$`)
+
+// Search and meaning search used to read "Not built yet" after both were built.
+// With no embed queue wired the page says so plainly, and it states the index
+// size and the process memory (the board has little to spare).
+func TestMirrorHealthStatesTheIndexAndMemory(t *testing.T) {
+	t.Parallel()
+	srv, dbs := newSeededServer(t)
+	ctx := context.Background()
+	for _, key := range []string{"k1", "k2", "k3"} {
+		if err := dbs.IndexSearchDoc(ctx, store.SearchDoc{AccountID: "a", ContentKey: key, Subject: key}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	health := getHealth(t, srv.URL)
+	if health.SearchIndex != "3 messages" {
+		t.Errorf("searchIndex = %q, want %q", health.SearchIndex, "3 messages")
+	}
+	if health.MeaningSearch != "Off" || health.EmbeddingQueue != 0 {
+		t.Errorf("meaning search = %q with %d queued, want Off and 0 with no queue wired", health.MeaningSearch, health.EmbeddingQueue)
+	}
+	if !humanBytes.MatchString(health.Memory) || health.Memory == "0 B" {
+		t.Errorf("memory = %q, want a real size such as 38.2 MB", health.Memory)
+	}
+}
+
+func TestMirrorHealthSaysNothingIsIndexedYet(t *testing.T) {
+	t.Parallel()
+	srv, _ := newSeededServer(t)
+	if got := getHealth(t, srv.URL).SearchIndex; got != "Nothing indexed yet" {
+		t.Errorf("searchIndex = %q, want %q", got, "Nothing indexed yet")
+	}
+}
+
+// An account with smart features off will never be embedded, so its mail is not
+// "waiting"; counting it would show a queue that cannot drain.
+func TestMirrorHealthCountsTheQueueOfSmartAccountsOnly(t *testing.T) {
+	t.Parallel()
+	backlog := fakeBacklog{counts: map[string]int{"on": 1200, "off": 9}}
+	srv, dbs := newConfiguredServer(t, func(s *Server) { s.WithEmbedBacklog(backlog) })
+	mustAccount(t, dbs, store.Account{ID: "on", Address: "on@example.com", LLMEnabled: true})
+	mustAccount(t, dbs, store.Account{ID: "off", Address: "off@example.com"})
+
+	health := getHealth(t, srv.URL)
+	if health.EmbeddingQueue != 1200 || health.MeaningSearch != "1,200 waiting" {
+		t.Errorf("queue = %d, meaning search = %q; want 1200 and %q", health.EmbeddingQueue, health.MeaningSearch, "1,200 waiting")
+	}
+
+	backlog.counts["on"] = 0
+	srv, dbs = newConfiguredServer(t, func(s *Server) { s.WithEmbedBacklog(backlog) })
+	mustAccount(t, dbs, store.Account{ID: "on", Address: "on@example.com", LLMEnabled: true})
+	if got := getHealth(t, srv.URL).MeaningSearch; got != "Up to date" {
+		t.Errorf("a drained queue reads %q, want %q", got, "Up to date")
+	}
+
+	srv, dbs = newConfiguredServer(t, func(s *Server) { s.WithEmbedBacklog(backlog) })
+	mustAccount(t, dbs, store.Account{ID: "off", Address: "off@example.com"})
+	if health := getHealth(t, srv.URL); health.MeaningSearch != "Off" || health.EmbeddingQueue != 0 {
+		t.Errorf("every account off: %q with %d queued, want Off and 0", health.MeaningSearch, health.EmbeddingQueue)
+	}
+}
+
+// The health page is how the operator finds out something is wrong, so a counter
+// that fails must not take the page with it.
+func TestMirrorHealthSurvivesAQueueThatCannotBeCounted(t *testing.T) {
+	t.Parallel()
+	srv, dbs := newConfiguredServer(t, func(s *Server) {
+		s.WithEmbedBacklog(fakeBacklog{err: errors.New("mirror busy")})
+	})
+	mustAccount(t, dbs, store.Account{ID: "on", Address: "on@example.com", LLMEnabled: true})
+	health := getHealth(t, srv.URL)
+	if health.MeaningSearch != "Unavailable" || health.EmbeddingQueue != 0 || len(health.Accounts) != 1 {
+		t.Errorf("health = %+v, want the page with meaning search Unavailable", health)
 	}
 }
 

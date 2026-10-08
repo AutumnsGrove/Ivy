@@ -27,6 +27,17 @@ test.describe('behaviour settings', () => {
 	});
 });
 
+test.describe('mirror health', () => {
+	test('states the index, the embedding queue, storage and memory the server reports', async ({ page }) => {
+		await page.goto('/settings/health');
+		const row = (label: string) => page.locator('.srow', { hasText: label });
+		await expect(row('Search index')).toContainText('12,408 messages');
+		await expect(row('Meaning search')).toContainText('1,204 waiting');
+		await expect(row('Storage used')).toContainText('1.8 GB');
+		await expect(row('Memory in use')).toContainText('41.3 MB');
+	});
+});
+
 test.describe('self-update', () => {
 	test('the Update button asks the host watcher and shows progress', async ({ page }) => {
 		await page.goto('/settings');
