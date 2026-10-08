@@ -38,7 +38,7 @@ machinery (withheld mail) that 5h and 5i also need; 5j needs 5b's registry and t
 
 | Stage | Plan | Status |
 |---|---|---|
-| 5a | [Gate, ledger and spend](5a-gate-ledger-spend.md) | **5a.1 and 5a.2 done** (2026-10-08); 5a.3 in progress, stages 1-2 of 4 (registry, estimate; mirror health) done |
+| 5a | [Gate, ledger and spend](5a-gate-ledger-spend.md) | **5a.1 and 5a.2 done** (2026-10-08); 5a.3 in progress, stages 1-3 of 4 (registry, estimate; mirror health; `/smart` API) done |
 | 5b | [The Jev layer](5b-jev-layer.md) | planned; questions answered 2026-10-07 |
 | 5c | [Needs-me cascade](5c-needs-me-cascade.md) | planned; questions answered 2026-10-07 |
 | 5d | [Classifiers and safety](5d-classifiers-and-safety.md) | planned; questions answered 2026-10-07 |

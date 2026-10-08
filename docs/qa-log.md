@@ -1818,3 +1818,16 @@ Not asked; revisit if wrong.
   little under what `top` shows; the point is the trend, not the byte.
 - **A failing counter never fails the page.** This is the screen the operator opens when something is
   wrong, so the queue degrades to "Unavailable".
+
+## 5a.3 stage 3: decisions the agent made (2026-10-08)
+
+Not asked; revisit if wrong.
+
+- **A monthly cap tops out at $1000.** It is there to catch a typo (an extra zero), not to police the
+  operator, who has the provider key's own limit as the real backstop. Zero stays valid and means no spend.
+- **Only labelled features are listed.** The table holds ten features that have no code yet; showing a
+  switch for each would be ten switches that do nothing. Each stage gives its feature a label when it ships.
+- **Per-feature model overrides are accepted by the API before any feature uses one.** The screen shows the
+  override pickers when a chat feature is listed; the API needs no change then.
+- **A request is validated whole, then written.** The writes themselves are separate statements, so a disk
+  failure part-way could still leave a partial change; a validation failure cannot.

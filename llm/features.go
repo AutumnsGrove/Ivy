@@ -26,10 +26,14 @@ type feature struct {
 	// per-feature switch says off. Features ship dark, so only the two that
 	// already shipped are on; each later stage turns its own on.
 	defaultOn bool
+	// label is the operator-facing name. A feature with none is not listed on the
+	// Smart features screen: it has no code behind it yet, and gains a label when
+	// its stage ships.
+	label string
 }
 
 var features = map[string]feature{
-	"search": {endpoint: EndpointEmbeddings, defaultOn: true},
+	"search": {endpoint: EndpointEmbeddings, defaultOn: true, label: "Meaning search"},
 	"embed":  {endpoint: EndpointEmbeddings, defaultOn: true},
 
 	// The tripwire and the sensitive check are the checks, so they cannot wait on

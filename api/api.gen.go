@@ -1581,6 +1581,79 @@ type SendStatus struct {
 // SendStatusState defines model for SendStatus.State.
 type SendStatusState string
 
+// SmartAccount defines model for SmartAccount.
+type SmartAccount struct {
+	Address string  `json:"address"`
+	CapUsd  float64 `json:"capUsd"`
+
+	// Features Whether each listed feature will run for this account
+	Features map[string]bool `json:"features"`
+	Id       string          `json:"id"`
+
+	// MonthUsd Spent this calendar month (UTC), across every endpoint
+	MonthUsd float64 `json:"monthUsd"`
+	Short    string  `json:"short"`
+
+	// Smart The account's smart-features switch; nothing below runs while it is off
+	Smart bool `json:"smart"`
+}
+
+// SmartAccountPatch defines model for SmartAccountPatch.
+type SmartAccountPatch struct {
+	CapUsd *float64 `json:"capUsd,omitempty"`
+
+	// Features Feature name to on or off
+	Features *map[string]bool `json:"features,omitempty"`
+}
+
+// SmartFeature A feature the operator can switch per account
+type SmartFeature struct {
+	DefaultOn bool   `json:"defaultOn"`
+	Label     string `json:"label"`
+	Name      string `json:"name"`
+}
+
+// SmartModel A chat model Ivy offers, from the code-defined catalog
+type SmartModel struct {
+	Id string `json:"id"`
+
+	// InPerM Listed dollars per million input tokens
+	InPerM float64 `json:"inPerM"`
+
+	// Multimodal Reads images, so it can serve vision
+	Multimodal bool   `json:"multimodal"`
+	Name       string `json:"name"`
+
+	// OutPerM Listed dollars per million output tokens
+	OutPerM float64 `json:"outPerM"`
+}
+
+// SmartSettings defines model for SmartSettings.
+type SmartSettings struct {
+	Accounts []SmartAccount `json:"accounts"`
+
+	// ChatModel The id chat features run on unless they override it
+	ChatModel string `json:"chatModel"`
+
+	// FeatureModels Per-feature overrides, feature name to model id; a feature not listed follows `chatModel`
+	FeatureModels  map[string]string `json:"featureModels"`
+	Features       []SmartFeature    `json:"features"`
+	GlobalCapUsd   float64           `json:"globalCapUsd"`
+	GlobalMonthUsd float64           `json:"globalMonthUsd"`
+	Models         []SmartModel      `json:"models"`
+}
+
+// SmartSettingsPatch defines model for SmartSettingsPatch.
+type SmartSettingsPatch struct {
+	// Accounts Account id to its changes
+	Accounts  *map[string]SmartAccountPatch `json:"accounts,omitempty"`
+	ChatModel *string                       `json:"chatModel,omitempty"`
+
+	// FeatureModels Feature name to model id; an empty id clears the override
+	FeatureModels *map[string]string `json:"featureModels,omitempty"`
+	GlobalCapUsd  *float64           `json:"globalCapUsd,omitempty"`
+}
+
 // SnoozeRequest defines model for SnoozeRequest.
 type SnoozeRequest struct {
 	Preset SnoozeRequestPreset `json:"preset"`
@@ -1913,6 +1986,9 @@ type UpdateRuleJSONRequestBody = RuleInput
 
 // SendMessageJSONRequestBody defines body for SendMessage for application/json ContentType.
 type SendMessageJSONRequestBody = SendRequest
+
+// UpdateSmartSettingsJSONRequestBody defines body for UpdateSmartSettings for application/json ContentType.
+type UpdateSmartSettingsJSONRequestBody = SmartSettingsPatch
 
 // CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
 type CreateTagJSONRequestBody = TagCreate

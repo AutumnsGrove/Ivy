@@ -22,8 +22,9 @@ type Embedding struct {
 	Query gateway.QueryEmbedder
 	// Worker embeds each message once. Nil when no account has a usable provider.
 	Worker *search.EmbedWorker
-	// Caps is the gate's own view of the monthly caps, for the stats panel.
-	Caps gateway.SpendCaps
+	// Caps is the gate itself as the Smart features screen and the stats panel see
+	// it: the caps, switches and model choices it applies, and the way to change them.
+	Caps gateway.SmartControls
 }
 
 // NewEmbedding builds the embedding stack from the operator's config. apiKey is

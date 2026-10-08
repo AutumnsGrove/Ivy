@@ -1084,3 +1084,29 @@ Verification: `make fmt vet lint test web-check`, the touched Go packages under 
 and the settings, named-state, a11y and screens Playwright specs (176 passed, phone and desktop). The
 smart-only filter was shown red by mutation. **Left for the operator:** the count query scans every
 message once per health-page open; measure it on the board with a large mailbox (`docs/PERFORMANCE.md`).
+
+## 5a.3 stage 3: the caps, switches and model-choice API (2026-10-08)
+
+- **One resource, two verbs.** `GET /smart` returns what the gate is applying right now: the global cap
+  and month-to-date spend, each account's cap, spend, smart switch and per-feature switches, the chat
+  models on offer with their listed prices, the chosen default and any per-feature overrides. `PATCH /smart`
+  is a partial update over the same shape. The values are read through the gate (`SmartControls`, which
+  `*llm.Gate` implements and which also answers the stats panel's caps), so the screen cannot show a value
+  admission is not applying, and a retired model reads as the default it will really run on.
+- **All or nothing.** The request is decoded strictly (unknown fields and bodies over 8 KiB are a 400),
+  then the accounts are checked (unknown is a 404), then every value is checked with the pure `llm.Check*`
+  functions, and only then are any written, in a fixed order. A test sends a valid global cap beside an
+  invalid account cap and proves the global one did not move; disabling the up-front check turns it red.
+- **Where the rules live.** The closed sets are checked in `llm` (`CheckCap`, `CheckFeature`,
+  `CheckChatModel`, `CheckFeatureModel`), which also owns the setters; the gateway only translates. A
+  refusal is a `*llm.BadValue` with a message fit to show that still matches `ErrBadRequest`.
+- **Caps.** 0 to $1000 (`MaxCapUSD`, a typo guard), where zero means no hosted spend. A test proves the
+  saved cap is the one the next call is refused at, with nothing reaching the provider.
+- **Features listed.** A feature appears on the screen only when it has a label, which a feature gets when
+  its stage ships; today that is Meaning search. The gate still accepts a switch for any feature in its
+  table, so a later stage needs no change here.
+- **Not here:** the client methods and the screen (stage 4); an account's own smart switch, which stays on
+  `PATCH /accounts/{id}`.
+
+Verification: `llm` and `gateway` under `-race`, `golangci-lint` (the one finding is in a file this stage
+did not touch), `make drift`.

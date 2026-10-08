@@ -575,6 +575,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/smart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caps, feature switches and model choices behind the Smart features screen
+         * @description Every value is what the gate is applying right now, not a copy: a cap is the stored one or the built-in default, a model is the one a feature will run on (a choice the catalog has since retired reads as the default). An account's own smart-features switch is `smart`, set through `updateAccountProfile`.
+         */
+        get: operations["getSmartSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change caps, feature switches or model choices
+         * @description A partial update: only the fields present change. The whole request is checked before anything is written, so a refusal changes nothing. A cap is dollars from 0 to 1000, and zero means no hosted spend at all.
+         */
+        patch: operations["updateSmartSettings"];
+        trace?: never;
+    };
     "/spend": {
         parameters: {
             query?: never;
@@ -975,6 +999,83 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description A feature the operator can switch per account */
+        SmartFeature: {
+            name: string;
+            label: string;
+            defaultOn: boolean;
+        };
+        /** @description A chat model Ivy offers, from the code-defined catalog */
+        SmartModel: {
+            id: string;
+            name: string;
+            /** @description Reads images, so it can serve vision */
+            multimodal: boolean;
+            /**
+             * Format: double
+             * @description Listed dollars per million input tokens
+             */
+            inPerM: number;
+            /**
+             * Format: double
+             * @description Listed dollars per million output tokens
+             */
+            outPerM: number;
+        };
+        SmartAccount: {
+            id: string;
+            address: string;
+            short: string;
+            /** @description The account's smart-features switch; nothing below runs while it is off */
+            smart: boolean;
+            /** Format: double */
+            capUsd: number;
+            /**
+             * Format: double
+             * @description Spent this calendar month (UTC), across every endpoint
+             */
+            monthUsd: number;
+            /** @description Whether each listed feature will run for this account */
+            features: {
+                [key: string]: boolean;
+            };
+        };
+        SmartSettings: {
+            /** Format: double */
+            globalCapUsd: number;
+            /** Format: double */
+            globalMonthUsd: number;
+            accounts: components["schemas"]["SmartAccount"][];
+            features: components["schemas"]["SmartFeature"][];
+            models: components["schemas"]["SmartModel"][];
+            /** @description The id chat features run on unless they override it */
+            chatModel: string;
+            /** @description Per-feature overrides, feature name to model id; a feature not listed follows `chatModel` */
+            featureModels: {
+                [key: string]: string;
+            };
+        };
+        SmartAccountPatch: {
+            /** Format: double */
+            capUsd?: number;
+            /** @description Feature name to on or off */
+            features?: {
+                [key: string]: boolean;
+            };
+        };
+        SmartSettingsPatch: {
+            /** Format: double */
+            globalCapUsd?: number;
+            chatModel?: string;
+            /** @description Feature name to model id; an empty id clears the override */
+            featureModels?: {
+                [key: string]: string;
+            };
+            /** @description Account id to its changes */
+            accounts?: {
+                [key: string]: components["schemas"]["SmartAccountPatch"];
+            };
+        };
         SpendRow: {
             key: string;
             calls: number;
@@ -2969,6 +3070,60 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RuleApplyResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSmartSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmartSettings"];
+                };
+            };
+        };
+    };
+    updateSmartSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SmartSettingsPatch"];
+            };
+        };
+        responses: {
+            /** @description The settings after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmartSettings"];
+                };
+            };
+            /** @description A value is not valid (`bad_request`): a cap out of range, an unknown feature or model, or a model that cannot serve the feature. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             404: components["responses"]["NotFound"];

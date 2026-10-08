@@ -985,6 +985,52 @@ paths:
                 $ref: "#/components/schemas/RuleApplyResult"
         "404":
           $ref: "#/components/responses/NotFound"
+  /smart:
+    get:
+      operationId: getSmartSettings
+      summary: The caps, feature switches and model choices behind the Smart features screen
+      description: >
+        Every value is what the gate is applying right now, not a copy: a cap is the
+        stored one or the built-in default, a model is the one a feature will run on
+        (a choice the catalog has since retired reads as the default). An account's
+        own smart-features switch is `smart`, set through `updateAccountProfile`.
+      responses:
+        "200":
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmartSettings"
+    patch:
+      operationId: updateSmartSettings
+      summary: Change caps, feature switches or model choices
+      description: >
+        A partial update: only the fields present change. The whole request is
+        checked before anything is written, so a refusal changes nothing. A cap is
+        dollars from 0 to 1000, and zero means no hosted spend at all.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmartSettingsPatch"
+      responses:
+        "200":
+          description: The settings after the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmartSettings"
+        "400":
+          description: >
+            A value is not valid (`bad_request`): a cap out of range, an unknown
+            feature or model, or a model that cannot serve the feature.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /spend:
     get:
       operationId: getSpend
@@ -1674,6 +1720,121 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
   schemas:
+    SmartFeature:
+      type: object
+      description: A feature the operator can switch per account
+      required: [name, label, defaultOn]
+      properties:
+        name:
+          type: string
+        label:
+          type: string
+        defaultOn:
+          type: boolean
+    SmartModel:
+      type: object
+      description: A chat model Ivy offers, from the code-defined catalog
+      required: [id, name, multimodal, inPerM, outPerM]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        multimodal:
+          type: boolean
+          description: Reads images, so it can serve vision
+        inPerM:
+          type: number
+          format: double
+          description: Listed dollars per million input tokens
+        outPerM:
+          type: number
+          format: double
+          description: Listed dollars per million output tokens
+    SmartAccount:
+      type: object
+      required: [id, address, short, smart, capUsd, monthUsd, features]
+      properties:
+        id:
+          type: string
+        address:
+          type: string
+        short:
+          type: string
+        smart:
+          type: boolean
+          description: The account's smart-features switch; nothing below runs while it is off
+        capUsd:
+          type: number
+          format: double
+        monthUsd:
+          type: number
+          format: double
+          description: Spent this calendar month (UTC), across every endpoint
+        features:
+          type: object
+          description: Whether each listed feature will run for this account
+          additionalProperties:
+            type: boolean
+    SmartSettings:
+      type: object
+      required: [globalCapUsd, globalMonthUsd, accounts, features, models, chatModel, featureModels]
+      properties:
+        globalCapUsd:
+          type: number
+          format: double
+        globalMonthUsd:
+          type: number
+          format: double
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/SmartAccount"
+        features:
+          type: array
+          items:
+            $ref: "#/components/schemas/SmartFeature"
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/SmartModel"
+        chatModel:
+          type: string
+          description: The id chat features run on unless they override it
+        featureModels:
+          type: object
+          description: Per-feature overrides, feature name to model id; a feature not listed follows `chatModel`
+          additionalProperties:
+            type: string
+    SmartAccountPatch:
+      type: object
+      properties:
+        capUsd:
+          type: number
+          format: double
+        features:
+          type: object
+          description: Feature name to on or off
+          additionalProperties:
+            type: boolean
+    SmartSettingsPatch:
+      type: object
+      properties:
+        globalCapUsd:
+          type: number
+          format: double
+        chatModel:
+          type: string
+        featureModels:
+          type: object
+          description: Feature name to model id; an empty id clears the override
+          additionalProperties:
+            type: string
+        accounts:
+          type: object
+          description: Account id to its changes
+          additionalProperties:
+            $ref: "#/components/schemas/SmartAccountPatch"
     SpendRow:
       type: object
       required: [key, calls, usd]
