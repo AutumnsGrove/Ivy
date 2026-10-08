@@ -156,16 +156,24 @@ func TestARefusedChangeChangesNothing(t *testing.T) {
 		patch api.SmartSettingsPatch
 		code  int
 	}{
-		"a negative account cap": {api.SmartSettingsPatch{GlobalCapUsd: &global,
-			Accounts: &map[string]api.SmartAccountPatch{"a1": {CapUsd: &bad}}}, http.StatusBadRequest},
+		"a negative account cap": {api.SmartSettingsPatch{
+			GlobalCapUsd: &global,
+			Accounts:     &map[string]api.SmartAccountPatch{"a1": {CapUsd: &bad}},
+		}, http.StatusBadRequest},
 		"a cap over the ceiling": {api.SmartSettingsPatch{GlobalCapUsd: &huge}, http.StatusBadRequest},
 		"an unknown model":       {api.SmartSettingsPatch{GlobalCapUsd: &global, ChatModel: &unknownModel}, http.StatusBadRequest},
-		"an unknown feature": {api.SmartSettingsPatch{GlobalCapUsd: &global,
-			Accounts: &map[string]api.SmartAccountPatch{"a1": {Features: &map[string]bool{"mystery": true}}}}, http.StatusBadRequest},
-		"a model that cannot serve the feature": {api.SmartSettingsPatch{GlobalCapUsd: &global,
-			FeatureModels: &map[string]string{"vision": text}}, http.StatusBadRequest},
-		"an unknown account": {api.SmartSettingsPatch{GlobalCapUsd: &global,
-			Accounts: &map[string]api.SmartAccountPatch{"nobody": {CapUsd: &global}}}, http.StatusNotFound},
+		"an unknown feature": {api.SmartSettingsPatch{
+			GlobalCapUsd: &global,
+			Accounts:     &map[string]api.SmartAccountPatch{"a1": {Features: &map[string]bool{"mystery": true}}},
+		}, http.StatusBadRequest},
+		"a model that cannot serve the feature": {api.SmartSettingsPatch{
+			GlobalCapUsd:  &global,
+			FeatureModels: &map[string]string{"vision": text},
+		}, http.StatusBadRequest},
+		"an unknown account": {api.SmartSettingsPatch{
+			GlobalCapUsd: &global,
+			Accounts:     &map[string]api.SmartAccountPatch{"nobody": {CapUsd: &global}},
+		}, http.StatusNotFound},
 	}
 	for name, c := range cases {
 		var errBody api.Error

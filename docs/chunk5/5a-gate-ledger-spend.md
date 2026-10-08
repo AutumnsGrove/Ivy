@@ -52,7 +52,7 @@ Nothing. Everything else in chunk 5 depends on this.
 3. **5a.3 Caps and settings** (four stages, 2026-10-08): (1) **done**, the model registry and the cost
    estimate helper the later backfills reuse (`docs/BUILD-LOG.md`); (2) **done**, the mirror-health
    additions (embedding queue, memory, index size); (3) **done**, the caps, feature-switch and model-choice
-   API (`GET`/`PATCH /smart`); (4) a **Smart features**
+   API (`GET`/`PATCH /smart`); (4) **done**, a **Smart features**
    screen at `/settings/smart` holding them (operator's choice of structure).
 
 ## Tests and exit

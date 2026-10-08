@@ -5,8 +5,11 @@ import type { Account, CallRecord } from '../src/lib/types';
 
 type Reply = { status?: number; contentType?: string; headers?: Record<string, string>; body: unknown };
 
-const GLOBAL_CAP = 10;
-const ACCOUNT_CAP = 5;
+/** The caps the gate is applying. One object serves this fixture and the Smart features mock, as one gate serves both screens. */
+export type Caps = { global: number; account: Record<string, number> };
+
+export const DEFAULT_GLOBAL_CAP = 10;
+export const DEFAULT_ACCOUNT_CAP = 5;
 
 /** Small deterministic generator (mulberry32); the fixture must not depend on Math.random. */
 function seeded(seed: number) {
@@ -102,7 +105,16 @@ function group(rows: CallRecord[], by: (c: CallRecord) => string): Row[] {
 		.sort((a, b) => b.usd - a.usd || a.key.localeCompare(b.key));
 }
 
-function summary(ledger: CallRecord[], from: string | null, now: Date, scenario: string | null) {
+/** This calendar month's spend (UTC), in total and by account, from the same ledger the spend screen reads. */
+export function monthSpend(accounts: Account[], now = new Date()) {
+	const monthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+	const rows = ledgerFor(accounts).filter((c) => c.outcome !== 'refused' && Date.parse(c.at) >= monthStart);
+	const account: Record<string, number> = {};
+	for (const c of rows) account[c.accountId] = (account[c.accountId] ?? 0) + c.costUsd;
+	return { global: rows.reduce((n, c) => n + c.costUsd, 0), account };
+}
+
+function summary(ledger: CallRecord[], from: string | null, now: Date, scenario: string | null, caps: Caps) {
 	const start = from ? Date.parse(from) : 0;
 	const inWindow = ledger.filter((c) => Date.parse(c.at) >= start);
 	const sent = inWindow.filter((c) => c.outcome !== 'refused');
@@ -124,13 +136,13 @@ function summary(ledger: CallRecord[], from: string | null, now: Date, scenario:
 		totalUsd: sent.reduce((n, c) => n + c.costUsd, 0),
 		calls: new Set(sent.map((c) => c.callId)).size,
 		// The designed "cap reached" state: the month is full and the gate has been turning calls away.
-		monthUsd: capHit ? GLOBAL_CAP : monthUsd,
-		capUsd: GLOBAL_CAP,
+		monthUsd: capHit ? caps.global : monthUsd,
+		capUsd: caps.global,
 		byFeature: group(sent, (c) => c.feature),
 		byAccount: group(sent, (c) => c.accountId).map((g) => ({
 			...g,
 			monthUsd: month.filter((c) => c.accountId === g.key).reduce((n, c) => n + c.costUsd, 0),
-			capUsd: ACCOUNT_CAP
+			capUsd: caps.account[g.key] ?? DEFAULT_ACCOUNT_CAP
 		})),
 		byModel: group(sent, (c) => c.model),
 		blocked
@@ -148,13 +160,13 @@ function ledgerFor(accounts: Account[]): CallRecord[] {
 }
 
 /** Answers /spend, /spend/calls and /spend/calls/export, or null for any other path. */
-export function spendReply(path: string, params: URLSearchParams, scenario: string | null, accounts: Account[]): Reply | null {
+export function spendReply(path: string, params: URLSearchParams, scenario: string | null, accounts: Account[], caps: Caps): Reply | null {
 	if (!path.startsWith('/spend')) return null;
 	const ledger = scenario === 'no-spend' ? [] : ledgerFor(accounts);
 	const from = params.get('from');
 	if (from !== null && Number.isNaN(Date.parse(from))) return bad('That window is not valid');
 
-	if (path === '/spend') return { body: summary(ledger, from, new Date(), scenario) };
+	if (path === '/spend') return { body: summary(ledger, from, new Date(), scenario, caps) };
 
 	const outcome = params.get('outcome');
 	if (outcome && !OUTCOMES.has(outcome)) return bad('That filter is not valid');

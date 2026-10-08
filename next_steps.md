@@ -58,7 +58,7 @@ screens**.
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
 | 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, rules, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; 3e done; 3f done; 3g done; **3h done** |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | **done** (4a-4h; rounds 60-66; see "Chunk 4 stages" and `docs/CHUNK4-BRIEF.md`) |
-| 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | **planned, not started** (2026-10-07): standing rules in `docs/CHUNK5-BRIEF.md`, one plan per feature in `docs/chunk5/` (5a-5j, foundation first); every plan's questions were answered with the operator on 2026-10-07 (see each plan's Decisions section and `docs/qa-log.md`); **5a.1 (the generalised gate) and 5a.2 (the spend API) are done**; **5a.3 (caps and settings) is in progress, stages 1-3 of 4 done** (registry and estimate; mirror health; the `/smart` API) |
+| 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | **planned, not started** (2026-10-07): standing rules in `docs/CHUNK5-BRIEF.md`, one plan per feature in `docs/chunk5/` (5a-5j, foundation first); every plan's questions were answered with the operator on 2026-10-07 (see each plan's Decisions section and `docs/qa-log.md`); **5a.1 (the generalised gate) and 5a.2 (the spend API) are done**; **5a.3 (caps and settings) is in progress, all four stages done** (registry and estimate; mirror health; the `/smart` API; the Smart features screen), so **5a is done** and 5b is next |
 
 Frontend: SvelteKit 3 app in `web/`. The reader endpoints (`/accounts`, `/inbox`,
 `/messages/{id}`, `/summary`, `/mirror/health`, account profile and photo), tags (`/tags`, the
@@ -93,16 +93,20 @@ client-side CSV are gone (`docs/BUILD-LOG.md`). The operator confirmed the **$10
 the OpenRouter key at the same amount. One visible change to look at on the phone: the call-log filters
 now read **Done / Held back / Errors / Declined**, because the ledger cannot yet say "acted" or "quiet"
 (qa-log "5a.2 decisions"); 5b can bring that split back when it records what a decision did.
-**5a.3 is in progress (four stages, operator-approved 2026-10-08; qa-log "5a.3: operator answers").**
-**Stage 1 is done:** the model registry and the bulk estimate (`llm/models.go`, `llm/estimate.go`;
+**5a.3 is done (four stages, operator-approved 2026-10-08; qa-log "5a.3: operator answers"), and with it
+5a.** **Stage 4 is done:** the **Smart features** screen at `/settings/smart` (reached from one row on the
+settings home) edits the global and per-account caps, the per-account feature switches and the default chat
+model; a typed cap is checked before sending and a refusal puts the old value back and says why.
+**Next: 5b (the Jev layer), which opens with gate G2** (registry format, cache key, cost estimate for the
+shipped question set, and the request for the OpenRouter key; ask first, it spends money). Look at the new
+screen on the phone, and measure the health page's queue-count query on the board.
+Stages 1-3, for the record: **Stage 1:** the model registry and the bulk estimate (`llm/models.go`, `llm/estimate.go`;
 `Gate.ModelFor` and `Gate.Estimate`; `docs/BUILD-LOG.md`). **Stage 2 is done:** Mirror health states the
 index size, the embed queue (opted-in accounts only) and process memory, and the two stale "Not built yet"
 strings are gone. **Stage 3 is done:** `GET`/`PATCH /smart` read and write the caps, per-account feature
-switches and model choices through the gate, validated whole before anything is written. **Next:** (4) the
-**Smart features** screen at `/settings/smart` (global cap, per-account caps, per-feature switches, model
-pickers), reached from one row on the settings home. The next gate is **G2**, before the first live Jev
-call in 5b. **Left for the operator:** nothing new; no live provider is reached yet. Confirmed by the
-operator (2026-10-08): a cap of zero means no spend at all.
+switches and model choices through the gate, validated whole before anything is written. **Left for the
+operator:** nothing blocking; no live provider is reached yet. Confirmed by the operator (2026-10-08): a
+cap of zero means no spend at all.
 
 **Chunk 4 is done.** 4h (rich text) is the last stage and landed with `squire-rte` (MIT, zero deps,
 16.1 KiB brotli, route-split to `/compose`), an explicit `bodyFormat` on the compose/API contract

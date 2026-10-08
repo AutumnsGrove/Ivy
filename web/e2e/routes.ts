@@ -34,6 +34,7 @@ export const ROUTES: Record<string, string> = {
 	'account-profile': '/settings/account/a1',
 	'mirror-health': '/settings/health',
 	'outbox': '/settings/outbox',
+	'smart-settings': '/settings/smart',
 	'spend': '/settings/spend',
 	'spend-none': '/settings/spend?scenario=no-spend',
 	'spend-cap': '/settings/spend?scenario=cap-hit',

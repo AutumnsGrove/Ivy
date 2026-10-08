@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blockedGroups, callDetail, featureLabel, formatUsd, outcomeOf, periodOf, windowStart } from './spend';
+import { blockedGroups, callDetail, featureLabel, formatUsd, outcomeOf, parseUsd, periodOf, windowStart } from './spend';
 import type { CallRecord } from './types';
 
 const call = (over: Partial<CallRecord> = {}): CallRecord => ({
@@ -30,6 +30,25 @@ describe('formatUsd', () => {
 		[0.0046, '$0.0046'],
 		[0.00002, '<$0.0001']
 	])('%d reads %s', (usd, text) => expect(formatUsd(usd)).toBe(text));
+});
+
+describe('parseUsd', () => {
+	it.each([
+		['5', 5],
+		['5.5', 5.5],
+		['$12.50', 12.5],
+		['  $ 7 ', 7],
+		['.5', 0.5],
+		['5.', 5],
+		['0', 0],
+		['1,000', 1000],
+		['0.005', 0.01] // a cap is whole cents: a half cent rounds, never truncates to nothing
+	])('reads %j as %d', (text, usd) => expect(parseUsd(text)).toBe(usd));
+
+	it.each(['', '  ', '$', 'ten', '-1', '1e3', '5 dollars', '1.2.3', '5,00,0', 'NaN', 'Infinity', '$$5', '1001', '999999999999'])(
+		'refuses %j',
+		(text) => expect(parseUsd(text)).toBeNull()
+	);
 });
 
 describe('windowStart', () => {

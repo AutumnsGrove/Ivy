@@ -124,6 +124,7 @@
 					/>{/snippet}
 			</ListRow>
 		{/each}
+		<ListRow href="/settings/smart" chevron>Caps, features and models</ListRow>
 	</Group>
 
 	<Group label="Look">

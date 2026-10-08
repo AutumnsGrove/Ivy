@@ -98,6 +98,13 @@ export type Settings = {
 	spamScore: boolean;
 };
 
+// --- Smart features: caps, per-account feature switches and the chat model choice.
+export type SmartSettings = Schema['SmartSettings'];
+export type SmartSettingsPatch = Schema['SmartSettingsPatch'];
+export type SmartAccount = Schema['SmartAccount'];
+export type SmartFeature = Schema['SmartFeature'];
+export type SmartModel = Schema['SmartModel'];
+
 // --- Spend and calls (the LLM ledger), straight from the contract. Costs are the
 // ledger's own dollars (a number), summed by the server, so the screens never add.
 

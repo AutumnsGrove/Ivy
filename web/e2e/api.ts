@@ -1,5 +1,6 @@
 import { test as base } from '@playwright/test';
 import * as mock from '../src/lib/api/mock';
+import { freshSmart, smartReply, type SmartState } from './smart-fixture';
 import { spendReply } from './spend-fixture';
 import type { Account, Attachment, DraftResume, DraftSummary, Identity, MailMessage, MailSummary, OutboxItem, SendStatus, TagsOverview, UpdateStatus, UserTag } from '../src/lib/types';
 
@@ -43,6 +44,8 @@ export type AccountState = {
 	/** Staged outgoing attachments, by upload id, and the id counter. */
 	uploads: Map<string, { name: string; mime: string; bytes: Buffer }>;
 	uploadSeq: number;
+	/** The Smart features screen's caps, switches and model choice; the spend screen reads the same caps. */
+	smart: SmartState;
 };
 
 const freshState = (): AccountState => ({
@@ -58,7 +61,8 @@ const freshState = (): AccountState => ({
 	sends: [],
 	sendDrafts: new Map(),
 	uploads: new Map(),
-	uploadSeq: 0
+	uploadSeq: 0,
+	smart: freshSmart()
 });
 
 const TAG_COLORS = new Set(['sky', 'rose', 'teal', 'coral', 'lilac', 'mint', 'gold', 'sand', 'orchid', 'fern', 'slate', 'berry']);
@@ -654,7 +658,9 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 		if (scenario === 'no-spend') return { body: state.accounts.map((a) => ({ ...a, smart: false })) };
 		return { body: scenario === 'sync-error' ? state.accounts.map(mock.failingHello) : state.accounts };
 	}
-	const spend = spendReply(path, params, scenario, state.accounts);
+	const smart = smartReply(path, method, state.smart, state.accounts, raw);
+	if (smart) return smart;
+	const spend = spendReply(path, params, scenario, state.accounts, state.smart.caps);
 	if (spend) return spend;
 	if (path === '/inbox') return inboxReply(params.get('account_id'), scenario, params.get('folder'), params.get('cursor'));
 	if (path === '/search') return searchReply(params.get('q') ?? '');

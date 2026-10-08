@@ -45,6 +45,8 @@ import type {
 	SnoozePreset,
 	Settings,
 	SpendPeriod,
+	SmartSettings,
+	SmartSettingsPatch,
 	SpendSummary,
 	TagCreate,
 	TagsOverview,
@@ -285,6 +287,17 @@ export const api = {
 	// --- still mock-backed until their chunks land ---------------------------
 	getSettings: (): Promise<Settings> => Promise.resolve(readSettings()),
 	updateSettings: async (patch: Partial<Settings>): Promise<Settings> => patchSettings(patch),
+
+	/** The caps, per-account feature switches and model choice, as the gate is applying them. */
+	getSmartSettings: (): Promise<SmartSettings> => request<SmartSettings>('/smart'),
+
+	/** A partial update: only the fields present change, and a refusal changes nothing. */
+	updateSmartSettings: (patch: SmartSettingsPatch): Promise<SmartSettings> =>
+		request<SmartSettings>('/smart', {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(patch)
+		}),
 
 	/** What the LLM layer cost over a period, summed by the server from the ledger's own rows. */
 	getSpend: (period: SpendPeriod, now: Date = new Date()): Promise<SpendSummary> =>

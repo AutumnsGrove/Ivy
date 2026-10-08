@@ -121,6 +121,29 @@ describe('account customization', () => {
 		expect(JSON.parse(calls[0].init.body as string)).toEqual({ displayName: 'Autumn', icon: '🌿' });
 	});
 
+	it('reads the smart settings and sends only the fields that changed', async () => {
+		const settings = {
+			globalCapUsd: 10,
+			globalMonthUsd: 0.4,
+			accounts: [],
+			features: [],
+			models: [],
+			chatModel: 'deepseek',
+			featureModels: {}
+		};
+		const calls: { url: string; init: RequestInit }[] = [];
+		vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+			calls.push({ url, init });
+			return reply(settings);
+		});
+		await expect(api.getSmartSettings()).resolves.toEqual(settings);
+		await api.updateSmartSettings({ globalCapUsd: 20, accounts: { a1: { capUsd: 3 } } });
+		expect(calls[0].url).toBe('/api/v1/smart');
+		expect(calls[1].url).toBe('/api/v1/smart');
+		expect(calls[1].init.method).toBe('PATCH');
+		expect(JSON.parse(calls[1].init.body as string)).toEqual({ globalCapUsd: 20, accounts: { a1: { capUsd: 3 } } });
+	});
+
 	it('uploads and clears a photo without ever leaving the client module', async () => {
 		const calls: { url: string; init: RequestInit }[] = [];
 		vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {

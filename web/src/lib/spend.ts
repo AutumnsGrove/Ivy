@@ -65,6 +65,22 @@ export function formatUsd(usd: number): string {
 	return `$${usd.toFixed(usd < 0.01 ? 4 : 2)}`;
 }
 
+/** The most a monthly cap may be. The server holds the same ceiling; this is only for quick feedback. */
+export const MAX_CAP_USD = 1000;
+
+/**
+ * A typed cap (`5`, `$12.50`, `1,000`) in dollars, or null when it is not an amount Ivy will store.
+ * Rounds to whole cents, and zero is valid because it means no spend at all.
+ */
+export function parseUsd(text: string): number | null {
+	const m = /^\$?\s*(?:(\d{1,3}(?:,\d{3})+|\d+)(\.\d*)?|(\.\d+))$/.exec(text.trim());
+	if (!m) return null;
+	const whole = (m[1] ?? '').replaceAll(',', '') || '0';
+	const frac = m[2] === '.' ? '' : (m[2] ?? m[3] ?? '');
+	const usd = Math.round(Number(whole + frac) * 100) / 100;
+	return usd <= MAX_CAP_USD ? usd : null;
+}
+
 /** The start of a period in the viewer's own zone as an instant the server can use, or undefined for all time. */
 export function windowStart(period: SpendPeriod, now: Date): string | undefined {
 	if (period === 'all') return undefined;

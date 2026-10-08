@@ -1110,3 +1110,22 @@ message once per health-page open; measure it on the board with a large mailbox 
 
 Verification: `llm` and `gateway` under `-race`, `golangci-lint` (the one finding is in a file this stage
 did not touch), `make drift`.
+
+## 5a.3 stage 4: the Smart features screen (2026-10-08)
+
+- **The screen.** `/settings/smart`, one row from the settings home. Sections: the monthly spending caps
+  (all accounts, then each account, with what has been spent this month), one group per listed feature with a
+  switch per account (disabled, with the reason, for an account whose smart features are off), and the models
+  (the default chat model with its listed price, and the built-in helper decision model, read-only).
+- **A cap is typed, not picked.** `MoneyInput` is a compact text field with a decimal keypad (not
+  `type=number`, which Safari formats and rounds). `parseUsd` accepts `5`, `$12.50`, `1,000` and `.5`, rounds
+  to cents, and refuses anything else; a bad entry or a server refusal puts the old amount back and toasts why.
+  Switches are bound so a refused change flips back.
+- **Mock and fixtures.** `e2e/smart-fixture.ts` serves `/smart` over mutable state with the server's refusals,
+  and the spend fixture now reads the same caps object, so a cap saved here shows on the spend screen as it does
+  against the real gate. The route is in `e2e/routes.ts`, so the screens, a11y and screenshot passes cover it.
+- **Not built yet:** per-feature model override pickers. The API accepts them, but no listed feature runs on a
+  chat model, so a picker would offer nothing; it arrives with the first chat feature.
+
+Verification: `make check` (drift, gofumpt, vet, lint, Go `-race`, `pnpm check`, 421 unit tests with the token
+guard), the whole mock Playwright suite (410 passed, 10 skipped, phone and desktop), `make smoke` (12 passed).
