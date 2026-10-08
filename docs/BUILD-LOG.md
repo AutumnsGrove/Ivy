@@ -1008,3 +1008,34 @@ where the code differs). What landed:
 Verification: `llm`, `store`, `search`, `cmd` and `gateway` tests green, then the whole Go suite under
 `-race` and a `CGO_ENABLED=0` build; `gofumpt`, `go vet` and `staticcheck` clean. The gate was written
 before its tests, so each behaviour test was proved by mutation (six mutations, six red tests).
+
+## 5a.2 The spend API and the real stats screens (2026-10-08)
+
+- **Store.** `SpendReport` rolls the ledger up by feature, account, model and refusal reason for a window;
+  `ListAPICalls` pages it newest first by row id; `CountAPICalls` sizes an export. Calls are counted by
+  call id, so a batch of inputs is one call, and a refusal is a *blocked* call and never spend.
+- **Contract and gateway.** `GET /spend`, `/spend/calls` and `/spend/calls/export` (`api/openapi.yaml`,
+  regenerated). The month and the caps come from the gate itself (`Gate.AccountCapUSD`, `GlobalCapUSD`,
+  handed to the server with `WithSpend`), so the screen can never state a cap the gate is not applying.
+  Filters and cursors are validated (a bad one is a 400, never a widened report); the export is
+  streamed, bounded at 200,000 rows, and neutralises spreadsheet formulas. A property test seeds a
+  ledger with batches, refusals and failures and checks every total, breakdown and blocked count against
+  the rows the export returns, for all time and a window.
+- **Frontend.** The in-client mock ledger, its summing and paging, and the client-side CSV are gone
+  (`mock.makeLedger`, `summarise`, `pageCalls`, `callsToCsv`). The screens read the real endpoints, list
+  every account whether or not it has spend, and fold the server's refusal reasons into the three usual
+  lines plus "Other" when there is something in it. The call-log chips now read Done / Held back /
+  Errors / Declined (qa-log: the ledger cannot yet say acted or quiet). "Save as CSV" is a real download
+  link carrying the filter; `Button` gained a `download` mode, which a test caught rendering
+  `download="true"` (a file named `true.html`) before it shipped.
+- **E2E.** The mock suite serves a seeded ledger at the network boundary (`e2e/spend-fixture.ts`), so
+  the screens are exercised against the real request and reply, with the designed "nothing sent" and
+  "cap reached" states still reachable by `?scenario=`. A browser download cannot be intercepted by
+  `page.route`, so the file is covered by the Go tests and the E2E asserts the link. The smoke slice
+  now fetches the roll-up and log from the real binary, checks the totals add up and renders both screens
+  with a clean console.
+
+Verification: Go `-race` on `store`, `gateway`, `llm` and `cmd`; `pnpm check`; `pnpm test` (397); the
+whole mock Playwright suite (386 passed, 10 skipped, phone and desktop); `make smoke` (12 passed); the
+size budgets; `gofumpt`, `go vet`, `staticcheck` and `golangci-lint` (one finding, in a file this stage
+did not touch).

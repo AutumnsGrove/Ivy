@@ -4,8 +4,6 @@ import type {
 	Account,
 	AskAnswer,
 	Check,
-	CallFeature,
-	CallRecord,
 	CheckDetail,
 	MailMessage,
 	MailSummary,
@@ -507,72 +505,3 @@ export const checkDetail: CheckDetail = {
 	runsOn: ['a1', 'a2'],
 	usedBy: 'From Cloudflare, tag receipts'
 };
-
-// --- The LLM call ledger. One row per call, as the real ledger will be, so the spend screens can
-// aggregate and page it for real. Built from whatever accounts the gateway returned (so ids match),
-// from a fixed seed (so tests and screenshots are stable) and reaching back about seven weeks.
-
-/** Small deterministic generator (mulberry32); the mock must not depend on Math.random. */
-function seeded(seed: number) {
-	let a = seed;
-	return () => {
-		a = (a + 0x6d2b79f5) | 0;
-		let t = Math.imul(a ^ (a >>> 15), 1 | a);
-		t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-	};
-}
-
-const FEATURE_MIX: { feature: CallFeature; model: string; micros: number; tokens: number; weight: number }[] = [
-	{ feature: 'embed', model: 'pplx-embed-v1-0.6b', micros: 200, tokens: 450, weight: 40 },
-	{ feature: 'needs', model: 'jev-latest', micros: 800, tokens: 1000, weight: 30 },
-	{ feature: 'categories', model: 'jev-latest', micros: 1000, tokens: 1200, weight: 12 },
-	{ feature: 'vision', model: 'vision-model', micros: 4600, tokens: 2100, weight: 8 },
-	{ feature: 'digest', model: 'summary-model', micros: 3200, tokens: 3000, weight: 6 },
-	{ feature: 'ask', model: 'summary-model', micros: 12400, tokens: 5200, weight: 4 }
-];
-const WEIGHT_TOTAL = FEATURE_MIX.reduce((a, f) => a + f.weight, 0);
-
-export function makeLedger(accountList: Account[], now: Date): CallRecord[] {
-	if (!accountList.length) return [];
-	const rand = seeded(20261015);
-	const out: CallRecord[] = [];
-	let at = now.getTime() - 20 * 60_000;
-	for (let i = 0; i < 280; i++) {
-		at -= (30 + rand() * 500) * 60_000;
-		let pick = rand() * WEIGHT_TOTAL;
-		const mix = FEATURE_MIX.find((f) => (pick -= f.weight) < 0) ?? FEATURE_MIX[0];
-		const account = accountList[Math.floor(rand() * accountList.length)];
-		const base = { id: `call-${String(i).padStart(4, '0')}`, at: new Date(at).toISOString(), feature: mix.feature, accountId: account.id, model: mix.model };
-		const roll = rand();
-
-		if (!account.smart) {
-			out.push({ ...base, outcome: 'held', reason: 'smart-off', costMicros: 0, tokens: 0, latencyMs: 0 });
-		} else if (mix.feature === 'needs' && roll < 0.06) {
-			out.push({ ...base, outcome: 'held', reason: 'withheld', costMicros: 0, tokens: 0, latencyMs: 0 });
-		} else if (roll > 0.96) {
-			out.push({ ...base, outcome: 'error', costMicros: 0, tokens: 0, latencyMs: 8000 });
-		} else {
-			const acted = mix.feature !== 'embed' && roll < 0.35;
-			const call: CallRecord = {
-				...base,
-				outcome: acted ? 'acted' : 'quiet',
-				costMicros: Math.round(mix.micros * (0.8 + rand() * 0.4)),
-				tokens: Math.round(mix.tokens * (0.8 + rand() * 0.4)),
-				latencyMs: Math.round(150 + rand() * (mix.feature === 'ask' ? 2500 : 600))
-			};
-			if (mix.feature === 'needs') {
-				const top = acted ? 0.7 + rand() * 0.25 : 0.03 + rand() * 0.2;
-				const rest = 1 - top;
-				const receipt = rest * (0.5 + rand() * 0.4);
-				call.probabilities = [
-					{ label: 'Needs me', p: top },
-					{ label: 'Receipt', p: receipt },
-					{ label: 'Newsletter', p: rest - receipt }
-				];
-			}
-			out.push(call);
-		}
-	}
-	return out;
-}

@@ -38,7 +38,7 @@ machinery (withheld mail) that 5h and 5i also need; 5j needs 5b's registry and t
 
 | Stage | Plan | Status |
 |---|---|---|
-| 5a | [Gate, ledger and spend](5a-gate-ledger-spend.md) | **5a.1 done** (2026-10-08); 5a.2 spend API and 5a.3 caps/settings next |
+| 5a | [Gate, ledger and spend](5a-gate-ledger-spend.md) | **5a.1 and 5a.2 done** (2026-10-08); 5a.3 caps/settings next |
 | 5b | [The Jev layer](5b-jev-layer.md) | planned; questions answered 2026-10-07 |
 | 5c | [Needs-me cascade](5c-needs-me-cascade.md) | planned; questions answered 2026-10-07 |
 | 5d | [Classifiers and safety](5d-classifiers-and-safety.md) | planned; questions answered 2026-10-07 |
@@ -59,7 +59,7 @@ Checked against the code on 2026-10-07, so each plan starts from the truth:
 |---|---|
 | `llm.Gate` | **Generalised in 5a.1:** `Embed`, `Decide` (Jev), `Complete` (chat) and `See` (vision) through one admit/call/settle path (`llm/gate.go`, `entrypoints.go`, `features.go`). The gate owns unexported provider clients; `llm/arch_test.go` fails on an endpoint, an exported client or an unknown feature name outside `llm/`. Nothing but `search` calls it yet, and no live Jev/chat/vision call is made until 5b (gate G2). |
 | Cost ledger | **Real**: `api_calls` and `api_caps` in `state.db` (`store/ledger.go`, migration 6), written by the gate for embeddings. Nothing reads it for the UI yet. |
-| Stats panel (`/settings/spend`, `/settings/spend/calls`) | **Mock only.** There is no spend endpoint in `api/openapi.yaml`; the screens run on a mock ledger. |
+| Stats panel (`/settings/spend`, `/settings/spend/calls`) | **Real since 5a.2:** `GET /spend`, `/spend/calls` and `/spend/calls/export` read the gate's ledger; the mock ledger is gone. Probabilities in the log are an optional field nothing fills until 5b. |
 | `GET /messages/{id}/summary` | **Not an LLM summary**: it is "the header alone, for a failed body". Summaries need their own surface (5e). |
 | `GET /reading` | **Real** (the tag-driven Reading feed from 3g); the digest is not generated. |
 | `POST /ask`, `/checks` | In the contract, **no gateway handler**; mock-backed in the web client. |

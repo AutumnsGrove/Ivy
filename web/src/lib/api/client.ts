@@ -8,7 +8,6 @@ import type {
 	AskAnswer,
 	CallOutcome,
 	CallPage,
-	CallRecord,
 	Check,
 	CheckDetail,
 	ComposePrefill,
@@ -55,9 +54,9 @@ import type {
 	UserTag,
 	Version
 } from '../types';
-import { pageCalls, summarise } from '../spend';
+import { windowStart } from '../spend';
 import { ApiError, type ErrorCode } from './errors';
-import { apiPath, request } from './http';
+import { apiPath, apiUrl, request } from './http';
 import * as mock from './mock';
 import { patchSettings, readSettings } from './settings';
 
@@ -68,16 +67,6 @@ type Opts = { scenario?: Scenario | null };
 
 const tick = <T>(value: T): Promise<T> => Promise.resolve(structuredClone(value));
 
-// The monthly cap becomes a setting with the gate (chunk 5); until then it is a fixed $5.
-const MOCK_CAP_MICROS = 5_000_000;
-
-// Built once per set of accounts so the log keeps the same rows (and cursors) while the page lives.
-let ledger: { key: string; rows: CallRecord[] } | null = null;
-async function ledgerFor(accounts: Account[]): Promise<CallRecord[]> {
-	const key = accounts.map((a) => `${a.id}:${a.smart}`).join(',');
-	if (ledger?.key !== key) ledger = { key, rows: mock.makeLedger(accounts, new Date()) };
-	return ledger.rows;
-}
 
 export const api = {
 	// --- reader: answered by the real gateway over the JSON contract ---------
@@ -297,23 +286,17 @@ export const api = {
 	getSettings: (): Promise<Settings> => Promise.resolve(readSettings()),
 	updateSettings: async (patch: Partial<Settings>): Promise<Settings> => patchSettings(patch),
 
-	/** Totals for one period over the call ledger, from the one-row-per-call mock until chunk 5. */
-	async getSpend(period: SpendPeriod, o: Opts = {}): Promise<SpendSummary> {
-		const accounts = await api.listAccounts();
-		if (o.scenario === 'no-spend') {
-			return summarise([], period, new Date(), accounts.map((a) => ({ ...a, smart: false })), MOCK_CAP_MICROS);
-		}
-		const s = summarise(await ledgerFor(accounts), period, new Date(), accounts, MOCK_CAP_MICROS);
-		// The designed "cap reached" state: the month is full and the gate has been turning calls away.
-		return o.scenario === 'cap-hit'
-			? { ...s, capMicros: s.monthMicros, held: { ...s.held, capReached: s.held.capReached + 12 } }
-			: s;
-	},
+	/** What the LLM layer cost over a period, summed by the server from the ledger's own rows. */
+	getSpend: (period: SpendPeriod, now: Date = new Date()): Promise<SpendSummary> =>
+		request<SpendSummary>(apiPath('/spend', { from: windowStart(period, now) })),
 
-	async listCalls(o: Opts & { outcome?: CallOutcome; cursor?: string; limit?: number } = {}): Promise<CallPage> {
-		if (o.scenario === 'no-spend') return { items: [], nextCursor: null };
-		return pageCalls(await ledgerFor(await api.listAccounts()), o);
-	},
+	/** One page of the call log, newest first. */
+	listCalls: (o: { outcome?: CallOutcome; cursor?: string; limit?: number } = {}): Promise<CallPage> =>
+		request<CallPage>(apiPath('/spend/calls', { outcome: o.outcome, cursor: o.cursor, limit: o.limit?.toString() })),
+
+	/** A link that downloads the log for a filter, as the browser's own request. */
+	callsExportUrl: (format: 'csv' | 'json', o: { outcome?: CallOutcome } = {}): string =>
+		apiUrl('/spend/calls/export', { format, outcome: o.outcome }),
 
 	listReading: (o: { cursor?: string } = {}): Promise<ReadingFeed> =>
 		request<ReadingFeed>(apiPath('/reading', { cursor: o.cursor })),

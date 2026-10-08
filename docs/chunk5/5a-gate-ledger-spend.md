@@ -45,7 +45,7 @@ Nothing. Everything else in chunk 5 depends on this.
    shared by all (opt-in, cap, withheld, ask-selection) so a new feature cannot forget one; the
    unexported provider clients for `/systemone`, chat and vision; the architecture test extended to
    every new endpoint. One ledger row per call and per input, in the same transaction as the counter.
-2. **5a.2 Spend API.** Add to `api/openapi.yaml` and regenerate: totals by window and breakdown, the
+2. **5a.2 Spend API. Done 2026-10-08; see `docs/BUILD-LOG.md`.** Add to `api/openapi.yaml` and regenerate: totals by window and breakdown, the
    per-call log (filters, cursor paging, export), caps and blocked-call counts. The gateway reads
    `api_calls` / `api_caps`; the web client moves from the mock to `http.ts`; the mock spend route
    and its E2E fixtures are removed in the same change.

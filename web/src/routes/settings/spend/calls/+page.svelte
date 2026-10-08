@@ -9,10 +9,10 @@
 	import ProgressBar from '#lib/components/ui/ProgressBar.svelte';
 	import TopBar from '#lib/components/ui/TopBar.svelte';
 	import { Download } from '#lib/icons.js';
-	import { callsToCsv, FEATURES, formatMicros, OUTCOMES } from '#lib/spend.js';
+	import { callDetail, featureLabel, formatUsd, OUTCOMES } from '#lib/spend.js';
 	import { formatMessageTime } from '#lib/time.js';
 	import { toasts } from '#lib/toast.js';
-	import type { CallOutcome, CallRecord, HeldReason } from '#lib/types.js';
+	import type { CallOutcome, CallRecord } from '#lib/types.js';
 
 	let { data } = $props();
 
@@ -22,46 +22,25 @@
 	let busy = $state(false);
 	$effect.pre(() => {
 		items = data.page.items;
-		cursor = data.page.nextCursor;
+		cursor = data.page.nextCursor ?? null;
 	});
 
 	const address = (id: string) => data.accounts.find((a) => a.id === id)?.address ?? id;
 	const filterHref = (o?: CallOutcome) =>
 		withScenario(o ? `/settings/spend/calls?outcome=${o}` : '/settings/spend/calls', data.scenario);
 
-	const HELD: Record<HeldReason, string> = {
-		'smart-off': 'Held back: smart features are off',
-		cap: 'Held back: monthly cap reached',
-		withheld: 'Held back: mail kept private'
-	};
-	const detail = (c: CallRecord) =>
-		c.outcome === 'held'
-			? HELD[c.reason ?? 'withheld']
-			: c.outcome === 'error'
-				? "The provider didn't answer"
-				: `${c.tokens.toLocaleString()} tokens · ${(c.latencyMs / 1000).toFixed(1)} s`;
-
 	async function older() {
 		if (!cursor || busy) return;
 		busy = true;
 		try {
-			const next = await api.listCalls({ outcome: data.outcome, cursor, scenario: data.scenario });
+			const next = await api.listCalls({ outcome: data.outcome, cursor });
 			items = [...items, ...next.items];
-			cursor = next.nextCursor;
+			cursor = next.nextCursor ?? null;
 		} catch (e) {
 			toasts.push({ text: e instanceof ApiError ? e.message : "Couldn't load older calls", tone: 'danger' });
 		} finally {
 			busy = false;
 		}
-	}
-
-	function saveCsv() {
-		const url = URL.createObjectURL(new Blob([callsToCsv(items, data.accounts)], { type: 'text/csv' }));
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = 'ivy-calls.csv';
-		a.click();
-		URL.revokeObjectURL(url);
 	}
 </script>
 
@@ -83,15 +62,15 @@
 						<li class="call">
 							<div class="a">
 								<i class="dot {c.outcome}" aria-hidden="true"></i>
-								<b>{FEATURES[c.feature]}</b>
-								<span>{formatMicros(c.costMicros)}</span>
+								<b>{featureLabel(c.feature)}</b>
+								<span>{formatUsd(c.costUsd)}</span>
 							</div>
 							<div class="b">
 								<span>{formatMessageTime(c.at)}</span>
 								<span>{address(c.accountId)}</span>
-								<span>{c.model}</span>
+								{#if c.model}<span>{c.model}</span>{/if}
 							</div>
-							<div class="b" class:held={c.outcome === 'held'} class:err={c.outcome === 'error'}>{detail(c)}</div>
+							<div class="b" class:held={c.outcome === 'refused'} class:err={c.outcome === 'error'}>{callDetail(c)}</div>
 							{#if c.probabilities}
 								<div class="prob">
 									{#each c.probabilities as p (p.label)}
@@ -109,13 +88,13 @@
 			</Glass>
 
 			<p class="legend">
-				<i class="dot acted"></i>Acted <i class="dot quiet"></i>Quiet <i class="dot held"></i>Held back <i class="dot error"></i>Error
+				<i class="dot ok"></i>Done <i class="dot refused"></i>Held back <i class="dot error"></i>Error <i class="dot rejected"></i>Declined
 			</p>
 
 			<div class="acts">
 				{#if cursor}<Button variant="tonal" onclick={older} disabled={busy}>Show older</Button>{/if}
 				<span class="grow"></span>
-				<Button variant="tonal" onclick={saveCsv}><Download />Save as CSV</Button>
+				<Button variant="tonal" download href={api.callsExportUrl('csv', { outcome: data.outcome })}><Download />Save as CSV</Button>
 			</div>
 		{:else}
 			<p class="none">No calls to show{data.outcome ? ' for this filter' : ' yet'}.</p>
@@ -185,10 +164,11 @@
 		border-radius: 50%;
 		background: var(--faint);
 	}
-	.dot.acted {
+	.dot.ok {
 		background: var(--ok);
 	}
-	.dot.held {
+	.dot.refused,
+	.dot.rejected {
 		background: var(--warn);
 	}
 	.dot.error {

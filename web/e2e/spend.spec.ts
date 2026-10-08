@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import { expect, test } from './api';
 
 const total = (page: import('@playwright/test').Page) => page.locator('.total');
@@ -78,14 +77,20 @@ test.describe('call log', () => {
 		await expect(page.getByRole('progressbar', { name: /^Needs me \d+ percent$/ }).first()).toBeVisible();
 	});
 
-	test('saves what is on screen as a CSV', async ({ page }) => {
+	// The file itself (content, headers, bounds, the formula guard) is the server's and is tested in Go;
+	// the browser's own download request cannot be intercepted here, so this checks the link it follows.
+	test('offers the log as a CSV download from the server', async ({ page }) => {
 		await page.goto('/settings/spend/calls');
-		const download = page.waitForEvent('download');
-		await page.getByRole('button', { name: 'Save as CSV' }).click();
-		const file = await download;
-		expect(file.suggestedFilename()).toBe('ivy-calls.csv');
-		const text = await readFile((await file.path())!, 'utf8');
-		expect(text.startsWith('time,account,feature,model,outcome,reason,cost_usd,tokens,latency_ms\r\n')).toBe(true);
-		expect(text.trimEnd().split('\r\n').length).toBeGreaterThan(5);
+		const link = page.getByRole('link', { name: 'Save as CSV' });
+		await expect(link).toHaveAttribute('download', '');
+		await expect(link).toHaveAttribute('href', '/api/v1/spend/calls/export?format=csv');
+	});
+
+	test('the download follows the filter on screen', async ({ page }) => {
+		await page.goto('/settings/spend/calls?outcome=error');
+		await expect(page.getByRole('link', { name: 'Save as CSV' })).toHaveAttribute(
+			'href',
+			'/api/v1/spend/calls/export?format=csv&outcome=error'
+		);
 	});
 });

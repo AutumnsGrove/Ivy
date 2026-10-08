@@ -59,6 +59,11 @@ export function apiPath(path: string, query: Record<string, string | undefined> 
 	return qs ? `${path}?${qs}` : path;
 }
 
+/** The full URL of an API path, for a link the browser follows itself (a download), not a fetch. */
+export function apiUrl(path: string, query: Record<string, string | undefined> = {}): string {
+	return BASE + apiPath(path, query);
+}
+
 /** One JSON request against the versioned API, with every failure turned into an ApiError. */
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	let res: Response;

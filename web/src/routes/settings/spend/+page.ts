@@ -6,6 +6,7 @@ import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ url }) => {
 	const scenario = scenarioOf(url);
-	const [summary, accounts] = await guard(Promise.all([api.getSpend(periodOf(url), { scenario }), api.listAccounts()]));
-	return { summary, accounts, scenario };
+	const period = periodOf(url);
+	const [summary, accounts] = await guard(Promise.all([api.getSpend(period), api.listAccounts()]));
+	return { summary, accounts, period, scenario };
 };

@@ -1,5 +1,6 @@
 import { test as base } from '@playwright/test';
 import * as mock from '../src/lib/api/mock';
+import { spendReply } from './spend-fixture';
 import type { Account, Attachment, DraftResume, DraftSummary, Identity, MailMessage, MailSummary, OutboxItem, SendStatus, TagsOverview, UpdateStatus, UserTag } from '../src/lib/types';
 
 // The reader client does real fetches, so the mock E2E suite serves the
@@ -649,8 +650,12 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	const passwordPath = /^\/accounts\/([^/]+)\/password$/.exec(path);
 	if (passwordPath && method === 'PUT') return passwordReply(state, passwordPath[1], raw);
 	if (path === '/accounts') {
+		// The designed "nothing sent" state: every account has smart features off.
+		if (scenario === 'no-spend') return { body: state.accounts.map((a) => ({ ...a, smart: false })) };
 		return { body: scenario === 'sync-error' ? state.accounts.map(mock.failingHello) : state.accounts };
 	}
+	const spend = spendReply(path, params, scenario, state.accounts);
+	if (spend) return spend;
 	if (path === '/inbox') return inboxReply(params.get('account_id'), scenario, params.get('folder'), params.get('cursor'));
 	if (path === '/search') return searchReply(params.get('q') ?? '');
 	if (path === '/reading') {

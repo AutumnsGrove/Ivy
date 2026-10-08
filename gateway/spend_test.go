@@ -57,8 +57,10 @@ func TestEveryTotalEqualsTheSumOfItsRows(t *testing.T) {
 		outcome := []string{"ok", "ok", "ok", "error", "refused"}[rng.Intn(5)]
 		var batch []store.APICall
 		for range rows {
-			c := store.APICall{At: at, Provider: "openrouter", Endpoint: "chat", Model: model, Feature: feature,
-				AccountID: account, Outcome: outcome, CallID: callID}
+			c := store.APICall{
+				At: at, Provider: "openrouter", Endpoint: "chat", Model: model, Feature: feature,
+				AccountID: account, Outcome: outcome, CallID: callID,
+			}
 			switch outcome {
 			case "ok":
 				c.CostUSD = float64(rng.Intn(1000)) / 1e6
@@ -296,8 +298,10 @@ func TestExportCSVNeutralisesFormulasAndStatesItsSize(t *testing.T) {
 	t.Parallel()
 	base, dbs := spendServer(t)
 	record(t, dbs,
-		store.APICall{At: spendNow, Provider: "openrouter", Endpoint: "chat", Feature: "ask", Model: `=HYPERLINK("http://evil")`,
-			AccountID: "+a", Outcome: "ok", CostUSD: 0.000123, InputTokens: 10, OutputTokens: 5, LatencyMS: 40, CallID: "c1"},
+		store.APICall{
+			At: spendNow, Provider: "openrouter", Endpoint: "chat", Feature: "ask", Model: `=HYPERLINK("http://evil")`,
+			AccountID: "+a", Outcome: "ok", CostUSD: 0.000123, InputTokens: 10, OutputTokens: 5, LatencyMS: 40, CallID: "c1",
+		},
 		store.APICall{At: spendNow, Endpoint: "chat", Feature: "summary", Model: "a,b\"c", AccountID: "a", Outcome: "refused", Reason: "withheld", CallID: "c2"},
 	)
 	resp, err := http.Get(base + "/spend/calls/export")

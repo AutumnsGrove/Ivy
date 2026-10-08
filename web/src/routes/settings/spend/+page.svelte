@@ -9,16 +9,18 @@
 	import ProgressBar from '#lib/components/ui/ProgressBar.svelte';
 	import Segmented from '#lib/components/ui/Segmented.svelte';
 	import TopBar from '#lib/components/ui/TopBar.svelte';
-	import { formatMicros, PERIOD_PHRASE, PERIODS } from '#lib/spend.js';
+	import { blockedGroups, featureLabel, formatUsd, PERIOD_PHRASE, PERIODS } from '#lib/spend.js';
 
 	let { data } = $props();
 	const s = $derived(data.summary);
 
-	const share = (micros: number) => (s.totalMicros ? micros / s.totalMicros : 0);
-	const capReached = $derived(s.capMicros > 0 && s.monthMicros >= s.capMicros);
-	const allOff = $derived(s.byAccount.every((a) => !a.smart));
+	const share = (usd: number) => (s.totalUsd ? usd / s.totalUsd : 0);
+	const capReached = $derived(s.capUsd > 0 && s.monthUsd >= s.capUsd);
+	const allOff = $derived(data.accounts.every((a) => !a.smart));
 	const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
-	const account = (id: string) => data.accounts.find((a) => a.id === id);
+	// Every account is listed, with or without spend, so one that is off still reads as sending nothing.
+	const spent = (id: string) => s.byAccount.find((a) => a.key === id)?.usd ?? 0;
+	const held = $derived(blockedGroups(s.blocked));
 </script>
 
 <TopBar title="Spend and calls" backHref={withScenario('/settings', data.scenario)} />
@@ -28,13 +30,13 @@
 		<Segmented
 			label="Period"
 			size="md"
-			value={s.period}
+			value={data.period}
 			options={PERIODS.map((p) => ({ ...p, href: withScenario(`/settings/spend?period=${p.value}`, data.scenario) }))}
 		/>
 
 		<Glass radius="group" class="card">
-			<p class="cap">{PERIOD_PHRASE[s.period]}</p>
-			<p class="total" aria-label="{formatMicros(s.totalMicros)} total">{formatMicros(s.totalMicros)}</p>
+			<p class="cap">{PERIOD_PHRASE[data.period]}</p>
+			<p class="total" aria-label="{formatUsd(s.totalUsd)} total">{formatUsd(s.totalUsd)}</p>
 			{#if s.calls}
 				<p class="meta">{plural(s.calls, 'call')} sent to your chosen provider</p>
 			{:else}
@@ -49,9 +51,9 @@
 			<div class="month" class:warn={capReached}>
 				<div class="mrow">
 					<span>This month</span>
-					<span>{formatMicros(s.monthMicros)} of {formatMicros(s.capMicros)}</span>
+					<span>{formatUsd(s.monthUsd)} of {formatUsd(s.capUsd)}</span>
 				</div>
-				<ProgressBar value={s.capMicros ? s.monthMicros / s.capMicros : 0} label="Spent this month against the monthly cap" />
+				<ProgressBar value={s.capUsd ? s.monthUsd / s.capUsd : 0} label="Spent this month against the monthly cap" />
 				{#if capReached}
 					<p class="why">The monthly cap is reached, so Ivy has paused smart features until next month. Nothing more is spent.</p>
 				{/if}
@@ -61,22 +63,22 @@
 		{#if s.byFeature.length}
 			<Group label="By feature">
 				{#each s.byFeature as f (f.key)}
+					{@const label = featureLabel(f.key)}
 					<div class="line">
-						<div class="top"><span class="name">{f.label}</span><span class="n">{plural(f.calls, 'call')}</span><span>{formatMicros(f.micros)}</span></div>
-						<ProgressBar value={share(f.micros)} label="{f.label} share of the spend" />
+						<div class="top"><span class="name">{label}</span><span class="n">{plural(f.calls, 'call')}</span><span>{formatUsd(f.usd)}</span></div>
+						<ProgressBar value={share(f.usd)} label="{label} share of the spend" />
 					</div>
 				{/each}
 			</Group>
 		{/if}
 
 		<Group label="By account">
-			{#each s.byAccount as a (a.key)}
-				{@const acc = account(a.key)}
-				<ListRow tall={!a.smart}>
-					{#snippet leading()}{#if acc}<Avatar {...accountAvatar(acc)} />{/if}{/snippet}
-					<span class:off={!a.smart}>{a.address}</span>
-					{#if !a.smart}<span class="sub">Smart features are off. Nothing is sent.</span>{/if}
-					{#snippet trailing()}<span class="val" class:off={!a.smart}>{formatMicros(a.micros)}</span>{/snippet}
+			{#each data.accounts as acc (acc.id)}
+				<ListRow tall={!acc.smart}>
+					{#snippet leading()}<Avatar {...accountAvatar(acc)} />{/snippet}
+					<span class:off={!acc.smart}>{acc.address}</span>
+					{#if !acc.smart}<span class="sub">Smart features are off. Nothing is sent.</span>{/if}
+					{#snippet trailing()}<span class="val" class:off={!acc.smart}>{formatUsd(spent(acc.id))}</span>{/snippet}
 				</ListRow>
 			{/each}
 		</Group>
@@ -85,26 +87,20 @@
 			<Group label="By model">
 				{#each s.byModel as m (m.key)}
 					<ListRow>
-						{m.label}
-						{#snippet trailing()}<span class="val">{formatMicros(m.micros)}</span>{/snippet}
+						{m.key}
+						{#snippet trailing()}<span class="val">{formatUsd(m.usd)}</span>{/snippet}
 					</ListRow>
 				{/each}
 			</Group>
 		{/if}
 
 		<Group label="Held back before anything was sent">
-			<ListRow>
-				Smart features off for that account
-				{#snippet trailing()}<span class="val">{s.held.smartOff}</span>{/snippet}
-			</ListRow>
-			<ListRow>
-				Monthly cap reached
-				{#snippet trailing()}<span class="val">{s.held.capReached}</span>{/snippet}
-			</ListRow>
-			<ListRow>
-				Mail kept private
-				{#snippet trailing()}<span class="val">{s.held.withheld}</span>{/snippet}
-			</ListRow>
+			{#each held as h (h.label)}
+				<ListRow>
+					{h.label}
+					{#snippet trailing()}<span class="val">{h.calls}</span>{/snippet}
+				</ListRow>
+			{/each}
 		</Group>
 
 		<Group>

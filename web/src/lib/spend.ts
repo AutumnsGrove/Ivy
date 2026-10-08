@@ -1,17 +1,7 @@
-// Pure ledger logic for the spend screens: money formatting, the period aggregation, call paging
-// and the CSV export. The mock ledger feeds it today; chunk 5 moves `summarise` and `pageCalls`
-// into Go and the screens keep rendering the same shapes.
-import { ApiError } from './api/errors';
-import type {
-	Account,
-	CallFeature,
-	CallOutcome,
-	CallPage,
-	CallRecord,
-	SpendPeriod,
-	SpendRow,
-	SpendSummary
-} from './types';
+// Presentation logic for the spend screens: money formatting, plain-English names and the window a
+// period means. The numbers themselves (totals, breakdowns, paging) come from the server, which
+// sums the ledger rows it reports; nothing here adds up money.
+import type { BlockedRow, CallOutcome, CallRecord, SpendPeriod } from './types';
 
 export const PERIODS: { value: SpendPeriod; label: string }[] = [
 	{ value: 'today', label: 'Today' },
@@ -20,21 +10,33 @@ export const PERIODS: { value: SpendPeriod; label: string }[] = [
 	{ value: 'all', label: 'All time' }
 ];
 
-/** Plain-English feature names; the ledger itself never labels anything as AI. */
-export const FEATURES: Record<CallFeature, string> = {
+/** Plain-English feature names, keyed by the gate's feature table; the ledger never labels anything as AI. */
+const FEATURES: Record<string, string> = {
+	search: 'Meaning search',
 	embed: 'Meaning search',
-	needs: 'Needs-me check',
-	vision: 'Reading images',
-	categories: 'Categories',
+	injection_tripwire: 'Safety check',
+	sensitive_content: 'Privacy check',
+	needs_me: 'Needs-me check',
+	needs_me_stage2: 'Needs-me second look',
+	classify: 'Categories',
+	junk_rescue: 'Junk rescue',
+	summary: 'Summaries',
 	digest: 'Digest',
-	ask: 'Ask'
+	extraction: 'Receipts',
+	compiler: 'Writing rules',
+	vision: 'Reading images',
+	ask: 'Ask',
+	claim_check: 'Ask, checking its sources'
 };
 
+/** A feature the screen has no name for yet reads as its own key rather than as nothing. */
+export const featureLabel = (key: string): string => FEATURES[key] ?? key;
+
 export const OUTCOMES: { value: CallOutcome; label: string }[] = [
-	{ value: 'acted', label: 'Acted' },
-	{ value: 'quiet', label: 'Quiet' },
+	{ value: 'ok', label: 'Done' },
+	{ value: 'refused', label: 'Held back' },
 	{ value: 'error', label: 'Errors' },
-	{ value: 'held', label: 'Held back' }
+	{ value: 'rejected', label: 'Declined' }
 ];
 
 /** How the total reads under each period, e.g. "Spent in the last 7 days". */
@@ -56,135 +58,63 @@ export function outcomeOf(url: URL): CallOutcome | undefined {
 	return OUTCOMES.find((o) => o.value === raw)?.value;
 }
 
-export const MAX_PAGE = 100;
-export const DEFAULT_PAGE = 25;
-
-/** Dollars from micro-dollars: cents normally, four places for the tiny per-call costs. */
-export function formatMicros(micros: number): string {
-	if (micros <= 0) return '$0.00';
-	if (micros < 100) return '<$0.0001';
-	return `$${(micros / 1_000_000).toFixed(micros < 10_000 ? 4 : 2)}`;
+/** Dollars: cents normally, four places for the tiny per-call costs. */
+export function formatUsd(usd: number): string {
+	if (usd <= 0) return '$0.00';
+	if (usd < 0.0001) return '<$0.0001';
+	return `$${usd.toFixed(usd < 0.01 ? 4 : 2)}`;
 }
 
-/** The start of a period in the viewer's own zone, or null for all time. */
-function periodStart(period: SpendPeriod, now: Date): number | null {
-	if (period === 'all') return null;
-	if (period === 'today') return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-	return now.getTime() - (period === '7d' ? 7 : 30) * 86_400_000;
+/** The start of a period in the viewer's own zone as an instant the server can use, or undefined for all time. */
+export function windowStart(period: SpendPeriod, now: Date): string | undefined {
+	if (period === 'all') return undefined;
+	const start =
+		period === 'today'
+			? new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+			: now.getTime() - (period === '7d' ? 7 : 30) * 86_400_000;
+	return new Date(start).toISOString();
 }
 
-export function summarise(
-	ledger: CallRecord[],
-	period: SpendPeriod,
-	now: Date,
-	accounts: Account[],
-	capMicros: number
-): SpendSummary {
-	const from = periodStart(period, now);
-	const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+/** Why a gate turned a call away, in the sentence the log shows. */
+const BLOCKED_DETAIL: Record<string, string> = {
+	not_enabled: 'Held back: smart features are off',
+	vision_off: 'Held back: reading images is off',
+	feature_off: 'Held back: that feature is off',
+	cap_account: 'Held back: monthly cap reached',
+	cap_global: 'Held back: monthly cap reached',
+	withheld: 'Held back: mail kept private',
+	too_large: 'Held back: too large to send',
+	no_provider: 'Held back: no provider is set up',
+	ledger_unwritable: "Held back: Ivy can't record its spending right now"
+};
 
-	const features = new Map<string, SpendRow>();
-	const models = new Map<string, SpendRow>();
-	const perAccount = new Map<string, { calls: number; micros: number }>();
-	const held = { smartOff: 0, capReached: 0, withheld: 0 };
-	let totalMicros = 0;
-	let calls = 0;
-	let monthMicros = 0;
-
-	const add = (map: Map<string, SpendRow>, key: string, label: string, micros: number) => {
-		const row = map.get(key) ?? { key, label, calls: 0, micros: 0 };
-		row.calls++;
-		row.micros += micros;
-		map.set(key, row);
-	};
-
-	for (const c of ledger) {
-		const at = Date.parse(c.at);
-		if (at >= monthStart) monthMicros += c.costMicros;
-		if (from !== null && at < from) continue;
-
-		if (c.outcome === 'held') {
-			if (c.reason === 'smart-off') held.smartOff++;
-			else if (c.reason === 'cap') held.capReached++;
-			else held.withheld++;
-			continue;
-		}
-		calls++;
-		totalMicros += c.costMicros;
-		add(features, c.feature, FEATURES[c.feature], c.costMicros);
-		add(models, c.model, c.model, c.costMicros);
-		const acc = perAccount.get(c.accountId) ?? { calls: 0, micros: 0 };
-		acc.calls++;
-		acc.micros += c.costMicros;
-		perAccount.set(c.accountId, acc);
+export function callDetail(c: CallRecord): string {
+	switch (c.outcome) {
+		case 'refused':
+			return BLOCKED_DETAIL[c.reason ?? ''] ?? 'Held back';
+		case 'error':
+			return "The provider didn't answer";
+		case 'rejected':
+			return 'The provider declined this one';
+		default:
+			return `${(c.inputTokens + c.outputTokens).toLocaleString()} tokens · ${(c.latencyMs / 1000).toFixed(1)} s`;
 	}
-
-	const bySpend = (a: SpendRow, b: SpendRow) => b.micros - a.micros || a.key.localeCompare(b.key);
-	return {
-		period,
-		totalMicros,
-		calls,
-		monthMicros,
-		capMicros,
-		byFeature: [...features.values()].sort(bySpend),
-		byAccount: accounts.map((a) => ({
-			key: a.id,
-			label: a.short,
-			address: a.address,
-			smart: a.smart,
-			...(perAccount.get(a.id) ?? { calls: 0, micros: 0 })
-		})),
-		byModel: [...models.values()].sort(bySpend),
-		held
-	};
 }
 
-/** Newest first; the cursor is the last id handed out, so a page never repeats or skips a row. */
-export function pageCalls(
-	ledger: CallRecord[],
-	{ outcome, cursor, limit = DEFAULT_PAGE }: { outcome?: CallOutcome; cursor?: string; limit?: number }
-): CallPage {
-	const size = Math.min(MAX_PAGE, Math.max(1, Math.floor(limit)));
-	const rows = ledger
-		.filter((c) => !outcome || c.outcome === outcome)
-		.sort((a, b) => Date.parse(b.at) - Date.parse(a.at) || b.id.localeCompare(a.id));
+const BLOCKED_GROUPS: { label: string; reasons: string[]; always: boolean }[] = [
+	{ label: 'Smart features off for that account', reasons: ['not_enabled', 'vision_off', 'feature_off'], always: true },
+	{ label: 'Monthly cap reached', reasons: ['cap_account', 'cap_global'], always: true },
+	{ label: 'Mail kept private', reasons: ['withheld'], always: true },
+	{ label: 'Other', reasons: ['too_large', 'no_provider', 'ledger_unwritable'], always: false }
+];
 
-	let start = 0;
-	if (cursor !== undefined) {
-		const i = rows.findIndex((c) => c.id === cursor);
-		if (i < 0) throw new ApiError('bad_request', 'Unknown page');
-		start = i + 1;
-	}
-	const items = rows.slice(start, start + size);
-	return { items, nextCursor: start + size < rows.length ? items[items.length - 1].id : null };
-}
-
-// A cell that starts with one of these is read as a formula by spreadsheets, and a model name or
-// account address is not ours to trust, so it is made inert with a leading apostrophe.
-const FORMULA = /^[=+\-@\t\r]/;
-
-function cell(value: string | number): string {
-	let text = String(value);
-	if (typeof value === 'string' && FORMULA.test(text)) text = `'${text}`;
-	return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-}
-
-export function callsToCsv(calls: CallRecord[], accounts: Pick<Account, 'id' | 'address'>[]): string {
-	const address = new Map(accounts.map((a) => [a.id, a.address]));
-	const rows = calls.map((c) =>
-		[
-			c.at,
-			address.get(c.accountId) ?? c.accountId,
-			c.feature,
-			c.model,
-			c.outcome,
-			c.reason ?? '',
-			(c.costMicros / 1_000_000).toFixed(6),
-			c.tokens,
-			c.latencyMs
-		]
-			.map(cell)
-			.join(',')
-	);
-	return ['time,account,feature,model,outcome,reason,cost_usd,tokens,latency_ms', ...rows].join('\r\n') + '\r\n';
+/** The server's per-reason counts folded into the few lines the screen shows; "Other" only when it has something. */
+export function blockedGroups(blocked: BlockedRow[]): { label: string; calls: number }[] {
+	return BLOCKED_GROUPS.map((g) => ({
+		label: g.label,
+		calls: blocked.filter((b) => g.reasons.includes(b.reason)).reduce((n, b) => n + b.calls, 0),
+		always: g.always
+	}))
+		.filter((g) => g.always || g.calls > 0)
+		.map(({ label, calls }) => ({ label, calls }));
 }

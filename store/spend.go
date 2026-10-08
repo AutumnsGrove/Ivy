@@ -102,6 +102,9 @@ type CallRow struct {
 	ID int64
 }
 
+const callColumns = `id, at, provider, endpoint, model, feature, account_id, content_key,
+	input_tokens, output_tokens, cost_usd, cost_estimated, latency_ms, outcome, reason, call_id`
+
 // MaxCallPage bounds a page of the log, whatever the caller asks.
 const MaxCallPage = 500
 
@@ -140,10 +143,10 @@ func (d *DBs) ListAPICalls(ctx context.Context, f CallFilter, before int64, limi
 		where += " AND id < ?"
 		args = append(args, before)
 	}
-	rows, err := d.State.Read.QueryContext(ctx, `
-		SELECT id, at, provider, endpoint, model, feature, account_id, content_key,
-		       input_tokens, output_tokens, cost_usd, cost_estimated, latency_ms, outcome, reason, call_id
-		FROM api_calls WHERE `+where+` ORDER BY id DESC LIMIT ?`, append(args, limit)...)
+	// The WHERE is assembled from fixed column names and placeholders only (see
+	// CallFilter.where); every value, including the cursor and limit, is bound.
+	query := "SELECT " + callColumns + " FROM api_calls WHERE " + where + " ORDER BY id DESC LIMIT ?" //nolint:gosec // G202: no caller text reaches the SQL
+	rows, err := d.State.Read.QueryContext(ctx, query, append(args, limit)...)
 	if err != nil {
 		return nil, fmt.Errorf("list api calls: %w", err)
 	}

@@ -1,69 +1,44 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from './client';
-import * as mock from './mock';
-import { scenarioOf } from './scenario';
 
-// Spend is mock-backed, but the accounts it is built from come from the gateway.
-function gateway() {
+// Spend is a real endpoint now: these pin the requests the client makes and how it
+// reads a failure. The numbers behind them are summed by the server (Go tests).
+function respond(status: number, body: unknown) {
+	const seen: string[] = [];
 	vi.stubGlobal('fetch', async (url: string) => {
-		if (url !== '/api/v1/accounts') throw new TypeError(`unexpected request to ${url}`);
-		return { ok: true, status: 200, json: async () => mock.accounts };
+		seen.push(url);
+		return { ok: status < 400, status, json: async () => body };
 	});
+	return seen;
 }
 afterEach(() => vi.unstubAllGlobals());
 
 describe('spend api', () => {
-	it('summarises the asked period over the real account list', async () => {
-		gateway();
-		const week = await api.getSpend('7d');
-		const all = await api.getSpend('all');
-		expect(week.period).toBe('7d');
-		expect(week.calls).toBeGreaterThan(0);
-		expect(all.calls).toBeGreaterThan(week.calls);
-		expect(week.byAccount.map((a) => a.key)).toEqual(mock.accounts.map((a) => a.id));
+	const now = new Date('2026-10-15T14:00:00Z');
+
+	it('asks for a window by its start, and for all time with none', async () => {
+		const seen = respond(200, { totalUsd: 0 });
+		await api.getSpend('7d', now);
+		await api.getSpend('all', now);
+		expect(seen[0]).toBe(`/api/v1/spend?from=${encodeURIComponent('2026-10-08T14:00:00.000Z')}`);
+		expect(seen[1]).toBe('/api/v1/spend');
 	});
 
-	it('nothing-spent: zero everywhere and every account shown as off', async () => {
-		gateway();
-		const s = await api.getSpend('7d', { scenario: 'no-spend' });
-		expect([s.totalMicros, s.calls, s.monthMicros]).toEqual([0, 0, 0]);
-		expect(s.byAccount.every((a) => !a.smart)).toBe(true);
+	it('pages the log with the cursor and filter it was given', async () => {
+		const seen = respond(200, { items: [] });
+		await api.listCalls();
+		await api.listCalls({ outcome: 'error', cursor: '41', limit: 10 });
+		expect(seen[0]).toBe('/api/v1/spend/calls');
+		expect(seen[1]).toBe('/api/v1/spend/calls?outcome=error&cursor=41&limit=10');
 	});
 
-	it('cap-hit: the month sits exactly on the cap and the gate reports what it stopped', async () => {
-		gateway();
-		const s = await api.getSpend('30d', { scenario: 'cap-hit' });
-		expect(s.monthMicros).toBe(s.capMicros);
-		expect(s.held.capReached).toBeGreaterThan(0);
-	});
-
-	it('pages the log and filters it', async () => {
-		gateway();
-		const first = await api.listCalls({ limit: 10 });
-		expect(first.items).toHaveLength(10);
-		const second = await api.listCalls({ limit: 10, cursor: first.nextCursor! });
-		expect(second.items[0].id).not.toBe(first.items[9].id);
-		const errors = await api.listCalls({ outcome: 'error', limit: 100 });
-		expect(errors.items.length).toBeGreaterThan(0);
-		expect(errors.items.every((c) => c.outcome === 'error')).toBe(true);
-	});
-
-	it('rejects a cursor it never issued', async () => {
-		gateway();
+	it('reads the server’s refusal of a filter as bad_request', async () => {
+		respond(400, { code: 'bad_request', message: 'That filter is not valid' });
 		await expect(api.listCalls({ cursor: 'forged' })).rejects.toMatchObject({ code: 'bad_request' });
 	});
 
-	it('an empty-ledger scenario returns an empty log', async () => {
-		gateway();
-		await expect(api.listCalls({ scenario: 'no-spend' })).resolves.toEqual({ items: [], nextCursor: null });
-	});
-});
-
-describe('spend scenarios', () => {
-	it('are honoured by name only', () => {
-		const url = (q: string) => new URL(`http://ivy.test/?scenario=${q}`);
-		expect(scenarioOf(url('no-spend'))).toBe('no-spend');
-		expect(scenarioOf(url('cap-hit'))).toBe('cap-hit');
-		expect(scenarioOf(url('NO-SPEND'))).toBeNull();
+	it('builds the download link for the filter on screen', () => {
+		expect(api.callsExportUrl('csv')).toBe('/api/v1/spend/calls/export?format=csv');
+		expect(api.callsExportUrl('csv', { outcome: 'refused' })).toBe('/api/v1/spend/calls/export?format=csv&outcome=refused');
 	});
 });

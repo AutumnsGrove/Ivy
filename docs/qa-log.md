@@ -1756,3 +1756,32 @@ Not asked; revisit if wrong. All are recorded in the "As built" section of
 - **Features ship dark**, switched per account by `llm.feature.<name>`; only `search` and `embed` default on.
 - **A multi-account call is vetted by "any selected account vouches for the key"** until 5i's account-tagged
   references replace it; a vetted-mail feature that names no mail is withheld.
+
+**Operator, 2026-10-08:** the built-in **$10 global cap is fine** (the mockups show the $5 per-account
+default; $10 stands). The operator will also limit the OpenRouter key itself to the same amount, so the
+cap has a second, provider-side guard. A cap of zero meaning "no hosted spend" was not discussed and
+stays an agent decision to revisit.
+
+## 5a.2: decisions the agent made while building the spend API (2026-10-08)
+
+Not asked; revisit if wrong. Recorded in `docs/BUILD-LOG.md` too.
+
+- **The screens speak the ledger's own vocabulary.** The mock's outcomes were `acted`, `quiet`, `held` and
+  `error`; the real ledger can say only `ok`, `error`, `rejected` (the provider declined that input) and
+  `refused` (a gate turned it away, with a reason). "Acted" and "quiet" need to know whether a decision
+  changed anything, which the Jev layer records in 5b, so for now the filter chips read **Done, Held back,
+  Errors, Declined**. When 5b lands the call detail it can bring the acted/quiet split back.
+- **Money is dollars (`float64`), not integer micro-dollars.** The ledger stores the provider's dollars, a
+  per-input share can be under a micro-dollar, and the server sums rows in SQL, so there is nothing for
+  the client to add up exactly. The contract marks every money field `format: double` (the generator
+  otherwise emits `float32`).
+- **The window is a `from` instant the browser computes** in the viewer's own zone, so "Today" means the
+  viewer's midnight with no timezone database on the board. The month figure and the caps are the gate's
+  UTC calendar month, whatever window is shown.
+- **The log is one entry per ledger row** (an embedding batch is several rows sharing a `callId`), paged by
+  the row id so a call landing between page loads neither repeats nor skips a row. Totals count distinct
+  call ids.
+- **Export is server-side**, CSV or JSON, streamed a page at a time, at most 200,000 rows with
+  `X-Ivy-Rows` and `X-Ivy-Truncated` stating the size, and a mid-stream failure resets the connection
+  rather than leaving a file that looks complete. It replaces the client-side CSV of the loaded rows.
+- **Probabilities stay in the contract as an optional field** that nothing fills until 5b records them.

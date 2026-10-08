@@ -7,6 +7,8 @@
 		/** Fill the row. */
 		block?: boolean;
 		href?: string;
+		/** The link is a file the server sends: the browser saves it and the router leaves it alone. */
+		download?: boolean;
 		type?: 'button' | 'submit';
 		disabled?: boolean;
 		onclick?: (e: MouseEvent) => void;
@@ -17,6 +19,7 @@
 		size = 'md',
 		block = false,
 		href,
+		download = false,
 		type = 'button',
 		disabled = false,
 		onclick,
@@ -25,7 +28,9 @@
 </script>
 
 {#if href}
-	<a {href} class="btn {variant} {size}" class:block {onclick}>{@render children()}</a>
+	<a {href} class="btn {variant} {size}" class:block {onclick} download={download ? '' : undefined} data-sveltekit-reload={download ? '' : undefined}
+		>{@render children()}</a
+	>
 {:else}
 	<button {type} {disabled} class="btn {variant} {size}" class:block {onclick}>
 		{@render children()}

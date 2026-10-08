@@ -78,3 +78,25 @@ test('tags a message through the real outbox and clears the tag again', async ({
 	expect(removed.status()).toBe(204);
 	expect(await tagIds()).not.toContain(tag.id);
 });
+
+// The stats panel reads the real ledger (chunk 5, 5a.2): the roll-up and the log come from the
+// gateway, the totals add up, and the screens render them with nothing in the console.
+test('serves the spend roll-up and call log from the real ledger', async ({ request, page }) => {
+	const summary = await (await request.get('/api/v1/spend')).json();
+	expect(summary).toMatchObject({ totalUsd: expect.any(Number), capUsd: expect.any(Number), byFeature: expect.any(Array), blocked: expect.any(Array) });
+	const byFeature = (summary.byFeature as { usd: number }[]).reduce((n, f) => n + f.usd, 0);
+	expect(byFeature).toBeCloseTo(summary.totalUsd, 9);
+
+	const log = await request.get('/api/v1/spend/calls?limit=5');
+	expect(log.status()).toBe(200);
+	expect((await log.json()).items.length).toBeLessThanOrEqual(5);
+	expect((await request.get('/api/v1/spend/calls?outcome=acted')).status()).toBe(400);
+
+	const errors: string[] = [];
+	page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+	await page.goto('/settings/spend');
+	await expect(page.getByText(/^Spent in the last 7 days$/)).toBeVisible();
+	await page.goto('/settings/spend/calls');
+	await expect(page.getByRole('link', { name: 'Save as CSV' })).toBeVisible();
+	expect(errors).toEqual([]);
+});
