@@ -38,6 +38,30 @@ func newWorld(t *testing.T) *mailworld.World {
 	return w
 }
 
+// optIn stores the account's smart-features switch, the way the app does. The gate
+// reads it from there; a request cannot carry it.
+func optIn(t *testing.T, dbs *store.DBs, id string, on bool) {
+	t.Helper()
+	ctx := context.Background()
+	if err := dbs.SaveAccountConfig(ctx, store.AccountConfig{
+		ID: id, Address: id + "@example.test", Username: id,
+		IMAPHost: "imap.example.test", IMAPPort: 993, SMTPHost: "smtp.example.test", SMTPPort: 465,
+		LLMEnabled: on, EmbedProvider: "openrouter", CreatedAt: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("save account config: %v", err)
+	}
+}
+
+// gateFor builds a gate whose providers are the fake world, the way `ivy run`
+// points it at the real ones.
+func gateFor(t *testing.T, dbs *store.DBs, w *mailworld.World, opts ...GateOption) *Gate {
+	t.Helper()
+	base := []GateOption{WithProviders(ProviderConfig{
+		OpenRouterBase: w.OpenRouterURL(), APIKey: "k", OllamaURL: w.OllamaURL(),
+	})}
+	return NewGate(dbs, append(base, opts...)...)
+}
+
 func TestQuantiseNativeInt8(t *testing.T) {
 	t.Parallel()
 	vals := []float32{1.0 / 128, -3.0 / 128, 0, 127.0 / 128}
@@ -92,32 +116,31 @@ func TestVectorEncodeDecodeRejectsCorrupt(t *testing.T) {
 func TestOpenRouterEmbed(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
-	e := NewOpenRouter(w.OpenRouterURL(), "test-key")
-	res, err := e.Embed(context.Background(), "pplx-embed-v1-0.6b", []string{"hello world", "second"})
+	e := newOpenRouter(w.OpenRouterURL(), "test-key")
+	vecs, u, err := e.embed(context.Background(), "pplx-embed-v1-0.6b", []string{"hello world", "second"})
 	if err != nil {
 		t.Fatalf("embed: %v", err)
 	}
-	if len(res.Vectors) != 2 || res.Vectors[0].Dims == 0 {
-		t.Fatalf("vectors = %+v", res.Vectors)
+	if len(vecs) != 2 || vecs[0].Dims == 0 {
+		t.Fatalf("vectors = %+v", vecs)
 	}
-	if res.CostUSD <= 0 || res.CostEstimated {
-		t.Errorf("cost = %v estimated=%v, want a reported cost", res.CostUSD, res.CostEstimated)
+	if u.CostUSD <= 0 || u.CostEstimated {
+		t.Errorf("cost = %v estimated=%v, want a reported cost", u.CostUSD, u.CostEstimated)
 	}
-	if res.InputTokens <= 0 {
-		t.Errorf("tokens = %d, want > 0", res.InputTokens)
+	if u.InputTokens <= 0 {
+		t.Errorf("tokens = %d, want > 0", u.InputTokens)
 	}
 }
 
 func TestOllamaEmbedIsFree(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
-	e := NewOllama(w.OllamaURL())
-	res, err := e.Embed(context.Background(), "nomic-embed-text", []string{"local text"})
+	vecs, u, err := newOllama(w.OllamaURL()).embed(context.Background(), "nomic-embed-text", []string{"local text"})
 	if err != nil {
 		t.Fatalf("embed: %v", err)
 	}
-	if res.CostUSD != 0 || len(res.Vectors) != 1 {
-		t.Fatalf("res = %+v, want one free vector", res)
+	if u.CostUSD != 0 || len(vecs) != 1 {
+		t.Fatalf("usage = %+v, %d vectors, want one free vector", u, len(vecs))
 	}
 }
 
@@ -126,10 +149,11 @@ func TestGateRefusesWhenSmartFeaturesAreOff(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t)
 	dbs := openStore(t)
-	g := NewGate(dbs, WithGateClock(func() time.Time { return time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC) }))
+	optIn(t, dbs, "a", false)
+	g := gateFor(t, dbs, w, WithGateClock(func() time.Time { return time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC) }))
 
 	_, err := g.Embed(ctx, EmbedRequest{
-		Embedder: NewOpenRouter(w.OpenRouterURL(), "k"), AccountID: "a", Enabled: false,
+		Provider: ProviderOpenRouter, AccountID: "a", Feature: "search",
 		Model: "m", Inputs: []string{"secret text"}, ContentKeys: []string{"ck1"},
 	})
 	if !errors.Is(err, ErrNotEnabled) {
@@ -139,8 +163,8 @@ func TestGateRefusesWhenSmartFeaturesAreOff(t *testing.T) {
 		t.Fatalf("provider was called %d times despite the refusal", len(w.Calls()))
 	}
 	calls, _ := dbs.RecentAPICalls(ctx, "a", 10)
-	if len(calls) != 1 || calls[0].Outcome != OutcomeRefused || calls[0].CostUSD != 0 {
-		t.Fatalf("ledger = %+v, want one zero-cost refusal", calls)
+	if len(calls) != 1 || calls[0].Outcome != OutcomeRefused || calls[0].CostUSD != 0 || calls[0].Reason != ReasonNotEnabled {
+		t.Fatalf("ledger = %+v, want one zero-cost refusal with reason not_enabled", calls)
 	}
 }
 
@@ -148,12 +172,17 @@ func TestGateAllowsLocalEmbeddingsWhenOff(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
 	dbs := openStore(t)
-	g := NewGate(dbs)
+	optIn(t, dbs, "a", false)
+	g := gateFor(t, dbs, w)
 	if _, err := g.Embed(context.Background(), EmbedRequest{
-		Embedder: NewOllama(w.OllamaURL()), AccountID: "a", Enabled: false,
+		Provider: ProviderOllama, AccountID: "a", Feature: "search",
 		Model: "nomic-embed-text", Inputs: []string{"local"}, ContentKeys: []string{"ck1"},
 	}); err != nil {
 		t.Fatalf("local embed with smart features off: %v", err)
+	}
+	calls, _ := dbs.RecentAPICalls(context.Background(), "a", 10)
+	if len(calls) != 1 || calls[0].Endpoint != EndpointOllamaEmbed || calls[0].CostUSD != 0 {
+		t.Fatalf("ledger = %+v, want one zero-cost ollama_embed row", calls)
 	}
 }
 
@@ -162,8 +191,9 @@ func TestGateRefusesAtTheMonthlyCap(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t)
 	dbs := openStore(t)
+	optIn(t, dbs, "a", true)
 	at := time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)
-	g := NewGate(dbs, WithGateClock(func() time.Time { return at }))
+	g := gateFor(t, dbs, w, WithGateClock(func() time.Time { return at }), WithDefaultCaps(5, 100))
 	if err := dbs.RecordAPICall(ctx, store.APICall{
 		At: at, Provider: ProviderOpenRouter, Endpoint: EndpointEmbeddings,
 		AccountID: "a", CostUSD: 5.0,
@@ -171,8 +201,8 @@ func TestGateRefusesAtTheMonthlyCap(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := g.Embed(ctx, EmbedRequest{
-		Embedder: NewOpenRouter(w.OpenRouterURL(), "k"), AccountID: "a", Enabled: true,
-		Model: "m", Inputs: []string{"text"}, ContentKeys: []string{"ck1"}, CapUSD: 5.0,
+		Provider: ProviderOpenRouter, AccountID: "a", Feature: "search",
+		Model: "m", Inputs: []string{"text"}, ContentKeys: []string{"ck1"},
 	})
 	if !errors.Is(err, ErrCapReached) {
 		t.Fatalf("err = %v, want ErrCapReached", err)
@@ -187,14 +217,15 @@ func TestGateSplitsTheExactCostPerInput(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t)
 	dbs := openStore(t)
+	optIn(t, dbs, "a", true)
 	at := time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)
-	g := NewGate(dbs, WithGateClock(func() time.Time { return at }))
+	g := gateFor(t, dbs, w, WithGateClock(func() time.Time { return at }))
 
 	inputs := []string{"short", "a somewhat longer message body", "medium body"}
 	_, err := g.Embed(ctx, EmbedRequest{
-		Embedder: NewOpenRouter(w.OpenRouterURL(), "k"), AccountID: "a", Enabled: true,
+		Provider: ProviderOpenRouter, AccountID: "a",
 		Model: "m", Feature: "search", Inputs: inputs,
-		ContentKeys: []string{"ck1", "ck2", "ck3"}, CapUSD: 5,
+		ContentKeys: []string{"ck1", "ck2", "ck3"},
 	})
 	if err != nil {
 		t.Fatalf("embed: %v", err)
@@ -242,10 +273,11 @@ func TestGateRecordsProviderFailureAtZeroCost(t *testing.T) {
 	w := newWorld(t)
 	w.Fault(mailworld.LLMDown{})
 	dbs := openStore(t)
-	g := NewGate(dbs)
+	optIn(t, dbs, "a", true)
+	g := gateFor(t, dbs, w)
 
 	_, err := g.Embed(ctx, EmbedRequest{
-		Embedder: NewOpenRouter(w.OpenRouterURL(), "k"), AccountID: "a", Enabled: true,
+		Provider: ProviderOpenRouter, AccountID: "a", Feature: "search",
 		Model: "m", Inputs: []string{"one", "two"}, ContentKeys: []string{"ck1", "ck2"},
 	})
 	if err == nil {
@@ -266,7 +298,8 @@ func TestGateRejectsAnOversizeBatchBeforeCalling(t *testing.T) {
 	t.Parallel()
 	w := newWorld(t)
 	dbs := openStore(t)
-	g := NewGate(dbs)
+	optIn(t, dbs, "a", true)
+	g := gateFor(t, dbs, w)
 	inputs := make([]string, MaxBatchInputs+1)
 	keys := make([]string, len(inputs))
 	for i := range inputs {
@@ -274,7 +307,7 @@ func TestGateRejectsAnOversizeBatchBeforeCalling(t *testing.T) {
 		keys[i] = "ck"
 	}
 	_, err := g.Embed(context.Background(), EmbedRequest{
-		Embedder: NewOpenRouter(w.OpenRouterURL(), "k"), AccountID: "a", Enabled: true,
+		Provider: ProviderOpenRouter, AccountID: "a", Feature: "search",
 		Model: "m", Inputs: inputs, ContentKeys: keys,
 	})
 	if !errors.Is(err, ErrTooLarge) {
@@ -285,15 +318,16 @@ func TestGateRejectsAnOversizeBatchBeforeCalling(t *testing.T) {
 	}
 }
 
+// okEmbedder stands in for a provider inside the package, so a test can control
+// exactly what comes back without a server.
 type okEmbedder struct{}
 
-func (okEmbedder) Name() string { return "stub" }
-func (okEmbedder) Embed(_ context.Context, _ string, inputs []string) (EmbedResult, error) {
-	res := EmbedResult{InputTokens: len(inputs), CostUSD: 0.0002}
-	for range inputs {
-		res.Vectors = append(res.Vectors, Quantise([]float32{0.5, 0, 0, 0}))
+func (okEmbedder) embed(_ context.Context, _ string, inputs []string) ([]Vector, usage, error) {
+	vecs := make([]Vector, len(inputs))
+	for i := range vecs {
+		vecs[i] = Quantise([]float32{0.5, 0, 0, 0})
 	}
-	return res, nil
+	return vecs, usage{InputTokens: len(inputs), CostUSD: 0.0002}, nil
 }
 
 // The ledger is also the cap's only record of spend. A failed ledger write must
@@ -307,11 +341,14 @@ func TestGateReportsALedgerWriteFailure(t *testing.T) {
 	t.Cleanup(func() { slog.SetDefault(prev) })
 
 	dbs := openStore(t)
+	optIn(t, dbs, "a", true)
+	g := NewGate(dbs)
+	g.embedders[ProviderOpenRouter] = okEmbedder{}
 	if err := dbs.State.Write.Close(); err != nil { // the ledger can no longer be written
 		t.Fatal(err)
 	}
-	vecs, err := NewGate(dbs).Embed(context.Background(), EmbedRequest{
-		Embedder: okEmbedder{}, AccountID: "a", Enabled: true, Model: "m", Feature: "search",
+	vecs, err := g.Embed(context.Background(), EmbedRequest{
+		Provider: ProviderOpenRouter, AccountID: "a", Model: "m", Feature: "search",
 		Inputs: []string{"hello"}, ContentKeys: []string{"k"},
 	})
 	if err != nil || len(vecs) != 1 {
@@ -347,17 +384,16 @@ func embeddingsServer(t *testing.T, usage string) *httptest.Server {
 func TestOpenRouterEstimatesTheCostWhenNoneIsReported(t *testing.T) {
 	t.Parallel()
 	srv := embeddingsServer(t, `{"prompt_tokens":1000000,"total_tokens":1000000}`)
-	e := NewOpenRouter(srv.URL, "k")
 
-	res, err := e.Embed(context.Background(), "perplexity/pplx-embed-v1-0.6b", []string{"a", "b"})
+	_, u, err := newOpenRouter(srv.URL, "k").embed(context.Background(), "perplexity/pplx-embed-v1-0.6b", []string{"a", "b"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.CostEstimated {
+	if !u.CostEstimated {
 		t.Error("CostEstimated = false, want true when the provider reported no cost")
 	}
-	if math.Abs(res.CostUSD-0.004) > 1e-9 {
-		t.Errorf("cost = %v for 1M tokens, want $0.004 (the model's listed price)", res.CostUSD)
+	if math.Abs(u.CostUSD-0.004) > 1e-9 {
+		t.Errorf("cost = %v for 1M tokens, want $0.004 (the model's listed price)", u.CostUSD)
 	}
 }
 
@@ -366,12 +402,12 @@ func TestOpenRouterEstimatesTheCostWhenNoneIsReported(t *testing.T) {
 func TestAnUnpricedModelIsEstimatedConservatively(t *testing.T) {
 	t.Parallel()
 	srv := embeddingsServer(t, `{"prompt_tokens":1000000}`)
-	res, err := NewOpenRouter(srv.URL, "k").Embed(context.Background(), "someone/new-model", []string{"a"})
+	_, u, err := newOpenRouter(srv.URL, "k").embed(context.Background(), "someone/new-model", []string{"a"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.CostUSD < 0.03 {
-		t.Errorf("cost = %v for 1M tokens of an unpriced model, want at least the dearest listed price ($0.03)", res.CostUSD)
+	if u.CostUSD < 0.03 {
+		t.Errorf("cost = %v for 1M tokens of an unpriced model, want at least the dearest listed price ($0.03)", u.CostUSD)
 	}
 }
 
@@ -380,12 +416,12 @@ func TestAnUnpricedModelIsEstimatedConservatively(t *testing.T) {
 func TestTokensAreEstimatedWhenTheProviderReportsNone(t *testing.T) {
 	t.Parallel()
 	srv := embeddingsServer(t, `{}`)
-	res, err := NewOpenRouter(srv.URL, "k").Embed(context.Background(), "perplexity/pplx-embed-v1-4b", []string{strings.Repeat("x", 4000)})
+	_, u, err := newOpenRouter(srv.URL, "k").embed(context.Background(), "perplexity/pplx-embed-v1-4b", []string{strings.Repeat("x", 4000)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.InputTokens != 1000 || res.CostUSD <= 0 || !res.CostEstimated {
-		t.Errorf("tokens=%d cost=%v estimated=%v, want 1000 tokens and a non-zero estimate", res.InputTokens, res.CostUSD, res.CostEstimated)
+	if u.InputTokens != 1000 || u.CostUSD <= 0 || !u.CostEstimated {
+		t.Errorf("tokens=%d cost=%v estimated=%v, want 1000 tokens and a non-zero estimate", u.InputTokens, u.CostUSD, u.CostEstimated)
 	}
 }
 
@@ -411,8 +447,10 @@ func TestGateRecordsADocumentRefusalDistinctlyFromAnOutage(t *testing.T) {
 			}))
 			t.Cleanup(srv.Close)
 			dbs := openStore(t)
-			_, err := NewGate(dbs).Embed(context.Background(), EmbedRequest{
-				Embedder: NewOpenRouter(srv.URL, "k"), AccountID: "a", Enabled: true,
+			optIn(t, dbs, "a", true)
+			g := NewGate(dbs, WithProviders(ProviderConfig{OpenRouterBase: srv.URL, APIKey: "k"}))
+			_, err := g.Embed(context.Background(), EmbedRequest{
+				Provider: ProviderOpenRouter, AccountID: "a", Feature: "search",
 				Model: "m", Inputs: []string{"one"}, ContentKeys: []string{"ck1"},
 			})
 			if err == nil {

@@ -147,7 +147,7 @@ func (s *Server) semanticHits(ctx context.Context, q string, accounts []string, 
 				return nil
 			}
 			return hits
-		case errors.Is(err, llm.ErrNoProvider), errors.Is(err, llm.ErrNotEnabled), errors.Is(err, llm.ErrCapReached):
+		case errors.Is(err, llm.ErrNoProvider), errors.Is(err, llm.ErrNotEnabled), errors.Is(err, llm.ErrCapReached), errors.Is(err, llm.ErrFeatureOff):
 			continue // this account cannot embed; another may
 		default:
 			if err != nil {

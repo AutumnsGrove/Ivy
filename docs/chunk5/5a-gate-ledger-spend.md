@@ -40,7 +40,7 @@ Nothing. Everything else in chunk 5 depends on this.
 
 ## Scope
 
-1. **5a.1 Generalise the gate (G1 first).** Request types for `Decide` (Jev), `Complete` (chat) and
+1. **5a.1 Generalise the gate (G1 first). Done 2026-10-08; see `docs/BUILD-LOG.md`.** Request types for `Decide` (Jev), `Complete` (chat) and
    `See` (vision) beside `Embed`; endpoint constants `systemone`, `chat`, `vision`; one policy check
    shared by all (opt-in, cap, withheld, ask-selection) so a new feature cannot forget one; the
    unexported provider clients for `/systemone`, chat and vision; the architecture test extended to

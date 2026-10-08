@@ -113,24 +113,27 @@ func (s *Service) Hybrid(fts, vec []Hit, limit int) []Hit {
 	return Fuse([][]Hit{fts, vec}, DefaultRRFK, limit)
 }
 
-// AccountConfig is one account's embedding policy, from ivy.yaml.
+// AccountConfig names which provider kind and model embed one account's mail. The
+// opt-in and the cap are not here: the gate reads them from what is stored on
+// every call, so a switch made in the app takes effect at once.
 type AccountConfig struct {
 	ID       string
-	Embedder llm.Embedder
+	Provider string
 	Model    string
-	Enabled  bool
-	CapUSD   float64
-	// EnabledNow, when set, is asked on every call instead of using Enabled, so a
-	// switch made in the app takes effect at once: turning smart features off must
-	// stop remote calls without a restart. Enabled is then only the fallback.
-	EnabledNow func(context.Context) bool
 }
 
-func (a AccountConfig) enabled(ctx context.Context) bool {
-	if a.EnabledNow != nil {
-		return a.EnabledNow(ctx)
+// pauses reports whether the gate declined the call for a reason that holds for
+// the whole account (off, capped, no provider, a broken ledger), as opposed to a
+// problem with one document. The pass stops quietly and tries again next time.
+func pauses(err error) bool {
+	for _, target := range []error{
+		llm.ErrNotEnabled, llm.ErrCapReached, llm.ErrFeatureOff, llm.ErrNoProvider, llm.ErrLedgerUnwritable,
+	} {
+		if errors.Is(err, target) {
+			return true
+		}
 	}
-	return a.Enabled
+	return false
 }
 
 // WorkerOptions tune the embed-once queue.
@@ -172,7 +175,7 @@ func (w *EmbedWorker) RunOnce(ctx context.Context) (int, error) {
 	}
 	embedded := 0
 	for _, acct := range w.accounts {
-		if acct.Embedder == nil {
+		if acct.Provider == "" {
 			continue
 		}
 		n, err := w.embedBodies(ctx, acct)
@@ -270,7 +273,7 @@ func (w *EmbedWorker) runJobs(ctx context.Context, acct AccountConfig, jobs []em
 		case err == nil:
 			embedded++
 			failures = 0
-		case errors.Is(err, llm.ErrNotEnabled), errors.Is(err, llm.ErrCapReached):
+		case pauses(err):
 			return embedded, nil
 		case ctx.Err() != nil:
 			return embedded, ctx.Err()
@@ -317,9 +320,9 @@ func (w *EmbedWorker) embedChunks(ctx context.Context, acct AccountConfig, ref, 
 			keys[i] = ref
 		}
 		vectors, err := w.gate.Embed(ctx, llm.EmbedRequest{
-			Embedder: acct.Embedder, AccountID: acct.ID, Enabled: acct.enabled(ctx),
+			Provider: acct.Provider, AccountID: acct.ID,
 			Model: acct.Model, Feature: "search", Inputs: batch,
-			ContentKeys: keys, CapUSD: acct.CapUSD,
+			ContentKeys: keys,
 		})
 		if err != nil {
 			return err

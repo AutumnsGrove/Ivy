@@ -203,6 +203,46 @@ All six questions were answered as recommended. 5a.1 may start, tests first.
    5d (categories, junk rescue, banners, mail types) stays in 5d. Until 5c.0 lands, the default `Vetting`
    refuses every vetted-mail feature, which is the intended fail-closed state.
 
+## As built (5a.1, 2026-10-08)
+
+The design held. These are the places the code differs from it or fills a gap, so a reviewer reads the
+code against the truth and not against the sketch above.
+
+- **The opt-in source is an injected `AccountPolicy`, not `store.Account.LLMEnabled`.** The mirror row's
+  `llm_enabled` is never set by sync (`gateway/read.go` says so), so the design's source was wrong in
+  production. The policy lives in `llm/policy.go` and is given to the gate at construction (never per
+  request): an account in `ivy.yaml` keeps its startup choice, an app-connected account is read live from
+  `state.db` `account_configs`, a seeded dev account falls back to its mirror row, an unknown account or a
+  read error is off. `cmd.NewEmbedding` builds it; `FromApp` still names which accounts are live. The
+  guarantee G1 wanted holds: no request carries an opt-in.
+- **Migration 19, not 18** (18 became the account-icon migration while G1 waited): `api_calls.reason`.
+- **Features ship dark** (brief section 4). The table has `defaultOn`; only `search` and `embed` are on.
+  A feature's per-account switch is the setting `llm.feature.<name>` (`on`/`off`); every later stage
+  turns its own on. Order of checks: shape, feature known, provider present, size, feature switch,
+  opt-in, vetting, ledger breaker, caps.
+- **Caps.** `llm.cap_usd` (per account) and `llm.global_cap_usd` (global scope) in settings; defaults
+  `$5` (the operator's `llm.monthly_cap_usd`) and `$10` (`DefaultGlobalCapUSD`, agent-chosen, revisit). A
+  setting that does not parse falls back to the default, never to "no cap". **A cap of zero or less now
+  allows no hosted spend** (it used to mean unlimited, which broke brief invariant 11). Spend is summed
+  across endpoints (`AccountSpend`, `GlobalSpend`), and the check is recorded spend plus in-flight
+  reservations plus the call's worst case, under one mutex.
+- **Breaker probe.** `store.ProbeLedger` runs the real ledger inserts in a transaction and rolls back, so
+  a broken ledger is detected through the same constraints a real write meets, and a probe leaves no row.
+- **Vetting for a multi-account call (Ask).** A call names accounts and keys but not which belongs to
+  whom, so a key is accepted if any selected account vouches for it; an error, or a vetted-mail feature
+  that names no mail, is withheld. 5i (gate G5) should replace this with account-tagged references.
+- **`Embed` keeps a singular `AccountID`**; `Decide`, `Complete` and `See` take `AccountIDs`. A request
+  naming no account, or several for a feature that is not `multi`, is `ErrBadRequest`: returned, not
+  ledgered, because it is a caller bug and not a policy outcome.
+- **Test shape.** Other packages can no longer inject a stub provider (that is the point), so the search
+  tests that used `stubEmbedder` and `countingRejecter` now point the gate at small `httptest` servers
+  speaking the real wire format. Inside `llm`, tests set the unexported client fields directly.
+  Test 9 ("existing tests pass untouched") therefore became "pass with the same assertions, ported to the
+  new construction"; no assertion was weakened.
+- **Test-first caveat.** The gate was written before its tests. Each behaviour test was then shown to
+  fail by mutation instead (opt-in check removed, reservation removed, release made a no-op, breaker
+  disabled, vetting disabled, Ask checking only the first account): every one turned its test red.
+
 ## The questions as asked
 
 1. **Providers owned by the gate** removes `NewOpenRouter`/`NewOllama`/`Embedder` from the public API

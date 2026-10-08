@@ -5,7 +5,7 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-06. **Chunk 4 (send) is complete: 4a-4h are done.** **4h (rich text)** landed with the decisions settled in qa-log round 66 and `docs/handoffs/2026-10-06-4h-richtext-design.md`: the editor is `squire-rte` (MIT, zero deps, 16.1 KiB brotli, chosen over a 98.3 KiB minimal TipTap), both modes stay with rich as the default and the mode fixed once typed, a `bodyFormat` field is sanitised server-side with a derived `text/plain`, and the paste walker is our own allow-list. `docs/BUILD-LOG.md` has the entry. What is left is the operator's live checks. **4g is done** (outgoing attachments and images; round 65): gate G4 cleared the dependency question — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4f is done** (the compose screen; round 64): the client calls and the new
+last updated: 2026-10-08 (5a.1 done; see "▶ Now"). **Chunk 4 (send) is complete: 4a-4h are done.** **4h (rich text)** landed with the decisions settled in qa-log round 66 and `docs/handoffs/2026-10-06-4h-richtext-design.md`: the editor is `squire-rte` (MIT, zero deps, 16.1 KiB brotli, chosen over a 98.3 KiB minimal TipTap), both modes stay with rich as the default and the mode fixed once typed, a `bodyFormat` field is sanitised server-side with a derived `text/plain`, and the paste walker is our own allow-list. `docs/BUILD-LOG.md` has the entry. What is left is the operator's live checks. **4g is done** (outgoing attachments and images; round 65): gate G4 cleared the dependency question — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4f is done** (the compose screen; round 64): the client calls and the new
 `/drafts` screen, the From picker over the real identities, People autocomplete, reply/forward
 prefills, debounced autosave to the server's Drafts folder (and once on leave), the Sending/Undo
 toast, the Not-sent sheet and the resend-free `unconfirmed` notice. The operator chose autosave plus
@@ -58,7 +58,7 @@ screens**.
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
 | 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, rules, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; 3e done; 3f done; 3g done; **3h done** |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | **done** (4a-4h; rounds 60-66; see "Chunk 4 stages" and `docs/CHUNK4-BRIEF.md`) |
-| 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | **planned, not started** (2026-10-07): standing rules in `docs/CHUNK5-BRIEF.md`, one plan per feature in `docs/chunk5/` (5a-5j, foundation first); every plan's questions were answered with the operator on 2026-10-07 (see each plan's Decisions section and `docs/qa-log.md`); next is gate G1, the 5a gate design |
+| 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | **planned, not started** (2026-10-07): standing rules in `docs/CHUNK5-BRIEF.md`, one plan per feature in `docs/chunk5/` (5a-5j, foundation first); every plan's questions were answered with the operator on 2026-10-07 (see each plan's Decisions section and `docs/qa-log.md`); **5a.1 (the generalised gate) is done**, next is 5a.2 (the spend API) |
 
 Frontend: SvelteKit 3 app in `web/`. The reader endpoints (`/accounts`, `/inbox`,
 `/messages/{id}`, `/summary`, `/mirror/health`, account profile and photo), tags (`/tags`, the
@@ -80,13 +80,20 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 
 ## ▶ Now
 
-**G1 is cleared (chunk 5, 5a.1: generalising the gate), 2026-10-07.** The design is
-`docs/handoffs/2026-10-07-G1-gate-design.md` and the operator answered its six questions as
-recommended. Its main finding: today's gate trusts the caller for the opt-in and the cap, and the
-caller owns the provider client, so the "one chokepoint" is not enforced by the code. **Next: 5a.1,
-tests first** (the nine listed in the design, each seen failing). One reordering came out of the
-questions: the vetting machinery (tripwire, sensitive check, real `Vetting`) is built as 5c.0, the
-first step of 5c, not in 5d. The next gate is **G2**, before the first live Jev call in 5b.
+**5a.1 is done (chunk 5, the generalised gate), 2026-10-08.** `Embed`, `Decide`, `Complete` and `See`
+share one `admit -> call -> settle` path in `llm/`; the gate owns its (unexported) provider clients, reads
+the opt-in from an injected `AccountPolicy` and the caps from settings, reserves each call's worst case so
+concurrent calls cannot overshoot, and trips a breaker on a failed ledger write. The default `Vetting`
+refuses all mail, so every vetted-mail feature stays withheld until 5c.0. `docs/BUILD-LOG.md` has the
+entry and the G1 design has an "As built" section listing where the code differs from the sketch (the
+opt-in source, migration 19, a zero cap now meaning no spend, features shipping dark).
+**Next: 5a.2, the spend API** (`api/openapi.yaml` totals, call log with cursor paging and export, caps and
+blocked-call counts by reason; move the web client off the mock ledger and delete the mock route and its
+E2E fixtures in the same change), then **5a.3** (caps and feature switches in settings, the estimate
+helper, the code-defined model registry in `llm/models.go`, which today holds only a price table).
+The next gate is **G2**, before the first live Jev call in 5b. **Left for the operator:** nothing new; no
+live provider is reached yet. Two small agent decisions to confirm are in qa-log ("5a.1: decisions the
+agent made"): the $10 global cap default and a zero cap meaning no spend.
 
 **Chunk 4 is done.** 4h (rich text) is the last stage and landed with `squire-rte` (MIT, zero deps,
 16.1 KiB brotli, route-split to `/compose`), an explicit `bodyFormat` on the compose/API contract

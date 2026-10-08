@@ -976,3 +976,35 @@ What each delivered, all tests first:
 - **#15** the sender sheet: real address, copy, Cc/To, auth line, People link via the same merge rules, spoofed-name warning.
 
 Playwright runs two workers locally (the default starved the laptop).
+
+## 5a.1 The generalised gate (2026-10-08)
+
+Gate G1 cleared the design (`docs/handoffs/2026-10-07-G1-gate-design.md`, with an "As built" section for
+where the code differs). What landed:
+
+- **One path, four entry points.** `Embed`, `Decide` (Jev, `/systemone`), `Complete` (chat) and `See`
+  (vision) each build an admission from their request and take the same `admit -> provider call ->
+  settle` sequence, so a feature cannot skip a check. No request carries an opt-in, a cap, a price or a
+  client. `llm/features.go` is the one table describing a feature (endpoint, needs-vetted-mail, vision,
+  multi-account, default on); an unknown name is refused, and features ship dark.
+- **The gate owns its providers.** `NewOpenRouter`, `NewOllama` and the `Embedder` interface are gone;
+  `WithProviders` builds unexported clients for embeddings, Jev, chat and vision (`llm/providers.go`),
+  and a request names a provider kind. `llm/arch_test.go` now fails on a provider endpoint outside
+  `llm/` (vision included), on an exported provider constructor or client type, and on a `Feature:`
+  literal the table does not contain; each scan is shown catching a deliberately violating file.
+- **Policy from stored state.** `AccountPolicy` (config, then `state.db`, then the mirror row, off on
+  error) and `Vetting` (default refuses all mail, so every vetted-mail feature is withheld until 5c.0)
+  are gate dependencies; refusals are a typed `*Refusal` with a reason from a closed set that
+  `errors.Is` maps onto the old sentinels. State migration 19 adds `api_calls.reason`.
+- **Caps that hold.** Per-account and global monthly caps from settings (defaults `$5` and `$10`), spend
+  summed across endpoints, checked against recorded spend plus in-flight reservations plus the call's
+  worst case under one mutex, so concurrent calls cannot overshoot; a failed or cancelled call releases
+  its reservation. A failed ledger write trips a breaker that refuses calls (`ledger_unwritable`) until
+  `ProbeLedger` succeeds. Per-endpoint concurrency slots and per-call deadlines are constants in `llm/`.
+- **Callers.** `cmd/embed.go` and `search` drop `Embedder`, `Enabled`, `CapUSD` and `EnabledNow`; the
+  `appSwitch` logic became the gate's policy. The search tests use `httptest` providers instead of
+  injected stubs.
+
+Verification: `llm`, `store`, `search`, `cmd` and `gateway` tests green, then the whole Go suite under
+`-race` and a `CGO_ENABLED=0` build; `gofumpt`, `go vet` and `staticcheck` clean. The gate was written
+before its tests, so each behaviour test was proved by mutation (six mutations, six red tests).

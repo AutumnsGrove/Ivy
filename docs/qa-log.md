@@ -1742,3 +1742,17 @@ before chunk 5. Decisions asked and answered:
   (#7); rich HTML mail sits on a light paper sheet and plain text takes the theme's colours (#9); the account
   icon is a Lucide name from a closed list of twelve and the ten old emoji were migrated (#14); an unknown
   auth verdict reads "your mail provider did not check", never an all-clear (#15).
+
+## 5a.1: decisions the agent made while building the gate (2026-10-08)
+
+Not asked; revisit if wrong. All are recorded in the "As built" section of
+`docs/handoffs/2026-10-07-G1-gate-design.md`.
+
+- **The opt-in is read through an injected policy**, because the design's source (the mirror row) is never
+  set in production. The policy is a gate dependency, never a request field, so the guarantee is the same.
+- **A cap of zero or less allows no hosted spend** (it meant unlimited before). Reason: brief invariant 11
+  and trigger T18 say no spend path may be unbounded.
+- **The built-in global cap is $10** (the per-account default stays the operator's $5).
+- **Features ship dark**, switched per account by `llm.feature.<name>`; only `search` and `embed` default on.
+- **A multi-account call is vetted by "any selected account vouches for the key"** until 5i's account-tagged
+  references replace it; a vetted-mail feature that names no mail is withheld.

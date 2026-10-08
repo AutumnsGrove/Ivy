@@ -2,8 +2,10 @@ package search
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -13,6 +15,54 @@ import (
 	"github.com/AutumnsGrove/Ivy/llm"
 	"github.com/AutumnsGrove/Ivy/store"
 )
+
+// hostedAccount is the one account these tests embed for, using the hosted
+// provider kind and a model name.
+var hostedAccount = AccountConfig{ID: "acct", Provider: llm.ProviderOpenRouter, Model: "m"}
+
+// optIn stores the account's smart-features switch the way the app does. The gate
+// reads it from there on every call; no request or worker setting can carry it.
+func optIn(t *testing.T, dbs *store.DBs, id string, on bool) {
+	t.Helper()
+	if err := dbs.SaveAccountConfig(context.Background(), store.AccountConfig{
+		ID: id, Address: id + "@example.test", Username: id,
+		IMAPHost: "imap.example.test", IMAPPort: 993, SMTPHost: "smtp.example.test", SMTPPort: 465,
+		LLMEnabled: on, EmbedProvider: "openrouter", CreatedAt: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("save account config: %v", err)
+	}
+}
+
+// gateAt builds a gate whose hosted provider is the server at base.
+func gateAt(dbs *store.DBs, base string) *llm.Gate {
+	return llm.NewGate(dbs, llm.WithProviders(llm.ProviderConfig{OpenRouterBase: base, APIKey: "k"}))
+}
+
+// markerServer is a hosted embeddings provider that answers every input with one
+// vector, except that a request containing marker is answered with status, the
+// way a provider refuses a single document it will not take (or is down). calls
+// counts the requests that carried the marker.
+func markerServer(t *testing.T, marker string, status int, calls *atomic.Int32) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Input []string `json:"input"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		var data []string
+		for i, in := range req.Input {
+			if marker != "" && strings.Contains(in, marker) {
+				calls.Add(1)
+				w.WriteHeader(status)
+				return
+			}
+			data = append(data, fmt.Sprintf(`{"index":%d,"embedding":[0.5,0,0,0]}`, i))
+		}
+		_, _ = fmt.Fprintf(w, `{"data":[%s],"usage":{"prompt_tokens":%d,"cost":0.0001}}`, strings.Join(data, ","), len(req.Input))
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
 
 func openStore(t *testing.T) *store.DBs {
 	t.Helper()
@@ -106,11 +156,9 @@ func TestEmbedWorkerEmbedsOnce(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t)
 	dbs := openStore(t)
-	embedder := llm.NewOpenRouter(w.OpenRouterURL(), "k")
-	gate := llm.NewGate(dbs)
-	worker := NewEmbedWorker(dbs, gate, []AccountConfig{
-		{ID: "acct", Embedder: embedder, Model: "m", Enabled: true, CapUSD: 5},
-	}, WorkerOptions{Batch: 32})
+	optIn(t, dbs, "acct", true)
+	gate := gateAt(dbs, w.OpenRouterURL())
+	worker := NewEmbedWorker(dbs, gate, []AccountConfig{hostedAccount}, WorkerOptions{Batch: 32})
 
 	seedMail(t, dbs, "acct", "f1", "m1", "ck1", "Domain renewal", "Your domain invoice is attached")
 
@@ -161,10 +209,9 @@ func TestEmbedWorkerSkipsANonEnabledHostedAccount(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t)
 	dbs := openStore(t)
-	gate := llm.NewGate(dbs)
-	worker := NewEmbedWorker(dbs, gate, []AccountConfig{
-		{ID: "acct", Embedder: llm.NewOpenRouter(w.OpenRouterURL(), "k"), Model: "m", Enabled: false},
-	}, WorkerOptions{})
+	optIn(t, dbs, "acct", false)
+	gate := gateAt(dbs, w.OpenRouterURL())
+	worker := NewEmbedWorker(dbs, gate, []AccountConfig{hostedAccount}, WorkerOptions{})
 	seedMail(t, dbs, "acct", "f1", "m1", "ck1", "Subject", "body")
 	if n, err := worker.RunOnce(ctx); err != nil || n != 0 {
 		t.Fatalf("pass = %d, %v; want 0", n, err)
@@ -179,22 +226,23 @@ func TestVectorSearchRanksTheMatchingDocument(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t)
 	dbs := openStore(t)
-	embedder := llm.NewOpenRouter(w.OpenRouterURL(), "k")
-	gate := llm.NewGate(dbs)
-	worker := NewEmbedWorker(dbs, gate, []AccountConfig{
-		{ID: "acct", Embedder: embedder, Model: "m", Enabled: true, CapUSD: 5},
-	}, WorkerOptions{})
+	optIn(t, dbs, "acct", true)
+	gate := gateAt(dbs, w.OpenRouterURL())
+	worker := NewEmbedWorker(dbs, gate, []AccountConfig{hostedAccount}, WorkerOptions{})
 	seedMail(t, dbs, "acct", "f1", "m1", "ck1", "Domain renewal", "The domain invoice renews in March")
 	if _, err := worker.RunOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
 
-	query, err := embedder.Embed(ctx, "m", []string{"domain invoice renewal"})
+	query, err := gate.Embed(ctx, llm.EmbedRequest{
+		Provider: llm.ProviderOpenRouter, AccountID: "acct", Model: "m", Feature: "search",
+		Inputs: []string{"domain invoice renewal"}, ContentKeys: []string{"acct:query"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	svc := New(dbs, gate)
-	hits, err := svc.VectorSearch(ctx, query.Vectors[0], []string{"acct"}, "m", 10)
+	hits, err := svc.VectorSearch(ctx, query[0], []string{"acct"}, "m", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,28 +250,6 @@ func TestVectorSearchRanksTheMatchingDocument(t *testing.T) {
 		t.Fatalf("hits = %+v, want ck1 first", hits)
 	}
 }
-
-// stubEmbedder is a hosted provider that answers every input with one vector,
-// except that it rejects any batch containing a marked input, the way a
-// provider refuses a single document it will not take.
-type stubEmbedder struct {
-	reject string
-}
-
-func (stubEmbedder) Name() string { return "stub" }
-
-func (s stubEmbedder) Embed(_ context.Context, _ string, inputs []string) (llm.EmbedResult, error) {
-	res := llm.EmbedResult{InputTokens: len(inputs), CostUSD: 0.0001}
-	for _, in := range inputs {
-		if s.reject != "" && strings.Contains(in, s.reject) {
-			return llm.EmbedResult{}, errStubRejected
-		}
-		res.Vectors = append(res.Vectors, llm.Quantise([]float32{0.5, 0, 0, 0}))
-	}
-	return res, nil
-}
-
-var errStubRejected = errors.New("stub provider rejected the input")
 
 func seedDated(t *testing.T, dbs *store.DBs, id, key, subject, body string, at time.Time) {
 	t.Helper()
@@ -275,9 +301,10 @@ func TestEmbedWorkerDoesNotStallBehindMailWithNothingToEmbed(t *testing.T) {
 	for i := range 3 {
 		seedDated(t, dbs, fmt.Sprintf("blank%d", i), fmt.Sprintf("ck-blank%d", i), "", "  \n ", day(10+i))
 	}
-	worker := NewEmbedWorker(dbs, llm.NewGate(dbs), []AccountConfig{
-		{ID: "acct", Embedder: stubEmbedder{}, Model: "m", Enabled: true, CapUSD: 5},
-	}, WorkerOptions{Batch: 2})
+	optIn(t, dbs, "acct", true)
+	var calls atomic.Int32
+	srv := markerServer(t, "", 0, &calls)
+	worker := NewEmbedWorker(dbs, gateAt(dbs, srv.URL), []AccountConfig{hostedAccount}, WorkerOptions{Batch: 2})
 
 	for range 4 {
 		if _, err := worker.RunOnce(ctx); err != nil {
@@ -302,9 +329,10 @@ func TestEmbedWorkerSkipsOneRefusedDocument(t *testing.T) {
 	seedDated(t, dbs, "poison", "ck-poison", "Weird", "this one is POISON", day(20))
 	seedDated(t, dbs, "ok1", "ck-ok1", "One", "the first good message", day(10))
 	seedDated(t, dbs, "ok2", "ck-ok2", "Two", "the second good message", day(5))
-	worker := NewEmbedWorker(dbs, llm.NewGate(dbs), []AccountConfig{
-		{ID: "acct", Embedder: stubEmbedder{reject: "POISON"}, Model: "m", Enabled: true, CapUSD: 5},
-	}, WorkerOptions{Batch: 2})
+	optIn(t, dbs, "acct", true)
+	var calls atomic.Int32
+	srv := markerServer(t, "POISON", http.StatusInternalServerError, &calls)
+	worker := NewEmbedWorker(dbs, gateAt(dbs, srv.URL), []AccountConfig{hostedAccount}, WorkerOptions{Batch: 2})
 
 	for range 3 {
 		_, _ = worker.RunOnce(ctx)
@@ -313,29 +341,6 @@ func TestEmbedWorkerSkipsOneRefusedDocument(t *testing.T) {
 	if !got["ck-ok1"] || !got["ck-ok2"] {
 		t.Fatalf("embedded = %v, want both good messages despite the refused one", got)
 	}
-}
-
-// countingRejecter refuses any input containing the marker the way a provider
-// refuses a document it will not take (422), and counts the calls that carried
-// it.
-type countingRejecter struct {
-	marker string
-	status int
-	calls  *atomic.Int32
-}
-
-func (countingRejecter) Name() string { return "stub" }
-
-func (c countingRejecter) Embed(_ context.Context, _ string, inputs []string) (llm.EmbedResult, error) {
-	res := llm.EmbedResult{InputTokens: len(inputs), CostUSD: 0.0001}
-	for _, in := range inputs {
-		if strings.Contains(in, c.marker) {
-			c.calls.Add(1)
-			return llm.EmbedResult{}, &llm.StatusError{Provider: "stub", Status: c.status, Body: "no"}
-		}
-		res.Vectors = append(res.Vectors, llm.Quantise([]float32{0.5, 0, 0, 0}))
-	}
-	return res, nil
 }
 
 // A document the provider refuses every time used to cost a failed call and a
@@ -349,11 +354,10 @@ func TestEmbedWorkerGivesUpOnADocumentAfterFiveRefusals(t *testing.T) {
 	day := func(d int) time.Time { return time.Date(2026, 9, d, 9, 0, 0, 0, time.UTC) }
 	seedDated(t, dbs, "poison", "ck-poison", "Weird", "this one is POISON", day(20))
 	seedDated(t, dbs, "ok1", "ck-ok1", "One", "the first good message", day(10))
+	optIn(t, dbs, "acct", true)
 	var calls atomic.Int32
-	worker := NewEmbedWorker(dbs, llm.NewGate(dbs), []AccountConfig{{
-		ID: "acct", Model: "m", Enabled: true, CapUSD: 5,
-		Embedder: countingRejecter{marker: "POISON", status: 422, calls: &calls},
-	}}, WorkerOptions{Batch: 2})
+	srv := markerServer(t, "POISON", http.StatusUnprocessableEntity, &calls)
+	worker := NewEmbedWorker(dbs, gateAt(dbs, srv.URL), []AccountConfig{hostedAccount}, WorkerOptions{Batch: 2})
 
 	for range 10 {
 		_, _ = worker.RunOnce(ctx)
@@ -378,11 +382,10 @@ func TestEmbedWorkerNeverGivesUpOnADocumentBecauseOfAnOutage(t *testing.T) {
 	dbs := openStore(t)
 	seedDatedAccount(t, dbs)
 	seedDated(t, dbs, "m1", "ck1", "Subject", "an ordinary POISON-marked body", time.Date(2026, 9, 1, 9, 0, 0, 0, time.UTC))
+	optIn(t, dbs, "acct", true)
 	var calls atomic.Int32
-	worker := NewEmbedWorker(dbs, llm.NewGate(dbs), []AccountConfig{{
-		ID: "acct", Model: "m", Enabled: true, CapUSD: 5,
-		Embedder: countingRejecter{marker: "POISON", status: 503, calls: &calls},
-	}}, WorkerOptions{Batch: 2})
+	srv := markerServer(t, "POISON", http.StatusServiceUnavailable, &calls)
+	worker := NewEmbedWorker(dbs, gateAt(dbs, srv.URL), []AccountConfig{hostedAccount}, WorkerOptions{Batch: 2})
 
 	for range 8 {
 		_, _ = worker.RunOnce(ctx)
@@ -401,15 +404,13 @@ func TestEmbedWorkerFollowsTheSwitchWhileRunning(t *testing.T) {
 	ctx := context.Background()
 	w := newWorld(t)
 	dbs := openStore(t)
-	on := true
-	worker := NewEmbedWorker(dbs, llm.NewGate(dbs), []AccountConfig{{
-		ID: "acct", Embedder: llm.NewOpenRouter(w.OpenRouterURL(), "k"), Model: "m",
-		Enabled:    true,                                     // what ivy.yaml said at startup
-		EnabledNow: func(context.Context) bool { return on }, // what the app says now
-	}}, WorkerOptions{})
+	optIn(t, dbs, "acct", true)
+	worker := NewEmbedWorker(dbs, gateAt(dbs, w.OpenRouterURL()), []AccountConfig{hostedAccount}, WorkerOptions{})
 	seedMail(t, dbs, "acct", "f1", "m1", "ck1", "Subject", "body")
 
-	on = false
+	if err := dbs.SetAccountSmart(ctx, "acct", false); err != nil {
+		t.Fatal(err)
+	}
 	if n, err := worker.RunOnce(ctx); err != nil || n != 0 {
 		t.Fatalf("pass with smart off = %d, %v; want 0", n, err)
 	}
@@ -417,7 +418,9 @@ func TestEmbedWorkerFollowsTheSwitchWhileRunning(t *testing.T) {
 		t.Fatal("the hosted provider was called after smart features were turned off")
 	}
 
-	on = true
+	if err := dbs.SetAccountSmart(ctx, "acct", true); err != nil {
+		t.Fatal(err)
+	}
 	if n, err := worker.RunOnce(ctx); err != nil || n != 1 {
 		t.Fatalf("pass after turning it back on = %d, %v; want 1", n, err)
 	}

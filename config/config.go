@@ -64,7 +64,8 @@ type LLM struct {
 	OllamaURL string `yaml:"ollama_url"`
 	// OllamaEmbedModel is the model Ollama is asked for.
 	OllamaEmbedModel string `yaml:"ollama_embed_model"`
-	// MonthlyCapUSD bounds hosted embedding spend per account and month.
+	// MonthlyCapUSD bounds hosted LLM spend (embeddings, Jev, chat, vision) per
+	// account and month; zero allows none. It is the default the settings override.
 	MonthlyCapUSD float64 `yaml:"monthly_cap_usd"`
 }
 

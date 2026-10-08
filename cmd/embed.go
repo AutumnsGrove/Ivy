@@ -32,11 +32,16 @@ func NewEmbedding(cfg *config.Config, dbs *store.DBs, apiKey string, opts ...Emb
 	for _, opt := range opts {
 		opt(&o)
 	}
-	sw := &appSwitch{dbs: dbs, fromApp: o.fromApp}
-	gate := llm.NewGate(dbs)
-	embedders, models := buildEmbedders(cfg, apiKey)
-	emb := &Embedding{Query: newQueryEmbedder(cfg, gate, embedders, models, sw)}
-	if accounts := embedAccounts(cfg, embedders, models, sw); len(accounts) > 0 {
+	gate := llm.NewGate(dbs,
+		llm.WithProviders(llm.ProviderConfig{
+			OpenRouterBase: cfg.LLM.OpenRouterBase, APIKey: apiKey, OllamaURL: cfg.LLM.OllamaURL,
+		}),
+		llm.WithAccountPolicy(llm.NewAccountPolicy(dbs, o.configuredSettings(cfg))),
+		llm.WithDefaultCaps(cfg.LLM.MonthlyCapUSD, llm.DefaultGlobalCapUSD),
+	)
+	providers, models := buildEmbedders(cfg, apiKey)
+	emb := &Embedding{Query: newQueryEmbedder(gate, providers, models)}
+	if accounts := embedAccounts(cfg, providers, models); len(accounts) > 0 {
 		emb.Worker = search.NewEmbedWorker(dbs, gate, accounts, search.WorkerOptions{})
 	}
 	return emb
@@ -59,36 +64,24 @@ func FromApp(ids ...string) EmbeddingOption {
 	}
 }
 
-// appSwitch answers "may this account use smart features right now?" for the
-// accounts the app manages. It fails closed: a state.db that cannot be read
-// means no remote call.
-type appSwitch struct {
-	dbs     *store.DBs
-	fromApp map[string]bool
-}
-
-func (s *appSwitch) managed(id string) bool { return s != nil && s.fromApp[id] }
-
-func (s *appSwitch) on(ctx context.Context, id string) bool {
-	rows, err := s.dbs.AccountConfigs(ctx)
-	if err != nil {
-		slog.WarnContext(ctx, "cannot read the smart-features switch; treating it as off", "account", id, "error", err)
-		return false
-	}
-	for _, r := range rows {
-		if r.ID == id {
-			return r.LLMEnabled
+// configuredSettings is the startup choice of every account ivy.yaml declares,
+// except those the app manages, which the gate reads live from state.db.
+func (o embeddingOptions) configuredSettings(cfg *config.Config) map[string]llm.AccountSettings {
+	out := make(map[string]llm.AccountSettings, len(cfg.Accounts))
+	for _, a := range cfg.Accounts {
+		if !o.fromApp[a.ID] {
+			out[a.ID] = llm.AccountSettings{Smart: a.LLMEnabled}
 		}
 	}
-	return false
+	return out
 }
 
-// buildEmbedders picks the provider per account from the operator's config. An
+// buildEmbedders picks the provider kind per account from the operator's config. An
 // account with no provider, or a hosted one with no API key, is left out, so
 // search for it stays keyword-only and never reaches a paid endpoint.
-func buildEmbedders(cfg *config.Config, apiKey string) (map[string]llm.Embedder, map[string]string) {
-	embedders := map[string]llm.Embedder{}
-	models := map[string]string{}
+func buildEmbedders(cfg *config.Config, apiKey string) (providers, models map[string]string) {
+	providers = map[string]string{}
+	models = map[string]string{}
 	for _, a := range cfg.Accounts {
 		switch a.EmbedProvider {
 		case "openrouter":
@@ -97,7 +90,7 @@ func buildEmbedders(cfg *config.Config, apiKey string) (map[string]llm.Embedder,
 					"account", a.ID)
 				continue
 			}
-			embedders[a.ID] = llm.NewOpenRouter(cfg.LLM.OpenRouterBase, apiKey)
+			providers[a.ID] = llm.ProviderOpenRouter
 			models[a.ID] = cfg.LLM.EmbedModel
 		case "ollama":
 			if cfg.LLM.OllamaURL == "" {
@@ -105,29 +98,22 @@ func buildEmbedders(cfg *config.Config, apiKey string) (map[string]llm.Embedder,
 					"account", a.ID)
 				continue
 			}
-			embedders[a.ID] = llm.NewOllama(cfg.LLM.OllamaURL)
+			providers[a.ID] = llm.ProviderOllama
 			models[a.ID] = cfg.LLM.OllamaEmbedModel
 		}
 	}
-	return embedders, models
+	return providers, models
 }
 
-// embedAccounts builds the worker's per-account policy from config.
-func embedAccounts(cfg *config.Config, embedders map[string]llm.Embedder, models map[string]string, sw *appSwitch) []search.AccountConfig {
+// embedAccounts builds the worker's per-account provider choice from config.
+func embedAccounts(cfg *config.Config, providers, models map[string]string) []search.AccountConfig {
 	var out []search.AccountConfig
 	for _, a := range cfg.Accounts {
-		emb, ok := embedders[a.ID]
+		kind, ok := providers[a.ID]
 		if !ok {
 			continue
 		}
-		ac := search.AccountConfig{
-			ID: a.ID, Embedder: emb, Model: models[a.ID],
-			Enabled: a.LLMEnabled, CapUSD: cfg.LLM.MonthlyCapUSD,
-		}
-		if id := a.ID; sw.managed(id) {
-			ac.EnabledNow = func(ctx context.Context) bool { return sw.on(ctx, id) }
-		}
-		out = append(out, ac)
+		out = append(out, search.AccountConfig{ID: a.ID, Provider: kind, Model: models[a.ID]})
 	}
 	return out
 }
@@ -137,37 +123,26 @@ func embedAccounts(cfg *config.Config, embedders map[string]llm.Embedder, models
 // message embeddings.
 type queryEmbedder struct {
 	gate      *llm.Gate
-	embedders map[string]llm.Embedder
+	providers map[string]string
 	models    map[string]string
-	accounts  map[string]config.Account
-	sw        *appSwitch
-	cap       float64
 }
 
-func newQueryEmbedder(cfg *config.Config, gate *llm.Gate, embedders map[string]llm.Embedder, models map[string]string, sw *appSwitch) *queryEmbedder {
-	byID := make(map[string]config.Account, len(cfg.Accounts))
-	for _, a := range cfg.Accounts {
-		byID[a.ID] = a
-	}
-	return &queryEmbedder{gate: gate, embedders: embedders, models: models, accounts: byID, sw: sw, cap: cfg.LLM.MonthlyCapUSD}
+func newQueryEmbedder(gate *llm.Gate, providers, models map[string]string) *queryEmbedder {
+	return &queryEmbedder{gate: gate, providers: providers, models: models}
 }
 
 // EmbedQuery turns a search query into a vector for one account. A refusal or
 // an outage is returned, and the HTTP handler falls back to keyword search.
 func (q *queryEmbedder) EmbedQuery(ctx context.Context, accountID, query string) (llm.Vector, string, error) {
-	emb, ok := q.embedders[accountID]
+	kind, ok := q.providers[accountID]
 	if !ok {
 		return llm.Vector{}, "", llm.ErrNoProvider
 	}
 	model := q.models[accountID]
-	enabled := q.accounts[accountID].LLMEnabled
-	if q.sw.managed(accountID) {
-		enabled = q.sw.on(ctx, accountID)
-	}
 	vecs, err := q.gate.Embed(ctx, llm.EmbedRequest{
-		Embedder: emb, AccountID: accountID, Enabled: enabled,
+		Provider: kind, AccountID: accountID,
 		Model: model, Feature: "search", Inputs: []string{query},
-		ContentKeys: []string{accountID + ":query"}, CapUSD: q.cap,
+		ContentKeys: []string{accountID + ":query"},
 	})
 	if err != nil {
 		return llm.Vector{}, "", err
