@@ -1759,8 +1759,7 @@ Not asked; revisit if wrong. All are recorded in the "As built" section of
 
 **Operator, 2026-10-08:** the built-in **$10 global cap is fine** (the mockups show the $5 per-account
 default; $10 stands). The operator will also limit the OpenRouter key itself to the same amount, so the
-cap has a second, provider-side guard. A cap of zero meaning "no hosted spend" was not discussed and
-stays an agent decision to revisit.
+cap has a second, provider-side guard. **Also confirmed: a cap of zero means no spend at all.**
 
 ## 5a.2: decisions the agent made while building the spend API (2026-10-08)
 

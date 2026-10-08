@@ -96,8 +96,9 @@ now read **Done / Held back / Errors / Declined**, because the ledger cannot yet
 **Next: 5a.3** (caps and feature switches in the settings panel, the estimate helper the backfills reuse,
 the code-defined model registry in `llm/models.go`, which today holds only a price table, and the
 mirror-health additions: embedding queue and memory). The next gate is **G2**, before the first live Jev
-call in 5b. **Left for the operator:** nothing new; no live provider is reached yet. Still unconfirmed
-from 5a.1: a cap of zero meaning "no hosted spend".
+call in 5b. **Left for the operator:** nothing new; no live provider is reached yet. Confirmed by the
+operator (2026-10-08): a cap of zero means no spend at all. **5a.3 has not been started; the operator
+paused here and is restarting the session.**
 
 **Chunk 4 is done.** 4h (rich text) is the last stage and landed with `squire-rte` (MIT, zero deps,
 16.1 KiB brotli, route-split to `/compose`), an explicit `bodyFormat` on the compose/API contract
