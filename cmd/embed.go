@@ -27,14 +27,60 @@ type Embedding struct {
 // NewEmbedding builds the embedding stack from the operator's config. apiKey is
 // the hosted provider's key (the environment's OPENROUTER_API_KEY in production);
 // an account that needs it and has none is left out with a warning.
-func NewEmbedding(cfg *config.Config, dbs *store.DBs, apiKey string) *Embedding {
+func NewEmbedding(cfg *config.Config, dbs *store.DBs, apiKey string, opts ...EmbeddingOption) *Embedding {
+	var o embeddingOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	sw := &appSwitch{dbs: dbs, fromApp: o.fromApp}
 	gate := llm.NewGate(dbs)
 	embedders, models := buildEmbedders(cfg, apiKey)
-	emb := &Embedding{Query: newQueryEmbedder(cfg, gate, embedders, models)}
-	if accounts := embedAccounts(cfg, embedders, models); len(accounts) > 0 {
+	emb := &Embedding{Query: newQueryEmbedder(cfg, gate, embedders, models, sw)}
+	if accounts := embedAccounts(cfg, embedders, models, sw); len(accounts) > 0 {
 		emb.Worker = search.NewEmbedWorker(dbs, gate, accounts, search.WorkerOptions{})
 	}
 	return emb
+}
+
+type embeddingOptions struct{ fromApp map[string]bool }
+
+// EmbeddingOption adjusts NewEmbedding.
+type EmbeddingOption func(*embeddingOptions)
+
+// FromApp names the accounts connected from the app. Their smart-features switch
+// lives in state.db and is read on every call, so turning it off in Settings stops
+// remote calls at once. Any other account keeps what ivy.yaml said at startup.
+func FromApp(ids ...string) EmbeddingOption {
+	return func(o *embeddingOptions) {
+		o.fromApp = make(map[string]bool, len(ids))
+		for _, id := range ids {
+			o.fromApp[id] = true
+		}
+	}
+}
+
+// appSwitch answers "may this account use smart features right now?" for the
+// accounts the app manages. It fails closed: a state.db that cannot be read
+// means no remote call.
+type appSwitch struct {
+	dbs     *store.DBs
+	fromApp map[string]bool
+}
+
+func (s *appSwitch) managed(id string) bool { return s != nil && s.fromApp[id] }
+
+func (s *appSwitch) on(ctx context.Context, id string) bool {
+	rows, err := s.dbs.AccountConfigs(ctx)
+	if err != nil {
+		slog.WarnContext(ctx, "cannot read the smart-features switch; treating it as off", "account", id, "error", err)
+		return false
+	}
+	for _, r := range rows {
+		if r.ID == id {
+			return r.LLMEnabled
+		}
+	}
+	return false
 }
 
 // buildEmbedders picks the provider per account from the operator's config. An
@@ -67,17 +113,21 @@ func buildEmbedders(cfg *config.Config, apiKey string) (map[string]llm.Embedder,
 }
 
 // embedAccounts builds the worker's per-account policy from config.
-func embedAccounts(cfg *config.Config, embedders map[string]llm.Embedder, models map[string]string) []search.AccountConfig {
+func embedAccounts(cfg *config.Config, embedders map[string]llm.Embedder, models map[string]string, sw *appSwitch) []search.AccountConfig {
 	var out []search.AccountConfig
 	for _, a := range cfg.Accounts {
 		emb, ok := embedders[a.ID]
 		if !ok {
 			continue
 		}
-		out = append(out, search.AccountConfig{
+		ac := search.AccountConfig{
 			ID: a.ID, Embedder: emb, Model: models[a.ID],
 			Enabled: a.LLMEnabled, CapUSD: cfg.LLM.MonthlyCapUSD,
-		})
+		}
+		if id := a.ID; sw.managed(id) {
+			ac.EnabledNow = func(ctx context.Context) bool { return sw.on(ctx, id) }
+		}
+		out = append(out, ac)
 	}
 	return out
 }
@@ -90,15 +140,16 @@ type queryEmbedder struct {
 	embedders map[string]llm.Embedder
 	models    map[string]string
 	accounts  map[string]config.Account
+	sw        *appSwitch
 	cap       float64
 }
 
-func newQueryEmbedder(cfg *config.Config, gate *llm.Gate, embedders map[string]llm.Embedder, models map[string]string) *queryEmbedder {
+func newQueryEmbedder(cfg *config.Config, gate *llm.Gate, embedders map[string]llm.Embedder, models map[string]string, sw *appSwitch) *queryEmbedder {
 	byID := make(map[string]config.Account, len(cfg.Accounts))
 	for _, a := range cfg.Accounts {
 		byID[a.ID] = a
 	}
-	return &queryEmbedder{gate: gate, embedders: embedders, models: models, accounts: byID, cap: cfg.LLM.MonthlyCapUSD}
+	return &queryEmbedder{gate: gate, embedders: embedders, models: models, accounts: byID, sw: sw, cap: cfg.LLM.MonthlyCapUSD}
 }
 
 // EmbedQuery turns a search query into a vector for one account. A refusal or
@@ -109,8 +160,12 @@ func (q *queryEmbedder) EmbedQuery(ctx context.Context, accountID, query string)
 		return llm.Vector{}, "", llm.ErrNoProvider
 	}
 	model := q.models[accountID]
+	enabled := q.accounts[accountID].LLMEnabled
+	if q.sw.managed(accountID) {
+		enabled = q.sw.on(ctx, accountID)
+	}
 	vecs, err := q.gate.Embed(ctx, llm.EmbedRequest{
-		Embedder: emb, AccountID: accountID, Enabled: q.accounts[accountID].LLMEnabled,
+		Embedder: emb, AccountID: accountID, Enabled: enabled,
 		Model: model, Feature: "search", Inputs: []string{query},
 		ContentKeys: []string{accountID + ":query"}, CapUSD: q.cap,
 	})

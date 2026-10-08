@@ -332,3 +332,50 @@ func TestUpdateAccountProfileIconIsAClosedList(t *testing.T) {
 		t.Errorf("clearing: status %d icon %q, want 200 and empty", code, got.Icon)
 	}
 }
+
+// The smart-features switch must stick: it is stored, and a fresh read shows it.
+func TestUpdateAccountSmartPersists(t *testing.T) {
+	t.Parallel()
+	srv, dbs := newSeededServer(t)
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	if err := dbs.SaveAccountConfig(context.Background(), store.AccountConfig{
+		ID: "acct-1", Address: "me@example.com", Username: "me",
+		IMAPHost: "imap.example.com", IMAPPort: 993, SMTPHost: "smtp.example.com", SMTPPort: 465, CreatedAt: testNow,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	on := true
+	var got api.Account
+	if code := doJSON(t, http.MethodPatch, srv.URL+"/api/v1/accounts/acct-1", api.AccountProfile{Smart: &on}, &got, nil); code != http.StatusOK || !got.Smart {
+		t.Fatalf("turn on: status %d smart %v, want 200 true", code, got.Smart)
+	}
+	var accounts []api.Account
+	getJSON(t, srv.URL+"/api/v1/accounts", &accounts)
+	if len(accounts) != 1 || !accounts[0].Smart {
+		t.Errorf("after a refresh smart = %+v, want it still on", accounts)
+	}
+
+	off := false
+	if code := doJSON(t, http.MethodPatch, srv.URL+"/api/v1/accounts/acct-1", api.AccountProfile{Smart: &off}, &got, nil); code != http.StatusOK || got.Smart {
+		t.Fatalf("turn off: status %d smart %v, want 200 false", code, got.Smart)
+	}
+	getJSON(t, srv.URL+"/api/v1/accounts", &accounts)
+	if accounts[0].Smart {
+		t.Error("after turning it off and refreshing, smart is on")
+	}
+}
+
+// An account declared in ivy.yaml is changed in the file; the app says so rather
+// than pretending to save a switch that would be reset at the next start.
+func TestUpdateAccountSmartRefusesAnIvyYAMLAccount(t *testing.T) {
+	t.Parallel()
+	srv, dbs := newConfiguredServer(t, func(s *Server) { s.WithConfiguredSmart(map[string]bool{"acct-1": false}) })
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+
+	on := true
+	var e api.Error
+	if code := doJSON(t, http.MethodPatch, srv.URL+"/api/v1/accounts/acct-1", api.AccountProfile{Smart: &on}, &e, nil); code != http.StatusConflict || e.Code != "configured_in_yaml" {
+		t.Fatalf("status/code = %d/%q, want 409 configured_in_yaml", code, e.Code)
+	}
+}

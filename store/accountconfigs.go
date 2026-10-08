@@ -23,6 +23,28 @@ type AccountConfig struct {
 	CreatedAt     time.Time
 }
 
+// SetAccountSmart turns an app-connected account's smart features on or off.
+// Turning it on names the hosted provider if none is set, as connecting with
+// smart on does; turning it off keeps the provider so it can be turned back on.
+// An account with no stored config (declared in ivy.yaml) is ErrNotFound: the
+// file is the operator's, and the app does not rewrite it.
+func (d *DBs) SetAccountSmart(ctx context.Context, id string, on bool) error {
+	res, err := d.State.Write.ExecContext(ctx, `
+		UPDATE account_configs
+		SET llm_enabled = ?,
+		    embed_provider = CASE WHEN ? AND embed_provider = '' THEN 'openrouter' ELSE embed_provider END
+		WHERE id = ?`, on, on, id)
+	if err != nil {
+		return fmt.Errorf("set smart for %s: %w", id, err)
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return fmt.Errorf("set smart for %s: %w", id, err)
+	} else if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // SaveAccountConfig inserts or updates an account's connection details,
 // preserving the original created_at on update.
 func (d *DBs) SaveAccountConfig(ctx context.Context, a AccountConfig) error {

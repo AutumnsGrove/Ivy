@@ -998,6 +998,8 @@ export interface components {
             displayName?: string;
             /** @description A Lucide icon name from the closed list, or empty to clear it. Anything else is a 400. */
             icon?: string;
+            /** @description Turn smart features on or off for the account. It is stored in state.db and read live by the gate, so turning it off stops remote calls at once. An account declared in ivy.yaml is changed there, not here (409 `configured_in_yaml`). */
+            smart?: boolean;
         };
         Identity: {
             /** @description The row id; empty for the synthetic primary before it is first edited */

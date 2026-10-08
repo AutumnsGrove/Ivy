@@ -104,3 +104,48 @@ func TestNewEmbeddingHasNoWorkerWhenNoAccountEmbeds(t *testing.T) {
 		t.Errorf("EmbedQuery = %v, want ErrNoProvider so search stays keyword-only", err)
 	}
 }
+
+// An account connected from the app follows the switch in state.db while Ivy
+// runs, for the worker and for search alike; the config only said what it was at
+// startup. Turning it off must stop remote calls at once.
+func TestEmbeddingFollowsTheAppSwitchWhileRunning(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w, err := mailworld.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = w.Close() })
+	dbs, err := store.Open(ctx, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = dbs.Close() })
+	if err := dbs.SaveAccountConfig(ctx, store.AccountConfig{
+		ID: "a1", Address: "a1@example.test", Username: "a1",
+		IMAPHost: "imap.example.test", IMAPPort: 993, SMTPHost: "smtp.example.test", SMTPPort: 465,
+		LLMEnabled: true, EmbedProvider: "openrouter", CreatedAt: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{
+		LLM:      config.LLM{OpenRouterBase: w.OpenRouterURL(), EmbedModel: "m", MonthlyCapUSD: 5},
+		Accounts: []config.Account{{ID: "a1", EmbedProvider: "openrouter", LLMEnabled: true}},
+	}
+	emb := NewEmbedding(cfg, dbs, "k", FromApp("a1"))
+
+	if _, _, err := emb.Query.EmbedQuery(ctx, "a1", "domain"); err != nil {
+		t.Fatalf("EmbedQuery with smart on = %v", err)
+	}
+	calls := len(w.Calls())
+
+	if err := dbs.SetAccountSmart(ctx, "a1", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := emb.Query.EmbedQuery(ctx, "a1", "domain"); !errors.Is(err, llm.ErrNotEnabled) {
+		t.Fatalf("EmbedQuery after turning smart off = %v, want ErrNotEnabled", err)
+	}
+	if got := len(w.Calls()); got != calls {
+		t.Errorf("the provider was called %d more times after smart was turned off", got-calls)
+	}
+}

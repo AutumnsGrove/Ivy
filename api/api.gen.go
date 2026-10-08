@@ -653,6 +653,9 @@ type AccountProfile struct {
 
 	// Icon A Lucide icon name from the closed list, or empty to clear it. Anything else is a 400.
 	Icon *string `json:"icon,omitempty"`
+
+	// Smart Turn smart features on or off for the account. It is stored in state.db and read live by the gate, so turning it off stops remote calls at once. An account declared in ivy.yaml is changed there, not here (409 `configured_in_yaml`).
+	Smart *bool `json:"smart,omitempty"`
 }
 
 // AccountSlot defines model for AccountSlot.

@@ -114,7 +114,11 @@ func runCmd(configPath *string, version string) *cobra.Command {
 
 			// The embeddings gate is the only path to a paid provider; search uses it
 			// for the query embedding and the embed worker for each message.
-			embedding := NewEmbedding(cfg, dbs, os.Getenv("OPENROUTER_API_KEY"))
+			appIDs := make([]string, len(stored))
+			for i, a := range stored {
+				appIDs[i] = a.ID
+			}
+			embedding := NewEmbedding(cfg, dbs, os.Getenv("OPENROUTER_API_KEY"), FromApp(appIDs...))
 
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()

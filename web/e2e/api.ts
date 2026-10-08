@@ -461,9 +461,21 @@ function draftReply(state: AccountState, path: string, method: string, raw: Buff
 
 const ACCOUNT_ICON_NAMES = ['leaf', 'moon', 'sun', 'flower', 'flower-2', 'sprout', 'tree-deciduous', 'bird', 'mail', 'droplets', 'cloud', 'star'];
 
-function updateProfile(state: AccountState, id: string, body: { displayName?: string; icon?: string }): Reply {
+function updateProfile(
+	state: AccountState,
+	id: string,
+	body: { displayName?: string; icon?: string; smart?: boolean },
+	scenario: string | null
+): Reply {
 	const account = state.accounts.find((a) => a.id === id);
 	if (!account) return notFound('No such account');
+	if (body.smart !== undefined) {
+		// An account declared in ivy.yaml is changed in the file, not from the app.
+		if (scenario === 'smart-yaml') {
+			return { status: 409, body: { code: 'configured_in_yaml', message: 'This account is set up in ivy.yaml; change smart features there' } };
+		}
+		account.smart = body.smart;
+	}
 	if (body.displayName !== undefined) {
 		if ([...body.displayName].length > 120) return badRequest('That name is too long');
 		account.name = body.displayName.trim();
@@ -729,7 +741,7 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	const profile = /^\/accounts\/([^/]+)$/.exec(path);
 	if (profile && method === 'PATCH' && raw) {
 		try {
-			return updateProfile(state, profile[1], JSON.parse(raw.toString('utf8')));
+			return updateProfile(state, profile[1], JSON.parse(raw.toString('utf8')), scenario);
 		} catch {
 			return badRequest('That request is not valid');
 		}

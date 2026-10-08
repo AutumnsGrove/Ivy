@@ -392,3 +392,33 @@ func TestEmbedWorkerNeverGivesUpOnADocumentBecauseOfAnOutage(t *testing.T) {
 		t.Fatalf("pending = %v, want the document still queued through an outage", pending)
 	}
 }
+
+// Smart features are switched from the app while Ivy runs. Turning them off must
+// stop remote calls at once, not at the next restart, and turning them on must
+// start them without one (for an account that already has a provider).
+func TestEmbedWorkerFollowsTheSwitchWhileRunning(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	dbs := openStore(t)
+	on := true
+	worker := NewEmbedWorker(dbs, llm.NewGate(dbs), []AccountConfig{{
+		ID: "acct", Embedder: llm.NewOpenRouter(w.OpenRouterURL(), "k"), Model: "m",
+		Enabled:    true,                                     // what ivy.yaml said at startup
+		EnabledNow: func(context.Context) bool { return on }, // what the app says now
+	}}, WorkerOptions{})
+	seedMail(t, dbs, "acct", "f1", "m1", "ck1", "Subject", "body")
+
+	on = false
+	if n, err := worker.RunOnce(ctx); err != nil || n != 0 {
+		t.Fatalf("pass with smart off = %d, %v; want 0", n, err)
+	}
+	if len(w.Calls()) != 0 {
+		t.Fatal("the hosted provider was called after smart features were turned off")
+	}
+
+	on = true
+	if n, err := worker.RunOnce(ctx); err != nil || n != 1 {
+		t.Fatalf("pass after turning it back on = %d, %v; want 1", n, err)
+	}
+}

@@ -22,6 +22,19 @@
 	$effect.pre(() => {
 		for (const a of data.accounts) smart[a.id] ??= a.smart;
 	});
+	// The switch is saved on the server as it is flipped. If that fails it flips back
+	// and says why, so it never looks saved when it is not.
+	async function setSmart(a: { id: string; short: string }, next: boolean) {
+		try {
+			await api.updateAccountProfile(a.id, { smart: next });
+			toasts.push({ text: `Smart features ${next ? 'on' : 'off'} for ${a.short}`, tone: 'ok' });
+			await invalidateAll();
+		} catch (e) {
+			smart[a.id] = !next;
+			toasts.push({ text: e instanceof ApiError ? e.message : "Couldn't change smart features", tone: 'danger' });
+		}
+	}
+
 	// svelte-ignore state_referenced_locally
 	let s = $state<Settings>({ ...data.settings });
 
@@ -100,11 +113,15 @@
 		</ListRow>
 	</Group>
 
-	<Group label="Smart features, per account" note="Off by default. When off, nothing from that account ever leaves your server.">
+	<Group label="Smart features, per account" note="Off by default. When off, nothing from that account ever leaves your server. Turning one off takes effect at once; turning on an account that was connected with it off starts after Ivy next restarts.">
 		{#each data.accounts as a (a.id)}
 			<ListRow>
 				{a.short}
-				{#snippet trailing()}<Toggle label="Smart features for {a.address}" bind:checked={smart[a.id]} />{/snippet}
+				{#snippet trailing()}<Toggle
+						label="Smart features for {a.address}"
+						bind:checked={smart[a.id]}
+						onchange={(next) => void setSmart(a, next)}
+					/>{/snippet}
 			</ListRow>
 		{/each}
 	</Group>

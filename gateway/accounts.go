@@ -65,6 +65,23 @@ func (s *Server) handleUpdateAccountProfile(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// The switch is checked before anything is written, so a refusal changes nothing.
+	if body.Smart != nil {
+		_, inYAML := s.configuredSmart[id]
+		err := store.ErrNotFound
+		if !inYAML {
+			err = s.dbs.SetAccountSmart(r.Context(), id, *body.Smart)
+		}
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusConflict, "configured_in_yaml",
+				"This account is set up in ivy.yaml; change smart features there")
+			return
+		}
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+	}
 	if err := s.dbs.SetAccountProfile(r.Context(), id, displayName, icon); err != nil {
 		s.serverError(w, r, err)
 		return

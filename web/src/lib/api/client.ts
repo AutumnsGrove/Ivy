@@ -175,7 +175,7 @@ export const api = {
 		}),
 
 	/** Rename an account or choose its icon; omitted fields keep their value. */
-	updateAccountProfile: (id: string, profile: { displayName?: string; icon?: string }): Promise<Account> =>
+	updateAccountProfile: (id: string, profile: { displayName?: string; icon?: string; smart?: boolean }): Promise<Account> =>
 		request<Account>(`/accounts/${encodeURIComponent(id)}`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },

@@ -120,6 +120,17 @@ type AccountConfig struct {
 	Model    string
 	Enabled  bool
 	CapUSD   float64
+	// EnabledNow, when set, is asked on every call instead of using Enabled, so a
+	// switch made in the app takes effect at once: turning smart features off must
+	// stop remote calls without a restart. Enabled is then only the fallback.
+	EnabledNow func(context.Context) bool
+}
+
+func (a AccountConfig) enabled(ctx context.Context) bool {
+	if a.EnabledNow != nil {
+		return a.EnabledNow(ctx)
+	}
+	return a.Enabled
 }
 
 // WorkerOptions tune the embed-once queue.
@@ -306,7 +317,7 @@ func (w *EmbedWorker) embedChunks(ctx context.Context, acct AccountConfig, ref, 
 			keys[i] = ref
 		}
 		vectors, err := w.gate.Embed(ctx, llm.EmbedRequest{
-			Embedder: acct.Embedder, AccountID: acct.ID, Enabled: acct.Enabled,
+			Embedder: acct.Embedder, AccountID: acct.ID, Enabled: acct.enabled(ctx),
 			Model: acct.Model, Feature: "search", Inputs: batch,
 			ContentKeys: keys, CapUSD: acct.CapUSD,
 		})
