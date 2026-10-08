@@ -35,7 +35,7 @@ func (g *Gate) Embed(ctx context.Context, req EmbedRequest) ([]Vector, error) {
 		bytes += len(in)
 	}
 	a.oversize = checkEmbed(req)
-	a.estimate = estimateCost(req.Model, EndpointEmbeddings, estimateTokensForBytes(bytes), 0)
+	a.estimate = worstCase(req.Model, EndpointEmbeddings, bytes, 0, 0)
 
 	var vecs []Vector
 	err := g.run(ctx, a, func(ctx context.Context) (usage, error) {
@@ -99,8 +99,7 @@ func (g *Gate) Decide(ctx context.Context, req DecideRequest) (DecideResult, err
 		feature: req.Feature, accounts: req.AccountIDs, keys: req.ContentKeys,
 		provider: ProviderOpenRouter, model: req.Model,
 		oversize: checkCall(req.Model, size, MaxDecideBytes, len(req.ContentKeys)),
-		estimate: estimateCost(req.Model, EndpointSystemOne,
-			estimateTokensForBytes(size), decideOutputTokensPerQuestion*len(req.Questions)),
+		estimate: worstCase(req.Model, EndpointSystemOne, size, len(req.Questions), 0),
 	}
 	var res DecideResult
 	err := g.run(ctx, a, func(ctx context.Context) (usage, error) {
@@ -141,7 +140,7 @@ func (g *Gate) Complete(ctx context.Context, req CompleteRequest) (CompleteResul
 		feature: req.Feature, accounts: req.AccountIDs, keys: req.ContentKeys,
 		provider: ProviderOpenRouter, model: req.Model,
 		oversize: checkCall(req.Model, size, MaxCompleteBytes, len(req.ContentKeys)),
-		estimate: estimateCost(req.Model, EndpointChat, estimateTokensForBytes(size), maxTokens),
+		estimate: worstCase(req.Model, EndpointChat, size, 0, maxTokens),
 	}
 	if a.oversize == "" && (maxTokens < 0 || maxTokens > MaxCompleteOutputTokens) {
 		a.oversize = fmt.Sprintf("max tokens %d outside 1..%d", maxTokens, MaxCompleteOutputTokens)
@@ -188,8 +187,7 @@ func (g *Gate) See(ctx context.Context, req SeeRequest) (SeeResult, error) {
 		feature: req.Feature, accounts: req.AccountIDs, keys: req.ContentKeys,
 		provider: ProviderOpenRouter, model: req.Model,
 		oversize: checkCall(req.Model, len(req.Prompt), MaxCompleteBytes, len(req.ContentKeys)),
-		estimate: estimateCost(req.Model, EndpointVision,
-			estimateTokensForBytes(len(req.Prompt))+imageTokens, maxTokens),
+		estimate: worstCase(req.Model, EndpointVision, len(req.Prompt), 0, maxTokens),
 	}
 	switch {
 	case a.oversize != "":

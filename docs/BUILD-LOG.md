@@ -1039,3 +1039,25 @@ Verification: Go `-race` on `store`, `gateway`, `llm` and `cmd`; `pnpm check`; `
 whole mock Playwright suite (386 passed, 10 skipped, phone and desktop); `make smoke` (12 passed); the
 size budgets; `gofumpt`, `go vet`, `staticcheck` and `golangci-lint` (one finding, in a file this stage
 did not touch).
+
+## 5a.3 stage 1: the model registry and the bulk estimate (2026-10-08)
+
+- **Registry.** `llm/models.go` is now the code-defined catalog (the Polaris pattern): stable ids, display
+  name, provider slug, the endpoint kind, multimodal, a token bound and listed dollars per million
+  tokens. The old price table is derived from it, so there is one table for the ledger's fallback cost, the
+  gate's reservation and the estimates. It holds the helper decision model (`jev`), the two embedding
+  models and three chat models (`deepseek` the default, `mimo`, the text-only `mercury`).
+- **Choosing.** `Gate.ModelFor(feature)` resolves the model a feature runs on: the Jev features use the
+  helper decision model; chat and vision use the feature's override (`llm.model.<feature>`), else the
+  chosen default (`llm.chat_model`), else the built-in. A stored id the catalog no longer holds, or a model
+  of the wrong kind (an embedding, or a text-only model for vision) is skipped with a warning and falls back,
+  never errors, so a catalog update cannot break a feature that had chosen a retired model.
+- **Estimate.** `Gate.Estimate` prices a bulk job (items x bytes, questions) with the same token formula the
+  entry points reserve with (`callTokens`, which the three entry points now call too), rounds up to the next
+  cent, and says whether the account and global caps leave room after recorded spend and calls in flight.
+  Bounds: 10M items, 100 questions, the endpoint's byte limit; a request over them is `ErrBadRequest`.
+- **Not in the catalog:** Polaris's haiku entry. Its price jumps 5x past 100k prompt tokens, which a flat
+  per-token table would under-state, and an estimate that errs low is the wrong way round.
+
+Verification: `llm` tests (new `models_test.go`), `-race`, `golangci-lint` clean; the rounding and the kind
+check were each shown red by mutation.

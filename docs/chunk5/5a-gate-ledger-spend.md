@@ -49,9 +49,10 @@ Nothing. Everything else in chunk 5 depends on this.
    per-call log (filters, cursor paging, export), caps and blocked-call counts. The gateway reads
    `api_calls` / `api_caps`; the web client moves from the mock to `http.ts`; the mock spend route
    and its E2E fixtures are removed in the same change.
-3. **5a.3 Caps and settings.** Monthly caps and the feature switches in the settings panel (the
-   structure is an open question), a cost estimate helper the later backfills reuse, and the
-   mirror-health additions the panel lists (embedding queue, memory).
+3. **5a.3 Caps and settings** (four stages, 2026-10-08): (1) **done**, the model registry and the cost
+   estimate helper the later backfills reuse (`docs/BUILD-LOG.md`); (2) the mirror-health additions
+   (embedding queue, memory); (3) the caps, feature-switch and model-choice API; (4) a **Smart features**
+   screen at `/settings/smart` holding them (operator's choice of structure).
 
 ## Tests and exit
 

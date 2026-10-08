@@ -1784,3 +1784,24 @@ Not asked; revisit if wrong. Recorded in `docs/BUILD-LOG.md` too.
   `X-Ivy-Rows` and `X-Ivy-Truncated` stating the size, and a mid-stream failure resets the connection
   rather than leaving a file that looks complete. It replaces the client-side CSV of the loaded rows.
 - **Probabilities stay in the contract as an optional field** that nothing fills until 5b records them.
+
+## 5a.3: operator answers (2026-10-08)
+
+- **Where the caps live.** A new **Smart features** screen (`/settings/smart`), reached from one row on the
+  settings home. It holds the global cap, per-account caps, per-feature switches and the model pickers. The
+  home keeps the per-account on/off toggles.
+- **Slicing.** Four stages, each tests-first and committed on its own: (1) the registry and the estimate
+  helper, (2) the mirror-health additions, (3) the caps and switches API, (4) the screen.
+
+## 5a.3 stage 1: decisions the agent made (2026-10-08)
+
+Not asked; revisit if wrong.
+
+- **The catalog opens with three chat models taken from Polaris's registry** (`deepseek` default, `mimo`,
+  `mercury`), at the prices its live surveys recorded. Gate G2 confirms the defaults before the first live
+  chat call; until then they only size caps and estimates.
+- **Model choice is a global setting** (`llm.chat_model`, `llm.model.<feature>`), not per account: a model is
+  a property of the install and its key.
+- **A bad stored choice falls back to the default** with a warning rather than failing the feature.
+- **An estimate rounds up to the next cent** and assumes about 110 tokens per Jev question (the brief's
+  figure), so one message shows $0.01 and not $0.00.
