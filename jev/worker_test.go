@@ -155,7 +155,7 @@ func TestJunkIsOnlyAskedTheQuestionsThatNameJunk(t *testing.T) {
 
 func TestOneBatchPerPassAndConcurrencyIsBounded(t *testing.T) {
 	w := newWorkerRig(t, WorkerOptions{Batch: 6, Concurrency: 2})
-	w.jev.delay = 25 * time.Millisecond
+	w.jev.setDelay(25 * time.Millisecond)
 	w.tick()
 	for i := 0; i < 15; i++ {
 		id := fmt.Sprintf("m%02d", i)
@@ -229,6 +229,30 @@ func TestOffMeansOffForTheWorker(t *testing.T) {
 				t.Fatal("the watermark outlived the switch; turning it back on would classify everything since")
 			}
 		})
+	}
+}
+
+// Switching smart features off while a pass is running is a state to wait out, not a
+// failure. The worker cancels the rest of its own batch when the gate says "off", and
+// the calls that were in flight then end with context.Canceled; that must not be
+// reported as an error for an account that was simply turned off.
+func TestTurningItOffMidPassIsNotAnError(t *testing.T) {
+	for range 5 {
+		w := newWorkerRig(t, WorkerOptions{Batch: 8, Concurrency: 2})
+		w.jev.setDelay(60 * time.Millisecond)
+		w.tick()
+		for i := 0; i < 8; i++ {
+			id := fmt.Sprintf("m%d", i)
+			w.arrive(id, id, store.RoleInbox, epoch.Add(time.Duration(i+1)*time.Minute), "Subject "+id, "body "+id)
+		}
+		w.clock = epoch.Add(time.Hour)
+		go func() {
+			time.Sleep(25 * time.Millisecond)
+			_ = w.gate.SetFeatureEnabled(context.Background(), rigAccount, CallFeature, false)
+		}()
+		if _, err := w.worker.RunOnce(context.Background()); err != nil {
+			t.Fatalf("turning the feature off mid-pass was reported as a failure: %v", err)
+		}
 	}
 }
 

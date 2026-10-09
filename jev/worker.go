@@ -248,6 +248,9 @@ func (w *Worker) process(ctx context.Context, account string, batch []store.Cand
 				mu.Unlock()
 			case isOffRefusal(err):
 				cancel() // off right now: not an error, and nothing is marked
+			case errors.Is(err, context.Canceled) && ctx.Err() != nil:
+				// Cut short by an earlier outcome in this batch (or by shutdown, which
+				// the caller sees on its own context); that outcome is the story.
 			default:
 				stop(err)
 			}
