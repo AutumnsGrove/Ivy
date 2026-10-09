@@ -111,6 +111,12 @@ func (f *fakeJev) setStatus(s int) {
 	f.status = s
 }
 
+func (f *fakeJev) setDelay(d time.Duration) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.delay = d
+}
+
 // quietAnswer picks the alphabetically first option at full confidence.
 func quietAnswer(criteria map[string]string) answerJSON {
 	first := ""
@@ -578,6 +584,44 @@ func TestInjectionCorpusCannotChangeTheShapeOfACall(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A caller that gives up (a closed request, a shutdown) must not stop the call from
+// being recorded: the provider may have charged for it, and the ledger is the cap's
+// only record of spend. Writing the row with the dead context failed, which tripped
+// the gate's breaker and refused every later call.
+func TestACancelledCallIsStillLedgeredAndDoesNotBreakTheGate(t *testing.T) {
+	r := newRig(t)
+	r.jev.setDelay(150 * time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(40 * time.Millisecond)
+		cancel()
+	}()
+	if _, err := r.engine.Decide(ctx, mail("ck1")); err == nil {
+		t.Fatal("a cancelled call reported success")
+	}
+
+	r.jev.setDelay(0)
+	if _, err := r.engine.Decide(context.Background(), mail("ck2")); err != nil {
+		t.Fatalf("the gate refused a later call after one was cancelled: %v", err)
+	}
+	rows, err := r.dbs.RecentAPICalls(context.Background(), rigAccount, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cancelled, ok int
+	for _, row := range rows {
+		switch {
+		case row.ContentKey == "ck1" && row.Outcome == "error":
+			cancelled++
+		case row.ContentKey == "ck2" && row.Outcome == "ok":
+			ok++
+		}
+	}
+	if cancelled != 1 || ok != 1 {
+		t.Fatalf("ledger has %d cancelled-call rows and %d ok rows for the two calls: %+v", cancelled, ok, rows)
 	}
 }
 

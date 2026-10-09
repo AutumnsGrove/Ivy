@@ -69,10 +69,13 @@ const (
 // Per-call deadlines and per-endpoint concurrency (G1). A call over a slot waits
 // on its context, never forever.
 const (
-	deadlineEmbed  = 60 * time.Second
-	deadlineJev    = 15 * time.Second
-	deadlineChat   = 90 * time.Second
-	deadlineVision = 120 * time.Second
+	deadlineEmbed = 60 * time.Second
+	deadlineJev   = 15 * time.Second
+	// ledgerWriteTimeout bounds the ledger write that follows a call, which must
+	// not depend on the caller still being there.
+	ledgerWriteTimeout = 10 * time.Second
+	deadlineChat       = 90 * time.Second
+	deadlineVision     = 120 * time.Second
 
 	slotsEmbed  = 1
 	slotsJev    = 8
@@ -537,6 +540,11 @@ func failureOutcome(err error) string {
 // the volume stays visible. If the write fails the breaker trips: the ledger is
 // the cap's only record of spend.
 func (g *Gate) settle(ctx context.Context, a admission, spec feature, outcome, reason string, u usage, latencyMS int) {
+	// A caller that gave up (a closed request, a shutdown) must not lose the record:
+	// the provider may have charged, the ledger is the cap's only account of spend,
+	// and a write failing on a dead context would trip the breaker for every caller.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ledgerWriteTimeout)
+	defer cancel()
 	keys := a.keys
 	if len(keys) == 0 {
 		keys = []string{""}
