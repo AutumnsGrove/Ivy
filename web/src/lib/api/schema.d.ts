@@ -272,6 +272,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/messages/{id}/odds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the helper decision model said about a message, with its odds
+         * @description Every cached answer for the message under the questions as they are now, with the full probability vector, the threshold and whether it fires, so thresholds can be tuned from real mail. Reads the cache only and never makes a request. Always available; a message that was never classified, or a server with smart features absent, returns empty lists.
+         */
+        get: operations["getMessageOdds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/messages/{id}/reply": {
         parameters: {
             query?: never;
@@ -1284,6 +1304,35 @@ export interface components {
             /** @enum {string} */
             tone?: "a" | "b";
             failed?: boolean;
+        };
+        MessageOdds: {
+            /** @description The model id the answers were read for; empty when none is configured. */
+            model: string;
+            answers: components["schemas"]["OddsAnswer"][];
+            unanswered: components["schemas"]["OddsUnanswered"][];
+        };
+        OddsAnswer: {
+            questionId: string;
+            choice: string;
+            probabilities: {
+                [key: string]: number;
+            };
+            /** Format: double */
+            confidence: number;
+            /** Format: double */
+            threshold: number;
+            quietOption: string;
+            /** @description The choice is not the quiet option and its probability and confidence reach the threshold. */
+            fires: boolean;
+            /** @description Another question that fires holds this one back. */
+            suppressed: boolean;
+            /** @description Fires and not suppressed. Even then it is a hint for a chip, a local tag or a sort order, never an action. */
+            acts: boolean;
+        };
+        OddsUnanswered: {
+            questionId: string;
+            /** @enum {string} */
+            reason: "nothing_to_read" | "rejected" | "invalid_answer" | "no_answer" | "too_large";
         };
         MailSummary: {
             id: string;
@@ -2415,6 +2464,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MailSummary"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getMessageOdds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The odds */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOdds"];
                 };
             };
             404: components["responses"]["NotFound"];

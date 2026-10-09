@@ -250,6 +250,33 @@ func (e MessageAuthState) Valid() bool {
 	}
 }
 
+// Defines values for OddsUnansweredReason.
+const (
+	OddsUnansweredReasonInvalidAnswer OddsUnansweredReason = "invalid_answer"
+	OddsUnansweredReasonNoAnswer      OddsUnansweredReason = "no_answer"
+	OddsUnansweredReasonNothingToRead OddsUnansweredReason = "nothing_to_read"
+	OddsUnansweredReasonRejected      OddsUnansweredReason = "rejected"
+	OddsUnansweredReasonTooLarge      OddsUnansweredReason = "too_large"
+)
+
+// Valid indicates whether the value is a known member of the OddsUnansweredReason enum.
+func (e OddsUnansweredReason) Valid() bool {
+	switch e {
+	case OddsUnansweredReasonInvalidAnswer:
+		return true
+	case OddsUnansweredReasonNoAnswer:
+		return true
+	case OddsUnansweredReasonNothingToRead:
+		return true
+	case OddsUnansweredReasonRejected:
+		return true
+	case OddsUnansweredReasonTooLarge:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OutboxActionAction.
 const (
 	OutboxActionArchive OutboxActionAction = "archive"
@@ -1261,6 +1288,15 @@ type MessageAuth struct {
 // MessageAuthState defines model for MessageAuth.State.
 type MessageAuthState string
 
+// MessageOdds defines model for MessageOdds.
+type MessageOdds struct {
+	Answers []OddsAnswer `json:"answers"`
+
+	// Model The model id the answers were read for; empty when none is configured.
+	Model      string           `json:"model"`
+	Unanswered []OddsUnanswered `json:"unanswered"`
+}
+
 // MessageParty Someone on a message, exactly as the sender wrote it. The name is sender-controlled text and must be shown as plain text next to the real address, since a name that contains another address is the classic spoof.
 type MessageParty struct {
 	// Address The address, lower-cased
@@ -1272,6 +1308,33 @@ type MessageParty struct {
 	// PersonId The People page for this address, after the operator's merges. Absent for the operator's own addresses, which People leaves out.
 	PersonId *string `json:"personId,omitempty"`
 }
+
+// OddsAnswer defines model for OddsAnswer.
+type OddsAnswer struct {
+	// Acts Fires and not suppressed. Even then it is a hint for a chip, a local tag or a sort order, never an action.
+	Acts       bool    `json:"acts"`
+	Choice     string  `json:"choice"`
+	Confidence float64 `json:"confidence"`
+
+	// Fires The choice is not the quiet option and its probability and confidence reach the threshold.
+	Fires         bool               `json:"fires"`
+	Probabilities map[string]float64 `json:"probabilities"`
+	QuestionId    string             `json:"questionId"`
+	QuietOption   string             `json:"quietOption"`
+
+	// Suppressed Another question that fires holds this one back.
+	Suppressed bool    `json:"suppressed"`
+	Threshold  float64 `json:"threshold"`
+}
+
+// OddsUnanswered defines model for OddsUnanswered.
+type OddsUnanswered struct {
+	QuestionId string               `json:"questionId"`
+	Reason     OddsUnansweredReason `json:"reason"`
+}
+
+// OddsUnansweredReason defines model for OddsUnanswered.Reason.
+type OddsUnansweredReason string
 
 // OutboxAction defines model for OutboxAction.
 type OutboxAction struct {

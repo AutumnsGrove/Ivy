@@ -489,6 +489,27 @@ paths:
                 $ref: "#/components/schemas/MailSummary"
         "404":
           $ref: "#/components/responses/NotFound"
+  /messages/{id}/odds:
+    get:
+      operationId: getMessageOdds
+      summary: What the helper decision model said about a message, with its odds
+      description: >
+        Every cached answer for the message under the questions as they are now, with
+        the full probability vector, the threshold and whether it fires, so thresholds
+        can be tuned from real mail. Reads the cache only and never makes a request.
+        Always available; a message that was never classified, or a server with smart
+        features absent, returns empty lists.
+      parameters:
+        - $ref: "#/components/parameters/MessageID"
+      responses:
+        "200":
+          description: The odds
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageOdds"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /messages/{id}/reply:
     get:
       operationId: replyToMessage
@@ -2226,6 +2247,60 @@ components:
           enum: [a, b]
         failed:
           type: boolean
+    MessageOdds:
+      type: object
+      required: [model, answers, unanswered]
+      properties:
+        model:
+          type: string
+          description: The model id the answers were read for; empty when none is configured.
+        answers:
+          type: array
+          items:
+            $ref: "#/components/schemas/OddsAnswer"
+        unanswered:
+          type: array
+          items:
+            $ref: "#/components/schemas/OddsUnanswered"
+    OddsAnswer:
+      type: object
+      required: [questionId, choice, probabilities, confidence, threshold, quietOption, fires, suppressed, acts]
+      properties:
+        questionId:
+          type: string
+        choice:
+          type: string
+        probabilities:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+        confidence:
+          type: number
+          format: double
+        threshold:
+          type: number
+          format: double
+        quietOption:
+          type: string
+        fires:
+          type: boolean
+          description: The choice is not the quiet option and its probability and confidence reach the threshold.
+        suppressed:
+          type: boolean
+          description: Another question that fires holds this one back.
+        acts:
+          type: boolean
+          description: Fires and not suppressed. Even then it is a hint for a chip, a local tag or a sort order, never an action.
+    OddsUnanswered:
+      type: object
+      required: [questionId, reason]
+      properties:
+        questionId:
+          type: string
+        reason:
+          type: string
+          enum: [nothing_to_read, rejected, invalid_answer, no_answer, too_large]
     MailSummary:
       type: object
       required: [id, accountId, from, initials, date, subject, preview, unread, needs]

@@ -63,6 +63,9 @@ type Server struct {
 	// spendCaps is where the stats panel reads the caps the gate applies; nil
 	// reports the built-in defaults.
 	spendCaps SpendCaps
+	// odds is where the odds sheet reads cached Jev answers; nil means every sheet is
+	// empty (smart features absent).
+	odds OddsSource
 	// smart is what the Smart features screen reads and writes; nil falls back to a
 	// gate with no providers.
 	smart SmartControls
@@ -178,6 +181,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/spend/calls/export", s.handleExportCalls)
 	api.HandleFunc("GET /api/v1/messages/{id}", s.handleMessage)
 	api.HandleFunc("GET /api/v1/messages/{id}/summary", s.handleMessageSummary)
+	api.HandleFunc("GET /api/v1/messages/{id}/odds", s.handleMessageOdds)
 	api.HandleFunc("GET /api/v1/messages/{id}/reply", s.handleReplyPrefill)
 	api.HandleFunc("GET /api/v1/messages/{id}/forward", s.handleForwardPrefill)
 	api.HandleFunc("GET /api/v1/messages/{id}/body", s.handleMessageBody)
