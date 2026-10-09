@@ -98,7 +98,7 @@ func bodyDocument(m store.Message, theme bodyTheme) string {
 		// its text hard against the edge, where it reads as clipped.
 		b.WriteString("body{padding:0 .5rem}")
 	}
-	b.WriteString("body{margin:0;font-family:system-ui,-apple-system,sans-serif;line-height:1.6;word-wrap:break-word}img{max-width:100%;height:auto}table{max-width:100%}a{color:inherit}</style>")
+	b.WriteString("body{margin:0;font-family:system-ui,-apple-system,sans-serif;line-height:1.6;word-wrap:break-word}img{max-width:100%;height:auto}a{color:inherit}</style>")
 	b.WriteString("</head><body>")
 	switch {
 	case m.BodyHTML != "":

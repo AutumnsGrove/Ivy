@@ -20,6 +20,20 @@
 	let frame: HTMLIFrameElement;
 	let observer: ResizeObserver | undefined;
 
+	// How wide the mail wants to be. scrollWidth alone is not trusted: on the
+	// operator's iPhone a wide mail reported the frame's own width and was never
+	// shrunk, so the right edge was clipped. The right edge of every element is
+	// read as well (bounded, so a huge body costs a fixed amount).
+	const MAX_SCANNED = 5000;
+	function naturalWidth(doc: Document): number {
+		let width = doc.documentElement.scrollWidth;
+		const all = doc.body.getElementsByTagName('*');
+		for (let i = 0; i < Math.min(all.length, MAX_SCANNED); i++) {
+			width = Math.max(width, all[i].getBoundingClientRect().right);
+		}
+		return Math.ceil(width);
+	}
+
 	function fit() {
 		const doc = frame.contentDocument;
 		if (!doc?.body) return;
@@ -30,7 +44,7 @@
 		// see the in-between, only the result.
 		frame.style.height = '0';
 		doc.body.style.zoom = '1';
-		const scale = fitScale(doc.documentElement.scrollWidth, frame.clientWidth);
+		const scale = fitScale(naturalWidth(doc), frame.clientWidth);
 		if (scale !== 1) doc.body.style.zoom = String(scale);
 		frame.style.height = `${Math.ceil(doc.documentElement.scrollHeight)}px`;
 	}
