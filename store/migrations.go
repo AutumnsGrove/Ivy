@@ -492,6 +492,44 @@ var mirrorMigrations = []migration{
 			`CREATE INDEX idx_people_last_seen ON people(last_seen DESC)`,
 		},
 	},
+	{
+		version: 17,
+		statements: []string{
+			// Jev's cached answers (5b), one row per (message, question, wording,
+			// model). The instruction hash and the model are in the key, so editing a
+			// question or pinning a model asks again lazily while a move, archive,
+			// flag or tag change never does: content_key does not move. The full
+			// probability vector is kept so a threshold can be re-tuned on the odds
+			// sheet without a new call. Derived and rebuildable, hence the mirror;
+			// the price of a rebuild is re-asking, which the monthly cap bounds.
+			`CREATE TABLE decisions (
+				account_id       TEXT NOT NULL,
+				content_key      TEXT NOT NULL,
+				question_id      TEXT NOT NULL,
+				instruction_hash TEXT NOT NULL,
+				model            TEXT NOT NULL,
+				choice           TEXT NOT NULL,
+				probabilities    TEXT NOT NULL,
+				confidence       REAL NOT NULL,
+				cost_usd         REAL NOT NULL DEFAULT 0,
+				decided_at       TEXT NOT NULL,
+				PRIMARY KEY (account_id, content_key, question_id, instruction_hash, model)
+			)`,
+			// Why a question was not answered for a message (nothing to read, or the
+			// provider refused the input). Recorded so the worker does not pay to ask
+			// the same thing again; a new wording or model is a new key and asks anew.
+			`CREATE TABLE decision_misses (
+				account_id       TEXT NOT NULL,
+				content_key      TEXT NOT NULL,
+				question_id      TEXT NOT NULL,
+				instruction_hash TEXT NOT NULL,
+				model            TEXT NOT NULL,
+				reason           TEXT NOT NULL,
+				at               TEXT NOT NULL,
+				PRIMARY KEY (account_id, content_key, question_id, instruction_hash, model)
+			)`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.
