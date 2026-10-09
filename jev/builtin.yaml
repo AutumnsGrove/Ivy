@@ -1,0 +1,5 @@
+# The questions that ship with Ivy. Empty until the features that ask them land
+# (5c needs_me, 5d classifiers, and so on). The operator's edits and own questions
+# live in state.db and are laid over these by id, so a release never overwrites
+# them. Write each instruction as what does not count, then the exceptions.
+questions: []

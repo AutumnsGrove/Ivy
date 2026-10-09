@@ -87,6 +87,13 @@ phone screen with no card around the mail. Decisions and findings are in `docs/q
 publishes (real mail, not the mock); turn on HTTPS for the tailnet name (`docs/DEPLOY.md` "HTTPS over
 Tailscale"); the calendar chip below is a backlog item, not started.
 
+**5b is in progress (2026-10-09).** **5b.1 (the registry) is done:** `jev/` holds the question type, the
+strict YAML parser, the merged `Registry` (built-ins plus the operator's edits by id, validated whole,
+swapped atomically) and `Question.Hash`, which covers instructions and options only so a threshold nudge
+never re-asks. The built-in set is empty (`jev/builtin.yaml`). **Next: 5b.2 the state builder, then 5b.3
+decide and cache, 5b.4 the worker, 5b.5 the odds sheet.** Gate G2 (a handoff file, then the operator's key)
+is due before the first *live* call, not before this build, which runs against the fake provider.
+
 **5a.1 is done (chunk 5, the generalised gate), 2026-10-08.** `Embed`, `Decide`, `Complete` and `See`
 share one `admit -> call -> settle` path in `llm/`; the gate owns its (unexported) provider clients, reads
 the opt-in from an injected `AccountPolicy` and the caps from settings, reserves each call's worst case so
