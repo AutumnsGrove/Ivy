@@ -175,3 +175,18 @@ func (g *Gate) SetFeatureModel(ctx context.Context, name, id string) error {
 	}
 	return g.store.SetSetting(ctx, "", FeatureModelKey(name), id)
 }
+
+// CanRun reports whether the gate would let this account use this feature right now,
+// short of its caps: a provider is wired, the account has opted in and the feature's
+// switch is on. It is a read that makes no call and writes no ledger row, so a
+// background worker can ask it each tick instead of being refused (and recording a
+// refusal) for an account that is simply off. A cap is left to the call itself,
+// since spend can change between the question and the call.
+func (g *Gate) CanRun(ctx context.Context, accountID, name string) bool {
+	spec, ok := features[name]
+	if !ok || !g.hasProvider(ProviderOpenRouter, spec) || !g.featureOn(ctx, accountID, name, spec) {
+		return false
+	}
+	s, err := g.policy.Settings(ctx, accountID)
+	return err == nil && s.Smart && (!spec.vision || s.Vision)
+}

@@ -26,6 +26,11 @@ type fakeJev struct {
 	requests []jevRequest
 	status   int
 	reply    func(jevRequest) map[string]answerJSON
+
+	// delay holds each request open, so a test can see how many are in flight at once.
+	delay       time.Duration
+	inflight    int
+	maxInflight int
 }
 
 type jevRequest struct {
@@ -54,8 +59,18 @@ func newFakeJev(t *testing.T) *fakeJev {
 		_ = json.Unmarshal(req.Raw, &req)
 		f.mu.Lock()
 		f.requests = append(f.requests, req)
-		status, reply := f.status, f.reply
+		status, reply, delay := f.status, f.reply, f.delay
+		f.inflight++
+		if f.inflight > f.maxInflight {
+			f.maxInflight = f.inflight
+		}
 		f.mu.Unlock()
+		defer func() {
+			f.mu.Lock()
+			f.inflight--
+			f.mu.Unlock()
+		}()
+		time.Sleep(delay)
 		if status != 0 {
 			w.WriteHeader(status)
 			_, _ = w.Write([]byte(`{"error":"no"}`))

@@ -87,6 +87,21 @@ func (e *Engine) pending(ctx context.Context, m Message) []Question {
 	return out
 }
 
+// QuestionCount is how many distinct questions could be asked about this account's
+// mail in the folders that are classified, for sizing a backfill.
+func (e *Engine) QuestionCount(accountID string) int {
+	ids := map[string]bool{}
+	for _, folder := range []string{FolderInbox, FolderJunk} {
+		for _, q := range e.reg.Active(accountID, folder) {
+			ids[q.ID] = true
+		}
+	}
+	return len(ids)
+}
+
+// Applicable reports whether any question could be asked about this account's mail.
+func (e *Engine) Applicable(accountID string) bool { return e.QuestionCount(accountID) > 0 }
+
 // Decide answers every applicable question about a message that is not already
 // answered for the current wording and model, in one provider call. Re-running it
 // on a known message makes no request. A gate refusal (the account or feature is
