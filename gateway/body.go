@@ -88,7 +88,9 @@ func bodyDocument(m store.Message, theme bodyTheme) string {
 		// over the reader instead of being painted opaque.
 		b.WriteString("html{color-scheme:" + theme.scheme + ";background:transparent}")
 		if m.BodyHTML == "" {
-			b.WriteString("body{color:" + theme.text + "}")
+			// A notice or plain text has no page of its own and the frame runs edge
+			// to edge, so it carries the reader's side margin itself.
+			b.WriteString("body{padding:0 18px;color:" + theme.text + "}")
 		}
 	}
 	b.WriteString("body{margin:0;font-family:system-ui,-apple-system,sans-serif;line-height:1.6;word-wrap:break-word}img{max-width:100%;height:auto}table{max-width:100%}a{color:inherit}</style>")

@@ -18,19 +18,21 @@
 	// never a small window with a scroll of its own. The frame runs no script, but
 	// it is same-origin, so this side can read and size it.
 	let frame: HTMLIFrameElement;
-	let height = $state<number | null>(null);
 	let observer: ResizeObserver | undefined;
 
 	function fit() {
 		const doc = frame.contentDocument;
 		if (!doc?.body) return;
 		// Measure at natural size, then shrink a fixed-width layout to the frame.
-		// Both writes land before the next paint, so nothing flickers and the
-		// observer does not see the in-between.
+		// The frame is collapsed while measuring because a document is never shorter
+		// than its viewport, so a taller frame would only ever report itself. All of
+		// it lands before the next paint: nothing flickers and the observer does not
+		// see the in-between, only the result.
+		frame.style.height = '0';
 		doc.body.style.zoom = '1';
 		const scale = fitScale(doc.documentElement.scrollWidth, frame.clientWidth);
 		if (scale !== 1) doc.body.style.zoom = String(scale);
-		height = Math.ceil(doc.documentElement.scrollHeight);
+		frame.style.height = `${Math.ceil(doc.documentElement.scrollHeight)}px`;
 	}
 
 	function attach() {
@@ -49,13 +51,11 @@
 <iframe
 	bind:this={frame}
 	class="body"
-	class:measured={height !== null}
 	{title}
 	src={themed}
 	sandbox="allow-same-origin"
 	referrerpolicy="no-referrer"
 	scrolling="no"
-	style:height={height === null ? null : `${height}px`}
 	onload={attach}
 ></iframe>
 
@@ -64,13 +64,10 @@
 		display: block;
 		width: 100%;
 		border: 0;
-		/* Until the first measure, hold a screenful so the page does not jump. */
-		min-height: 40vh;
+		/* Until the first measure, hold a screenful; the measure then sets the height inline. */
+		height: 40vh;
 		overflow: hidden;
 		/* The document paints its own page (themed text, or the inverted sheet for rich mail). */
 		background: transparent;
-	}
-	.body.measured {
-		min-height: 0;
 	}
 </style>

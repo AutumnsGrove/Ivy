@@ -81,7 +81,7 @@
 		<div class="chip"><SmartChip>{message.summary}</SmartChip></div>
 	{/if}
 
-	<div class="body">
+	<div class="body" class:rich={message.html}>
 		{#if message.html}
 			<MessageBody src={bodySrc} />
 		{:else}
@@ -167,6 +167,11 @@
 	.body {
 		margin-top: var(--sp-16);
 		font: 400 var(--fs-read-sm) / 1.6 var(--font-read);
+	}
+	/* Rich mail draws its own page, so it takes back the reader's side margin (set
+	   by the phone screen; the desktop pane has none) and runs edge to edge. */
+	.body.rich {
+		margin-inline: calc(var(--reader-gutter, 0rem) * -1);
 	}
 	.wide .body {
 		margin-top: var(--sp-24);

@@ -80,6 +80,13 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 
 ## ▶ Now
 
+**Reader rework, 2026-10-09 (operator's phone report, screenshots against Apple Mail and Proton).** Four
+stages on main: the flicker (`c8a7fa7`), the dark body (`04221b6`), the frame sizing (`4503cd2`) and the
+phone screen with no card around the mail. Decisions and findings are in `docs/qa-log.md` round 67 and
+`docs/BUILD-LOG.md`. **Operator-owned, still open:** look at the phone build on the potato once the image
+publishes (real mail, not the mock); turn on HTTPS for the tailnet name (`docs/DEPLOY.md` "HTTPS over
+Tailscale"); the calendar chip below is a backlog item, not started.
+
 **5a.1 is done (chunk 5, the generalised gate), 2026-10-08.** `Embed`, `Decide`, `Complete` and `See`
 share one `admit -> call -> settle` path in `llm/`; the gate owns its (unexported) provider clients, reads
 the opt-in from an injected `AccountPolicy` and the caps from settings, reserves each call's worst case so
@@ -343,6 +350,19 @@ Found by the round 32 audit; each needs a home before its milestone starts.
 
 ### Frontend
 
+- **Calendar chip in the reader (operator wants it, 2026-10-09).** Apple Mail shows a card above the body
+  for a mail with an invite: title, day and time, place and an Add button. Today `.ics` is only read as
+  text for search (tier 0 extraction) and RSVP is a v1 non-goal in `PLAN.md`, so nothing is planned for
+  it. A first slice needs no RSVP: parse the `text/calendar` part server-side (title, start, end,
+  location) into the message view, render the chip from it, and let Add download the `.ics` for the
+  phone to open. Replying to an organiser stays out until RSVP is decided.
+- **Reader: mail the inverter gets wrong.** Dark mode inverts rich mail written for a light page and
+  leaves mail whose first declared background is dark (`gateway/bodydark.go`). A light mail with a dark
+  banner gets a light banner; a mail with no declared background that styles its text white would be
+  inverted wrongly. If real mail shows either often, read text colours too, or add a per-message
+  "show original" toggle.
+- **Reader: the page reloads accounts, inbox and tags on every hub hint**, even on the message screen,
+  which uses only the accounts. Harmless now that the reader no longer rebuilds, but wasteful on the potato.
 - Rich-text follow-ups (4h): changing the From identity does not rewrite the signature in rich mode,
   because the body is HTML and the signature swap is a plain-text one; the signature inserted when the
   message started stays. The link button uses `window.prompt`, so a proper inline link editor is later

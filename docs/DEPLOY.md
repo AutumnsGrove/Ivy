@@ -92,6 +92,21 @@ welcome screen: tap **Connect your first account**, enter your address and an ap
 nothing unless it works, so a typo leaves nothing behind and you can just try again. For now Ivy
 connects to Purelymail only; the server fixes the hosts, so there are no server fields to fill in.
 
+### HTTPS over Tailscale
+
+Safari shows "Not Secure" on a plain `http://` address, and a secure context is also what WebAuthn
+and service workers need later. Tailscale can terminate TLS for the tailnet name with a real
+certificate, so nothing about Ivy changes: it keeps listening on port 8418 and Tailscale puts HTTPS
+in front.
+
+1. In the Tailscale admin console, **DNS**, switch on **HTTPS Certificates** (once per tailnet).
+2. On the board: `sudo tailscale serve --bg --https=443 http://127.0.0.1:8418`
+3. Open `https://potato.your-tailnet.ts.net` (no port). `tailscale serve status` shows the mapping;
+   `sudo tailscale serve --https=443 off` removes it.
+
+`allowed_hosts` already names the host without a port, so it needs no change. Keep it to `serve`, not
+`funnel`: `funnel` puts Ivy on the public internet, and Ivy has no login.
+
 Where the password goes: `data/secrets/<account id>`, one private file (mode 600) on the board's disk.
 It is in no database and in no backup, so a restored `state.db` brings your accounts back with an
 **Update password** prompt on each (Settings, Mirror health).

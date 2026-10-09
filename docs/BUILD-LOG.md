@@ -1129,3 +1129,19 @@ did not touch), `make drift`.
 
 Verification: `make check` (drift, gofumpt, vet, lint, Go `-race`, `pnpm check`, 421 unit tests with the token
 guard), the whole mock Playwright suite (410 passed, 10 skipped, phone and desktop), `make smoke` (12 passed).
+
+## Reader rework (2026-10-09, after the operator's phone report; qa-log round 67)
+
+- **Flicker.** `MessageLoader` read its props inside a `$derived.by`; they are getters over the page `data`,
+  which every hub hint replaces, so the await restarted, the skeleton showed and the body frame was rebuilt.
+  It now derives `id` and `scenario` first (a `$derived` stops at an unchanged value). `e2e/reader.spec.ts`
+  proves a hint and the read mark leave the frame element alone; it failed before the fix.
+- **Dark body.** `gateway/body.go` writes a valid `color-scheme`. At night, rich mail is inverted
+  (`invert(1) hue-rotate(180deg)` on the root, the same filter back on `img`, `video`, `picture`, `canvas`) unless
+  `mailIsDark` (`gateway/bodydark.go`) finds a dark background among the first 40 tags. The paper sheet is gone.
+- **Frame.** `MessageBody.svelte` sizes the frame to its content (collapsing it to zero to measure, since a
+  document is never shorter than its viewport) and zooms a too-wide body down with `fitScale` (`bodyFit.ts`).
+- **Phone screen.** No card around the mail; the rich body takes back the reader's gutter and runs edge to edge.
+- **Not verified on a device.** Checked in Playwright (WebKit phone, Chromium desktop) and one screenshot of
+  an inverted sample; real mail on the potato is the operator's check. `zoom` is non-standard CSS that
+  Safari and Chromium honour; Firefox honours it from 126.

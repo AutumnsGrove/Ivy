@@ -1831,3 +1831,20 @@ Not asked; revisit if wrong.
   override pickers when a chat feature is listed; the API needs no change then.
 - **A request is validated whole, then written.** The writes themselves are separate statements, so a disk
   failure part-way could still leave a partial change; a validation failure cannot.
+
+## Round 67 — the reader on a phone (2026-10-09, operator report with screenshots)
+
+The operator compared Ivy's reader with Apple Mail and Proton on an iPhone and asked for: a fully dark
+message (Proton's way, not a white box), a body that is full width and scrolls with the page, much less
+chrome around the mail, the flicker gone (suspecting the mark-read fix, "revert it if needed"), the
+calendar chip noted for later, and the domain secured.
+
+| Question | Answer |
+|---|---|
+| Is the flicker the mark-read feature? | No. A hub hint alone rebuilt the reader: the loader's props are getters over the page `data`, which `invalidateAll` replaces on every hint, so the await restarted and the frame was rebuilt. Mark-read only caused one hint per opened message. Fixed in the loader; **mark-read stays.** |
+| Why a white box, even after issue #9? | The body document said `color-scheme: night`, which is not a CSS value. It was ignored, the frame's scheme differed from the page's and the browser painted it opaque white. It now says `dark` or `light`. |
+| Dark mode for mail | Invert rich mail written for a light page (a CSS filter on the frame's root, images and video turned back), unless its first declared background is already dark; by day mail is left as sent. Chosen over a paper sheet (issue #9's design call, now reversed by the operator). |
+| Wide mail | The sanitizer drops `<style>`, so responsive rules are gone. The frame shrinks a fixed-width layout to fit (floor 0.4) and grows to its content; no scroll of its own. |
+| Chrome | Phone: no card around the mail. Chrome only at the top (back, archive, delete, tag, more) and the bottom (reply, forward); the mail runs edge to edge. Desktop keeps its pane. |
+| Calendar chip | Wanted. Not planned before; recorded in `next_steps.md` Backlog with a first slice that needs no RSVP. |
+| "Secure the domain" | Read as HTTPS on the tailnet name (Safari says Not Secure). It is the operator's step on the board; `docs/DEPLOY.md` has "HTTPS over Tailscale" (`tailscale serve`, not `funnel`). |

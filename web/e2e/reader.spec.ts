@@ -57,3 +57,14 @@ test('a wide fixed-width mail is shrunk to the frame and the frame grows to it',
 	expect(Math.abs(after.frameH - after.docH)).toBeLessThanOrEqual(2);
 	expect(after.overflowX).toBeLessThanOrEqual(1);
 });
+
+// A frame only ever reports its own height if it is measured while still tall,
+// so a short mail must end up short, not stuck at the height it started with.
+test('a short mail gets a short frame', async ({ page }) => {
+	await page.route('**/api/v1/messages/m1/body*', (route) =>
+		route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><body style="margin:0"><p>Hi</p></body>' })
+	);
+	await page.goto('/m/m1');
+	await expect(page.frameLocator('iframe.body').getByText('Hi')).toBeVisible();
+	await expect.poll(() => page.locator('iframe.body').evaluate((el) => el.getBoundingClientRect().height)).toBeLessThan(120);
+});

@@ -39,9 +39,11 @@
 		<IconButton label="More" onclick={() => (more = true)}><Ellipsis /></IconButton>
 	</header>
 
-	<Glass variant="panel" radius="panel" as="section" class="reader" aria-label="Message">
+	<!-- No card around the message: chrome belongs at the top and the bottom, and
+	     the mail itself runs edge to edge on the scene. -->
+	<section class="reader" aria-label="Message">
 		<MessageLoader {id} {accounts} {scenario} onloaded={(m) => (loaded = m)} />
-	</Glass>
+	</section>
 
 	<Glass variant="strong" radius="bar" class="reply">
 		<Button variant="primary" size="lg" href="/compose?reply={id}"><Reply />Reply</Button>
@@ -63,18 +65,21 @@
 	.screen {
 		max-width: var(--phone-max);
 		margin: 0 auto;
-		padding: var(--sp-14) var(--sp-12) calc(var(--sp-90) + env(safe-area-inset-bottom));
+		padding: var(--sp-14) 0 calc(var(--sp-90) + env(safe-area-inset-bottom));
 	}
 	.bar {
 		display: flex;
 		align-items: center;
-		margin: 0 calc(var(--sp-4) * -1) var(--sp-4);
+		padding: 0 var(--sp-8);
+		margin-bottom: var(--sp-4);
 	}
 	.grow {
 		flex-grow: 1;
 	}
-	.screen :global(.reader) {
-		padding: var(--sp-22) var(--sp-20);
+	.reader {
+		/* The header keeps this margin; the body takes it back to run edge to edge. */
+		--reader-gutter: var(--sp-18);
+		padding: var(--sp-12) var(--reader-gutter) 0;
 	}
 	.screen :global(.reply) {
 		position: fixed;
