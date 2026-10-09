@@ -27,6 +27,10 @@ func TestMessageBodyDocumentFollowsTheTheme(t *testing.T) {
 		ID: "rich", AccountID: "acct-1", FolderID: "inbox-1", UID: 2, ContentKey: "ck:rich",
 		BodyHTML: `<p>Newsletter</p>`, BodyStatus: store.BodyOK,
 	})
+	mustMessage(t, dbs, store.Message{
+		ID: "darkmail", AccountID: "acct-1", FolderID: "inbox-1", UID: 3, ContentKey: "ck:dark",
+		BodyHTML: `<table bgcolor="#111111"><tr><td>Already dark</td></tr></table>`, BodyStatus: store.BodyOK,
+	})
 	doc := func(id, query string) string {
 		t.Helper()
 		resp, err := http.Get(srv.URL + "/api/v1/messages/" + id + "/body" + query)
@@ -51,13 +55,32 @@ func TestMessageBodyDocumentFollowsTheTheme(t *testing.T) {
 		t.Errorf("no theme should mean the app's default, night: %s", got)
 	}
 
-	for _, theme := range []string{"night", "day"} {
-		rich := doc("rich", "?theme="+theme)
-		// The root keeps the app's colour-scheme: a frame whose scheme differs from
-		// its page is painted opaque, which would bring the white box back.
-		if !strings.Contains(rich, paper) || !strings.Contains(rich, "html{color-scheme:"+theme) {
-			t.Errorf("%s rich HTML should sit on the paper sheet under the app's scheme: %s", theme, rich)
+	// The scheme must be a real CSS value (dark or light, never the theme's own
+	// name): an invalid one is ignored, the frame's scheme then differs from the
+	// page's and the browser paints it opaque white.
+	// The one exception is light mail inverted at night: it is drawn as a light
+	// page and the whole frame is then flipped, over an opaque canvas of its own.
+	for _, tc := range []struct{ theme, id, scheme string }{
+		{"night", "plain", "dark"}, {"night", "darkmail", "dark"}, {"night", "rich", "light"},
+		{"day", "plain", "light"}, {"day", "darkmail", "light"}, {"day", "rich", "light"},
+	} {
+		if got := doc(tc.id, "?theme="+tc.theme); !strings.Contains(got, "html{color-scheme:"+tc.scheme+";") || strings.Contains(got, "color-scheme:"+tc.theme) {
+			t.Errorf("%s %s should declare color-scheme:%s: %s", tc.theme, tc.id, tc.scheme, got)
 		}
+	}
+
+	// Rich mail assumes a light page. At night it is inverted (with its images
+	// turned back) so the whole reader is dark; mail that already paints itself
+	// dark, and everything by day, is left as the sender made it.
+	const invert = "invert(1) hue-rotate(180deg)"
+	if rich := doc("rich", "?theme=night"); !strings.Contains(rich, "html{") || strings.Count(rich, invert) != 2 || strings.Contains(rich, paper) {
+		t.Errorf("night light mail should be inverted with images restored: %s", rich)
+	}
+	if dark := doc("darkmail", "?theme=night"); strings.Contains(dark, invert) {
+		t.Errorf("night mail that is already dark must not be inverted: %s", dark)
+	}
+	if rich := doc("rich", "?theme=day"); strings.Contains(rich, invert) || strings.Contains(rich, paper) {
+		t.Errorf("day mail is left as sent: %s", rich)
 	}
 
 	hostile := doc("plain", "?theme="+url.QueryEscape(`</style><script>alert(1)</script>`))

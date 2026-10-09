@@ -37,12 +37,16 @@ func (s *Server) handleMessageBody(w http.ResponseWriter, r *http.Request) {
 // values are repeated here from tokens.css (--text in each theme).
 type bodyTheme struct {
 	name string
-	text string
+	// scheme is the CSS color-scheme value, which is dark or light and never the
+	// theme's name: an invalid value is ignored, the frame's scheme then differs
+	// from the page's and the browser paints the frame opaque white.
+	scheme string
+	text   string
 }
 
 var (
-	nightBody = bodyTheme{name: "night", text: "#f2eddc"}
-	dayBody   = bodyTheme{name: "day", text: "#2a2014"}
+	nightBody = bodyTheme{name: "night", scheme: "dark", text: "#f2eddc"}
+	dayBody   = bodyTheme{name: "day", scheme: "light", text: "#2a2014"}
 )
 
 // bodyThemeOf matches the query value against the two themes; anything else,
@@ -54,27 +58,40 @@ func bodyThemeOf(v string) bodyTheme {
 	return nightBody
 }
 
-// paperSheet is the page rich HTML mail is drawn on. HTML mail assumes a light
-// canvas, so inverting it would break the mail it was written for; a rounded
-// light sheet looks chosen rather than pasted in, in either theme.
-const paperSheet = "body{margin:12px;padding:16px;border-radius:12px;background:#fbf8ef;color:#1f1b14}"
+// invertFilter turns a light page dark and keeps hues recognisable. It is its
+// own inverse (invert and a half-turn of hue commute), so applying it again to
+// images and video puts their original colours back exactly.
+const invertFilter = "invert(1) hue-rotate(180deg)"
+
+// invertedPage is the night treatment for rich mail written for a light page.
+// The page is drawn as the sender meant it (light scheme, black text, a pale
+// canvas that becomes near-black, a shade off the reader's own dark) and the
+// whole thing is inverted; the media inside is inverted back. Done in CSS so the
+// frame still runs no script.
+const invertedPage = "html{color-scheme:light;background:#ececec;filter:" + invertFilter + "}" +
+	"body{color:#1f1b14}img,video,picture,canvas{filter:" + invertFilter + "}"
 
 // bodyDocument wraps the stored sanitised HTML, or the plain text, in a small
 // document. The HTML is not re-parsed or re-sanitised: sync stored the result
 // of render/, and the response policy is the second layer. Plain text and
-// Ivy's own notes take the reader's colours; rich HTML sits on the paper sheet.
+// Ivy's own notes take the reader's colours. Rich HTML assumes a light page, so
+// at night it is inverted unless it already paints itself dark; by day it is
+// left as the sender made it.
 func bodyDocument(m store.Message, theme bodyTheme) string {
 	var b strings.Builder
-	b.WriteString("<!doctype html><html><head><meta charset=\"utf-8\">")
-	// The root keeps the app's colour-scheme: a frame whose scheme differs from its
-	// page is painted opaque, which is the white box this replaces.
-	b.WriteString("<style>html{color-scheme:" + theme.name + ";background:transparent}")
-	if m.BodyHTML != "" {
-		b.WriteString(paperSheet)
-	} else {
-		b.WriteString("body{margin:0;background:transparent;color:" + theme.text + "}")
+	b.WriteString("<!doctype html><html><head><meta charset=\"utf-8\"><style>")
+	switch {
+	case m.BodyHTML != "" && theme == nightBody && !mailIsDark(m.BodyHTML):
+		b.WriteString(invertedPage)
+	default:
+		// The root keeps the app's colour-scheme, so the frame stays transparent
+		// over the reader instead of being painted opaque.
+		b.WriteString("html{color-scheme:" + theme.scheme + ";background:transparent}")
+		if m.BodyHTML == "" {
+			b.WriteString("body{color:" + theme.text + "}")
+		}
 	}
-	b.WriteString("body{font-family:system-ui,-apple-system,sans-serif;line-height:1.6;word-wrap:break-word}img{max-width:100%;height:auto}table{max-width:100%}a{color:inherit}</style>")
+	b.WriteString("body{margin:0;font-family:system-ui,-apple-system,sans-serif;line-height:1.6;word-wrap:break-word}img{max-width:100%;height:auto}table{max-width:100%}a{color:inherit}</style>")
 	b.WriteString("</head><body>")
 	switch {
 	case m.BodyHTML != "":
