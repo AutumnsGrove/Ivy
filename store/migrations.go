@@ -546,6 +546,17 @@ var mirrorMigrations = []migration{
 			)`,
 		},
 	},
+	{
+		version: 19,
+		statements: []string{
+			// The Jev worker's queue filters by account and arrival, where arrival is
+			// the server's internal date falling back to the Date header. No plain
+			// column index covers that coalesce, so without this every 30 s pass scans
+			// every Inbox/Junk row of the account.
+			`CREATE INDEX idx_messages_classify_arrival
+				ON messages(account_id, (COALESCE(NULLIF(internaldate, ''), date)))`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.

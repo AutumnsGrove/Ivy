@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestReadQueriesUseIndexes guards the large-table rule in STANDARDS.md
@@ -15,12 +16,21 @@ func TestReadQueriesUseIndexes(t *testing.T) {
 	dbs := openTemp(t)
 
 	cases := []struct {
-		name  string
-		query string
-		args  []any
+		name      string
+		query     string
+		args      []any
+		wantIndex string
 	}{
-		{"inbox", inboxSelect, []any{"inbox", "", "", "[]", "", "", "", 50}},
-		{"inbox counts", inboxCountsSelect, []any{"inbox", "", "", "[]"}},
+		{"inbox", inboxSelect, []any{"inbox", "", "", "[]", "", "", "", 50}, ""},
+		{"inbox counts", inboxCountsSelect, []any{"inbox", "", "", "[]"}, ""},
+		{
+			"classify queue",
+			"SELECT COUNT(DISTINCT m.content_key) " + classifiable,
+			[]any{"acct", formatTime(time.Now())},
+			// A looser account index would still pass the search check above, so name
+			// the arrival expression index the pass depends on.
+			"idx_messages_classify_arrival",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -31,6 +41,9 @@ func TestReadQueriesUseIndexes(t *testing.T) {
 			}
 			if !strings.Contains(plan, "SEARCH") {
 				t.Errorf("no index search in plan:\n%s", plan)
+			}
+			if tc.wantIndex != "" && !strings.Contains(plan, tc.wantIndex) {
+				t.Errorf("plan does not use %s:\n%s", tc.wantIndex, plan)
 			}
 		})
 	}
