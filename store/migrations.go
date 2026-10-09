@@ -530,6 +530,22 @@ var mirrorMigrations = []migration{
 			)`,
 		},
 	},
+	{
+		version: 18,
+		statements: []string{
+			// Which messages the Jev worker has considered, so it never rescans mail
+			// that needed no question, was answered, or was refused. Keyed by content
+			// key like decisions, so a move or a second copy is not a new message.
+			// Rebuildable: losing it makes the worker consider recent mail once more,
+			// and the decisions cache makes that free.
+			`CREATE TABLE classified (
+				account_id  TEXT NOT NULL,
+				content_key TEXT NOT NULL,
+				at          TEXT NOT NULL,
+				PRIMARY KEY (account_id, content_key)
+			)`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.
