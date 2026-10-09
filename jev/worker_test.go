@@ -278,7 +278,7 @@ func TestACapReachedIsReportedAndSpendsNothing(t *testing.T) {
 	}
 }
 
-func TestNoQuestionsMeansNoWorkAndTheWatermarkFollowsTime(t *testing.T) {
+func TestNoQuestionsMeansNoWorkAndNothingReachesBack(t *testing.T) {
 	w := newWorkerRig(t, WorkerOptions{})
 	if err := w.reg.Set(nil, nil); err != nil {
 		t.Fatal(err)
@@ -289,16 +289,20 @@ func TestNoQuestionsMeansNoWorkAndTheWatermarkFollowsTime(t *testing.T) {
 	if n := w.tick(); n != 0 || w.jev.count() != 0 {
 		t.Fatalf("processed=%d calls=%d with no questions", n, w.jev.count())
 	}
-	// A question that ships later must not reach back over mail that arrived while
-	// there was nothing to ask: the watermark stayed with the clock.
-	if !w.since().Equal(w.clock) {
-		t.Fatalf("watermark = %v, want %v", w.since(), w.clock)
+	// With nothing to ask the watermark stays unset, so there is nothing to rewrite
+	// every pass; the first pass that has a question starts from that moment.
+	if !w.since().IsZero() {
+		t.Fatalf("watermark = %v with no questions, want unset", w.since())
 	}
 	if err := w.reg.Set(mustParse(t, strings.Replace(validYAML, "enabled: false", "enabled: true", 1)), nil); err != nil {
 		t.Fatal(err)
 	}
+	w.clock = epoch.Add(48 * time.Hour)
 	if w.tick() != 0 || w.jev.count() != 0 {
 		t.Fatal("a newly added question classified mail that predates it")
+	}
+	if !w.since().Equal(w.clock) {
+		t.Fatalf("watermark = %v, want %v", w.since(), w.clock)
 	}
 }
 

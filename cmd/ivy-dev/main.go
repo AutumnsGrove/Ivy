@@ -215,7 +215,7 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool, llmKey string)
 	defer dbs.Close()
 
 	// The same search and embedding stack `ivy run` builds, so dev exercises what ships.
-	embedding := ivycmd.NewEmbedding(stack.Config, dbs, llmKey)
+	embedding := ivycmd.NewEmbedding(stack.Config, dbs, llmKey, ivycmd.WithQuestions(devQuestions()...))
 	var workers sync.WaitGroup
 	workerCtx, stopWorkers := context.WithCancel(ctx)
 	defer func() { stopWorkers(); workers.Wait() }()
@@ -229,10 +229,20 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool, llmKey string)
 		}()
 	}
 
+	if embedding.Classifier != nil {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			if err := embedding.Classifier.Run(workerCtx); err != nil && !errors.Is(err, context.Canceled) {
+				fmt.Fprintf(cmd.ErrOrStderr(), "jev classifier stopped: %v\n", err)
+			}
+		}()
+	}
+
 	hub := events.New()
 	srv := &http.Server{
 		Addr:              stack.Config.Listen,
-		Handler:           gateway.New(dbs, version, webui.FS).WithSearch(embedding.Query).WithSmartControls(embedding.Caps).WithEmbedBacklog(embedding.Backlog()).WithEvents(hub).WithAllowedHosts(stack.Config.HostAllowList()).Handler(),
+		Handler:           gateway.New(dbs, version, webui.FS).WithSearch(embedding.Query).WithSmartControls(embedding.Caps).WithEmbedBacklog(embedding.Backlog()).WithOdds(embedding.Odds).WithEvents(hub).WithAllowedHosts(stack.Config.HostAllowList()).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}

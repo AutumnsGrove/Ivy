@@ -177,9 +177,11 @@ func (w *Worker) account(ctx context.Context, id string) (int, error) {
 		return 0, w.setSince(ctx, id, time.Time{})
 	}
 	if !w.engine.Applicable(id) {
-		// Nothing to ask yet: the watermark follows the clock, so a question that
-		// ships later does not reach back over mail that arrived before it.
-		return 0, w.setSince(ctx, id, now)
+		// Nothing to ask yet. Leaving the watermark unset (rather than chasing the
+		// clock) writes nothing each pass, and the first pass that has a question
+		// starts from then, so a question that ships later does not reach back over
+		// mail that arrived before it.
+		return 0, w.setSince(ctx, id, time.Time{})
 	}
 	since, err := w.since(ctx, id)
 	if err != nil {

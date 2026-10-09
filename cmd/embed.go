@@ -7,6 +7,7 @@ import (
 
 	"github.com/AutumnsGrove/Ivy/config"
 	"github.com/AutumnsGrove/Ivy/gateway"
+	"github.com/AutumnsGrove/Ivy/jev"
 	"github.com/AutumnsGrove/Ivy/llm"
 	"github.com/AutumnsGrove/Ivy/search"
 	"github.com/AutumnsGrove/Ivy/store"
@@ -25,6 +26,12 @@ type Embedding struct {
 	// Caps is the gate itself as the Smart features screen and the stats panel see
 	// it: the caps, switches and model choices it applies, and the way to change them.
 	Caps gateway.SmartControls
+	// Classifier asks the Jev questions about new mail through the same gate. It
+	// makes no request while the registry is empty, the account is off or no key is
+	// set. Nil only if the shipped question file is unreadable.
+	Classifier *jev.Worker
+	// Odds is the odds sheet's read of the answers the classifier cached.
+	Odds gateway.OddsSource
 }
 
 // NewEmbedding builds the embedding stack from the operator's config. apiKey is
@@ -44,6 +51,12 @@ func NewEmbedding(cfg *config.Config, dbs *store.DBs, apiKey string, opts ...Emb
 	)
 	providers, models := buildEmbedders(cfg, apiKey)
 	emb := &Embedding{Query: newQueryEmbedder(gate, providers, models), Caps: gate}
+	if engine, err := newJevEngine(gate, dbs, o.questions); err != nil {
+		slog.Error("the Jev question layer is off: its questions could not be loaded", "error", err)
+	} else {
+		emb.Classifier = jev.NewWorker(engine, gate, dbs, jev.WorkerOptions{})
+		emb.Odds = engine
+	}
 	if accounts := embedAccounts(cfg, providers, models); len(accounts) > 0 {
 		emb.Worker = search.NewEmbedWorker(dbs, gate, accounts, search.WorkerOptions{})
 	}
@@ -59,10 +72,34 @@ func (e *Embedding) Backlog() gateway.EmbedBacklog {
 	return e.Worker
 }
 
-type embeddingOptions struct{ fromApp map[string]bool }
+// newJevEngine loads the shipped questions, lays the given extras over them by id and
+// builds the engine on the one gate.
+func newJevEngine(gate *llm.Gate, dbs *store.DBs, extra []jev.Question) (*jev.Engine, error) {
+	builtin, err := jev.Builtin()
+	if err != nil {
+		return nil, err
+	}
+	reg := jev.NewRegistry()
+	if err := reg.Set(builtin, extra); err != nil {
+		return nil, err
+	}
+	return jev.NewEngine(reg, gate, dbs), nil
+}
+
+type embeddingOptions struct {
+	fromApp   map[string]bool
+	questions []jev.Question
+}
 
 // EmbeddingOption adjusts NewEmbedding.
 type EmbeddingOption func(*embeddingOptions)
+
+// WithQuestions adds questions beside the shipped ones, matched by id. The shipped
+// file is empty until the features that ask them land, so the dev stack and tests
+// use this to exercise the layer end to end.
+func WithQuestions(qs ...jev.Question) EmbeddingOption {
+	return func(o *embeddingOptions) { o.questions = qs }
+}
 
 // FromApp names the accounts connected from the app. Their smart-features switch
 // lives in state.db and is read on every call, so turning it off in Settings stops

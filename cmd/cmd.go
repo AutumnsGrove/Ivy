@@ -138,7 +138,7 @@ func runCmd(configPath *string, version string) *cobra.Command {
 				DBs: dbs, Supervisor: supervisor, SecretsDir: cfg.SecretsDir(), Provider: appProvider,
 				Existing: func() []config.Account { return ivyYAMLAccounts },
 			})
-			api := gateway.New(dbs, version, webui.FS).WithSearch(embedding.Query).WithSmartControls(embedding.Caps).WithEmbedBacklog(embedding.Backlog()).WithEvents(hub).
+			api := gateway.New(dbs, version, webui.FS).WithSearch(embedding.Query).WithSmartControls(embedding.Caps).WithEmbedBacklog(embedding.Backlog()).WithOdds(embedding.Odds).WithEvents(hub).
 				WithAllowedHosts(cfg.HostAllowList()).WithBackupTargets(cfg.BackupTargets()).
 				WithAccountConnector(connector).WithConfiguredSmart(smartOf(ivyYAMLAccounts))
 
@@ -174,6 +174,19 @@ func runCmd(configPath *string, version string) *cobra.Command {
 					defer workers.Done()
 					if err := embedding.Worker.Run(workerCtx); err != nil && !errors.Is(err, context.Canceled) {
 						slog.WarnContext(workerCtx, "embed worker stopped", "error", err)
+					}
+				}()
+			}
+
+			// The Jev classifier is the same kind of low-priority queue, behind the same
+			// gate. It asks nothing until a question exists, the account has opted in and
+			// the key is set, so starting it costs a cheap check each half minute.
+			if embedding.Classifier != nil {
+				workers.Add(1)
+				go func() {
+					defer workers.Done()
+					if err := embedding.Classifier.Run(workerCtx); err != nil && !errors.Is(err, context.Canceled) {
+						slog.WarnContext(workerCtx, "jev classifier stopped", "error", err)
 					}
 				}()
 			}
