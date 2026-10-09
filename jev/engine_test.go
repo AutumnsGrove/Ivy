@@ -510,3 +510,51 @@ func TestEveryCallIsLedgered(t *testing.T) {
 		t.Fatalf("ledger = %+v", calls)
 	}
 }
+
+func TestOddsListsCurrentAnswersAndWhatCouldNotBeAnswered(t *testing.T) {
+	r := newRig(t)
+	r.jev.reply = func(req jevRequest) map[string]answerJSON {
+		return map[string]answerJSON{
+			"needs_me": {Choice: "nope", Probabilities: map[string]float64{"nope": 1}, Confidence: 1},
+			"urgency":  quietAnswer(req.Questions["urgency"].Criteria),
+		}
+	}
+	r.decide(mail("ck1"))
+	odds, err := r.engine.Odds(context.Background(), rigAccount, "ck1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if odds.Model != "jev-latest" || len(odds.Answers) != 1 || odds.Answers[0].QuestionID != "urgency" {
+		t.Fatalf("answers = %+v", odds)
+	}
+	if len(odds.Unanswered) != 1 || odds.Unanswered[0].QuestionID != "needs_me" || odds.Unanswered[0].Reason != store.MissInvalidAnswer {
+		t.Fatalf("unanswered = %+v", odds.Unanswered)
+	}
+}
+
+func TestOddsForAnUnclassifiedMessageIsEmptyNotAnError(t *testing.T) {
+	r := newRig(t)
+	odds, err := r.engine.Odds(context.Background(), rigAccount, "never-seen")
+	if err != nil || len(odds.Answers) != 0 || len(odds.Unanswered) != 0 {
+		t.Fatalf("odds = %+v, %v", odds, err)
+	}
+	// With no gate at all the sheet is simply empty.
+	empty, err := NewEngine(r.reg, nil, r.dbs).Odds(context.Background(), rigAccount, "ck1")
+	if err != nil || len(empty.Answers) != 0 {
+		t.Fatalf("nil gate odds = %+v, %v", empty, err)
+	}
+}
+
+func TestOddsDropAnEditedQuestionsOldAnswer(t *testing.T) {
+	r := newRig(t)
+	r.decide(mail("ck1"))
+	edited, _ := r.reg.Get("needs_me")
+	edited.Instructions += " Receipts do not count."
+	if err := r.reg.Set(mustParse(t, strings.Replace(validYAML, "enabled: false", "enabled: true", 1)), []Question{edited}); err != nil {
+		t.Fatal(err)
+	}
+	odds, _ := r.engine.Odds(context.Background(), rigAccount, "ck1")
+	if len(odds.Answers) != 1 || odds.Answers[0].QuestionID != "urgency" {
+		t.Fatalf("the stale answer is still shown: %+v", odds.Answers)
+	}
+}

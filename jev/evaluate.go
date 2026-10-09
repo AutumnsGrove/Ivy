@@ -1,6 +1,8 @@
 package jev
 
 import (
+	"context"
+	"fmt"
 	"sort"
 
 	"github.com/AutumnsGrove/Ivy/store"
@@ -70,4 +72,52 @@ func Evaluate(reg *Registry, ds []store.Decision, model string) []Verdict {
 		out[i].Suppressed = suppressed[out[i].QuestionID]
 	}
 	return out
+}
+
+// Unanswered is a question that was asked, or considered, and has no answer, with
+// the reason recorded at the time.
+type Unanswered struct {
+	QuestionID string
+	Reason     string
+}
+
+// Odds is everything the odds sheet shows for one message.
+type Odds struct {
+	Model      string
+	Answers    []Verdict
+	Unanswered []Unanswered
+}
+
+// Odds reads a message's cached answers as verdicts under the registry as it stands.
+// It makes no request and is available for every classified message; a message never
+// classified, or an engine with no gate, yields an empty sheet rather than an error.
+func (e *Engine) Odds(ctx context.Context, accountID, contentKey string) (Odds, error) {
+	if e.gate == nil {
+		return Odds{}, nil
+	}
+	model, err := e.gate.ModelFor(ctx, CallFeature)
+	if err != nil {
+		return Odds{}, fmt.Errorf("jev model: %w", err)
+	}
+	ds, err := e.store.DecisionsFor(ctx, accountID, contentKey)
+	if err != nil {
+		return Odds{}, err
+	}
+	ms, err := e.store.DecisionMissesFor(ctx, accountID, contentKey)
+	if err != nil {
+		return Odds{}, err
+	}
+	out := Odds{Model: model.Slug, Answers: Evaluate(e.reg, ds, model.Slug)}
+	for _, q := range e.reg.All() {
+		if !q.IsEnabled() {
+			continue
+		}
+		for _, m := range ms {
+			if m.QuestionID == q.ID && m.InstructionHash == q.Hash() && m.Model == model.Slug {
+				out.Unanswered = append(out.Unanswered, Unanswered{QuestionID: q.ID, Reason: m.Reason})
+				break
+			}
+		}
+	}
+	return out, nil
 }
