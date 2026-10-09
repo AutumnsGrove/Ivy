@@ -61,8 +61,12 @@ func TestMessageBodyDocumentFollowsTheTheme(t *testing.T) {
 	// The one exception is light mail inverted at night: it is drawn as a light
 	// page and the whole frame is then flipped, over an opaque canvas of its own.
 	for _, tc := range []struct{ theme, id, scheme string }{
-		{"night", "plain", "dark"}, {"night", "darkmail", "dark"}, {"night", "rich", "light"},
-		{"day", "plain", "light"}, {"day", "darkmail", "light"}, {"day", "rich", "light"},
+		{"night", "plain", "dark"},
+		{"night", "darkmail", "dark"},
+		{"night", "rich", "light"},
+		{"day", "plain", "light"},
+		{"day", "darkmail", "light"},
+		{"day", "rich", "light"},
 	} {
 		if got := doc(tc.id, "?theme="+tc.theme); !strings.Contains(got, "html{color-scheme:"+tc.scheme+";") || strings.Contains(got, "color-scheme:"+tc.theme) {
 			t.Errorf("%s %s should declare color-scheme:%s: %s", tc.theme, tc.id, tc.scheme, got)
@@ -80,7 +84,7 @@ func TestMessageBodyDocumentFollowsTheTheme(t *testing.T) {
 	// frame's edge, so rich mail gets a slim gutter in every variant.
 	for _, id := range []string{"rich", "darkmail"} {
 		for _, theme := range []string{"night", "day"} {
-			if got := doc(id, "?theme="+theme); !strings.Contains(got, "padding:0 1rem") {
+			if got := doc(id, "?theme="+theme); !strings.Contains(got, "padding:0 .5rem") {
 				t.Errorf("%s %s should have a side gutter: %s", theme, id, got)
 			}
 		}
