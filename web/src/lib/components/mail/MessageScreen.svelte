@@ -11,12 +11,14 @@
 	import Sheet from '../ui/Sheet.svelte';
 	import TagPicker from '../tags/TagPicker.svelte';
 	import MessageLoader from './MessageLoader.svelte';
+	import OddsSheet from './OddsSheet.svelte';
 
 	type Props = { id: string; accounts: Account[]; scenario: Scenario | null };
 	let { id, accounts, scenario }: Props = $props();
 	const back = $derived(withScenario('/', scenario));
 	let more = $state(false);
 	let tagging = $state(false);
+	let odds = $state(false);
 	// A live flag op is the optimistic truth; the loaded message is the fallback.
 	let loaded = $state<MailMessage | null>(null);
 	const flagged = $derived(outbox.flags(id)?.flagged ?? (loaded?.id === id ? loaded.flagged : false) ?? false);
@@ -58,7 +60,10 @@
 		<Button block onclick={async () => { more = false; await markUnread(id); }}>Mark unread</Button>
 		<Button block onclick={async () => { more = false; await markSpam(id); }}>Mark as spam</Button>
 		<Button block onclick={async () => { more = false; await markNotJunk(id); }}>Not junk</Button>
+		<Button block onclick={() => { more = false; odds = true; }}>Show the odds</Button>
 	</Sheet>
+
+	<OddsSheet {id} bind:open={odds} />
 </div>
 
 <style>

@@ -98,6 +98,12 @@ export type Settings = {
 	spamScore: boolean;
 };
 
+// --- The odds sheet: what the helper decision model said about one message.
+export type MessageOdds = Schema['MessageOdds'];
+export type OddsAnswer = Schema['OddsAnswer'];
+export type OddsUnanswered = Schema['OddsUnanswered'];
+export type OddsReason = OddsUnanswered['reason'];
+
 // --- Smart features: caps, per-account feature switches and the chat model choice.
 export type SmartSettings = Schema['SmartSettings'];
 export type SmartSettingsPatch = Schema['SmartSettingsPatch'];

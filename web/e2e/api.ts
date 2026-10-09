@@ -2,7 +2,7 @@ import { test as base } from '@playwright/test';
 import * as mock from '../src/lib/api/mock';
 import { freshSmart, smartReply, type SmartState } from './smart-fixture';
 import { spendReply } from './spend-fixture';
-import type { Account, Attachment, DraftResume, DraftSummary, Identity, MailMessage, MailSummary, OutboxItem, SendStatus, TagsOverview, UpdateStatus, UserTag } from '../src/lib/types';
+import type { Account, Attachment, DraftResume, DraftSummary, Identity, MailMessage, MailSummary, MessageOdds, OutboxItem, SendStatus, TagsOverview, UpdateStatus, UserTag } from '../src/lib/types';
 
 // The reader client does real fetches, so the mock E2E suite serves the
 // contract from the same fixtures at the network boundary instead of inside
@@ -22,6 +22,22 @@ const badRequest = (message: string): Reply => ({ status: 400, body: { code: 'ba
 const tooLarge = (message: string): Reply => ({ status: 413, body: { code: 'too_large', message } });
 
 export const MAX_PHOTO_BYTES = 5 << 20;
+
+/** What the odds sheet shows for m1: one answer that would act, one held back, one that could not be answered. */
+export const ODDS_FIXTURE: MessageOdds = {
+	model: 'jev-latest',
+	answers: [
+		{
+			questionId: 'needs_me', choice: 'likely', probabilities: { likely: 0.9, maybe: 0.07, none: 0.03 },
+			confidence: 0.95, threshold: 0.8, quietOption: 'none', fires: true, suppressed: false, acts: true
+		},
+		{
+			questionId: 'urgency', choice: 'high', probabilities: { high: 0.9, low: 0.1 },
+			confidence: 0.9, threshold: 0.75, quietOption: 'low', fires: true, suppressed: true, acts: false
+		}
+	],
+	unanswered: [{ questionId: 'category', reason: 'invalid_answer' }]
+};
 
 /** The mutable account state a customization flow edits, cloned per test. */
 export type AccountState = {
@@ -834,12 +850,13 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	if (queued) return queued;	const drafts = draftReply(state, path, method, raw);
 	if (drafts) return drafts;
 
-	const match = /^\/messages\/([^/]+)(\/summary|\/body)?$/.exec(path);
+	const match = /^\/messages\/([^/]+)(\/summary|\/body|\/odds)?$/.exec(path);
 	if (match) {
 		const [, id, kind] = match;
 		const summary: MailSummary | undefined = mock.inbox.find((x) => x.id === id);
 		if (!summary) return notFound('No such message');
 		if (kind === '/summary') return { body: summary };
+		if (kind === '/odds') return { body: id === 'm1' ? ODDS_FIXTURE : { model: '', answers: [], unanswered: [] } };
 		if (kind === '/body') return bodyDocument(id);
 		return messageReply(id, scenario, state.tagged.get(id) ?? []);
 	}

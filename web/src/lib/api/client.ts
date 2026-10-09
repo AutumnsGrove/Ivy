@@ -24,6 +24,7 @@ import type {
 	MailMessage,
 	MailSummary,
 	MailAttachmentList,
+	MessageOdds,
 	OutboxAction,
 	OutboxBatch,
 	OutboxBatchResult,
@@ -83,6 +84,10 @@ export const api = {
 	/** The header alone, for the screen that shows a failed body under a real subject line. */
 	getSummary: (id: string): Promise<MailSummary> =>
 		request<MailSummary>(`/messages/${encodeURIComponent(id)}/summary`),
+
+	/** What the helper decision model said about a message, with its odds. Reads the cache; never makes a request. */
+	getMessageOdds: (id: string): Promise<MessageOdds> =>
+		request<MessageOdds>(`/messages/${encodeURIComponent(id)}/odds`),
 
 	getHealth: (): Promise<HealthOverview> => request<HealthOverview>('/mirror/health'),
 
