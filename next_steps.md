@@ -5,7 +5,7 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-08 (5a.1 and 5a.2 done; see "▶ Now"). **Chunk 4 (send) is complete: 4a-4h are done.** **4h (rich text)** landed with the decisions settled in qa-log round 66 and `docs/handoffs/2026-10-06-4h-richtext-design.md`: the editor is `squire-rte` (MIT, zero deps, 16.1 KiB brotli, chosen over a 98.3 KiB minimal TipTap), both modes stay with rich as the default and the mode fixed once typed, a `bodyFormat` field is sanitised server-side with a derived `text/plain`, and the paste walker is our own allow-list. `docs/BUILD-LOG.md` has the entry. What is left is the operator's live checks. **4g is done** (outgoing attachments and images; round 65): gate G4 cleared the dependency question — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4f is done** (the compose screen; round 64): the client calls and the new
+last updated: 2026-10-09 (5b built, waiting at G2; see "▶ Now"). **Chunk 4 (send) is complete: 4a-4h are done.** **4h (rich text)** landed with the decisions settled in qa-log round 66 and `docs/handoffs/2026-10-06-4h-richtext-design.md`: the editor is `squire-rte` (MIT, zero deps, 16.1 KiB brotli, chosen over a 98.3 KiB minimal TipTap), both modes stay with rich as the default and the mode fixed once typed, a `bodyFormat` field is sanitised server-side with a derived `text/plain`, and the paste walker is our own allow-list. `docs/BUILD-LOG.md` has the entry. What is left is the operator's live checks. **4g is done** (outgoing attachments and images; round 65): gate G4 cleared the dependency question — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4f is done** (the compose screen; round 64): the client calls and the new
 `/drafts` screen, the From picker over the real identities, People autocomplete, reply/forward
 prefills, debounced autosave to the server's Drafts folder (and once on leave), the Sending/Undo
 toast, the Not-sent sheet and the resend-free `unconfirmed` notice. The operator chose autosave plus
@@ -58,7 +58,7 @@ screens**.
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
 | 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, rules, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; 3e done; 3f done; 3g done; **3h done** |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | **done** (4a-4h; rounds 60-66; see "Chunk 4 stages" and `docs/CHUNK4-BRIEF.md`) |
-| 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | **planned, not started** (2026-10-07): standing rules in `docs/CHUNK5-BRIEF.md`, one plan per feature in `docs/chunk5/` (5a-5j, foundation first); every plan's questions were answered with the operator on 2026-10-07 (see each plan's Decisions section and `docs/qa-log.md`); **5a.1 (the generalised gate) and 5a.2 (the spend API) are done**; **5a.3 (caps and settings) is in progress, all four stages done** (registry and estimate; mirror health; the `/smart` API; the Smart features screen), so **5a is done** and 5b is next |
+| 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | **planned, not started** (2026-10-07): standing rules in `docs/CHUNK5-BRIEF.md`, one plan per feature in `docs/chunk5/` (5a-5j, foundation first); every plan's questions were answered with the operator on 2026-10-07 (see each plan's Decisions section and `docs/qa-log.md`); **5a.1 (the generalised gate) and 5a.2 (the spend API) are done**; **5a.3 (caps and settings) is in progress, all four stages done** (registry and estimate; mirror health; the `/smart` API; the Smart features screen), so **5a is done**; **5b (the Jev layer) is built against the fake and waits at gate G2 for the live run** (`docs/handoffs/2026-10-09-G2-jev-live-call.md`); 5c is next |
 
 Frontend: SvelteKit 3 app in `web/`. The reader endpoints (`/accounts`, `/inbox`,
 `/messages/{id}`, `/summary`, `/mirror/health`, account profile and photo), tags (`/tags`, the
@@ -87,12 +87,26 @@ phone screen with no card around the mail. Decisions and findings are in `docs/q
 publishes (real mail, not the mock); turn on HTTPS for the tailnet name (`docs/DEPLOY.md` "HTTPS over
 Tailscale"); the calendar chip below is a backlog item, not started.
 
-**5b is in progress (2026-10-09).** **5b.1 (the registry) is done:** `jev/` holds the question type, the
-strict YAML parser, the merged `Registry` (built-ins plus the operator's edits by id, validated whole,
-swapped atomically) and `Question.Hash`, which covers instructions and options only so a threshold nudge
-never re-asks. The built-in set is empty (`jev/builtin.yaml`). **Next: 5b.2 the state builder, then 5b.3
-decide and cache, 5b.4 the worker, 5b.5 the odds sheet.** Gate G2 (a handoff file, then the operator's key)
-is due before the first *live* call, not before this build, which runs against the fake provider.
+**5b is built and committed (2026-10-09); the previous handoff's finish list is done.** 5b.1 to 5b.5
+and the wiring are on main in small stages: the odds sheet, the gate ledger fix (`settle` now writes
+under `context.WithoutCancel` with a bounded `ledgerWriteTimeout`), the worker's mid-pass "off" fix, and
+mirror migration 19 (the arrival expression index the classify queue needs, asserted by name in
+`store/queryplan_test.go`). `go test -race ./jev/ ./llm/ ./store/ ./cmd/ ./gateway/`, `make check`
+(451 frontend unit tests) and the mock Playwright suite are green. The 5b.5 odds sheet and the docs
+(BUILD-LOG, qa-log, chunk5 README and 5b plan, the G2 note, this file) landed with them.
+
+**5b (the Jev layer) is built against the fake provider, 2026-10-09, and waiting at gate G2.** The registry,
+state builder, `decisions` cache, `GET /messages/{id}/odds`, the background worker and the odds sheet (reader,
+More, "Show the odds") all work end to end on the dev stack with one dev question. It ships no visible feature and
+spends $0: the shipped question file is empty and `classify` ships dark. `docs/BUILD-LOG.md` has the entry and
+**`docs/handoffs/2026-10-09-G2-jev-live-call.md` is the G2 note: registry format, cache key, cost estimate
+(1,000 messages at 9 questions is $0.06 worst case) and the live-check steps.**
+**Waiting on the operator:** (1) confirm the one assumption, that every shared Jev call runs under the single gate
+feature `classify` with a question able to name a feature of its own; (2) the go-ahead and the key for the live
+run, then the live check itself (its own pending line, never folded into "done"): the cost on Settings, Spend
+against the provider's dashboard, and looking at the odds sheet on the phone. **Not built, deliberately:** a
+backfill button over `Worker.EstimateBackfill`/`StartBackfill`, the queue depth on Mirror health, and a Jev
+spike at 50 and 100 questions. **Next: 5c (the needs-me cascade)**, which starts with 5c.0, the vetting machinery.
 
 **5a.1 is done (chunk 5, the generalised gate), 2026-10-08.** `Embed`, `Decide`, `Complete` and `See`
 share one `admit -> call -> settle` path in `llm/`; the gate owns its (unexported) provider clients, reads

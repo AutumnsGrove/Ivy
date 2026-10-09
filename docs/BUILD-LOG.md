@@ -1009,6 +1009,11 @@ Verification: `llm`, `store`, `search`, `cmd` and `gateway` tests green, then th
 `-race` and a `CGO_ENABLED=0` build; `gofumpt`, `go vet` and `staticcheck` clean. The gate was written
 before its tests, so each behaviour test was proved by mutation (six mutations, six red tests).
 
+**Follow-up (2026-10-09).** `settle` wrote the ledger with the caller's context, so a caller that gave
+up (a closed request, a shutdown) lost the row and tripped the breaker, refusing every later call. It
+now writes under `context.WithoutCancel` with a bounded `ledgerWriteTimeout`; the ledger is the cap's
+only record, so a charged call must survive the caller. Found while building 5b.
+
 ## 5a.2 The spend API and the real stats screens (2026-10-08)
 
 - **Store.** `SpendReport` rolls the ledger up by feature, account, model and refusal reason for a window;
@@ -1145,3 +1150,43 @@ guard), the whole mock Playwright suite (410 passed, 10 skipped, phone and deskt
 - **Not verified on a device.** Checked in Playwright (WebKit phone, Chromium desktop) and one screenshot of
   an inverted sample; real mail on the potato is the operator's check. `zoom` is non-standard CSS that
   Safari and Chromium honour; Firefox honours it from 126.
+
+## 5b: the Jev layer (2026-10-09; qa-log "5b: decisions the agent made"; G2 handoff)
+
+The question layer over `Gate.Decide`, built against the fake provider. It ships **no visible feature and
+spends $0**: the shipped question file is empty, `classify` ships dark, and a live call waits at gate G2
+(`docs/handoffs/2026-10-09-G2-jev-live-call.md`).
+
+- **5b.1 Registry** (`jev/registry.go`, `jev/builtin.yaml`). A question is data: id, instructions, options
+  (`criteria`), quiet option, threshold, scope, folders, switch, suppression and an optional gate feature.
+  Strict YAML (unknown keys refused), validated as a whole set so an override cannot leave a suppression
+  dangling, swapped atomically, returned as copies. At most 100 questions. `Question.Hash` covers the wording
+  and the option set only, so tuning never invalidates a cached answer.
+- **5b.2 State builder** (`jev/state.go`). A pure function: From, To/Cc names only (no recipient address), Subject,
+  Date, List-Id, the provider's SPF/DKIM/DMARC, attachment names and types, then the body with quoted lines,
+  the attribution above them, an "Original Message" tail and a trailing signature removed. No markup, control or
+  directional characters, no header a sender can forge, invalid UTF-8 repaired, work bounded by the budget and
+  not the body (an 18 MiB body is cheap), clipped on a rune boundary, skipped when there is nothing to read.
+- **5b.3 Decide and cache** (`jev/engine.go`, `jev/evaluate.go`, `store/decisions.go`, mirror migration 17,
+  `gateway/odds.go`). One gate call carries every applicable question not already answered for the current
+  wording and model. Answers are validated against each question's own options; refusals and empties go to
+  `decision_misses`. `Evaluate` turns stored odds into verdicts (quiet option never fires, probability and
+  confidence must both reach the bar, suppression decided before it is applied). `GET /messages/{id}/odds` reads
+  the cache, is always available and is empty rather than an error when smart features are absent.
+- **5b.4 Worker** (`jev/worker.go`, `store/classify.go`, mirror migrations 18-19, `llm.Gate.CanRun`). New mail only
+  by a per-account arrival watermark; a bounded batch per pass at bounded concurrency; newest first; Inbox and
+  Junk only, one row per content key; quiet skips for accounts that are off; exponential backoff on errors, a
+  long pause at a cap; `EstimateBackfill` and `StartBackfill`. Migration 19 adds the arrival expression index
+  the queue needs (`COALESCE(NULLIF(internaldate,''), date)`), since no plain column index covers it and each
+  pass would otherwise scan every Inbox/Junk row; `store/queryplan_test.go` names the index in the plan.
+  Started beside the embed worker by `ivy run` and
+  `ivy-dev` through the shared `NewEmbedding` builder; `ivy-dev` adds one trivial question to exercise the layer.
+- **5b.5 Odds sheet** (`web/src/lib/components/mail/OddsSheet.svelte`, `odds.ts`). In the reader's More menu on
+  phone and desktop: each question with every option as a labelled meter, its bar, how sure the answer was and
+  where it stands in plain words (would act, held back, not sure enough, quiet); questions that could not be
+  answered with the reason; a note that nothing is moved, hidden or deleted because of the numbers.
+- **Guards.** `jev/arch_test.go` makes the package unable to import `smtp`, `send`, `compose`, `sync` or
+  `gateway`, so invariant 6 is mechanical. `llm/arch_test.go` still covers every provider endpoint.
+- **Not built (listed in the G2 handoff):** a backfill button (the API and settings control over the worker's
+  estimate and start), the queue depth on Mirror health, and storing the operator's edited questions in
+  `state.db` (5j's authoring brings it; today the registry merges only what `NewEmbedding` is given).

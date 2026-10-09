@@ -39,7 +39,7 @@ machinery (withheld mail) that 5h and 5i also need; 5j needs 5b's registry and t
 | Stage | Plan | Status |
 |---|---|---|
 | 5a | [Gate, ledger and spend](5a-gate-ledger-spend.md) | **5a.1 and 5a.2 done** (2026-10-08); **5a.3 done (2026-10-08), so 5a is done**; 5b next |
-| 5b | [The Jev layer](5b-jev-layer.md) | **in progress: 5b.1 registry done (2026-10-09)** |
+| 5b | [The Jev layer](5b-jev-layer.md) | **built against the fake (2026-10-09); waiting at gate G2 for the live run** |
 | 5c | [Needs-me cascade](5c-needs-me-cascade.md) | planned; questions answered 2026-10-07 |
 | 5d | [Classifiers and safety](5d-classifiers-and-safety.md) | planned; questions answered 2026-10-07 |
 | 5e | [Summaries and thread help](5e-summaries-and-thread-help.md) | planned; questions answered 2026-10-07 |

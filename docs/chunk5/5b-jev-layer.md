@@ -111,6 +111,24 @@ questions in this registry.
    only measured to about 18 to 20 questions (S4, Polaris), so a short spike at 50 and 100 runs before
    anything relies on the larger sets.
 
+## As built (2026-10-09)
+
+5b.1 to 5b.5 are built against the fake provider; the live run waits at G2
+(`docs/handoffs/2026-10-09-G2-jev-live-call.md`). Where the code differs from, or settles, the plan:
+
+- **One gate feature, `classify`, for the shared call** (assumed, to confirm at G2); a question may name a
+  feature of its own whose switch must also be on. A call has one `Feature`, and one call per message is the
+  point.
+- **New mail only is an arrival watermark** (`jev.since`), plus a `classified` marker table (mirror migration
+  18) so considered mail is never rescanned. A backfill lowers the watermark; there is no backfill button yet.
+- **The cache** is `decisions` (mirror migration 17) with `decision_misses` for refused and empty inputs.
+  Verdicts are computed on read, so retuning never re-asks.
+- **The registry holds built-ins plus extras by id.** The `state.db` store for the operator's edits (decision
+  4) is not built: nothing authors a question until 5j, and today the extras come from the code that builds the
+  engine (`ivy-dev` passes one dev question).
+- **Not built:** the settings backfill control, the queue depth on Mirror health, and a Jev spike at 50 and 100
+  questions (decision 9). Nothing relies on a set larger than about 20 yet.
+
 ## The questions as asked
 
 1. **When it runs:** only on arrival, or also a background pass over recent mail? Which mail is

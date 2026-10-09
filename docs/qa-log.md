@@ -1848,3 +1848,31 @@ calendar chip noted for later, and the domain secured.
 | Chrome | Phone: no card around the mail. Chrome only at the top (back, archive, delete, tag, more) and the bottom (reply, forward); the mail runs edge to edge. Desktop keeps its pane. |
 | Calendar chip | Wanted. Not planned before; recorded in `next_steps.md` Backlog with a first slice that needs no RSVP. |
 | "Secure the domain" | Read as HTTPS on the tailnet name (Safari says Not Secure). It is the operator's step on the board; `docs/DEPLOY.md` has "HTTPS over Tailscale" (`tailscale serve`, not `funnel`). |
+
+## 5b: decisions the agent made while building (2026-10-09)
+
+The operator said "it's time for 5b" and the plan's questions were already answered (2026-10-07), so these
+are the choices the build forced that no answer covered. None spends money. They are in
+`docs/handoffs/2026-10-09-G2-jev-live-call.md`, and the first needs the operator's confirmation.
+
+- **One gate feature for the shared call: `classify`. (Assumed; confirm at G2.)** A Jev call carries one
+  feature, but its questions belong to several (needs-me, junk rescue, checks). One call per feature would
+  break "one call per message" and multiply the question text, which is most of the cost of short mail. So
+  the call runs under `classify` (its switch, ledger rows and caps) and a question may name a feature of its
+  own, which must also be on for it to ride the call.
+- **"New mail only" is an arrival watermark per account** (`jev.since` in `state.db` settings), set the
+  first time the worker finds the feature on and forgotten when it is turned off. A backfill only lowers it.
+  With no questions registered the watermark stays unset, so a question that ships later cannot reach back.
+- **A `classified` marker table** (mirror migration 18) records that the worker has considered a message, so
+  empty, refused and question-less mail is never rescanned. Lazy re-reading of an edited question therefore
+  happens only for mail the worker has not considered yet; re-reading already-classified mail is a backfill.
+- **Answers are validated against the question's own options** before they are stored; a bad one is
+  recorded (`decision_misses`, reason `invalid_answer`) and not retried until the wording or model changes.
+  A provider 400, 413 or 422 is recorded as `rejected` and not retried; any other failure is retried with
+  backoff and records nothing.
+- **Verdicts are computed on read** from the stored probability vector, so retuning a threshold or a
+  suppression never re-asks and the odds sheet always reflects the current numbers.
+- **The odds sheet labels nothing as AI** and states plainly that nothing is moved, hidden or deleted
+  because of the numbers. It lives in the reader's More menu on phone and desktop.
+- **The worker asks the gate `CanRun` before calling.** A refused call writes a zero-cost ledger row, so a
+  worker polling an account that is simply off would fill the call log with refusals every half minute.
