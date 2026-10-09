@@ -69,6 +69,13 @@ func FeatureNames() []string {
 	return out
 }
 
+// IsJevFeature reports whether a feature is answered by Jev (/systemone), so a
+// question file can only name a switch that governs decision questions.
+func IsJevFeature(name string) bool {
+	f, ok := features[name]
+	return ok && f.endpoint == EndpointSystemOne
+}
+
 // featureSwitchKey is the per-account setting that turns one feature off (or, for
 // a feature that ships dark, on).
 func featureSwitchKey(name string) string { return "llm.feature." + name }

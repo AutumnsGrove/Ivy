@@ -62,6 +62,10 @@ type Question struct {
 	Enabled *bool `yaml:"enabled,omitempty"`
 	// Suppresses names questions whose result is held back when this one fires.
 	Suppresses []string `yaml:"suppresses,omitempty"`
+	// Feature names the per-account switch that must be on for the question to be
+	// asked (for example junk_rescue). Empty means it rides on the shared call's own
+	// feature. It never changes what an answer means, so it is not in the hash.
+	Feature string `yaml:"feature,omitempty"`
 }
 
 // IsEnabled reports whether the question is switched on (the default).
@@ -220,6 +224,9 @@ func validateOne(q Question) error {
 		if a == "" || len(a) > maxFieldBytes {
 			return errors.New("scope names an empty or oversized account id")
 		}
+	}
+	if q.Feature != "" && !llm.IsJevFeature(q.Feature) {
+		return fmt.Errorf("feature %q is not a Jev feature", q.Feature)
 	}
 	for _, f := range q.Folders {
 		if f != FolderInbox && f != FolderJunk {

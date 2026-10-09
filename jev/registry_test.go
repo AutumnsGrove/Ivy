@@ -89,6 +89,8 @@ func TestParseRejects(t *testing.T) {
 		"not yaml":              "questions: [",
 		"empty document":        "",
 		"empty scope entry":     q("    scope: ['']\n"),
+		"unknown feature":       q("    feature: telepathy\n"),
+		"chat feature":          q("    feature: summary\n"),
 		"option key with blank": strings.Replace(q(""), "{no: n, yes: y}", `{no: n, "": y}`, 1),
 	}
 	for name, src := range cases {
@@ -97,6 +99,14 @@ func TestParseRejects(t *testing.T) {
 				t.Fatalf("Parse accepted %q", name)
 			}
 		})
+	}
+}
+
+func TestParseAcceptsAJevFeature(t *testing.T) {
+	src := "questions:\n  - id: q\n    instructions: hi\n    criteria: {no: n, yes: y}\n    quiet_option: no\n    threshold: 0.8\n    feature: junk_rescue\n"
+	qs := mustParse(t, src)
+	if qs[0].Feature != "junk_rescue" {
+		t.Fatalf("feature = %q", qs[0].Feature)
 	}
 }
 
