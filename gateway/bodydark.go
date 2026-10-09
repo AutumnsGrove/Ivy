@@ -31,6 +31,8 @@ func mailIsDark(htmlStr string) bool {
 			if luma, ok := declaredBackground(z.Token()); ok {
 				return luma < darkLuma
 			}
+		default:
+			// Text, end tags, comments and the doctype declare no background.
 		}
 	}
 	return false

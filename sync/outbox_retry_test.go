@@ -283,9 +283,9 @@ func TestOutboxMoveArchivedMessageCanBeTrashed(t *testing.T) {
 func TestOutboxMoveGoneNamesTheStepThatFoundNothing(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name   string
-		break_ func(fx *outboxFixture, t *testing.T)
-		want   string
+		name     string
+		sabotage func(fx *outboxFixture, t *testing.T)
+		want     string
 	}{
 		{"search finds nothing", func(fx *outboxFixture, t *testing.T) {
 			if err := fx.acc.Expunge("INBOX", 1); err != nil {
@@ -314,7 +314,7 @@ func TestOutboxMoveGoneNamesTheStepThatFoundNothing(t *testing.T) {
 				ContentKey: contentKeyFor(1), SourceFolderID: inbox.ID,
 				Expect: store.OutboxExpect{DestFolderID: archive.ID},
 			})
-			tc.break_(fx, t)
+			tc.sabotage(fx, t)
 			fx.run(t)
 
 			got, err := fx.dbs.GetOutbox(fx.ctx, op.ID)
