@@ -19,12 +19,20 @@
 
 	let attempt = $state(0);
 
+	// Props here are getters over the page's `data`, which every hub hint replaces
+	// (invalidateAll). Reading them straight inside `loading` would restart the fetch,
+	// drop to the skeleton and rebuild the body frame on every hint. A $derived stops
+	// at an unchanged value, so only a real change of message or scenario reloads.
+	const wantedId = $derived(id);
+	const wantedScenario = $derived(scenario);
+
 	// The header (summary) loads on its own so a failed body can still sit under a real subject line.
 	const loading = $derived.by(() => {
 		void attempt;
+		const messageId = wantedId;
 		return Promise.all([
-			api.getSummary(id),
-			api.getMessage(id, { scenario }).then(
+			api.getSummary(messageId),
+			api.getMessage(messageId, { scenario: wantedScenario }).then(
 				(message) => {
 					onloaded?.(message);
 					return { ok: true as const, message };
