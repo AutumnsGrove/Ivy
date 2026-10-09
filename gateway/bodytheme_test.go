@@ -76,6 +76,15 @@ func TestMessageBodyDocumentFollowsTheTheme(t *testing.T) {
 	if rich := doc("rich", "?theme=night"); !strings.Contains(rich, "html{") || strings.Count(rich, invert) != 2 || strings.Contains(rich, paper) {
 		t.Errorf("night light mail should be inverted with images restored: %s", rich)
 	}
+	// Edge-to-edge mail leaves text touching (and, once shrunk, clipped by) the
+	// frame's edge, so rich mail gets a slim gutter in every variant.
+	for _, id := range []string{"rich", "darkmail"} {
+		for _, theme := range []string{"night", "day"} {
+			if got := doc(id, "?theme="+theme); !strings.Contains(got, "padding:0 1rem") {
+				t.Errorf("%s %s should have a side gutter: %s", theme, id, got)
+			}
+		}
+	}
 	if dark := doc("darkmail", "?theme=night"); strings.Contains(dark, invert) {
 		t.Errorf("night mail that is already dark must not be inverted: %s", dark)
 	}
