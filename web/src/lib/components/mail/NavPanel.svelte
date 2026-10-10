@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Archive, FileText, Inbox, PenLine, Trash2 } from '#lib/icons.js';
+	import { Archive, CircleAlert, FileText, Inbox, PenLine, Trash2 } from '#lib/icons.js';
 	import { accountAvatar } from '#lib/accounts.js';
 	import type { Account, FolderView } from '#lib/types.js';
 	import Avatar from '../ui/Avatar.svelte';
@@ -17,8 +17,10 @@
 		compose?: boolean;
 		/** The folder view on screen, so its row is marked. */
 		folder?: FolderView;
+		/** How many open verdicts the view holds; the row shows none when zero. */
+		needCount?: number;
 	};
-	let { accounts, selectedId, tags, compose = false, folder = 'inbox' }: Props = $props();
+	let { accounts, selectedId, tags, compose = false, folder = 'inbox', needCount = 0 }: Props = $props();
 
 	const total = $derived(accounts.reduce((n, a) => n + a.unread, 0));
 </script>
@@ -46,6 +48,10 @@
 	<NavRow href="/" on={folder === 'inbox'}>
 		{#snippet leading()}<Inbox />{/snippet}
 		Inbox
+	</NavRow>
+	<NavRow href="/needs" meta={needCount ? String(needCount) : undefined}>
+		{#snippet leading()}<CircleAlert />{/snippet}
+		Needs attention
 	</NavRow>
 	<NavRow href="/?folder=archive" on={folder === 'archive'}>
 		{#snippet leading()}<Archive />{/snippet}

@@ -66,7 +66,7 @@
 	style:grid-template-columns="{panes.nav}px var(--handle-w) {panes.list}px var(--handle-w) minmax(0, 1fr)"
 >
 	<Glass radius="panel" as="aside" class="nav" aria-label="Accounts and folders">
-		<NavPanel {accounts} selectedId={accountId} {tags} {folder} compose />
+		<NavPanel {accounts} selectedId={accountId} {tags} {folder} needCount={inbox.needCount} compose />
 	</Glass>
 
 	<ResizeHandle

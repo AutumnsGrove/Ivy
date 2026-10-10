@@ -131,3 +131,33 @@ describe('OddsSheet', () => {
 		expect(document.querySelector('b')).toBeNull();
 	});
 });
+
+describe('OddsSheet second stage', () => {
+	const reply = (stage2?: unknown) => ({ model: 'jev-latest', answers: [needsMe], unanswered: [], stage2 });
+
+	it('shows the second look with its reason as plain text', async () => {
+		mocks.getMessageOdds.mockResolvedValue(
+			reply({ verdict: 'needs', reason: '<i>Dana</i> wants Friday confirmed', model: 'chat-x', dismissed: false })
+		);
+		render(OddsSheet, { id: 'm1', open: true });
+		const s = await screen.findByRole('group', { name: 'Second look' });
+		expect(s).toHaveTextContent('Needs you');
+		expect(s).toHaveTextContent('<i>Dana</i> wants Friday confirmed');
+		expect(s).toHaveTextContent('chat-x');
+	});
+
+	it('says a dismissed verdict was cleared, and a "not" verdict has no reason', async () => {
+		mocks.getMessageOdds.mockResolvedValue(reply({ verdict: 'not', model: 'chat-x', dismissed: true }));
+		render(OddsSheet, { id: 'm1', open: true });
+		const s = await screen.findByRole('group', { name: 'Second look' });
+		expect(s).toHaveTextContent('Does not need you');
+		expect(s).toHaveTextContent('Cleared');
+	});
+
+	it('leaves the section out when the second stage never ran', async () => {
+		mocks.getMessageOdds.mockResolvedValue(reply());
+		render(OddsSheet, { id: 'm1', open: true });
+		await screen.findByText('Needs me');
+		expect(screen.queryByRole('group', { name: 'Second look' })).not.toBeInTheDocument();
+	});
+});

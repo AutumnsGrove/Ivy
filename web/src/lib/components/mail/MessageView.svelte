@@ -1,10 +1,13 @@
 <script lang="ts">
+	import { invalidateAll } from '$app/navigation';
+	import { dismissNeeds } from '#lib/needsActions.js';
 	import { formatMessageTime } from '#lib/time.js';
 	import { Flag } from '#lib/icons.js';
 	import { markReadOnOpen } from '#lib/messageActions.js';
 	import { outbox } from '#lib/outbox.svelte.js';
 	import type { MailMessage, MessageParty } from '#lib/types.js';
 	import Avatar from '../ui/Avatar.svelte';
+	import Button from '../ui/Button.svelte';
 	import Dot from '../ui/Dot.svelte';
 	import Pill from '../ui/Pill.svelte';
 	import SmartChip from '../ui/SmartChip.svelte';
@@ -22,6 +25,7 @@
 			| 'date'
 			| 'toShort'
 			| 'needs'
+			| 'needsReason'
 			| 'flagged'
 			| 'tag'
 			| 'summary'
@@ -39,6 +43,15 @@
 		wide?: boolean;
 	};
 	let { message, color, wide = false }: Props = $props();
+	// Dismissing hides the marker here at once; the lists catch up when the page reloads.
+	let clearedId = $state<string | null>(null);
+	const needsYou = $derived(message.needs && clearedId !== message.id);
+	async function clear() {
+		if (await dismissNeeds(message.id)) {
+			clearedId = message.id;
+			await invalidateAll();
+		}
+	}
 	const bodySrc = $derived(`/api/v1/messages/${encodeURIComponent(message.id)}/body`);
 	// A live flag op is the optimistic truth; the loaded message is the fallback.
 	const flagged = $derived(outbox.flags(message.id)?.flagged ?? message.flagged ?? false);
@@ -54,10 +67,16 @@
 </script>
 
 <article class="msg" class:wide>
-	{#if message.needs || message.tag}
+	{#if needsYou || message.tag}
 		<div class="pills">
-			{#if message.needs}<Pill tone="need">needs you</Pill>{/if}
+			{#if needsYou}<Pill tone="need">needs you</Pill>{/if}
 			{#if message.tag}<Pill>{message.tag}</Pill>{/if}
+		</div>
+	{/if}
+	{#if needsYou}
+		<div class="why">
+			{#if message.needsReason}<p dir="auto">{message.needsReason}</p>{/if}
+			<Button size="sm" variant="tonal" onclick={() => void clear()}>Dismiss</Button>
 		</div>
 	{/if}
 
@@ -107,6 +126,19 @@
 		display: flex;
 		gap: var(--sp-6);
 		margin-bottom: var(--sp-12);
+	}
+	.why {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--sp-12);
+		margin-bottom: var(--sp-12);
+	}
+	.why p {
+		margin: 0;
+		font-size: var(--fs-aside);
+		line-height: 1.4;
+		overflow-wrap: anywhere;
 	}
 	.subject {
 		font: 500 var(--fs-read-title) / 1.22 var(--font-read);

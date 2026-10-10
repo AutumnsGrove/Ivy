@@ -115,7 +115,7 @@
 {/if}
 
 <Drawer bind:open={ui.drawerOpen}>
-	<NavPanel {accounts} selectedId={accountId} {tags} {folder} />
+	<NavPanel {accounts} selectedId={accountId} {tags} {folder} needCount={inbox.needCount} />
 </Drawer>
 
 <style>

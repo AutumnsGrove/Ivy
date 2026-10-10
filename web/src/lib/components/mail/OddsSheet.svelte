@@ -38,7 +38,7 @@
 		if (open) void load(id);
 	});
 
-	const empty = $derived(odds !== null && odds.answers.length === 0 && odds.unanswered.length === 0);
+	const empty = $derived(odds !== null && odds.answers.length === 0 && odds.unanswered.length === 0 && !odds.stage2);
 </script>
 
 <Sheet bind:open title="The odds">
@@ -88,6 +88,21 @@
 				</ul>
 			</section>
 		{/each}
+
+		{#if odds.stage2}
+			<section class="q" role="group" aria-label="Second look">
+				<header>
+					<h3>Second look</h3>
+					<span class="stand {odds.stage2.verdict === 'needs' ? 'acts' : 'quiet'}">
+						{odds.stage2.verdict === 'needs' ? 'Needs you' : 'Does not need you'}
+					</span>
+				</header>
+				{#if odds.stage2.reason}<p class="reason" dir="auto">{odds.stage2.reason}</p>{/if}
+				<p class="facts">
+					{#if odds.stage2.dismissed}Cleared · {/if}Model {odds.stage2.model}
+				</p>
+			</section>
+		{/if}
 
 		{#if odds.unanswered.length}
 			<h3 class="sub">Not answered</h3>
@@ -143,6 +158,11 @@
 		margin: var(--sp-3) 0 var(--sp-8);
 		color: var(--muted);
 		font-size: var(--fs-meta);
+	}
+	.reason {
+		margin: var(--sp-6) 0 0;
+		font-size: var(--fs-small);
+		overflow-wrap: anywhere;
 	}
 	.opts {
 		margin: 0;
