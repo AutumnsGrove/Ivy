@@ -40,6 +40,20 @@ func TestReadQueriesUseIndexes(t *testing.T) {
 			[]any{"acct", "needs_me", "h", "jev", "none", 0.65, 0.65, "needs_me_stage2", "p", "chat", "2026-10-10T00:00:00Z"},
 			"idx_decisions_question",
 		},
+		{
+			// The Needs attention view: it must start from the few open verdicts, not walk
+			// the account's messages.
+			"needs attention view",
+			needsAttentionSelect,
+			[]any{"urgency", "h", "jev", "high", 0.8, 0.8, "", "", "[]", "", 0, 0, "", "", "", 50},
+			"idx_needs_me_open",
+		},
+		{
+			"needs attention count",
+			needsAttentionCount,
+			[]any{"", "", "[]"},
+			"idx_needs_me_open",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

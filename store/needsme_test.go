@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -328,4 +329,132 @@ func TestDismissingTwiceOrWithoutAVerdictIsHarmless(t *testing.T) {
 	if _, ok, _ := dbs.GetNeedsMe(ctx, "a", "never-judged"); ok {
 		t.Error("dismissing a message with no verdict invented a row")
 	}
+}
+
+var urgentBar = UrgencyBar{QuestionID: "urgency", Hash: "u1", Model: "jev-latest", High: "high", Threshold: 0.8}
+
+func putUrgency(t *testing.T, dbs *DBs, key, choice string, p float64, mut func(*Decision)) {
+	t.Helper()
+	d := Decision{
+		AccountID: "a", ContentKey: key, QuestionID: "urgency", InstructionHash: "u1", Model: "jev-latest",
+		Choice: choice, Probabilities: map[string]float64{choice: p}, Confidence: p, DecidedAt: classifyNow,
+	}
+	if mut != nil {
+		mut(&d)
+	}
+	if err := dbs.PutDecisions(context.Background(), []Decision{d}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func needsView(t *testing.T) *DBs {
+	t.Helper()
+	dbs := openTemp(t)
+	seedClassify(t, dbs, "a",
+		classifySeed{id: "m-old-urgent", folder: "inbox", key: "old-urgent", arrived: classifyNow},
+		classifySeed{id: "m-new-plain", folder: "inbox", key: "new-plain", arrived: classifyNow.Add(4 * time.Hour)},
+		classifySeed{id: "m-mid-urgent", folder: "inbox", key: "mid-urgent", arrived: classifyNow.Add(2 * time.Hour)},
+		classifySeed{id: "m-weak-urgent", folder: "inbox", key: "weak-urgent", arrived: classifyNow.Add(3 * time.Hour)},
+		classifySeed{id: "m-archived", folder: "archive", key: "archived", arrived: classifyNow.Add(5 * time.Hour)},
+		classifySeed{id: "m-unflagged", folder: "inbox", key: "unflagged", arrived: classifyNow.Add(6 * time.Hour)},
+	)
+	for _, k := range []string{"old-urgent", "new-plain", "mid-urgent", "weak-urgent", "archived"} {
+		if err := dbs.PutNeedsMe(context.Background(), NeedsMeRow{AccountID: "a", ContentKey: k, Verdict: "needs", Reason: "why " + k, Model: "m", State: NeedsOpen}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	putUrgency(t, dbs, "old-urgent", "high", 0.95, nil)
+	putUrgency(t, dbs, "mid-urgent", "high", 0.9, nil)
+	putUrgency(t, dbs, "weak-urgent", "high", 0.5, nil) // under the bar: not urgent
+	putUrgency(t, dbs, "new-plain", "normal", 0.99, nil)
+	return dbs
+}
+
+func TestNeedsAttentionListsUrgentFirstThenNewest(t *testing.T) {
+	t.Parallel()
+	dbs := needsView(t)
+	page, err := dbs.NeedsAttention(context.Background(), NeedsAttentionQuery{Urgency: urgentBar})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"mid-urgent", "old-urgent", "new-plain", "weak-urgent"}
+	var got []string
+	for _, it := range page.Items {
+		got = append(got, it.ContentKey)
+		if !it.Needs || it.NeedsReason == "" {
+			t.Errorf("%s: a row in this view must be flagged with its reason: %+v", it.ContentKey, it)
+		}
+	}
+	if !eq(got, want) {
+		t.Fatalf("order = %v, want %v (urgent first, newest first within each group; the archived and unflagged mail is not here)", got, want)
+	}
+	if page.NeedCount != 4 {
+		t.Fatalf("NeedCount = %d, want 4", page.NeedCount)
+	}
+}
+
+func TestNeedsAttentionPagesAcrossTheUrgentBoundary(t *testing.T) {
+	t.Parallel()
+	dbs := needsView(t)
+	var got []string
+	cursor := ""
+	for i := 0; i < 10; i++ {
+		page, err := dbs.NeedsAttention(context.Background(), NeedsAttentionQuery{Urgency: urgentBar, Limit: 1, Cursor: cursor})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, it := range page.Items {
+			got = append(got, it.ContentKey)
+		}
+		if page.NextCursor == "" {
+			break
+		}
+		cursor = page.NextCursor
+	}
+	if want := []string{"mid-urgent", "old-urgent", "new-plain", "weak-urgent"}; !eq(got, want) {
+		t.Fatalf("paged order = %v, want %v with nothing repeated or skipped", got, want)
+	}
+}
+
+func TestNeedsAttentionLeavesOutDismissedHiddenAndStaleUrgency(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := needsView(t)
+	if err := dbs.DismissNeedsMe(ctx, "a", "old-urgent"); err != nil {
+		t.Fatal(err)
+	}
+	q := NeedsAttentionQuery{Urgency: urgentBar, Hide: []ContentRef{{AccountID: "a", ContentKey: "new-plain"}}}
+	page, _ := dbs.NeedsAttention(ctx, q)
+	var got []string
+	for _, it := range page.Items {
+		got = append(got, it.ContentKey)
+	}
+	if want := []string{"mid-urgent", "weak-urgent"}; !eq(got, want) {
+		t.Fatalf("items = %v, want %v", got, want)
+	}
+	if page.NeedCount != 2 {
+		t.Fatalf("NeedCount = %d, want 2", page.NeedCount)
+	}
+
+	// An urgency answer to older wording does not rank anything.
+	stale := urgentBar
+	stale.Hash = "u0"
+	page, _ = dbs.NeedsAttention(ctx, NeedsAttentionQuery{Urgency: stale})
+	if len(page.Items) == 0 || page.Items[0].ContentKey != "new-plain" {
+		t.Fatalf("with stale urgency the view should be plain newest-first: %+v", keysOfSummaries(page.Items))
+	}
+	if other, _ := dbs.NeedsAttention(ctx, NeedsAttentionQuery{AccountID: "someone-else", Urgency: urgentBar}); len(other.Items) != 0 {
+		t.Fatal("another account's mail was returned")
+	}
+	if _, err := dbs.NeedsAttention(ctx, NeedsAttentionQuery{Cursor: "!!!"}); !errors.Is(err, ErrBadCursor) {
+		t.Fatalf("a bad cursor = %v, want ErrBadCursor", err)
+	}
+}
+
+func keysOfSummaries(items []MessageSummary) []string {
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = it.ContentKey
+	}
+	return out
 }

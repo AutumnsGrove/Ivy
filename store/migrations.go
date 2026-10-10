@@ -568,6 +568,17 @@ var mirrorMigrations = []migration{
 				ON decisions(account_id, question_id, instruction_hash, model, choice)`,
 		},
 	},
+	{
+		version: 21,
+		statements: []string{
+			// The Needs attention view is the handful of open verdicts out of a mailbox
+			// of any size. Without a way to find them directly the planner walks every
+			// Inbox message and probes needs_me for each. A partial index holds only the
+			// open ones, and the queries repeat its condition so the planner can use it.
+			`CREATE INDEX idx_needs_me_open ON needs_me(account_id, content_key)
+				WHERE verdict = 'needs' AND state <> 'dismissed'`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.
