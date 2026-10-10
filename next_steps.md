@@ -80,6 +80,14 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 
 ## ▶ Now
 
+**5c.0 (the vetting machinery) is half built, 2026-10-10: the backend is on main, the marker and override
+control are not.** The real `Vetter`, the `vetting_overrides` table (state migration 20), the two shipped checks
+and the gate wiring are done, tested and mutation-checked (`docs/BUILD-LOG.md` "5c.0"). The 5b assumption is
+confirmed (qa-log "5c.0: operator answers"). **Left in 5c.0:** the quiet "kept private from helpers: ..." marker
+in the reader with a per-message override control (a `withheld` fact on `GET /messages/{id}`, set/clear
+endpoints, the screen, E2E on phone and desktop). Then 5c.1 (the `needs_me` question). **Operator to confirm:**
+the two checks carry no feature switch of their own (a build-time choice); thresholds 0.5 are provisional.
+
 **Reader rework, 2026-10-09 (operator's phone report, screenshots against Apple Mail and Proton).** Four
 stages on main: the flicker (`c8a7fa7`), the dark body (`04221b6`), the frame sizing (`4503cd2`) and the
 phone screen with no card around the mail. Decisions and findings are in `docs/qa-log.md` round 67 and

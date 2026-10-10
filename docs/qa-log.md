@@ -1884,5 +1884,5 @@ plans did not settle; both answered as recommended.
 
 | Question | Answer |
 |---|---|
-| Is the 5b assumption confirmed: every shared Jev call runs under the one gate feature `classify`, and a question may name a feature of its own as an extra switch? | **Confirmed.** The tripwire and sensitive checks ship as two questions that ride the same call, each with its own feature switch. |
+| Is the 5b assumption confirmed: every shared Jev call runs under the one gate feature `classify`, and a question may name a feature of its own as an extra switch? | **Confirmed.** The tripwire and sensitive checks ship as two questions that ride the same call. (Agent's build-time choice, to confirm: they carry **no switch of their own**, so a safety check cannot be quietly off while the features that need it look on.) |
 | Where does the withheld fact live? | **Derived, not stored.** Vetted means both checks have a current answer (same wording hash, same model) that is quiet below the question's threshold. A miss, a missing answer or an error is not vetted (fail closed). Editing a check's wording or changing the model re-vets lazily, and no flag can go stale. Only the operator's per-message **override** is stored, in `state.db` (operator-owned, backed up), keyed by account and content key. This replaces the 5c plan's "withheld fact in a mirror migration". |

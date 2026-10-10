@@ -1190,3 +1190,31 @@ spends $0**: the shipped question file is empty, `classify` ships dark, and a li
 - **Not built (listed in the G2 handoff):** a backfill button (the API and settings control over the worker's
   estimate and start), the queue depth on Mirror health, and storing the operator's edited questions in
   `state.db` (5j's authoring brings it; today the registry merges only what `NewEmbedding` is given).
+
+## 5c.0 The vetting machinery, backend (2026-10-10)
+
+The gate already refused every feature that reads mail text (`Vetting` defaulted to refuse-all, G1). This
+replaces that default with the real thing. Built test first; the vetter's tests were then mutation-checked
+(dropping the all-checks-answered rule and ignoring a fired check each turned five and three tests red).
+
+- **Withheld is derived, not stored** (qa-log "5c.0: operator answers"). `jev.Vetter` (`jev/vetting.go`)
+  reads the cached `injection_tripwire` and `sensitive_content` answers under the registry as it stands: vetted
+  means both answered for the current wording hash and the Jev model and neither fires at its threshold. A
+  check that is missing, disabled, scoped away from the account, unanswered, stale, recorded as a miss, or any
+  read error leaves the message withheld. Suppression is deliberately not applied. No mirror migration.
+- **The operator's override is the only stored fact:** state migration 20 `vetting_overrides` (account, content
+  key), with `Set/Clear/VettingOverridden` in `store/vettingoverrides.go`. It lives in `state.db` because it is
+  the operator's own decision and is backed up; an override lifts the withholding for that one message.
+- **The two checks ship** in `jev/builtin.yaml`, on for every account's Inbox, thresholds 0.5 (provisional; low
+  on purpose, since a wrong guess withholds behind a quiet marker and the other wrong exposes the message).
+  They ride the shared `classify` call with **no feature switch of their own**, so a safety question cannot be
+  quietly off while the features that need it look on.
+- **Wiring:** `cmd.NewEmbedding` builds the registry before the gate and gives it `llm.WithVetting(jev.NewVetter(...))`.
+  If the questions cannot load, the gate keeps its refuse-all default: fail closed.
+- **The fake Jev** (`internal/mailworld`) knows `sensitive_content` (quiet `none`, keywords per option), so the
+  seeded dev stack vets its mail instead of reading every message as `credentials`.
+- **Consequence to know:** mail that was never classified (older than the watermark, other folders) is
+  withheld from stage 2, ask, vision and summaries until a backfill checks it. That is the settled
+  fail-closed, new-mail-only design, now actually in force once a feature that needs vetting is switched on.
+- **Not built yet in 5c.0:** the quiet withheld marker with its reason in the reader and the per-message
+  override control (API, `schema.d.ts` and screen), which replace nothing mocked and need the phone check.

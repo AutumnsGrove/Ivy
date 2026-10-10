@@ -174,9 +174,10 @@ func jevCalls(w *mailworld.World) int {
 	return n
 }
 
-// The classifier shares the one gate with search. Shipped with no questions it makes
-// no request at all, even with an account opted in and the key present; given a
-// question it classifies only mail that arrives after the first pass.
+// The classifier shares the one gate with search. Its first pass only sets the
+// watermark, so it makes no request at all, even with an account opted in, the key
+// present and the shipped safety checks registered; it then classifies only mail
+// that arrives after that pass.
 func TestNewEmbeddingBuildsTheJevLayerOnTheSameGate(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -209,7 +210,7 @@ func TestNewEmbeddingBuildsTheJevLayerOnTheSameGate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n, err := shipped.Classifier.RunOnce(ctx); err != nil || n != 0 || jevCalls(w) != 0 {
-		t.Fatalf("with no questions: processed=%d err=%v calls=%d", n, err, jevCalls(w))
+		t.Fatalf("on the first pass: processed=%d err=%v calls=%d", n, err, jevCalls(w))
 	}
 
 	emb := NewEmbedding(cfg, dbs, "k", WithQuestions(devQuestion()))
@@ -226,9 +227,14 @@ func TestNewEmbeddingBuildsTheJevLayerOnTheSameGate(t *testing.T) {
 	if n, err := emb.Classifier.RunOnce(ctx); err != nil || n != 1 || jevCalls(w) != 1 {
 		t.Fatalf("processed=%d err=%v calls=%d; want the new message read once", n, err, jevCalls(w))
 	}
+	// The shipped safety checks ride the same single call as the dev question.
 	odds, err := emb.Odds.Odds(ctx, "a1", "ck1")
-	if err != nil || len(odds.Answers) != 1 || odds.Answers[0].QuestionID != "is_personal" {
-		t.Fatalf("odds = %+v, %v", odds, err)
+	var ids []string
+	for _, a := range odds.Answers {
+		ids = append(ids, a.QuestionID)
+	}
+	if err != nil || strings.Join(ids, ",") != "injection_tripwire,is_personal,sensitive_content" {
+		t.Fatalf("odds answers = %v, err %v; want the two checks and the dev question", ids, err)
 	}
 }
 

@@ -73,6 +73,52 @@ func (r *vetRig) vetted(key string) bool {
 	return ok
 }
 
+// The checks ship with the binary and are on. They ride the shared call with no
+// switch of their own, so a safety question cannot be quietly off while the
+// features that depend on it look on, and their thresholds lean toward withholding
+// because a withheld message costs a marker and a missed one costs exposure.
+func TestTheShippedChecksAreOnAndLeanTowardWithholding(t *testing.T) {
+	qs, err := Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]Question{}
+	for _, q := range qs {
+		byID[q.ID] = q
+	}
+	want := map[string]struct {
+		quiet   string
+		options []string
+	}{
+		QuestionTripwire:  {"no", []string{"no", "yes"}},
+		QuestionSensitive: {"none", []string{"none", "credentials", "financial", "health", "id_document"}},
+	}
+	for id, w := range want {
+		q, ok := byID[id]
+		if !ok {
+			t.Fatalf("%s is not shipped", id)
+		}
+		if !q.IsEnabled() || q.Feature != "" || len(q.Scope) != 0 || len(q.Folders) != 0 {
+			t.Errorf("%s must be on for every account's Inbox with no switch of its own: %+v", id, q)
+		}
+		if q.QuietOption != w.quiet || len(q.Criteria) != len(w.options) {
+			t.Errorf("%s options = %v, quiet %q; want %v, quiet %q", id, q.Criteria, q.QuietOption, w.options, w.quiet)
+		}
+		for _, o := range w.options {
+			if _, ok := q.Criteria[o]; !ok {
+				t.Errorf("%s has no option %q", id, o)
+			}
+		}
+		if q.Threshold > 0.65 {
+			t.Errorf("%s threshold %v is above 0.65: a safety check should withhold eagerly", id, q.Threshold)
+		}
+		// Written as what does not count, then the exceptions (docs/JEV.md).
+		if !strings.Contains(strings.ToLower(q.Instructions), "do not count") {
+			t.Errorf("%s instructions do not say what does not count", id)
+		}
+	}
+}
+
 // Fail closed: a message nobody has checked is not vetted, so a feature that reads
 // mail text is refused until the checks have run.
 func TestAnUncheckedMessageIsNotVetted(t *testing.T) {
