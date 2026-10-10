@@ -77,6 +77,9 @@ func (s *Server) handleEnqueueOutbox(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if dealsWithMessage(string(body.Action)) {
+		s.clearNeed(ctx, msg.AccountID, msg.ContentKey)
+	}
 	s.hintOutbox(msg.AccountID)
 	writeJSON(w, http.StatusAccepted, s.outboxItem(ctx, stored))
 }

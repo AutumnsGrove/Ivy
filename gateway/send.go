@@ -203,6 +203,7 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	s.clearNeedForReply(ctx, acct.ID, stringOr(req.InReplyTo, ""))
 	s.hintSend(acct.ID)
 	writeJSON(w, http.StatusAccepted, s.sendStatus(stored))
 }
