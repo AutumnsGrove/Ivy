@@ -13,6 +13,7 @@ import (
 	"github.com/AutumnsGrove/Ivy/internal/mailworld"
 	"github.com/AutumnsGrove/Ivy/jev"
 	"github.com/AutumnsGrove/Ivy/llm"
+	"github.com/AutumnsGrove/Ivy/needsme"
 	"github.com/AutumnsGrove/Ivy/store"
 )
 
@@ -403,5 +404,76 @@ func TestNewJevRegistryAppliesTheStoredTuning(t *testing.T) {
 		if q, _ := reg.Get(jev.QuestionTripwire); q.Threshold != 0.5 {
 			t.Errorf("bad tuning %q left threshold %v, want the shipped 0.5", bad, q.Threshold)
 		}
+	}
+}
+
+// The whole needs-attention chain on the shipped questions and the real gate: a new
+// message arrives, stage one flags it, stage two writes the verdict and a reason, and
+// the inbox flags it. Until the stage-two switch is on, nothing past stage one runs.
+func TestNeedsAttentionRunsStageOneThenStageTwo(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w, err := mailworld.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = w.Close() })
+	dbs, err := store.Open(ctx, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = dbs.Close() })
+	if err := dbs.UpsertAccount(ctx, store.Account{ID: "a1", Address: "a1@example.test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := dbs.UpsertFolder(ctx, store.Folder{ID: "f1", AccountID: "a1", Name: "INBOX", Role: store.RoleInbox}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{
+		LLM:      config.LLM{OpenRouterBase: w.OpenRouterURL(), EmbedModel: "m", MonthlyCapUSD: 5},
+		Accounts: []config.Account{{ID: "a1", LLMEnabled: true}},
+	}
+	emb := NewEmbedding(cfg, dbs, "k")
+	if emb.NeedsMe == nil {
+		t.Fatal("stage two is missing from the shared builder")
+	}
+	for _, f := range []string{jev.CallFeature, "needs_me"} {
+		if err := emb.Caps.SetFeatureEnabled(ctx, "a1", f, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, _ := emb.Classifier.RunOnce(ctx); n != 0 { // the first pass only sets the watermark
+		t.Fatalf("the first pass read %d messages", n)
+	}
+	arrive := time.Now().Add(time.Minute)
+	if err := dbs.UpsertMessage(ctx, store.Message{
+		ID: "m1", AccountID: "a1", FolderID: "f1", UID: 1, ContentKey: "ck1", Subject: "Venue",
+		BodyText: "Could you please confirm the venue by Friday? Reply when you can.", Date: arrive, InternalDate: arrive,
+		From: store.Address{Name: "Ada", Address: "ada@example.com"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := emb.Classifier.RunOnce(ctx); err != nil || n != 1 {
+		t.Fatalf("stage one processed=%d err=%v", n, err)
+	}
+
+	// Stage two's own switch is still off: nothing happens, and nothing is recorded.
+	if n, err := emb.NeedsMe.RunOnce(ctx); err != nil || n != 0 || chatCalls(w) != 0 {
+		t.Fatalf("with the stage-two switch off: processed=%d err=%v chat=%d", n, err, chatCalls(w))
+	}
+	if err := emb.Caps.SetFeatureEnabled(ctx, "a1", needsme.Feature, true); err != nil {
+		t.Fatal(err)
+	}
+	w.QueueChat(`{"verdict":"needs","reason":"Ada wants the venue booking confirmed."}`)
+	if n, err := emb.NeedsMe.RunOnce(ctx); err != nil || n != 1 {
+		t.Fatalf("stage two processed=%d err=%v", n, err)
+	}
+	row, ok, err := dbs.GetNeedsMe(ctx, "a1", "ck1")
+	if err != nil || !ok || row.Verdict != "needs" || row.Reason != "Ada wants the venue booking confirmed." {
+		t.Fatalf("verdict = %+v, %v, %v", row, ok, err)
+	}
+	page, err := dbs.ListInbox(ctx, store.InboxQuery{AccountID: "a1"})
+	if err != nil || len(page.Items) != 1 || !page.Items[0].Needs || page.NeedCount != 1 {
+		t.Fatalf("inbox = %+v, %v; want the message flagged", page, err)
 	}
 }

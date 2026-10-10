@@ -238,6 +238,15 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool, llmKey string)
 			}
 		}()
 	}
+	if embedding.NeedsMe != nil {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			if err := embedding.NeedsMe.Run(workerCtx); err != nil && !errors.Is(err, context.Canceled) {
+				fmt.Fprintf(cmd.ErrOrStderr(), "needs-attention stage two stopped: %v\n", err)
+			}
+		}()
+	}
 
 	hub := events.New()
 	srv := &http.Server{

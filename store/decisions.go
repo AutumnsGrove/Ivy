@@ -22,6 +22,9 @@ const (
 	MissNoAnswer = "no_answer"
 	// MissTooLarge: the clipped state plus the questions still overran the call.
 	MissTooLarge = "too_large"
+	// MissWithheld: a safety check keeps the message from this step. Unlike the
+	// others it is a pause: it expires, and the operator's override ends it.
+	MissWithheld = "withheld"
 )
 
 // Decision is Jev's cached answer to one question about one message.

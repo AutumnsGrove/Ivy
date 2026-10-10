@@ -68,11 +68,11 @@ func TestParseReplyRefusesAnythingElse(t *testing.T) {
 // The reason is rendered as plain text on the reading surface, so whatever the
 // model sent is reduced to one short plain line.
 func TestReasonIsReducedToShortPlainText(t *testing.T) {
-	v, err := ParseReply(`{"verdict":"needs","reason":"<b>Reply</b> to <script>x()</script>Ada\nsoon‮ now\u0007."}`, body)
+	v, err := ParseReply(`{"verdict":"needs","reason":"<b>Reply</b> to <script>x()</script>Ada\nsoon\u202e now\u0007."}`, body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.ContainsAny(v.Reason, "<>\n‮\u0007") {
+	if strings.ContainsAny(v.Reason, "<>\n\u202e\u0007") {
 		t.Fatalf("reason kept markup or control characters: %q", v.Reason)
 	}
 	if !strings.Contains(v.Reason, "Reply") || !strings.Contains(v.Reason, "Ada soon") {

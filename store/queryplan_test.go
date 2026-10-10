@@ -37,7 +37,7 @@ func TestReadQueriesUseIndexes(t *testing.T) {
 			// an account's answers.
 			"stage two queue",
 			"SELECT m.id " + stage2Queue,
-			[]any{"acct", "needs_me", "h", "jev", "none", 0.65, 0.65, "needs_me_stage2", "p", "chat"},
+			[]any{"acct", "needs_me", "h", "jev", "none", 0.65, 0.65, "needs_me_stage2", "p", "chat", "2026-10-10T00:00:00Z"},
 			"idx_decisions_question",
 		},
 	}

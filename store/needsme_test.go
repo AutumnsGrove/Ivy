@@ -186,3 +186,56 @@ func TestStage2OnlyReadsVisibleInboxMail(t *testing.T) {
 		t.Fatal("another account's mail was returned")
 	}
 }
+
+// A withheld message is skipped so it cannot block the queue, but only for a while:
+// the checks may be re-run, and the operator may allow it. The skip expires, and the
+// override ends it at once.
+func TestAWithheldSkipExpiresAndTheOverrideEndsIt(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedClassify(t, dbs, "a", classifySeed{id: "m1", folder: "inbox", key: "held", arrived: classifyNow})
+	putAnswer(t, dbs, "held", "likely", 0.9, 0.9, nil)
+	if err := dbs.PutDecisionMisses(ctx, []DecisionMiss{{
+		AccountID: "a", ContentKey: "held", QuestionID: "needs_me_stage2", InstructionHash: "p1", Model: "chat-1",
+		Reason: MissWithheld, At: classifyNow,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	q := stage2Q
+	q.RetryWithheldBefore = classifyNow.Add(-time.Minute) // the skip is newer than the cutoff
+	if got, _ := dbs.Stage2Candidates(ctx, "a", q, 10); len(got) != 0 {
+		t.Fatalf("a fresh withheld skip still queued the message: %v", keysOf(got))
+	}
+	q.RetryWithheldBefore = classifyNow.Add(time.Minute) // the skip is older than the cutoff
+	if got, _ := dbs.Stage2Candidates(ctx, "a", q, 10); !eq(keysOf(got), []string{"held"}) {
+		t.Fatalf("an expired withheld skip kept the message out: %v", keysOf(got))
+	}
+
+	// A different kind of miss never expires this way: an invalid reply stays settled.
+	if err := dbs.PutDecisionMisses(ctx, []DecisionMiss{{
+		AccountID: "a", ContentKey: "held", QuestionID: "needs_me_stage2", InstructionHash: "p1", Model: "chat-1",
+		Reason: MissInvalidAnswer, At: classifyNow,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := dbs.Stage2Candidates(ctx, "a", q, 10); len(got) != 0 {
+		t.Fatalf("an invalid-reply miss expired: %v", keysOf(got))
+	}
+
+	// The override clears the withheld skip for that message now.
+	if err := dbs.PutDecisionMisses(ctx, []DecisionMiss{{
+		AccountID: "a", ContentKey: "held", QuestionID: "needs_me_stage2", InstructionHash: "p1", Model: "chat-1",
+		Reason: MissWithheld, At: classifyNow,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	q.RetryWithheldBefore = classifyNow.Add(-time.Minute)
+	if err := dbs.SetVettingOverride(ctx, "a", "held", classifyNow); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := dbs.Stage2Candidates(ctx, "a", q, 10); !eq(keysOf(got), []string{"held"}) {
+		t.Fatalf("the override did not end the withheld skip: %v", keysOf(got))
+	}
+}

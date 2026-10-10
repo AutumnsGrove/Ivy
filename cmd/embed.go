@@ -9,6 +9,7 @@ import (
 	"github.com/AutumnsGrove/Ivy/gateway"
 	"github.com/AutumnsGrove/Ivy/jev"
 	"github.com/AutumnsGrove/Ivy/llm"
+	"github.com/AutumnsGrove/Ivy/needsme"
 	"github.com/AutumnsGrove/Ivy/search"
 	"github.com/AutumnsGrove/Ivy/store"
 )
@@ -35,6 +36,10 @@ type Embedding struct {
 	// Privacy is the withheld marker's read of the safety checks; nil when the layer
 	// is off, which the reader sees as unchecked.
 	Privacy gateway.PrivacySource
+	// NeedsMe is stage two of needs-attention: it turns the classifier's cheap flags
+	// into verdicts and reasons. Nil when the layer is off. It asks nothing while the
+	// needs_me_stage2 switch is off, which is its default.
+	NeedsMe *needsme.Worker
 }
 
 // NewEmbedding builds the embedding stack from the operator's config. apiKey is
@@ -72,6 +77,7 @@ func NewEmbedding(cfg *config.Config, dbs *store.DBs, apiKey string, opts ...Emb
 		emb.Classifier = jev.NewWorker(engine, gate, dbs, jev.WorkerOptions{})
 		emb.Odds = engine
 		emb.Privacy = vetter
+		emb.NeedsMe = needsme.NewWorker(reg, gate, dbs, vetter, jev.WorkerOptions{})
 	}
 	if accounts := embedAccounts(cfg, providers, models); len(accounts) > 0 {
 		emb.Worker = search.NewEmbedWorker(dbs, gate, accounts, search.WorkerOptions{})

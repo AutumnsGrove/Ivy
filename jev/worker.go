@@ -70,6 +70,18 @@ func (o *WorkerOptions) applyDefaults() {
 	}
 }
 
+// Resolved returns the options with every unset bound at its default, for a worker
+// elsewhere that paces itself the same way.
+func (o WorkerOptions) Resolved() WorkerOptions {
+	o.applyDefaults()
+	return o
+}
+
+// NextDelay is nextDelay for those workers; o must already be Resolved.
+func (o WorkerOptions) NextDelay(err error, processed, failures int) time.Duration {
+	return o.nextDelay(err, processed, failures)
+}
+
 // nextDelay is how long Run waits after a pass: the cap pause, an exponential
 // backoff on other errors, a short wait after real work, else the idle interval.
 func (o WorkerOptions) nextDelay(err error, processed, failures int) time.Duration {
@@ -246,7 +258,7 @@ func (w *Worker) process(ctx context.Context, account string, batch []store.Cand
 				mu.Lock()
 				done++
 				mu.Unlock()
-			case isOffRefusal(err):
+			case IsOffRefusal(err):
 				cancel() // off right now: not an error, and nothing is marked
 			case errors.Is(err, context.Canceled) && ctx.Err() != nil:
 				// Cut short by an earlier outcome in this batch (or by shutdown, which
@@ -260,9 +272,9 @@ func (w *Worker) process(ctx context.Context, account string, batch []store.Cand
 	return done, firstErr
 }
 
-// isOffRefusal is a gate refusal that says the account or feature is not available
+// IsOffRefusal is a gate refusal that says the account or feature is not available
 // right now, which is a state to wait out, not a failure to report.
-func isOffRefusal(err error) bool {
+func IsOffRefusal(err error) bool {
 	return errors.Is(err, llm.ErrNotEnabled) || errors.Is(err, llm.ErrFeatureOff) ||
 		errors.Is(err, llm.ErrWithheld) || errors.Is(err, llm.ErrNoProvider)
 }

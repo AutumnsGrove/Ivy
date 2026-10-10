@@ -21,6 +21,15 @@ func (d *DBs) SetVettingOverride(ctx context.Context, accountID, contentKey stri
 	if err != nil {
 		return fmt.Errorf("set vetting override: %w", err)
 	}
+	// Steps that skipped this message for being withheld should look again now, not
+	// when their pause expires. The skips live in the mirror, so this is a second
+	// write; it is idempotent and an interrupted one only costs the wait.
+	_, err = d.Mirror.Write.ExecContext(ctx,
+		`DELETE FROM decision_misses WHERE account_id=? AND content_key=? AND reason=?`,
+		accountID, contentKey, MissWithheld)
+	if err != nil {
+		return fmt.Errorf("set vetting override: %w", err)
+	}
 	return nil
 }
 

@@ -164,7 +164,7 @@ func (e *Engine) Decide(ctx context.Context, m Message) (Outcome, error) {
 	case err == nil:
 	case errors.Is(err, llm.ErrTooLarge):
 		return out, e.miss(ctx, m, model.Slug, todo, store.MissTooLarge)
-	case isInputRefusal(err):
+	case IsInputRefusal(err):
 		out.Called = true
 		return out, e.miss(ctx, m, model.Slug, todo, store.MissRejected)
 	default:
@@ -175,10 +175,10 @@ func (e *Engine) Decide(ctx context.Context, m Message) (Outcome, error) {
 	return out, e.record(ctx, m, model.Slug, todo, res)
 }
 
-// isInputRefusal is a provider 400, 413 or 422: it will not take this input, and
+// IsInputRefusal is a provider 400, 413 or 422: it will not take this input, and
 // asking again only repeats the refusal. An outage, a rate limit or a bad key is
-// not, and stays an error to retry.
-func isInputRefusal(err error) bool {
+// not, and stays an error to retry. Stage two of needs-attention reads it too.
+func IsInputRefusal(err error) bool {
 	var status *llm.StatusError
 	if !errors.As(err, &status) {
 		return false

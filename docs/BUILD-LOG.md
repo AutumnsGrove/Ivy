@@ -1255,3 +1255,39 @@ replaces that default with the real thing. Built test first; the vetter's tests 
   budget and is superseded.
 - **Not yet:** nothing writes `needs_me` rows or reads a verdict; that is 5c.2 and 5c.3. Real-mail accuracy is
   unmeasured until the labelled run (5c.5, gate G3).
+
+## 5c.2 Stage two: the verdict and the reason (2026-10-10)
+
+New package `needsme/` (cannot import smtp, send, compose, sync, gateway or net/http: `arch_test.go`).
+
+- **The cascade runs end to end on the shipped questions.** `needsme.Worker` takes Inbox mail whose stage-one
+  `needs_me` answer is a non-quiet option at or above the bar (both its probability and the answer's confidence),
+  for the current wording and Jev model, with no verdict yet. It builds the clipped text-only state (`jev.BuildState`,
+  24 KiB), asks the chat model through `Gate.Complete` under the `needs_me_stage2` feature, and writes `needs_me`
+  (`verdict` `needs` or `not`, `reason`, `stage2_model`, `state` `open`). The inbox query already flagged
+  `verdict = 'needs'`, so the flag lights with no change to it (`store/needsme_test.go`, `cmd/embed_test.go`).
+- **The reply is parsed strictly** (`needsme/reply.go`). One JSON object with `verdict` of `needs` or `not` and, for
+  `needs`, a `reason`; a Markdown fence is allowed, prose around it, a second object, an unknown or repeated key
+  or an unknown verdict is not. `Complete` has no provider-side JSON-schema parameter, so the shape is requested in
+  the prompt and enforced here. The reason is reduced to one plain line (entities decoded, markup, control and
+  direction characters removed, cut at a word boundary at 120 runes) and **refused if it repeats six words in a
+  row from the message**: decision 3 says the reason may name the sender and may not quote it.
+- **An invalid reply is recorded, never guessed.** It becomes a `decision_misses` row (`needs_me_stage2`, reason
+  `invalid_answer`) keyed by the prompt's hash and the model, the message stays unmarked, and it is not asked
+  again until the prompt or the model changes. A provider 400/413/422 is `rejected`, an oversize call `too_large`,
+  no readable text `nothing_to_read`. A cap or outage ends the pass with an error and records nothing.
+- **Withheld mail is skipped quietly.** The worker asks the same `Vetting` the gate applies first, so a withheld
+  message costs no refused-call ledger row each pass (the 5b lesson), is recorded as a **pause** (`withheld`) so it
+  cannot starve the queue, and is looked at again after 15 minutes. The operator's override clears the pause at
+  once (`SetVettingOverride` deletes that message's withheld misses). An account or feature that is off is skipped
+  by `CanRun` with no request and no ledger row.
+- **Mirror migration 20** adds `idx_decisions_question (account, question, hash, model, choice)`. The queue joins
+  `decisions` to `messages` with a pinned `CROSS JOIN` order and `store/queryplan_test.go` names the index: without
+  it the planner walked every message of the account on every pass.
+- **Dark and unlabelled.** `needs_me_stage2` ships off and is still not listed on the Smart features screen; the
+  switch arrives with the view in 5c.4. The worker runs beside the classifier in `ivy run` and `ivy-dev`.
+- **Cost.** One chat call per flagged message: the prompt is about 0.5 KiB of rules plus the state (24 KiB at most),
+  capped at 200 output tokens. The per-message worst case comes from the registry price for the default chat model
+  and is reserved by the gate before each call; the monthly caps apply.
+- **Not yet:** dismissal and clearing on reply/archive (5c.3), the list endpoint, the reason in the inbox API and the
+  Needs attention view (5c.3, 5c.4), the odds sheet's second stage (5c.4), and the labelled evaluation (5c.5, G3).

@@ -191,6 +191,18 @@ func runCmd(configPath *string, version string) *cobra.Command {
 				}()
 			}
 
+			// Stage two of needs-attention reads what the classifier flagged. It is off
+			// until its own switch is on, so starting it costs the same cheap check.
+			if embedding.NeedsMe != nil {
+				workers.Add(1)
+				go func() {
+					defer workers.Done()
+					if err := embedding.NeedsMe.Run(workerCtx); err != nil && !errors.Is(err, context.Canceled) {
+						slog.WarnContext(workerCtx, "needs-attention stage two stopped", "error", err)
+					}
+				}()
+			}
+
 			// The daily state.db snapshot is its own owned goroutine, started with
 			// the server and stopped by the same cancel path.
 			backupManager := backup.New(dbs, cfg.BackupTargets())

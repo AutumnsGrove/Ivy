@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // NeedsMeRow is stage two's verdict on a message. It is derived, regenerable data
@@ -78,6 +79,10 @@ type Stage2Query struct {
 	StageQuestion string
 	StageHash     string
 	StageModel    string
+	// RetryWithheldBefore lets a "withheld" skip recorded at or before this instant
+	// queue the message again. Withheld is a pause (the checks may be re-run), not a
+	// settled outcome like an invalid reply.
+	RetryWithheldBefore time.Time
 }
 
 // stage2Queue selects the Inbox mail stage one flagged that stage two has not
@@ -100,7 +105,8 @@ const stage2Queue = `
 	                  WHERE n.account_id = d.account_id AND n.content_key = d.content_key)
 	  AND NOT EXISTS (SELECT 1 FROM decision_misses x
 	                  WHERE x.account_id = d.account_id AND x.content_key = d.content_key
-	                    AND x.question_id = ? AND x.instruction_hash = ? AND x.model = ?)`
+	                    AND x.question_id = ? AND x.instruction_hash = ? AND x.model = ?
+	                    AND (x.reason <> 'withheld' OR julianday(x.at) > julianday(?)))`
 
 // Stage2Candidates returns up to limit Inbox messages stage one flagged and stage two
 // has not settled, newest first. A message filed in two folders appears once.
@@ -114,7 +120,7 @@ func (d *DBs) Stage2Candidates(ctx context.Context, accountID string, q Stage2Qu
 		ORDER BY arrived DESC, m.content_key
 		LIMIT ?`,
 		accountID, q.QuestionID, q.Hash, q.Model, q.Quiet, q.Threshold, q.Threshold,
-		q.StageQuestion, q.StageHash, q.StageModel, limit)
+		q.StageQuestion, q.StageHash, q.StageModel, q.RetryWithheldBefore.UTC().Format(time.RFC3339Nano), limit)
 	if err != nil {
 		return nil, fmt.Errorf("list stage two candidates: %w", err)
 	}
