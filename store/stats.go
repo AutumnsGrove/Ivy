@@ -98,18 +98,24 @@ func scanAccountStats(rows *sql.Rows, stats map[string]AccountStat, set func(*Ac
 // MessageNeeds reports whether triage has flagged this message as needing the
 // operator. A missing row is not an error: most mail has not been looked at.
 func (d *DBs) MessageNeeds(ctx context.Context, accountID, contentKey string) (bool, error) {
-	var one int
+	on, _, err := d.MessageNeedsReason(ctx, accountID, contentKey)
+	return on, err
+}
+
+// MessageNeedsReason is MessageNeeds with the one-line reason stage two gave.
+func (d *DBs) MessageNeedsReason(ctx context.Context, accountID, contentKey string) (bool, string, error) {
+	var reason sql.NullString
 	err := d.Mirror.Read.QueryRowContext(ctx, `
-		SELECT 1 FROM needs_me
+		SELECT reason FROM needs_me
 		WHERE account_id = ? AND content_key = ? AND verdict = 'needs' AND state <> 'dismissed'
-		LIMIT 1`, accountID, contentKey).Scan(&one)
+		LIMIT 1`, accountID, contentKey).Scan(&reason)
 	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
+		return false, "", nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("message needs %s: %w", contentKey, err)
+		return false, "", fmt.Errorf("message needs %s: %w", contentKey, err)
 	}
-	return true, nil
+	return true, reason.String, nil
 }
 
 // MirrorBytes is the mirror file's size, for mirror health. It reads the

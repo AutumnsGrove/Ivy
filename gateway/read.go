@@ -137,7 +137,7 @@ func (s *Server) handleMessageSummary(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	needs, err := s.dbs.MessageNeeds(r.Context(), m.AccountID, m.ContentKey)
+	needs, reason, err := s.dbs.MessageNeedsReason(r.Context(), m.AccountID, m.ContentKey)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -149,7 +149,7 @@ func (s *Server) handleMessageSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	view := summaryView(store.MessageSummary{
 		ID: m.ID, AccountID: m.AccountID, From: m.From, Subject: m.Subject,
-		Snippet: m.Snippet, Date: m.Date, Unread: !m.Seen, Needs: needs,
+		Snippet: m.Snippet, Date: m.Date, Unread: !m.Seen, Needs: needs, NeedsReason: reason,
 	})
 	if name, ok := names[m.ContentKey]; ok {
 		view.Tag = &name
@@ -234,7 +234,7 @@ func (s *Server) embedQueue(ctx context.Context, views []api.Account) (int, stri
 }
 
 func (s *Server) messageView(r *http.Request, m store.Message) (api.MailMessage, error) {
-	needs, err := s.dbs.MessageNeeds(r.Context(), m.AccountID, m.ContentKey)
+	needs, reason, err := s.dbs.MessageNeedsReason(r.Context(), m.AccountID, m.ContentKey)
 	if err != nil {
 		return api.MailMessage{}, err
 	}
@@ -265,6 +265,7 @@ func (s *Server) messageView(r *http.Request, m store.Message) (api.MailMessage,
 		Unread:      !m.Seen,
 		Flagged:     boolPtr(m.Flagged),
 		Needs:       needs,
+		NeedsReason: optionalText(reason),
 		ToShort:     accountShort(acct.Address),
 		ToFull:      acct.Address,
 		Paragraphs:  paragraphs(m.BodyText),
@@ -290,20 +291,30 @@ func (s *Server) messageView(r *http.Request, m store.Message) (api.MailMessage,
 // knows the viewer's zone and locale, the server does not (N15, round 32b).
 func summaryView(m store.MessageSummary) api.MailSummary {
 	return api.MailSummary{
-		Id:        m.ID,
-		AccountId: m.AccountID,
-		From:      displayName(m.From),
-		Initials:  initials(m.From.Name, m.From.Address),
-		Date:      m.Date.UTC(),
-		Subject:   m.Subject,
-		Preview:   m.Snippet,
-		Unread:    m.Unread,
-		Flagged:   boolPtr(m.Flagged),
-		Needs:     m.Needs,
+		Id:          m.ID,
+		AccountId:   m.AccountID,
+		From:        displayName(m.From),
+		Initials:    initials(m.From.Name, m.From.Address),
+		Date:        m.Date.UTC(),
+		Subject:     m.Subject,
+		Preview:     m.Snippet,
+		Unread:      m.Unread,
+		Flagged:     boolPtr(m.Flagged),
+		Needs:       m.Needs,
+		NeedsReason: optionalText(m.NeedsReason),
 	}
 }
 
 func boolPtr(b bool) *bool { return &b }
+
+// optionalText is nil for empty text, so a field that only exists while it means
+// something is left out of the JSON instead of sent blank.
+func optionalText(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
 
 func (s *Server) accountViews(r *http.Request) ([]api.Account, error) {
 	accounts, err := s.dbs.ListAccounts(r.Context())

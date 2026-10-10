@@ -1256,12 +1256,15 @@ type MailMessage struct {
 	From    string `json:"from"`
 
 	// Html Server-sanitised HTML body, safe to place in the reader's sandboxed frame. Empty for a message with no HTML part; use paragraphs then.
-	Html       *string  `json:"html,omitempty"`
-	Id         string   `json:"id"`
-	Initials   string   `json:"initials"`
-	Needs      bool     `json:"needs"`
-	Paragraphs []string `json:"paragraphs"`
-	Preview    string   `json:"preview"`
+	Html     *string `json:"html,omitempty"`
+	Id       string  `json:"id"`
+	Initials string  `json:"initials"`
+	Needs    bool    `json:"needs"`
+
+	// NeedsReason One plain sentence on why the message needs the owner; present only while `needs` is true. Rendered as text, never as markup.
+	NeedsReason *string  `json:"needsReason,omitempty"`
+	Paragraphs  []string `json:"paragraphs"`
+	Preview     string   `json:"preview"`
 
 	// Sender Someone on a message, exactly as the sender wrote it. The name is sender-controlled text and must be shown as plain text next to the real address, since a name that contains another address is the classic spoof.
 	Sender  MessageParty `json:"sender"`
@@ -1285,15 +1288,18 @@ type MailSummary struct {
 	Date time.Time `json:"date"`
 
 	// Flagged Whether the message carries the \\Flagged keyword
-	Flagged  *bool   `json:"flagged,omitempty"`
-	From     string  `json:"from"`
-	Id       string  `json:"id"`
-	Initials string  `json:"initials"`
-	Needs    bool    `json:"needs"`
-	Preview  string  `json:"preview"`
-	Subject  string  `json:"subject"`
-	Tag      *string `json:"tag,omitempty"`
-	Unread   bool    `json:"unread"`
+	Flagged  *bool  `json:"flagged,omitempty"`
+	From     string `json:"from"`
+	Id       string `json:"id"`
+	Initials string `json:"initials"`
+	Needs    bool   `json:"needs"`
+
+	// NeedsReason One plain sentence on why the message needs the owner; present only while `needs` is true. Rendered as text, never as markup.
+	NeedsReason *string `json:"needsReason,omitempty"`
+	Preview     string  `json:"preview"`
+	Subject     string  `json:"subject"`
+	Tag         *string `json:"tag,omitempty"`
+	Unread      bool    `json:"unread"`
 }
 
 // MessageAuth What the mail provider vouched for. Only a trusted server's verdicts are believed, so a provider that adds none (Purelymail today) is `none`, which means unknown and is never shown as an all-clear.

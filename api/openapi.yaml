@@ -510,6 +510,21 @@ paths:
                 $ref: "#/components/schemas/MessageOdds"
         "404":
           $ref: "#/components/responses/NotFound"
+  /messages/{id}/needs/dismiss:
+    post:
+      operationId: dismissNeedsAttention
+      summary: Clear a message's needs-attention flag
+      description: >
+        The operator's own "I have this" for one message, kept locally so the flag does
+        not return on a re-read. Replying to, archiving or deleting a message does the
+        same. Repeating it, or dismissing a message nobody judged, is not an error.
+      parameters:
+        - $ref: "#/components/parameters/MessageID"
+      responses:
+        "204":
+          description: Cleared
+        "404":
+          $ref: "#/components/responses/NotFound"
   /messages/{id}/privacy:
     get:
       operationId: getMessagePrivacy
@@ -2395,6 +2410,11 @@ components:
           description: Whether the message carries the \\Flagged keyword
         needs:
           type: boolean
+        needsReason:
+          type: string
+          description: >
+            One plain sentence on why the message needs the owner; present only while
+            `needs` is true. Rendered as text, never as markup.
         tag:
           type: string
     MailMessage:
@@ -2438,6 +2458,11 @@ components:
           description: Whether the message carries the \\Flagged keyword
         needs:
           type: boolean
+        needsReason:
+          type: string
+          description: >
+            One plain sentence on why the message needs the owner; present only while
+            `needs` is true. Rendered as text, never as markup.
         tag:
           type: string
         tagIds:

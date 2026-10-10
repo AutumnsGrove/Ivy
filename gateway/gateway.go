@@ -185,6 +185,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/messages/{id}", s.handleMessage)
 	api.HandleFunc("GET /api/v1/messages/{id}/summary", s.handleMessageSummary)
 	api.HandleFunc("GET /api/v1/messages/{id}/odds", s.handleMessageOdds)
+	api.HandleFunc("POST /api/v1/messages/{id}/needs/dismiss", s.handleDismissNeeds)
 	api.HandleFunc("GET /api/v1/messages/{id}/privacy", s.handleMessagePrivacy)
 	api.HandleFunc("PUT /api/v1/messages/{id}/privacy/override", s.handleAllowForHelpers)
 	api.HandleFunc("DELETE /api/v1/messages/{id}/privacy/override", s.handleWithholdFromHelpers)

@@ -292,6 +292,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/messages/{id}/needs/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear a message's needs-attention flag
+         * @description The operator's own "I have this" for one message, kept locally so the flag does not return on a re-read. Replying to, archiving or deleting a message does the same. Repeating it, or dismissing a message nobody judged, is not an error.
+         */
+        post: operations["dismissNeedsAttention"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/messages/{id}/privacy": {
         parameters: {
             query?: never;
@@ -1402,6 +1422,8 @@ export interface components {
             /** @description Whether the message carries the \\Flagged keyword */
             flagged?: boolean;
             needs: boolean;
+            /** @description One plain sentence on why the message needs the owner; present only while `needs` is true. Rendered as text, never as markup. */
+            needsReason?: string;
             tag?: string;
         };
         MailMessage: {
@@ -1424,6 +1446,8 @@ export interface components {
             /** @description Whether the message carries the \\Flagged keyword */
             flagged?: boolean;
             needs: boolean;
+            /** @description One plain sentence on why the message needs the owner; present only while `needs` is true. Rendered as text, never as markup. */
+            needsReason?: string;
             tag?: string;
             /** @description Every tag the message is in, for the tag picker; `tag` is the first by name */
             tagIds?: string[];
@@ -2540,6 +2564,27 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MessageOdds"];
                 };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    dismissNeedsAttention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             404: components["responses"]["NotFound"];
         };
