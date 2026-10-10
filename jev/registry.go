@@ -247,12 +247,18 @@ func Builtin() ([]Question, error) { return Parse(builtinYAML) }
 // own questions laid over them by id. It is safe for concurrent use; Set swaps the
 // whole set atomically so a worker never sees half of an edit.
 type Registry struct {
-	mu  sync.RWMutex
-	set map[string]Question
+	mu sync.RWMutex
+	// base is the merged set as shipped and edited; set is base with the operator's
+	// tuning laid over it, which is what every reader sees.
+	base   map[string]Question
+	tuning Tuning
+	set    map[string]Question
 }
 
 // NewRegistry returns an empty registry.
-func NewRegistry() *Registry { return &Registry{set: map[string]Question{}} }
+func NewRegistry() *Registry {
+	return &Registry{base: map[string]Question{}, set: map[string]Question{}}
+}
 
 // Set replaces the live registry with builtin overlaid by user, matched by id. The
 // merged whole is validated first; on any error the live registry is untouched, so
@@ -273,8 +279,15 @@ func (r *Registry) Set(builtin, user []Question) error {
 		return err
 	}
 	r.mu.Lock()
-	r.set = merged
-	r.mu.Unlock()
+	defer r.mu.Unlock()
+	// The tuning is the operator's and outlives a reload. One that no longer fits the
+	// new set (its question is gone) is dropped for this set rather than blocking it.
+	live, err := r.tuning.apply(merged)
+	if err != nil {
+		r.tuning = nil
+		live = merged
+	}
+	r.base, r.set = merged, live
 	return nil
 }
 

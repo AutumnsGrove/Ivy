@@ -46,7 +46,7 @@ func NewEmbedding(cfg *config.Config, dbs *store.DBs, apiKey string, opts ...Emb
 	// and vetting reads the two safety checks from it. If the questions cannot be
 	// loaded the gate keeps its default, which withholds all mail from any feature
 	// that reads text: the layer fails closed, not open.
-	reg, regErr := newJevRegistry(o.questions)
+	reg, regErr := newJevRegistry(context.Background(), dbs, o.questions)
 	gateOpts := []llm.GateOption{
 		llm.WithProviders(llm.ProviderConfig{
 			OpenRouterBase: cfg.LLM.OpenRouterBase, APIKey: apiKey, OllamaURL: cfg.LLM.OllamaURL,
@@ -82,8 +82,10 @@ func (e *Embedding) Backlog() gateway.EmbedBacklog {
 	return e.Worker
 }
 
-// newJevRegistry loads the shipped questions and lays the given extras over them by id.
-func newJevRegistry(extra []jev.Question) (*jev.Registry, error) {
+// newJevRegistry loads the shipped questions, lays the given extras over them by id
+// and then the operator's stored tuning. A tuning that cannot be read or does not
+// fit is logged and ignored: the shipped numbers stand, the layer still starts.
+func newJevRegistry(ctx context.Context, dbs *store.DBs, extra []jev.Question) (*jev.Registry, error) {
 	builtin, err := jev.Builtin()
 	if err != nil {
 		return nil, err
@@ -91,6 +93,16 @@ func newJevRegistry(extra []jev.Question) (*jev.Registry, error) {
 	reg := jev.NewRegistry()
 	if err := reg.Set(builtin, extra); err != nil {
 		return nil, err
+	}
+	raw, _, err := dbs.GetSetting(ctx, "", jev.SettingTuning)
+	if err == nil {
+		var t jev.Tuning
+		if t, err = jev.ParseTuning(raw); err == nil {
+			err = reg.SetTuning(t)
+		}
+	}
+	if err != nil {
+		slog.Warn("the stored question tuning was ignored; the shipped thresholds stand", "error", err)
 	}
 	return reg, nil
 }

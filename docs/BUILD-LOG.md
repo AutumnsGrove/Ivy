@@ -1218,3 +1218,9 @@ replaces that default with the real thing. Built test first; the vetter's tests 
   fail-closed, new-mail-only design, now actually in force once a feature that needs vetting is switched on.
 - **Not built yet in 5c.0:** the quiet withheld marker with its reason in the reader and the per-message
   override control (API, `schema.d.ts` and screen), which replace nothing mocked and need the phone check.
+- **Tuning (added to 5c.0 at the operator's request: "make sure they are easily tunable").** `jev.Tuning`
+  (`jev/tuning.go`) is the operator's per-question threshold and on/off, stored as JSON in the global setting
+  `jev.tuning` and laid over the shipped questions at startup and by `Registry.SetTuning` (validated whole,
+  untouched on error, survives a question-set reload). Neither knob is in the answer hash, so retuning is
+  immediate and re-asks nothing. A corrupt stored value is logged and ignored. **Not built:** a settings
+  screen or API to write it (today the setting is written directly), and editing wording (5j authoring).

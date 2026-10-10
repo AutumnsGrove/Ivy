@@ -356,3 +356,51 @@ func TestNewEmbeddingClassifierIsInertWithoutAKey(t *testing.T) {
 		t.Fatalf("without a key: processed=%d err=%v", n, err)
 	}
 }
+
+// The operator's tuning in state.db is laid over the shipped questions at startup. A
+// corrupt value never blocks the layer or zeroes a threshold: the shipped numbers
+// stand and the problem is logged.
+func TestNewJevRegistryAppliesTheStoredTuning(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs, err := store.Open(ctx, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = dbs.Close() })
+
+	reg, err := newJevRegistry(ctx, dbs, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q, _ := reg.Get(jev.QuestionTripwire); q.Threshold != 0.5 {
+		t.Fatalf("shipped threshold = %v, want 0.5", q.Threshold)
+	}
+
+	if err := dbs.SetSetting(ctx, "", jev.SettingTuning, `{"injection_tripwire":{"threshold":0.35},"sensitive_content":{"enabled":false}}`); err != nil {
+		t.Fatal(err)
+	}
+	reg, err = newJevRegistry(ctx, dbs, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q, _ := reg.Get(jev.QuestionTripwire); q.Threshold != 0.35 {
+		t.Errorf("tuned threshold = %v, want 0.35", q.Threshold)
+	}
+	if q, _ := reg.Get(jev.QuestionSensitive); q.IsEnabled() {
+		t.Error("the stored tuning did not switch the sensitive check off")
+	}
+
+	for _, bad := range []string{`{`, `{"injection_tripwire":{"threshold":7}}`} {
+		if err := dbs.SetSetting(ctx, "", jev.SettingTuning, bad); err != nil {
+			t.Fatal(err)
+		}
+		reg, err = newJevRegistry(ctx, dbs, nil)
+		if err != nil {
+			t.Fatalf("a bad tuning %q blocked the layer: %v", bad, err)
+		}
+		if q, _ := reg.Get(jev.QuestionTripwire); q.Threshold != 0.5 {
+			t.Errorf("bad tuning %q left threshold %v, want the shipped 0.5", bad, q.Threshold)
+		}
+	}
+}
