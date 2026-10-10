@@ -1886,3 +1886,24 @@ plans did not settle; both answered as recommended.
 |---|---|
 | Is the 5b assumption confirmed: every shared Jev call runs under the one gate feature `classify`, and a question may name a feature of its own as an extra switch? | **Confirmed.** The tripwire and sensitive checks ship as two questions that ride the same call. (Agent's build-time choice, to confirm: they carry **no switch of their own**, so a safety check cannot be quietly off while the features that need it look on.) |
 | Where does the withheld fact live? | **Derived, not stored.** Vetted means both checks have a current answer (same wording hash, same model) that is quiet below the question's threshold. A miss, a missing answer or an error is not vetted (fail closed). Editing a check's wording or changing the model re-vets lazily, and no flag can go stale. Only the operator's per-message **override** is stored, in `state.db` (operator-owned, backed up), keyed by account and content key. This replaces the 5c plan's "withheld fact in a mirror migration". |
+
+## 5c.1 and 5c.2: choices the agent made while building (2026-10-10)
+
+None spends money (both switches ship off). The operator said "let's do it" to the 5c plan, whose questions were
+already answered; these are what the build forced. Please confirm or change.
+
+- **Thresholds:** `needs_me` **0.65** (the brief's "Eager" bar: it is stage one of a cascade, so over-include and
+  let stage two decide), the four companions **0.80**. Provisional until the labelled run (G3); tunable through
+  `jev.tuning` without a release.
+- **Which switch:** `needs_me`, `urgency`, `has_deadline` and `asks_question` ride the `needs_me` feature (dark).
+  `is_automated` rides `classify` because 5d will reuse it to protect personal mail.
+- **Estimate budget:** 900 bytes per question (was 440). The "what does not count, then the exceptions" wording
+  measures about 225 tokens, and the two safety checks were already 850 bytes, so the old figure understated every
+  estimate. Worst case now **$0.11 per 1,000 messages** at seven questions.
+- **The reason may not quote the mail:** six words in a row shared with the message makes a reply invalid
+  (decision 3 said "may not quote"; this is the mechanism). A paraphrase passes.
+- **Withheld mail** is retried after 15 minutes, or at once when you allow it.
+- **No provider-side JSON schema:** `Complete` has none, so the reply shape is requested in the prompt and enforced
+  strictly on arrival. Adding a schema parameter to the gate is possible later.
+- **Switches are unlisted** on the Smart features screen until the view exists (5c.4): a switch that spends money
+  on answers only the odds sheet shows would mislead.

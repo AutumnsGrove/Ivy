@@ -80,6 +80,17 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 
 ## ▶ Now
 
+**5c.1 and 5c.2 are done, 2026-10-10 (backend of the needs-attention cascade).** The needs-me question and its
+companions ship dark (`needs_me` 0.65, the rest 0.80; `docs/BUILD-LOG.md` "5c.1"), and stage two (`needsme/`) turns
+the flags into verdicts and one-line reasons, parsed strictly, withheld mail skipped, all behind the dark
+`needs_me_stage2` switch. The full chain is proven in `cmd/embed_test.go` on the shipped questions. **Next: 5c.3**
+(dismissal and clearing, the reason in the inbox API, a list endpoint, the "placed for you" tag), then 5c.4 (the
+Needs attention view, the inline marker, the Smart-screen labels, the odds sheet's second stage). **Nothing spends
+money yet**: both switches are off and unlisted until 5c.4. **Operator to confirm** (build-time choices, qa-log
+"5c.2"): a reason quoting six words of the mail is refused; a withheld message is retried after 15 minutes unless
+you allow it; the estimate's per-question budget is now 900 bytes ($0.11 worst case per 1,000 messages at seven
+questions).
+
 **5c.0 (the vetting machinery) is done, 2026-10-10.** The real `Vetter`, `vetting_overrides` (state migration
 20), the two shipped checks, the gate wiring, the tuning overlay (`jev.tuning` setting: per-question threshold
 and on/off, live and free of re-billing), the privacy API and the reader's withheld marker with its override
