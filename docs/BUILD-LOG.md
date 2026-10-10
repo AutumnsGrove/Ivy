@@ -1216,8 +1216,15 @@ replaces that default with the real thing. Built test first; the vetter's tests 
 - **Consequence to know:** mail that was never classified (older than the watermark, other folders) is
   withheld from stage 2, ask, vision and summaries until a backfill checks it. That is the settled
   fail-closed, new-mail-only design, now actually in force once a feature that needs vetting is switched on.
-- **Not built yet in 5c.0:** the quiet withheld marker with its reason in the reader and the per-message
-  override control (API, `schema.d.ts` and screen), which replace nothing mocked and need the phone check.
+- **The withheld marker and the override control** (the rest of 5c.0). `Vetter.Status` returns `clear`,
+  `unchecked` or `withheld` with reason codes (`injection`, or the sensitive option), and `Vetted` is built on
+  it so the reader and the gate cannot disagree. `GET /messages/{id}/privacy`, `PUT`/`DELETE
+  /messages/{id}/privacy/override` (`gateway/privacy.go`; override stored against the content key). In the
+  reader, `WithheldNote.svelte` shows a quiet "Kept private from helpers: <why>" line with one button ("Let
+  helpers read it" / "Keep it private again") on phone and desktop; it shows nothing for clear or unchecked
+  mail or if the read fails, and never says AI (`privacy.ts` words it; unknown reason codes read as "a check
+  flagged it", as text). E2E fixture withholds `m3`; phone and desktop specs plus axe. **Operator-owned:**
+  look at the marker on the phone once the image publishes, with real flagged mail.
 - **Tuning (added to 5c.0 at the operator's request: "make sure they are easily tunable").** `jev.Tuning`
   (`jev/tuning.go`) is the operator's per-question threshold and on/off, stored as JSON in the global setting
   `jev.tuning` and laid over the shipped questions at startup and by `Registry.SetTuning` (validated whole,

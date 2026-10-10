@@ -25,6 +25,7 @@ import type {
 	MailSummary,
 	MailAttachmentList,
 	MessageOdds,
+	MessagePrivacy,
 	OutboxAction,
 	OutboxBatch,
 	OutboxBatchResult,
@@ -88,6 +89,18 @@ export const api = {
 	/** What the helper decision model said about a message, with its odds. Reads the cache; never makes a request. */
 	getMessageOdds: (id: string): Promise<MessageOdds> =>
 		request<MessageOdds>(`/messages/${encodeURIComponent(id)}/odds`),
+
+	/** Whether the safety checks keep this message from helper features, and why. Reads the cache; never makes a request. */
+	getMessagePrivacy: (id: string): Promise<MessagePrivacy> =>
+		request<MessagePrivacy>(`/messages/${encodeURIComponent(id)}/privacy`),
+
+	/** The operator's choice to let helper features read a withheld message. Repeating it is harmless. */
+	allowMessageForHelpers: (id: string): Promise<void> =>
+		request<void>(`/messages/${encodeURIComponent(id)}/privacy/override`, { method: 'PUT' }),
+
+	/** Put the message back under the safety checks. */
+	withholdMessageFromHelpers: (id: string): Promise<void> =>
+		request<void>(`/messages/${encodeURIComponent(id)}/privacy/override`, { method: 'DELETE' }),
 
 	getHealth: (): Promise<HealthOverview> => request<HealthOverview>('/mirror/health'),
 

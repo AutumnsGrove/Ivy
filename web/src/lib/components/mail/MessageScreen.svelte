@@ -12,6 +12,7 @@
 	import TagPicker from '../tags/TagPicker.svelte';
 	import MessageLoader from './MessageLoader.svelte';
 	import OddsSheet from './OddsSheet.svelte';
+	import WithheldNote from './WithheldNote.svelte';
 
 	type Props = { id: string; accounts: Account[]; scenario: Scenario | null };
 	let { id, accounts, scenario }: Props = $props();
@@ -44,6 +45,7 @@
 	<!-- No card around the message: chrome belongs at the top and the bottom, and
 	     the mail itself runs edge to edge on the scene. -->
 	<section class="reader" aria-label="Message">
+		<WithheldNote {id} />
 		<MessageLoader {id} {accounts} {scenario} onloaded={(m) => (loaded = m)} />
 	</section>
 

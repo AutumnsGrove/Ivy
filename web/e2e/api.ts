@@ -2,7 +2,7 @@ import { test as base } from '@playwright/test';
 import * as mock from '../src/lib/api/mock';
 import { freshSmart, smartReply, type SmartState } from './smart-fixture';
 import { spendReply } from './spend-fixture';
-import type { Account, Attachment, DraftResume, DraftSummary, Identity, MailMessage, MailSummary, MessageOdds, OutboxItem, SendStatus, TagsOverview, UpdateStatus, UserTag } from '../src/lib/types';
+import type { Account, Attachment, DraftResume, DraftSummary, Identity, MailMessage, MailSummary, MessageOdds, MessagePrivacy, OutboxItem, SendStatus, TagsOverview, UpdateStatus, UserTag } from '../src/lib/types';
 
 // The reader client does real fetches, so the mock E2E suite serves the
 // contract from the same fixtures at the network boundary instead of inside
@@ -62,7 +62,18 @@ export type AccountState = {
 	uploadSeq: number;
 	/** The Smart features screen's caps, switches and model choice; the spend screen reads the same caps. */
 	smart: SmartState;
+	/** Messages the operator let helper features read despite a safety check. */
+	privacyAllowed: Set<string>;
 };
+
+/** The messages the fixture's safety checks withheld, and why. Every other message reads as unchecked. */
+const WITHHELD: Record<string, string[]> = { m3: ['injection'] };
+
+const privacyOf = (s: AccountState, id: string): MessagePrivacy => ({
+	state: id in WITHHELD ? 'withheld' : 'unchecked',
+	reasons: WITHHELD[id] ?? [],
+	overridden: s.privacyAllowed.has(id)
+});
 
 const freshState = (): AccountState => ({
 	accounts: structuredClone(mock.accounts),
@@ -78,7 +89,8 @@ const freshState = (): AccountState => ({
 	sendDrafts: new Map(),
 	uploads: new Map(),
 	uploadSeq: 0,
-	smart: freshSmart()
+	smart: freshSmart(),
+	privacyAllowed: new Set()
 });
 
 const TAG_COLORS = new Set(['sky', 'rose', 'teal', 'coral', 'lilac', 'mint', 'gold', 'sand', 'orchid', 'fern', 'slate', 'berry']);
@@ -850,12 +862,19 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	if (queued) return queued;	const drafts = draftReply(state, path, method, raw);
 	if (drafts) return drafts;
 
-	const match = /^\/messages\/([^/]+)(\/summary|\/body|\/odds)?$/.exec(path);
+	const match = /^\/messages\/([^/]+)(\/summary|\/body|\/odds|\/privacy|\/privacy\/override)?$/.exec(path);
 	if (match) {
 		const [, id, kind] = match;
 		const summary: MailSummary | undefined = mock.inbox.find((x) => x.id === id);
 		if (!summary) return notFound('No such message');
 		if (kind === '/summary') return { body: summary };
+		if (kind === '/privacy') return { body: privacyOf(state, id) };
+		if (kind === '/privacy/override') {
+			if (method === 'PUT') state.privacyAllowed.add(id);
+			else if (method === 'DELETE') state.privacyAllowed.delete(id);
+			else return notFound('No such route');
+			return { status: 204, body: null };
+		}
 		if (kind === '/odds') return { body: id === 'm1' ? ODDS_FIXTURE : { model: '', answers: [], unanswered: [] } };
 		if (kind === '/body') return bodyDocument(id);
 		return messageReply(id, scenario, state.tagged.get(id) ?? []);

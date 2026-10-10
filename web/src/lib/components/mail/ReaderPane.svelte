@@ -11,6 +11,7 @@
 	import TagPicker from '../tags/TagPicker.svelte';
 	import MessageLoader from './MessageLoader.svelte';
 	import OddsSheet from './OddsSheet.svelte';
+	import WithheldNote from './WithheldNote.svelte';
 
 	type Props = { id: string; accounts: Account[]; scenario: Scenario | null };
 	let { id, accounts, scenario }: Props = $props();
@@ -39,6 +40,7 @@
 	</div>
 	<div class="scroll">
 		{#key id}
+			<WithheldNote {id} />
 			<MessageLoader {id} {accounts} {scenario} wide onloaded={(m) => (loaded = m)} />
 		{/key}
 		<div class="reply">

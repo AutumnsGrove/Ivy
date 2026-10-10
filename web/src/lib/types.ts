@@ -104,6 +104,9 @@ export type OddsAnswer = Schema['OddsAnswer'];
 export type OddsUnanswered = Schema['OddsUnanswered'];
 export type OddsReason = OddsUnanswered['reason'];
 
+// --- The withheld marker: whether the safety checks keep a message from helper features.
+export type MessagePrivacy = Schema['MessagePrivacy'];
+
 // --- Smart features: caps, per-account feature switches and the chat model choice.
 export type SmartSettings = Schema['SmartSettings'];
 export type SmartSettingsPatch = Schema['SmartSettingsPatch'];
