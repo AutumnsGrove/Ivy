@@ -80,6 +80,14 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 
 ## ▶ Now
 
+**5c.3 is done, 2026-10-10: the whole needs-attention backend is built.** Dismissal (kept, survives re-reads and newer
+verdicts), clearing on archive/delete/move/spam and on reply, `needsReason` on rows, `GET /needs-attention` (urgent
+first, paged, hides snoozed/Reading), and the reserved local-only "Needs you" tag (removing it is the dismissal; it is
+never an IMAP keyword, and a sync leak was found and fixed by test). `docs/BUILD-LOG.md` "5c.3". **Next: 5c.4, the
+screens** (the Needs attention view, the inline marker with its reason and a dismiss button, the Smart-screen labels
+for `needs_me` and `needs_me_stage2`, the odds sheet's second stage), with phone and desktop E2E and the real
+request shapes. Still nothing spends money until those switches have labels. 
+
 **5c.1 and 5c.2 are done, 2026-10-10 (backend of the needs-attention cascade).** The needs-me question and its
 companions ship dark (`needs_me` 0.65, the rest 0.80; `docs/BUILD-LOG.md` "5c.1"), and stage two (`needsme/`) turns
 the flags into verdicts and one-line reasons, parsed strictly, withheld mail skipped, all behind the dark
