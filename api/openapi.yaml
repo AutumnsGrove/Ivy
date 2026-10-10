@@ -510,6 +510,53 @@ paths:
                 $ref: "#/components/schemas/MessageOdds"
         "404":
           $ref: "#/components/responses/NotFound"
+  /messages/{id}/privacy:
+    get:
+      operationId: getMessagePrivacy
+      summary: Whether helper features may read a message, and why not
+      description: >
+        Where the message stands with the two safety checks (does it address an AI,
+        does it hold passwords or financial, health or identity details). `withheld`
+        means a check fired and no helper that reads mail text will see it unless the
+        operator lets it; `unchecked` means the checks have not looked yet and the
+        reader should say nothing. Reads the cache only and never makes a request.
+        A server with smart features absent returns `unchecked`.
+      parameters:
+        - $ref: "#/components/parameters/MessageID"
+      responses:
+        "200":
+          description: The message's standing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessagePrivacy"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /messages/{id}/privacy/override:
+    put:
+      operationId: allowMessageForHelpers
+      summary: Let helper features read a withheld message
+      description: >
+        The operator's own decision for this one message, kept in state.db. Repeating
+        it is not an error.
+      parameters:
+        - $ref: "#/components/parameters/MessageID"
+      responses:
+        "204":
+          description: Allowed
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: withholdMessageFromHelpers
+      summary: Put a message back under the safety checks
+      description: Undoes the override. Repeating it, or clearing one never set, is not an error.
+      parameters:
+        - $ref: "#/components/parameters/MessageID"
+      responses:
+        "204":
+          description: Withheld again if a check fired
+        "404":
+          $ref: "#/components/responses/NotFound"
   /messages/{id}/reply:
     get:
       operationId: replyToMessage
@@ -2262,6 +2309,23 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OddsUnanswered"
+    MessagePrivacy:
+      type: object
+      required: [state, reasons, overridden]
+      properties:
+        state:
+          type: string
+          enum: [clear, unchecked, withheld]
+        reasons:
+          type: array
+          description: >
+            Codes for the checks that fired: `injection`, or one of `credentials`,
+            `financial`, `health`, `id_document`. Kept when overridden.
+          items:
+            type: string
+        overridden:
+          type: boolean
+          description: The operator let helper features read this message anyway.
     OddsAnswer:
       type: object
       required: [questionId, choice, probabilities, confidence, threshold, quietOption, fires, suppressed, acts]

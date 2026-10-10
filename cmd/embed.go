@@ -32,6 +32,9 @@ type Embedding struct {
 	Classifier *jev.Worker
 	// Odds is the odds sheet's read of the answers the classifier cached.
 	Odds gateway.OddsSource
+	// Privacy is the withheld marker's read of the safety checks; nil when the layer
+	// is off, which the reader sees as unchecked.
+	Privacy gateway.PrivacySource
 }
 
 // NewEmbedding builds the embedding stack from the operator's config. apiKey is
@@ -54,8 +57,10 @@ func NewEmbedding(cfg *config.Config, dbs *store.DBs, apiKey string, opts ...Emb
 		llm.WithAccountPolicy(llm.NewAccountPolicy(dbs, o.configuredSettings(cfg))),
 		llm.WithDefaultCaps(cfg.LLM.MonthlyCapUSD, llm.DefaultGlobalCapUSD),
 	}
+	var vetter *jev.Vetter
 	if regErr == nil {
-		gateOpts = append(gateOpts, llm.WithVetting(jev.NewVetter(reg, dbs)))
+		vetter = jev.NewVetter(reg, dbs)
+		gateOpts = append(gateOpts, llm.WithVetting(vetter))
 	}
 	gate := llm.NewGate(dbs, gateOpts...)
 	providers, models := buildEmbedders(cfg, apiKey)
@@ -66,6 +71,7 @@ func NewEmbedding(cfg *config.Config, dbs *store.DBs, apiKey string, opts ...Emb
 		engine := jev.NewEngine(reg, gate, dbs)
 		emb.Classifier = jev.NewWorker(engine, gate, dbs, jev.WorkerOptions{})
 		emb.Odds = engine
+		emb.Privacy = vetter
 	}
 	if accounts := embedAccounts(cfg, providers, models); len(accounts) > 0 {
 		emb.Worker = search.NewEmbedWorker(dbs, gate, accounts, search.WorkerOptions{})

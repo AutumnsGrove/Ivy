@@ -250,6 +250,27 @@ func (e MessageAuthState) Valid() bool {
 	}
 }
 
+// Defines values for MessagePrivacyState.
+const (
+	Clear     MessagePrivacyState = "clear"
+	Unchecked MessagePrivacyState = "unchecked"
+	Withheld  MessagePrivacyState = "withheld"
+)
+
+// Valid indicates whether the value is a known member of the MessagePrivacyState enum.
+func (e MessagePrivacyState) Valid() bool {
+	switch e {
+	case Clear:
+		return true
+	case Unchecked:
+		return true
+	case Withheld:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OddsUnansweredReason.
 const (
 	OddsUnansweredReasonInvalidAnswer OddsUnansweredReason = "invalid_answer"
@@ -1308,6 +1329,19 @@ type MessageParty struct {
 	// PersonId The People page for this address, after the operator's merges. Absent for the operator's own addresses, which People leaves out.
 	PersonId *string `json:"personId,omitempty"`
 }
+
+// MessagePrivacy defines model for MessagePrivacy.
+type MessagePrivacy struct {
+	// Overridden The operator let helper features read this message anyway.
+	Overridden bool `json:"overridden"`
+
+	// Reasons Codes for the checks that fired: `injection`, or one of `credentials`, `financial`, `health`, `id_document`. Kept when overridden.
+	Reasons []string            `json:"reasons"`
+	State   MessagePrivacyState `json:"state"`
+}
+
+// MessagePrivacyState defines model for MessagePrivacy.State.
+type MessagePrivacyState string
 
 // OddsAnswer defines model for OddsAnswer.
 type OddsAnswer struct {

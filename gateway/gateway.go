@@ -66,6 +66,9 @@ type Server struct {
 	// odds is where the odds sheet reads cached Jev answers; nil means every sheet is
 	// empty (smart features absent).
 	odds OddsSource
+	// privacy is where the withheld marker reads the safety checks; nil reads as
+	// unchecked.
+	privacy PrivacySource
 	// smart is what the Smart features screen reads and writes; nil falls back to a
 	// gate with no providers.
 	smart SmartControls
@@ -182,6 +185,9 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/messages/{id}", s.handleMessage)
 	api.HandleFunc("GET /api/v1/messages/{id}/summary", s.handleMessageSummary)
 	api.HandleFunc("GET /api/v1/messages/{id}/odds", s.handleMessageOdds)
+	api.HandleFunc("GET /api/v1/messages/{id}/privacy", s.handleMessagePrivacy)
+	api.HandleFunc("PUT /api/v1/messages/{id}/privacy/override", s.handleAllowForHelpers)
+	api.HandleFunc("DELETE /api/v1/messages/{id}/privacy/override", s.handleWithholdFromHelpers)
 	api.HandleFunc("GET /api/v1/messages/{id}/reply", s.handleReplyPrefill)
 	api.HandleFunc("GET /api/v1/messages/{id}/forward", s.handleForwardPrefill)
 	api.HandleFunc("GET /api/v1/messages/{id}/body", s.handleMessageBody)

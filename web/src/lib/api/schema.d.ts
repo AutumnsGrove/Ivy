@@ -292,6 +292,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/messages/{id}/privacy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether helper features may read a message, and why not
+         * @description Where the message stands with the two safety checks (does it address an AI, does it hold passwords or financial, health or identity details). `withheld` means a check fired and no helper that reads mail text will see it unless the operator lets it; `unchecked` means the checks have not looked yet and the reader should say nothing. Reads the cache only and never makes a request. A server with smart features absent returns `unchecked`.
+         */
+        get: operations["getMessagePrivacy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/messages/{id}/privacy/override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Let helper features read a withheld message
+         * @description The operator's own decision for this one message, kept in state.db. Repeating it is not an error.
+         */
+        put: operations["allowMessageForHelpers"];
+        post?: never;
+        /**
+         * Put a message back under the safety checks
+         * @description Undoes the override. Repeating it, or clearing one never set, is not an error.
+         */
+        delete: operations["withholdMessageFromHelpers"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/messages/{id}/reply": {
         parameters: {
             query?: never;
@@ -1310,6 +1354,14 @@ export interface components {
             model: string;
             answers: components["schemas"]["OddsAnswer"][];
             unanswered: components["schemas"]["OddsUnanswered"][];
+        };
+        MessagePrivacy: {
+            /** @enum {string} */
+            state: "clear" | "unchecked" | "withheld";
+            /** @description Codes for the checks that fired: `injection`, or one of `credentials`, `financial`, `health`, `id_document`. Kept when overridden. */
+            reasons: string[];
+            /** @description The operator let helper features read this message anyway. */
+            overridden: boolean;
         };
         OddsAnswer: {
             questionId: string;
@@ -2488,6 +2540,71 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MessageOdds"];
                 };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getMessagePrivacy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The message's standing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagePrivacy"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    allowMessageForHelpers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Allowed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    withholdMessageFromHelpers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Withheld again if a check fired */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             404: components["responses"]["NotFound"];
         };
