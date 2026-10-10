@@ -1876,3 +1876,13 @@ are the choices the build forced that no answer covered. None spends money. They
   because of the numbers. It lives in the reader's More menu on phone and desktop.
 - **The worker asks the gate `CanRun` before calling.** A refused call writes a zero-cost ledger row, so a
   worker polling an account that is simply off would fill the call log with refusals every half minute.
+
+## 5c.0: operator answers (2026-10-10)
+
+The operator said "let's begin our next section" and 5c.0 (the vetting machinery) was next. Two questions the
+plans did not settle; both answered as recommended.
+
+| Question | Answer |
+|---|---|
+| Is the 5b assumption confirmed: every shared Jev call runs under the one gate feature `classify`, and a question may name a feature of its own as an extra switch? | **Confirmed.** The tripwire and sensitive checks ship as two questions that ride the same call, each with its own feature switch. |
+| Where does the withheld fact live? | **Derived, not stored.** Vetted means both checks have a current answer (same wording hash, same model) that is quiet below the question's threshold. A miss, a missing answer or an error is not vetted (fail closed). Editing a check's wording or changing the model re-vets lazily, and no flag can go stale. Only the operator's per-message **override** is stored, in `state.db` (operator-owned, backed up), keyed by account and content key. This replaces the 5c plan's "withheld fact in a mirror migration". |

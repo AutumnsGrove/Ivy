@@ -967,6 +967,21 @@ var stateMigrations = []migration{
 			`ALTER TABLE api_calls ADD COLUMN reason TEXT NOT NULL DEFAULT ''`,
 		},
 	},
+	{
+		version: 20,
+		statements: []string{
+			// The operator's "let helpers read this one" for a message the safety checks
+			// withheld. Whether a message is withheld is derived from the cached check
+			// answers in the mirror; only this decision is the operator's own, so it lives
+			// here, where it is backed up, and not in the mirror that is rebuilt.
+			`CREATE TABLE vetting_overrides (
+				account_id TEXT NOT NULL,
+				content_key TEXT NOT NULL,
+				created_at TEXT NOT NULL,
+				PRIMARY KEY (account_id, content_key)
+			) WITHOUT ROWID`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state
