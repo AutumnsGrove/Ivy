@@ -477,6 +477,7 @@ var jevQuiet = map[string]string{
 	"receipt_or_invoice":   "no",
 	"phishing_risk":        "none",
 	"injection_tripwire":   "no",
+	"sensitive_content":    "none",
 	"contact_form_quality": "genuine",
 	"cold_outreach":        "no",
 	"junk_rescue":          "junk",
@@ -509,6 +510,12 @@ var jevKeywords = map[string]map[string][]string{
 	"receipt_or_invoice": {"receipt": {"receipt"}, "invoice": {"invoice"}, "renewal_notice": {"renewal"}, "payment_failed": {"payment failed", "declined"}},
 	"phishing_risk":      {"likely": {"verify your account", "click here to claim", "suspended", "unusual sign-in"}, "suspicious": {"urgent action", "confirm your password"}},
 	"injection_tripwire": {"yes": {"ignore previous", "system prompt", "as an ai", "you are an assistant", "disregard"}},
+	"sensitive_content": {
+		"credentials": {"password", "passcode", "verification code", "one-time code", "api key"},
+		"financial":   {"card number", "account number", "routing number", "iban", "cvv"},
+		"health":      {"diagnosis", "prescription", "test results"},
+		"id_document": {"passport number", "driver's licence", "social security"},
+	},
 }
 
 func jevChoose(id string, q jevQuestion, state string) JevAnswer {

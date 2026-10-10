@@ -42,18 +42,28 @@ func NewEmbedding(cfg *config.Config, dbs *store.DBs, apiKey string, opts ...Emb
 	for _, opt := range opts {
 		opt(&o)
 	}
-	gate := llm.NewGate(dbs,
+	// The registry comes first because the gate is given its vetting at construction,
+	// and vetting reads the two safety checks from it. If the questions cannot be
+	// loaded the gate keeps its default, which withholds all mail from any feature
+	// that reads text: the layer fails closed, not open.
+	reg, regErr := newJevRegistry(o.questions)
+	gateOpts := []llm.GateOption{
 		llm.WithProviders(llm.ProviderConfig{
 			OpenRouterBase: cfg.LLM.OpenRouterBase, APIKey: apiKey, OllamaURL: cfg.LLM.OllamaURL,
 		}),
 		llm.WithAccountPolicy(llm.NewAccountPolicy(dbs, o.configuredSettings(cfg))),
 		llm.WithDefaultCaps(cfg.LLM.MonthlyCapUSD, llm.DefaultGlobalCapUSD),
-	)
+	}
+	if regErr == nil {
+		gateOpts = append(gateOpts, llm.WithVetting(jev.NewVetter(reg, dbs)))
+	}
+	gate := llm.NewGate(dbs, gateOpts...)
 	providers, models := buildEmbedders(cfg, apiKey)
 	emb := &Embedding{Query: newQueryEmbedder(gate, providers, models), Caps: gate}
-	if engine, err := newJevEngine(gate, dbs, o.questions); err != nil {
-		slog.Error("the Jev question layer is off: its questions could not be loaded", "error", err)
+	if regErr != nil {
+		slog.Error("the Jev question layer is off: its questions could not be loaded", "error", regErr)
 	} else {
+		engine := jev.NewEngine(reg, gate, dbs)
 		emb.Classifier = jev.NewWorker(engine, gate, dbs, jev.WorkerOptions{})
 		emb.Odds = engine
 	}
@@ -72,9 +82,8 @@ func (e *Embedding) Backlog() gateway.EmbedBacklog {
 	return e.Worker
 }
 
-// newJevEngine loads the shipped questions, lays the given extras over them by id and
-// builds the engine on the one gate.
-func newJevEngine(gate *llm.Gate, dbs *store.DBs, extra []jev.Question) (*jev.Engine, error) {
+// newJevRegistry loads the shipped questions and lays the given extras over them by id.
+func newJevRegistry(extra []jev.Question) (*jev.Registry, error) {
 	builtin, err := jev.Builtin()
 	if err != nil {
 		return nil, err
@@ -83,7 +92,7 @@ func newJevEngine(gate *llm.Gate, dbs *store.DBs, extra []jev.Question) (*jev.En
 	if err := reg.Set(builtin, extra); err != nil {
 		return nil, err
 	}
-	return jev.NewEngine(reg, gate, dbs), nil
+	return reg, nil
 }
 
 type embeddingOptions struct {
