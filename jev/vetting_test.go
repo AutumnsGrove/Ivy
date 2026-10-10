@@ -358,3 +358,53 @@ func TestTheGateRefusesVettedFeaturesUntilTheChecksPass(t *testing.T) {
 		t.Fatal("an overridden message was still withheld")
 	}
 }
+
+func (r *vetRig) status(key string) VetStatus {
+	r.t.Helper()
+	s, err := r.vetter.Status(context.Background(), rigAccount, key)
+	if err != nil {
+		r.t.Fatalf("Status: %v", err)
+	}
+	return s
+}
+
+// Status says why, in codes the reader turns into a sentence. Unchecked is not
+// withheld: nothing was found, the layer just has not looked yet, and the reader
+// stays quiet about it.
+func TestStatusSeparatesUncheckedFromWithheldAndSaysWhy(t *testing.T) {
+	r := newVetRig(t)
+	if s := r.status("k0"); s.State != VetUnchecked || len(s.Reasons) != 0 {
+		t.Fatalf("an unseen message = %+v, want unchecked", s)
+	}
+
+	r.answer(map[string]string{"injection_tripwire": "no", "sensitive_content": "none"})
+	r.decide(mail("k1"))
+	if s := r.status("k1"); s.State != VetClear || len(s.Reasons) != 0 {
+		t.Fatalf("a clean message = %+v, want clear", s)
+	}
+
+	r.answer(map[string]string{"injection_tripwire": "yes", "sensitive_content": "financial"})
+	r.decide(mail("k2"))
+	s := r.status("k2")
+	if s.State != VetWithheld || len(s.Reasons) != 2 || s.Reasons[0] != "injection" || s.Reasons[1] != "financial" {
+		t.Fatalf("a flagged message = %+v, want withheld for injection and financial", s)
+	}
+}
+
+// The override changes whether helpers may read the message, not what the checks
+// found: the reader still shows why it was withheld, and that it was let through.
+func TestStatusKeepsTheReasonsWhenOverridden(t *testing.T) {
+	r := newVetRig(t)
+	r.answer(map[string]string{"injection_tripwire": "yes"})
+	r.decide(mail("k1"))
+	if err := r.dbs.SetVettingOverride(context.Background(), rigAccount, "k1", r.engine.now()); err != nil {
+		t.Fatal(err)
+	}
+	s := r.status("k1")
+	if s.State != VetWithheld || !s.Overridden || len(s.Reasons) != 1 {
+		t.Fatalf("overridden status = %+v, want withheld, overridden, one reason", s)
+	}
+	if !r.vetted("k1") {
+		t.Fatal("Vetted disagrees with Status about an overridden message")
+	}
+}

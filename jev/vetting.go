@@ -48,41 +48,81 @@ var _ llm.Vetting = (*Vetter)(nil)
 // Suppression is deliberately not applied: another question firing must never
 // excuse a check that fired.
 func (v *Vetter) Vetted(ctx context.Context, accountID, contentKey string) (bool, error) {
+	s, err := v.Status(ctx, accountID, contentKey)
+	if err != nil {
+		return false, err
+	}
+	return s.State == VetClear || s.Overridden, nil
+}
+
+// VetState is what the checks found.
+type VetState string
+
+const (
+	// VetClear: both checks answered and neither fired.
+	VetClear VetState = "clear"
+	// VetUnchecked: the layer cannot say yet (a check is missing, off, unanswered or
+	// stale). Nothing was found, so the reader stays quiet; the gate still withholds.
+	VetUnchecked VetState = "unchecked"
+	// VetWithheld: a check fired.
+	VetWithheld VetState = "withheld"
+)
+
+// VetStatus is a message's standing with the safety checks, for the reader.
+type VetStatus struct {
+	State VetState
+	// Reasons are codes for the checks that fired: "injection", or the sensitive
+	// check's own option ("credentials", "financial", "health", "id_document").
+	Reasons []string
+	// Overridden: the operator let helpers read it anyway. Reasons are kept, so the
+	// reader can still say why it was withheld.
+	Overridden bool
+}
+
+// Status reads where a message stands without changing anything. It is what Vetted
+// is built on, so the reader and the gate cannot disagree.
+func (v *Vetter) Status(ctx context.Context, accountID, contentKey string) (VetStatus, error) {
 	overridden, err := v.st.VettingOverridden(ctx, accountID, contentKey)
 	if err != nil {
-		return false, fmt.Errorf("vetting: %w", err)
+		return VetStatus{}, fmt.Errorf("vetting: %w", err)
 	}
-	if overridden {
-		return true, nil
-	}
+	out := VetStatus{State: VetUnchecked, Overridden: overridden}
 	runs := map[string]bool{}
 	for _, q := range v.reg.Active(accountID, FolderInbox) {
 		runs[q.ID] = true
 	}
 	for _, id := range checkQuestions {
 		if !runs[id] {
-			return false, nil
+			return out, nil
 		}
 	}
 	model, ok := llm.LookupModel(llm.JevModelID)
 	if !ok {
-		return false, nil
+		return out, nil
 	}
 	ds, err := v.st.DecisionsFor(ctx, accountID, contentKey)
 	if err != nil {
-		return false, fmt.Errorf("vetting: %w", err)
+		return VetStatus{}, fmt.Errorf("vetting: %w", err)
 	}
 	passed := 0
 	for _, verdict := range Evaluate(v.reg, ds, model.Slug) {
-		if !isCheck(verdict.QuestionID) {
-			continue
+		switch {
+		case !isCheck(verdict.QuestionID):
+		case verdict.Fires && verdict.QuestionID == QuestionTripwire:
+			out.Reasons = append(out.Reasons, "injection")
+		case verdict.Fires:
+			out.Reasons = append(out.Reasons, verdict.Choice)
+		default:
+			passed++
 		}
-		if verdict.Fires {
-			return false, nil
-		}
-		passed++
 	}
-	return passed == len(checkQuestions), nil
+	switch {
+	case len(out.Reasons) > 0:
+		out.State = VetWithheld
+	case passed == len(checkQuestions):
+		out.State = VetClear
+	}
+	return out, nil
 }
 
 func isCheck(id string) bool { return id == QuestionTripwire || id == QuestionSensitive }
