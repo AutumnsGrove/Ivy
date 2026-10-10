@@ -227,14 +227,15 @@ func TestNewEmbeddingBuildsTheJevLayerOnTheSameGate(t *testing.T) {
 	if n, err := emb.Classifier.RunOnce(ctx); err != nil || n != 1 || jevCalls(w) != 1 {
 		t.Fatalf("processed=%d err=%v calls=%d; want the new message read once", n, err, jevCalls(w))
 	}
-	// The shipped safety checks ride the same single call as the dev question.
+	// The shipped safety checks and is_automated ride the same single call as the dev
+	// question. The needs-me group stays dark: its switch is off, so none of it is asked.
 	odds, err := emb.Odds.Odds(ctx, "a1", "ck1")
 	var ids []string
 	for _, a := range odds.Answers {
 		ids = append(ids, a.QuestionID)
 	}
-	if err != nil || strings.Join(ids, ",") != "injection_tripwire,is_personal,sensitive_content" {
-		t.Fatalf("odds answers = %v, err %v; want the two checks and the dev question", ids, err)
+	if err != nil || strings.Join(ids, ",") != "injection_tripwire,is_automated,is_personal,sensitive_content" {
+		t.Fatalf("odds answers = %v, err %v; want the two checks, is_automated and the dev question", ids, err)
 	}
 }
 

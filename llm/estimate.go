@@ -17,9 +17,14 @@ const (
 	// MaxQuestionsPerCall is the operator's limit of 100 questions per Jev call
 	// (brief section 2).
 	MaxQuestionsPerCall = 100
-	// bytesPerQuestion sizes a question the way the brief does: about 110 tokens
-	// of instruction and criteria, at four bytes a token.
-	bytesPerQuestion = 440
+	// QuestionBytesBudget is how many bytes of instruction and options the estimate
+	// prices each Jev question at: about 225 tokens at four bytes a token, because
+	// instructions written as what does not count, then the exceptions (the wording
+	// that measured best, S4) run about twice the brief's 110. A shipped question over
+	// it would make every estimate understate, so the Jev layer's tests hold the
+	// shipped set to it.
+	QuestionBytesBudget = 900
+	bytesPerQuestion    = QuestionBytesBudget
 )
 
 // callTokens is the one worst-case token formula. The entry points reserve with it

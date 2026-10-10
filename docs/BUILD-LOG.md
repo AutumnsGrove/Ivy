@@ -1231,3 +1231,27 @@ replaces that default with the real thing. Built test first; the vetter's tests 
   untouched on error, survives a question-set reload). Neither knob is in the answer hash, so retuning is
   immediate and re-asks nothing. A corrupt stored value is logged and ignored. **Not built:** a settings
   screen or API to write it (today the setting is written directly), and editing wording (5j authoring).
+
+## 5c.1 The needs-me question (2026-10-10)
+
+- **Shipped in `jev/builtin.yaml`:** `needs_me` (none / maybe / likely, quiet `none`, threshold **0.65**), and its
+  companions `urgency` (low / normal / high, quiet `normal`), `has_deadline` and `asks_question` (no / yes), all at
+  **0.80**. `is_automated` (no / yes, 0.80) ships with them because it protects personal mail from every
+  automated behaviour. All written as what does not count, then the exceptions; none suppresses another (a bill is
+  automated and still needs the owner). Thresholds are provisional until G3 and tunable through `jev.tuning`.
+- **Stage one over-includes on purpose.** 0.65 is the "Eager" bar from the brief: only `maybe` and `likely` go on to
+  the chat model in 5c.2, so a miss here is permanent and a false alarm costs one more call.
+- **Dark by construction.** `needs_me`, `urgency`, `has_deadline` and `asks_question` name the `needs_me` gate
+  feature, so nothing in the group is asked until that switch is on. `is_automated` and the two checks ride
+  `classify`. The Smart features screen does **not** list `needs_me` yet (`TestOnlyShippedFeaturesAreListedForTheScreen`
+  still holds): until the view and stage 2 exist (5c.2 to 5c.4) a switch would spend money on answers only the
+  odds sheet shows. It gets its label in 5c.4.
+- **The estimate's per-question budget is now 900 bytes** (`llm.QuestionBytesBudget`, was 440). The wording that
+  measured best runs about 225 tokens a question, and the two safety checks were already 850 bytes, so the old figure
+  understated every estimate. `TestEveryShippedQuestionFitsTheEstimatesBudget` holds the whole shipped set to it.
+- **Cost, stated.** All seven questions on one 4 KiB message: the worst case for **1,000 messages is $0.11**
+  (rounded up to the cent; held by `TestTheShippedSetCostsCentsPerThousandMessages` at $0.15). With only the
+  default (`classify`) switch the call carries three questions. The 5b figure ($0.06 for 9 questions) used the old
+  budget and is superseded.
+- **Not yet:** nothing writes `needs_me` rows or reads a verdict; that is 5c.2 and 5c.3. Real-mail accuracy is
+  unmeasured until the labelled run (5c.5, gate G3).

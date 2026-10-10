@@ -46,3 +46,90 @@ questions:
       id_document: an identity document number or scan
     quiet_option: none
     threshold: 0.5
+
+  # --- Needs attention (5c). Ships dark: every question below that names the
+  # needs_me feature is asked only while an account has that switch on. needs_me is
+  # stage one of a cascade and is meant to over-include: only maybe and likely go on
+  # to the bigger model, which decides and writes the reason, so a miss here is
+  # permanent and a false alarm only costs one more call. The companions order and
+  # qualify it; none of them suppresses another (a bill is automated and still needs
+  # the owner).
+  - id: needs_me
+    instructions: >-
+      Is the owner of this mailbox expected to do something, answer something or
+      decide something because of this message? Count a direct question or request
+      from a person, a plan waiting on their reply or confirmation, a bill or notice
+      with an action and a date, and a form or document they must sign or send. Do
+      not count newsletters, marketing, receipts and order confirmations, shipping
+      updates, social notifications, automatic alerts that need nothing, or messages
+      that only inform. Exception: automated mail still counts when it names
+      something the owner must do, like a payment failing or an account about to
+      lapse.
+    criteria:
+      none: nothing is asked of the owner
+      maybe: it might need the owner, or it is unclear
+      likely: the owner is clearly expected to act or reply
+    quiet_option: none
+    threshold: 0.65
+    feature: needs_me
+
+  - id: urgency
+    instructions: >-
+      How soon does this message need attention? Count high only when waiting costs
+      something soon: a deadline within about two days, something expiring, a person
+      waiting on an answer today, a problem happening now. Do not count words like
+      urgent or important in marketing, a deadline weeks away, or a routine reminder.
+      Exception: a plain request from a person with no date is normal, not low.
+    criteria:
+      low: no rush at all, can wait indefinitely
+      normal: ordinary mail, a few days is fine
+      high: needs attention within a day or two
+    quiet_option: normal
+    threshold: 0.80
+    feature: needs_me
+
+  - id: has_deadline
+    instructions: >-
+      Does this message state a date or time by which something must happen? Count
+      a due date, an expiry, a cutoff, an appointment to confirm, or a request
+      with a day on it. Do not count the date the message was sent, an event the
+      owner is only told about, a delivery estimate, or a sale ending in marketing.
+      Exception: a bill's due date counts even when the message is automated.
+    criteria:
+      "no": no date by which something must happen
+      "yes": a date or time by which something must happen
+    quiet_option: "no"
+    threshold: 0.80
+    feature: needs_me
+
+  - id: asks_question
+    instructions: >-
+      Does a person ask the owner a direct question or make a request that needs a
+      reply? Count a question put to the owner, a request for information, a
+      choice offered, or a request to confirm. Do not count rhetorical questions,
+      questions in a newsletter or marketing, survey and feedback prompts, a
+      question the sender answers themselves, or a quoted earlier message.
+      Exception: a polite request without a question mark counts.
+    criteria:
+      "no": nothing is asked of the owner that needs a reply
+      "yes": the owner is asked a question or to reply
+    quiet_option: "no"
+    threshold: 0.80
+    feature: needs_me
+
+  # Protects personal correspondence from every automated behaviour, so it rides
+  # the shared call on its own switch and not needs_me's.
+  - id: is_automated
+    instructions: >-
+      Was this message sent automatically rather than written by a person to the
+      owner? Count newsletters, marketing, receipts, order and shipping updates,
+      alerts, notifications, system messages and mass mailings, including ones
+      with a person's name on them. Do not count a message a person wrote to the
+      owner, even if it is brief, uses a template, or comes from a company address.
+      Exception: a reply from a support person to the owner's own request is a
+      person.
+    criteria:
+      "no": a person wrote this to the owner
+      "yes": it was sent automatically or to many people at once
+    quiet_option: "no"
+    threshold: 0.80
