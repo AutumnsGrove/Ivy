@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/AutumnsGrove/Ivy/llm"
+	"github.com/AutumnsGrove/Ivy/store"
 )
 
 func shipped(t *testing.T) map[string]Question {
@@ -144,4 +145,40 @@ func TestTheShippedSetCostsCentsPerThousandMessages(t *testing.T) {
 		t.Fatalf("1,000 messages at 7 questions estimate $%.2f, want no more than $0.15", est.USD)
 	}
 	t.Logf("1,000 messages x 7 questions, 4 KiB each: worst case $%.2f", est.USD)
+}
+
+// The Needs attention view orders by the live urgency question: its current wording,
+// the Jev model and the bar as tuned. Switched off or missing, nothing counts as urgent.
+func TestTheUrgencyBarFollowsTheLiveQuestion(t *testing.T) {
+	r := NewRegistry()
+	qs, err := Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Set(qs, nil); err != nil {
+		t.Fatal(err)
+	}
+	q, _ := r.Get("urgency")
+	model, _ := llm.LookupModel(llm.JevModelID)
+	want := store.UrgencyBar{QuestionID: "urgency", Hash: q.Hash(), Model: model.Slug, High: "high", Threshold: 0.80}
+	if got := r.UrgencyBar(); got != want {
+		t.Fatalf("bar = %+v, want %+v", got, want)
+	}
+
+	if err := r.SetTuning(Tuning{"urgency": {Threshold: f64(0.6)}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.UrgencyBar(); got.Threshold != 0.6 || got.Hash != q.Hash() {
+		t.Fatalf("a retuned bar = %+v, want threshold 0.6 and the same wording hash", got)
+	}
+
+	if err := r.SetTuning(Tuning{"urgency": {Enabled: flag(false)}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.UrgencyBar(); got != (store.UrgencyBar{}) {
+		t.Fatalf("with urgency off the bar = %+v, want none", got)
+	}
+	if got := NewRegistry().UrgencyBar(); got != (store.UrgencyBar{}) {
+		t.Fatalf("an empty registry's bar = %+v, want none", got)
+	}
 }

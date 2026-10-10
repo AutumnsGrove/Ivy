@@ -459,6 +459,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Inbox"
+  /needs-attention:
+    get:
+      operationId: listNeedsAttention
+      summary: Mail that needs the owner, urgent first
+      description: >
+        Inbox mail with an open needs-attention verdict, each row carrying its
+        reason. Mail the helper decision model rated clearly urgent comes first, then
+        the rest, newest first inside each group. Snoozed and Reading mail is hidden
+        as in the inbox, and a dismissed or handled message is gone. `needCount` is the
+        whole view's size; `unreadCount` and `readingWaiting` are zero here. Reads
+        what is already decided and never makes a request; empty when nothing is.
+      parameters:
+        - name: account_id
+          in: query
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        "200":
+          description: A page of the view
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inbox"
+        "400":
+          description: The cursor or limit is not valid (`bad_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /messages/{id}:
     get:
       operationId: getMessage

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/AutumnsGrove/Ivy/store"
 )
@@ -58,4 +59,57 @@ func (s *Server) clearNeedForReply(ctx context.Context, accountID, inReplyTo str
 		return
 	}
 	s.clearNeed(ctx, accountID, store.ContentKey(inReplyTo, nil))
+}
+
+// UrgencySource says how the Needs attention view recognises an urgent message: the
+// live urgency question's wording, model and bar. The Jev registry implements it, so
+// retuning the bar reorders the view with no migration.
+type UrgencySource interface {
+	UrgencyBar() store.UrgencyBar
+}
+
+// WithNeedsAttention wires the urgency ordering. Without it the view is plainly
+// newest first, which is how a server with smart features absent behaves.
+func (s *Server) WithNeedsAttention(src UrgencySource) *Server {
+	s.urgency = src
+	return s
+}
+
+// handleNeedsAttention serves GET /needs-attention.
+func (s *Server) handleNeedsAttention(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	accountID := q.Get("account_id")
+	limit := 0
+	if raw := q.Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > store.MaxInboxLimit {
+			writeError(w, http.StatusBadRequest, "bad_request", "That page size is not valid")
+			return
+		}
+		limit = n
+	}
+	hidden, _, err := s.hiddenKeys(r.Context(), accountID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	query := store.NeedsAttentionQuery{AccountID: accountID, Cursor: q.Get("cursor"), Limit: limit, Hide: hidden}
+	if s.urgency != nil {
+		query.Urgency = s.urgency.UrgencyBar()
+	}
+	page, err := s.dbs.NeedsAttention(r.Context(), query)
+	if errors.Is(err, store.ErrBadCursor) {
+		writeError(w, http.StatusBadRequest, "bad_request", "That page link is not valid")
+		return
+	}
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	out, err := s.inboxResponse(r, page, 0)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
 }

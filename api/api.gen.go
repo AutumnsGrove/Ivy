@@ -1968,6 +1968,13 @@ type ReplyToMessageParams struct {
 	All *bool `form:"all,omitempty" json:"all,omitempty"`
 }
 
+// ListNeedsAttentionParams defines parameters for ListNeedsAttention.
+type ListNeedsAttentionParams struct {
+	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
+	Cursor    *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit     *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListOutboxParams defines parameters for ListOutbox.
 type ListOutboxParams struct {
 	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`

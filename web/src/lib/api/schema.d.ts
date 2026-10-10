@@ -238,6 +238,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/needs-attention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mail that needs the owner, urgent first
+         * @description Inbox mail with an open needs-attention verdict, each row carrying its reason. Mail the helper decision model rated clearly urgent comes first, then the rest, newest first inside each group. Snoozed and Reading mail is hidden as in the inbox, and a dismissed or handled message is gone. `needCount` is the whole view's size; `unreadCount` and `readingWaiting` are zero here. Reads what is already decided and never makes a request; empty when nothing is.
+         */
+        get: operations["listNeedsAttention"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/messages/{id}": {
         parameters: {
             query?: never;
@@ -2495,6 +2515,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Inbox"];
+                };
+            };
+        };
+    };
+    listNeedsAttention: {
+        parameters: {
+            query?: {
+                account_id?: string;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of the view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Inbox"];
+                };
+            };
+            /** @description The cursor or limit is not valid (`bad_request`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };

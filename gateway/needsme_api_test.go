@@ -1,8 +1,10 @@
 package gateway
 
 import (
+	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/AutumnsGrove/Ivy/api"
 	"github.com/AutumnsGrove/Ivy/store"
@@ -75,5 +77,124 @@ func TestDismissingClearsTheFlagThroughTheAPI(t *testing.T) {
 	}
 	if code := doJSON(t, http.MethodPost, base+"/messages/nope/needs/dismiss", nil, nil, nil); code != http.StatusNotFound {
 		t.Fatalf("dismissing an unknown message = %d, want 404", code)
+	}
+}
+
+type fakeBar struct{ bar store.UrgencyBar }
+
+func (f fakeBar) UrgencyBar() store.UrgencyBar { return f.bar }
+
+// viewServer has three open verdicts: an older one Jev rated urgent, and two newer
+// ones it did not.
+func viewServer(t *testing.T, bar *fakeBar) (string, *store.DBs) {
+	t.Helper()
+	srv, dbs := newConfiguredServer(t, func(s *Server) {
+		if bar != nil {
+			s.WithNeedsAttention(*bar)
+		}
+	})
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox})
+	for i, id := range []string{"old", "mid", "new"} {
+		mustMessage(t, dbs, inboxMessage(id, "acct-1", "inbox-1", testNow.Add(time.Duration(i)*time.Hour), false))
+		flagNeeds(t, dbs, "ck:"+id)
+	}
+	if err := dbs.PutDecisions(context.Background(), []store.Decision{{
+		AccountID: "acct-1", ContentKey: "ck:old", QuestionID: "urgency", InstructionHash: "u1", Model: "jev-latest",
+		Choice: "high", Probabilities: map[string]float64{"high": 0.95}, Confidence: 0.95, DecidedAt: testNow,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	return srv.URL + "/api/v1", dbs
+}
+
+var testBar = fakeBar{bar: store.UrgencyBar{QuestionID: "urgency", Hash: "u1", Model: "jev-latest", High: "high", Threshold: 0.8}}
+
+func ids(items []api.MailSummary) []string {
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = it.Id
+	}
+	return out
+}
+
+func TestNeedsAttentionViewListsUrgentFirstWithReasons(t *testing.T) {
+	t.Parallel()
+	base, _ := viewServer(t, &testBar)
+	var page api.Inbox
+	if code := getJSON(t, base+"/needs-attention", &page); code != http.StatusOK {
+		t.Fatalf("status = %d", code)
+	}
+	if got := ids(page.Items); len(got) != 3 || got[0] != "old" || got[1] != "new" || got[2] != "mid" {
+		t.Fatalf("order = %v, want the urgent old one first, then newest first", got)
+	}
+	if page.NeedCount != 3 {
+		t.Fatalf("needCount = %d, want 3", page.NeedCount)
+	}
+	for _, it := range page.Items {
+		if !it.Needs || it.NeedsReason == nil || *it.NeedsReason == "" {
+			t.Fatalf("every row in this view carries its reason: %+v", it)
+		}
+	}
+}
+
+// With nothing wired the view is the same list, plainly newest first: urgency is an
+// ordering nicety and its absence must not break the view.
+func TestNeedsAttentionViewWorksWithoutAnUrgencySource(t *testing.T) {
+	t.Parallel()
+	base, _ := viewServer(t, nil)
+	var page api.Inbox
+	getJSON(t, base+"/needs-attention", &page)
+	if got := ids(page.Items); len(got) != 3 || got[0] != "new" || got[2] != "old" {
+		t.Fatalf("order = %v, want newest first", got)
+	}
+}
+
+func TestNeedsAttentionViewPagesAndRejectsABadCursor(t *testing.T) {
+	t.Parallel()
+	base, _ := viewServer(t, &testBar)
+	var seen []string
+	cursor := ""
+	for i := 0; i < 5; i++ {
+		var page api.Inbox
+		url := base + "/needs-attention?limit=1"
+		if cursor != "" {
+			url += "&cursor=" + cursor
+		}
+		if code := getJSON(t, url, &page); code != http.StatusOK {
+			t.Fatalf("status = %d", code)
+		}
+		seen = append(seen, ids(page.Items)...)
+		if page.NextCursor == nil {
+			break
+		}
+		cursor = *page.NextCursor
+	}
+	if len(seen) != 3 || seen[0] != "old" || seen[1] != "new" || seen[2] != "mid" {
+		t.Fatalf("paged = %v, want all three once, in order", seen)
+	}
+	if code := getJSON(t, base+"/needs-attention?cursor=!!!", nil); code != http.StatusBadRequest {
+		t.Fatalf("a bad cursor = %d, want 400", code)
+	}
+	if code := getJSON(t, base+"/needs-attention?limit=0", nil); code != http.StatusBadRequest {
+		t.Fatalf("limit 0 = %d, want 400", code)
+	}
+}
+
+// Snoozed mail is hidden from the view as it is from the inbox, and a dismissed or
+// handled message leaves it.
+func TestNeedsAttentionViewHidesSnoozedAndDismissed(t *testing.T) {
+	t.Parallel()
+	base, dbs := viewServer(t, &testBar)
+	if err := dbs.DismissNeedsMe(context.Background(), "acct-1", "ck:mid"); err != nil {
+		t.Fatal(err)
+	}
+	if code := doJSON(t, http.MethodPost, base+"/messages/new/snooze", map[string]string{"preset": "tomorrow"}, nil, nil); code != http.StatusNoContent {
+		t.Fatalf("snooze setup = %d, want 204", code)
+	}
+	var page api.Inbox
+	getJSON(t, base+"/needs-attention", &page)
+	if got := ids(page.Items); len(got) != 1 || got[0] != "old" {
+		t.Fatalf("items = %v, want only the one neither dismissed nor snoozed", got)
 	}
 }

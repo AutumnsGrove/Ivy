@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/AutumnsGrove/Ivy/llm"
+	"github.com/AutumnsGrove/Ivy/store"
 )
 
 // SettingTuning is the global setting that holds the operator's tuning as JSON.
@@ -70,6 +73,22 @@ func (t Tuning) apply(qs map[string]Question) (map[string]Question, error) {
 		out[id] = q
 	}
 	return out, nil
+}
+
+// UrgencyBar is how the Needs attention view recognises an urgent message under the
+// live registry: the urgency question's current wording hash, the Jev model and the
+// bar as tuned. It is the zero value, ranking nothing, when the question is missing
+// or switched off.
+func (r *Registry) UrgencyBar() store.UrgencyBar {
+	q, ok := r.Get("urgency")
+	if !ok || !q.IsEnabled() {
+		return store.UrgencyBar{}
+	}
+	model, ok := llm.LookupModel(llm.JevModelID)
+	if !ok {
+		return store.UrgencyBar{}
+	}
+	return store.UrgencyBar{QuestionID: q.ID, Hash: q.Hash(), Model: model.Slug, High: "high", Threshold: q.Threshold}
 }
 
 // SetTuning replaces the live tuning. It is checked whole against the current

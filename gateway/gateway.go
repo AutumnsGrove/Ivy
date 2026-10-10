@@ -69,6 +69,8 @@ type Server struct {
 	// privacy is where the withheld marker reads the safety checks; nil reads as
 	// unchecked.
 	privacy PrivacySource
+	// urgency orders the Needs attention view; nil means plainly newest first.
+	urgency UrgencySource
 	// smart is what the Smart features screen reads and writes; nil falls back to a
 	// gate with no providers.
 	smart SmartControls
@@ -185,6 +187,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/messages/{id}", s.handleMessage)
 	api.HandleFunc("GET /api/v1/messages/{id}/summary", s.handleMessageSummary)
 	api.HandleFunc("GET /api/v1/messages/{id}/odds", s.handleMessageOdds)
+	api.HandleFunc("GET /api/v1/needs-attention", s.handleNeedsAttention)
 	api.HandleFunc("POST /api/v1/messages/{id}/needs/dismiss", s.handleDismissNeeds)
 	api.HandleFunc("GET /api/v1/messages/{id}/privacy", s.handleMessagePrivacy)
 	api.HandleFunc("PUT /api/v1/messages/{id}/privacy/override", s.handleAllowForHelpers)

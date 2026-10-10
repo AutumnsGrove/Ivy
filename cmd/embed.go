@@ -40,6 +40,9 @@ type Embedding struct {
 	// into verdicts and reasons. Nil when the layer is off. It asks nothing while the
 	// needs_me_stage2 switch is off, which is its default.
 	NeedsMe *needsme.Worker
+	// Urgency orders the Needs attention view from the live urgency question; nil when
+	// the layer is off, which leaves the view plainly newest first.
+	Urgency gateway.UrgencySource
 }
 
 // NewEmbedding builds the embedding stack from the operator's config. apiKey is
@@ -77,6 +80,7 @@ func NewEmbedding(cfg *config.Config, dbs *store.DBs, apiKey string, opts ...Emb
 		emb.Classifier = jev.NewWorker(engine, gate, dbs, jev.WorkerOptions{})
 		emb.Odds = engine
 		emb.Privacy = vetter
+		emb.Urgency = reg
 		emb.NeedsMe = needsme.NewWorker(reg, gate, dbs, vetter, jev.WorkerOptions{})
 	}
 	if accounts := embedAccounts(cfg, providers, models); len(accounts) > 0 {
