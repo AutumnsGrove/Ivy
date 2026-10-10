@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -68,8 +69,15 @@ func TestTheSmartScreenReadsWhatTheGateIsApplying(t *testing.T) {
 	if on, listed := a1.Features["search"]; !listed || !on {
 		t.Errorf("a1 features = %v, want meaning search on by default", a1.Features)
 	}
-	if len(got.Features) == 0 || got.Features[0].Name != "search" || got.Features[0].Label != "Meaning search" {
-		t.Errorf("features = %+v, want meaning search listed", got.Features)
+	var listed []string
+	for _, f := range got.Features {
+		listed = append(listed, f.Name)
+		if f.Name == "search" && f.Label != "Meaning search" {
+			t.Errorf("search is labelled %q, want Meaning search", f.Label)
+		}
+	}
+	if !slices.Contains(listed, "search") || !slices.Contains(listed, "needs_me") {
+		t.Errorf("features = %v, want meaning search and needs-me listed", listed)
 	}
 	if got.ChatModel != llm.DefaultChatModelID || len(got.FeatureModels) != 0 {
 		t.Errorf("models = %q with overrides %v, want the default and none", got.ChatModel, got.FeatureModels)

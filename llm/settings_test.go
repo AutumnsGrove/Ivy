@@ -132,8 +132,13 @@ func TestOnlyShippedFeaturesAreListedForTheScreen(t *testing.T) {
 	if !slices.Contains(names, "search") {
 		t.Errorf("listed = %v, want meaning search among them", names)
 	}
-	if slices.Contains(names, "needs_me") {
-		t.Errorf("listed = %v: needs_me has no code behind it yet", names)
+	for _, shipped := range []string{"needs_me", "needs_me_stage2"} {
+		if !slices.Contains(names, shipped) {
+			t.Errorf("listed = %v, want %s: the needs-attention view ships it", names, shipped)
+		}
+	}
+	if slices.Contains(names, "classify") {
+		t.Errorf("listed = %v: classify has no screen behind it yet", names)
 	}
 }
 

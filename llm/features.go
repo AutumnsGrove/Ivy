@@ -42,11 +42,11 @@ var features = map[string]feature{
 	"sensitive_content":  {endpoint: EndpointSystemOne},
 
 	// Classifiers read clipped state only.
-	"needs_me":    {endpoint: EndpointSystemOne},
+	"needs_me":    {endpoint: EndpointSystemOne, label: "Needs you"},
 	"classify":    {endpoint: EndpointSystemOne},
 	"junk_rescue": {endpoint: EndpointSystemOne},
 
-	"needs_me_stage2": {endpoint: EndpointChat, vetted: true},
+	"needs_me_stage2": {endpoint: EndpointChat, vetted: true, label: "Needs you: reasons"},
 	"summary":         {endpoint: EndpointChat, vetted: true},
 	"digest":          {endpoint: EndpointChat, vetted: true},
 	"extraction":      {endpoint: EndpointChat, vetted: true},
