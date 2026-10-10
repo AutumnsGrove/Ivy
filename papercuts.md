@@ -1771,7 +1771,7 @@ real browser or the potato.
 - **Gate after N44:** `golangci-lint` 0 issues, `go vet`, `staticcheck`, `gofumpt` clean, `make drift` clean,
   `CGO_ENABLED=1 go test -race -count=1 ./...` all packages pass. No web code changed in this item.
 
-- **N50 open** (found during 5c.3, 2026-10-10) · `jev/engine_test.go` `TestACancelledCallIsStillLedgeredAndDoesNotBreakTheGate` is
+- **N52 open** (found during 5c.3, 2026-10-10) · `jev/engine_test.go` `TestACancelledCallIsStillLedgeredAndDoesNotBreakTheGate` is
   timing-based (the fake provider holds the request 150 ms and the test cancels after 40 ms), so it fails when the
   machine is loaded: it failed once in a run of `./jev/` alongside every other package (127 s against the usual ~30 s) and
   passed 5 of 5 on its own, with and without the 5c.3 changes. Not a defect in the gate. Fix when convenient by cancelling on

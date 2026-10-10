@@ -1291,3 +1291,39 @@ New package `needsme/` (cannot import smtp, send, compose, sync, gateway or net/
   and is reserved by the gate before each call; the monthly caps apply.
 - **Not yet:** dismissal and clearing on reply/archive (5c.3), the list endpoint, the reason in the inbox API and the
   Needs attention view (5c.3, 5c.4), the odds sheet's second stage (5c.4), and the labelled evaluation (5c.5, G3).
+
+## 5c.3 Storage and API for needs-attention (2026-10-10)
+
+The backend half of the view, in five stages. Operator confirmed decision 5's assumption: **removing the tag and
+dismissing the flag are the same action.**
+
+- **Dismissal** (`store/needsme.go`). `needs_me.state` is `open` or `dismissed`. A dismissed row is kept, so stage two
+  never re-decides the message, a newer verdict cannot resurrect it (`PutNeedsMe` keeps a dismissal), and the flag
+  does not return on a re-read. The inbox flag, the count, the by-reference view and `MessageNeeds` all read open
+  verdicts only. `POST /messages/{id}/needs/dismiss` is the explicit click (204, safe to repeat, works on an unjudged
+  message).
+- **Handled clears it.** Archiving, trashing, spamming, moving or expunging a message, one by one or in a batch, and
+  sending a reply to it (the reply's In-Reply-To hashes to the parent's content key, so no lookup) dismiss the flag
+  once the action is accepted. Flag, seen, tag and refused actions do not. Reading alone never does. Dismissal is
+  local and best effort: a failure is logged and never fails an action the server already accepted. **Known edge:**
+  undoing a send does not bring the flag back.
+- **The reason is on the rows.** Inbox rows, the message and its summary carry `needsReason` (optional, only while open).
+- **`GET /needs-attention`** pages the open verdicts as an `Inbox` page (so the list code is shared): urgent first, newest
+  first inside each group, keyset paging across the boundary, snoozed and Reading mail hidden as in the inbox, `limit`
+  1-200. "Urgent" is the live urgency question's current wording, the Jev model and the bar as tuned
+  (`Registry.UrgencyBar`), so retuning reorders the view with no migration; with no source it is plainly newest first.
+  It reads what is decided and never calls a provider.
+- **Indexes.** Mirror migrations 20 (`idx_decisions_question`, for stage two's queue) and 21 (`idx_needs_me_open`, a
+  partial index over open verdicts). The first plan of the view started from every Inbox message and probed
+  `needs_me` for each; it now starts from the open verdicts (`CROSS JOIN` order pinned, plan tests name the index).
+- **The "Needs you" tag** (`store/tags.go`): reserved (cannot be deleted), **local only** (`Tag.LocalOnly`), placed by stage
+  two with a `needs` verdict (source `placed`). Dismissing by any path removes it; removing it from the picker (single or
+  batch untag) dismisses the flag. Applying it by hand is refused (`409 local_tag`) because that would write an IMAP
+  keyword. **A leak found by test:** a rebuilt-mailbox sync would have queued `$ivy-needs-you` to the server, because the
+  re-apply loop writes a keyword for every membership. Local-only tags are now left out of the sync index and of the
+  re-apply (`sync/tags_readback_test.go`).
+- **Found on the way:** `TestACancelledCallIsStillLedgeredAndDoesNotBreakTheGate` (5b) is timing-based and failed once
+  under full-suite load; passes alone 5 of 5, with and without these changes (papercut N52).
+- **Not yet (5c.4):** every screen: the Needs attention view, the inline marker with its reason, the Smart-screen
+  labels for the two switches, the odds sheet's second stage, and replacing the mock `needs` fixtures in E2E. Also 5c.5,
+  the labelled evaluation (gate G3).
