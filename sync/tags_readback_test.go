@@ -234,3 +234,38 @@ func TestNoReapplyForUntaggedMailOrKeywordlessServers(t *testing.T) {
 		t.Errorf("a keywordless server was queued %d ops", n)
 	}
 }
+
+// The "Needs you" tag is placed by Ivy and lives only here: a rebuilt mailbox must
+// not get a keyword written back for it, and a keyword another client sets for the
+// same slug must not turn into membership of it.
+func TestThePlacedTagNeverReachesTheServerOrComesBackFromIt(t *testing.T) {
+	t.Parallel()
+	fx := newTagFixture(t)
+	if err := fx.dbs.PlaceNeedsTag(fx.ctx, "acct-1", contentKeyFor(1)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := fx.acc.BumpUIDValidity("INBOX"); err != nil {
+		t.Fatal(err)
+	}
+	fx.acc.Deliver("INBOX", rawFor(1))
+	fx.fetch(t)
+	if n := len(fx.activeOps(t)); n != 0 {
+		t.Fatalf("a rebuilt mailbox queued %d ops for a tag that must stay local: %+v", n, fx.activeOps(t))
+	}
+	m, _ := fx.dbs.TagsForMessages(fx.ctx, "acct-1", []string{contentKeyFor(1)})
+	if len(m[contentKeyFor(1)]) != 1 || m[contentKeyFor(1)][0].ID != store.NeedsTagID {
+		t.Fatalf("the rebuild lost the local membership: %v", m)
+	}
+
+	fx.acc.Deliver("INBOX", rawFor(2))
+	fx.fetch(t)
+	if err := fx.acc.Flag("INBOX", 2, imapFlag(store.TagKeyword(store.NeedsSlug))); err != nil {
+		t.Fatal(err)
+	}
+	fx.fetch(t)
+	m, _ = fx.dbs.TagsForMessages(fx.ctx, "acct-1", []string{contentKeyFor(2)})
+	if len(m[contentKeyFor(2)]) != 0 {
+		t.Fatalf("a keyword from the server placed the local tag: %v", m[contentKeyFor(2)])
+	}
+}

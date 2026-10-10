@@ -77,7 +77,7 @@ func (s *Server) handleEnqueueOutbox(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if dealsWithMessage(string(body.Action)) {
+	if dealsWithMessage(string(body.Action)) || s.removesPlacedTag(ctx, string(body.Action), body.TagId) {
 		s.clearNeed(ctx, msg.AccountID, msg.ContentKey)
 	}
 	s.hintOutbox(msg.AccountID)
@@ -200,6 +200,8 @@ func outboxActionMessage(code string) string {
 		return "This account has no Junk folder"
 	case "no_inbox_folder":
 		return "This account has no Inbox"
+	case "local_tag":
+		return "Ivy places that tag itself; take it off to dismiss the flag"
 	case "bad_destination":
 		return "That folder is not available"
 	case "same_folder":

@@ -22,6 +22,17 @@ func dealsWithMessage(action string) bool {
 	return false
 }
 
+// removesPlacedTag reports whether an action takes the local "Needs you" tag off a
+// message. That is the same act as dismissing the flag (decision 5), so the caller
+// clears it. A tag that cannot be read is not the placed tag.
+func (s *Server) removesPlacedTag(ctx context.Context, action string, tagID *string) bool {
+	if action != "untag" || tagID == nil || *tagID == "" {
+		return false
+	}
+	tag, err := s.dbs.GetTag(ctx, *tagID)
+	return err == nil && tag.LocalOnly()
+}
+
 // clearNeed drops a message's needs-attention flag once the operator has dealt with
 // it. The action that earned it has already been accepted and the flag is only a
 // local hint, so a failure here is logged and never turned into a failed request.

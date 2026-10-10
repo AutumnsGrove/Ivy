@@ -144,7 +144,7 @@ func (s *Server) handleEnqueueOutboxBatch(w http.ResponseWriter, r *http.Request
 		}
 		for _, i := range primary {
 			items = append(items, s.outboxItem(ctx, stored[i]))
-			if dealsWithMessage(string(action)) {
+			if dealsWithMessage(string(action)) || s.removesPlacedTag(ctx, string(action), body.TagId) {
 				s.clearNeed(ctx, ops[i].AccountID, ops[i].ContentKey)
 			}
 		}

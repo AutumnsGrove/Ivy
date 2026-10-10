@@ -458,3 +458,92 @@ func keysOfSummaries(items []MessageSummary) []string {
 	}
 	return out
 }
+
+func tagIDs(t *testing.T, dbs *DBs, account, key string) []string {
+	t.Helper()
+	m, err := dbs.TagsForMessages(context.Background(), account, []string{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, tag := range m[key] {
+		out = append(out, tag.ID)
+	}
+	return out
+}
+
+// The "placed for you" tag is reserved so it cannot be deleted from under the view,
+// and local only so it never becomes an IMAP keyword on someone's mail.
+func TestThePlacedTagIsReservedLocalOnlyAndIdempotent(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+
+	tag, err := dbs.EnsureNeedsTag(ctx)
+	if err != nil || tag.ID != NeedsTagID || tag.Slug != NeedsSlug || tag.Name != NeedsTagName {
+		t.Fatalf("tag = %+v, %v", tag, err)
+	}
+	again, err := dbs.EnsureNeedsTag(ctx)
+	if err != nil || again.ID != tag.ID {
+		t.Fatalf("a second ensure = %+v, %v; want the same tag", again, err)
+	}
+	if !IsReservedTag(NeedsTagID) || !tag.LocalOnly() {
+		t.Fatal("the placed tag must be reserved and local only")
+	}
+	if (Tag{ID: "t-other", Slug: "work"}).LocalOnly() {
+		t.Fatal("an ordinary tag reads as local only")
+	}
+
+	for i := 0; i < 2; i++ {
+		if err := dbs.PlaceNeedsTag(ctx, "a", "k1"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := tagIDs(t, dbs, "a", "k1"); len(got) != 1 || got[0] != NeedsTagID {
+		t.Fatalf("tags = %v, want the placed tag once", got)
+	}
+	var source string
+	if err := dbs.State.Read.QueryRowContext(ctx,
+		`SELECT source FROM message_tags WHERE tag_id = ? AND content_key = 'k1'`, NeedsTagID).Scan(&source); err != nil {
+		t.Fatal(err)
+	}
+	if source != TagSourcePlaced {
+		t.Fatalf("source = %q, want %q: placed by the layer, not the operator", source, TagSourcePlaced)
+	}
+}
+
+// Decision 5: removing the tag and dismissing the flag are the same action, so
+// dismissing, by whatever path, takes the tag away too.
+func TestDismissingTakesThePlacedTagAway(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	flaggedInbox(t, dbs)
+	for _, k := range []string{"k1", "k2"} {
+		if err := dbs.PlaceNeedsTag(ctx, "a", k); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := dbs.DismissNeedsMe(ctx, "a", "k1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tagIDs(t, dbs, "a", "k1"); len(got) != 0 {
+		t.Fatalf("k1 still carries %v after being dismissed", got)
+	}
+	if got := tagIDs(t, dbs, "a", "k2"); len(got) != 1 {
+		t.Fatalf("dismissing k1 took k2's tag: %v", got)
+	}
+	// A message the operator tagged with something else keeps that.
+	if _, err := dbs.CreateTag(ctx, "t-work", "Work", "sky"); err != nil {
+		t.Fatal(err)
+	}
+	if err := dbs.TagMessage(ctx, "a", "k2", "t-work", TagSourceOperator); err != nil {
+		t.Fatal(err)
+	}
+	if err := dbs.DismissNeedsMe(ctx, "a", "k2"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tagIDs(t, dbs, "a", "k2"); len(got) != 1 || got[0] != "t-work" {
+		t.Fatalf("k2 tags = %v, want only the operator's own tag left", got)
+	}
+}

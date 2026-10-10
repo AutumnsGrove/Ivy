@@ -48,6 +48,7 @@ type Store interface {
 	ListAccounts(ctx context.Context) ([]store.Account, error)
 	Stage2Candidates(ctx context.Context, accountID string, q store.Stage2Query, limit int) ([]store.Candidate, error)
 	PutNeedsMe(ctx context.Context, r store.NeedsMeRow) error
+	PlaceNeedsTag(ctx context.Context, accountID, contentKey string) error
 	PutDecisionMisses(ctx context.Context, ms []store.DecisionMiss) error
 }
 
@@ -223,6 +224,13 @@ func (w *Worker) one(ctx context.Context, account string, c store.Candidate, cha
 	if err := w.st.PutNeedsMe(ctx, row); err != nil {
 		slog.ErrorContext(ctx, "needsme: a paid verdict could not be stored", "account", account, "content_key", key, "error", err)
 		return false, err
+	}
+	if v.Needs {
+		// The "Needs you" tag is local, removable and never an IMAP keyword. The
+		// verdict is already kept, so a failure here is reported without losing it.
+		if err := w.st.PlaceNeedsTag(ctx, account, key); err != nil {
+			slog.WarnContext(ctx, "needsme: could not place the Needs you tag", "account", account, "content_key", key, "error", err)
+		}
 	}
 	return true, nil
 }

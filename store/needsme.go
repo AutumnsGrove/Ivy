@@ -40,7 +40,10 @@ func (d *DBs) DismissNeedsMe(ctx context.Context, accountID, contentKey string) 
 	if err != nil {
 		return fmt.Errorf("dismiss needs_me: %w", err)
 	}
-	return nil
+	// Removing the placed tag and dismissing the flag are the same action (decision 5),
+	// so whichever way the flag is cleared the tag goes with it. The tag lives in
+	// state.db, so this is a second write; it is idempotent.
+	return d.UntagMessage(ctx, accountID, contentKey, NeedsTagID)
 }
 
 // PutNeedsMe stores a verdict, replacing any earlier one for the message. A

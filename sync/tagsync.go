@@ -36,7 +36,15 @@ func (f *Fetcher) loadTagIndex(ctx context.Context) (tagIndex, error) {
 	}
 	ix := make(tagIndex, len(tags))
 	for _, t := range tags {
+		// A local-only tag (the placed "Needs you") has no keyword: it is not read back
+		// from the server and not written to it, however the mail moves or is rebuilt.
+		if t.LocalOnly() {
+			continue
+		}
 		ix[t.Slug] = t.Tag
+	}
+	if len(ix) == 0 {
+		return nil, nil
 	}
 	return ix, nil
 }
@@ -160,6 +168,9 @@ func (f *Fetcher) readBackNew(ctx context.Context, acct Account, folderID string
 			present := ix.keywordTags(ref.Flags)
 			var missing []string
 			for _, t := range members[ref.ContentKey] {
+				if t.LocalOnly() {
+					continue // never a keyword, however the mailbox was rebuilt
+				}
 				if !hasTag(present, t.ID) {
 					missing = append(missing, store.TagKeyword(t.Slug))
 				}

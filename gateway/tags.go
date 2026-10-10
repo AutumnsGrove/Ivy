@@ -212,6 +212,11 @@ func (s *Server) tagKeywordAction(ctx context.Context, body api.OutboxAction) (s
 	}
 	keyword := []string{store.TagKeyword(tag.Slug)}
 	if body.Action == api.OutboxActionTag {
+		if tag.LocalOnly() {
+			// A placed tag is Ivy's, not a label: applying it would write a keyword to
+			// the server. Taking it off is allowed and is how the flag is dismissed.
+			return store.OutboxExpect{}, "local_tag", nil
+		}
 		return store.OutboxExpect{FlagsAdd: keyword}, "", nil
 	}
 	return store.OutboxExpect{FlagsClear: keyword}, "", nil

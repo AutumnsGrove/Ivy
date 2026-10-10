@@ -126,3 +126,61 @@ func TestARefusedSendLeavesTheFlag(t *testing.T) {
 		t.Fatal("a refused send cleared the flag")
 	}
 }
+
+// The placed tag is local only. Applying it from the tag picker would write a
+// keyword to the server, so that is refused; taking it off is how the operator
+// dismisses the flag, so that clears the flag and works everywhere untag does.
+func TestThePlacedTagCannotBeAppliedByHandButRemovingItDismisses(t *testing.T) {
+	t.Parallel()
+	srv, dbs := outboxServer(t)
+	ctx := context.Background()
+	flagNeeds(t, dbs, "ck:m1")
+	if err := dbs.PlaceNeedsTag(ctx, "acct-1", "ck:m1"); err != nil {
+		t.Fatal(err)
+	}
+	tagID := store.NeedsTagID
+
+	var refusal api.Error
+	if code := postJSON(t, srv.URL+"/api/v1/outbox", api.OutboxAction{MessageId: "m1", Action: api.OutboxActionTag, TagId: &tagID}, &refusal); code != http.StatusConflict || refusal.Code != "local_tag" {
+		t.Fatalf("tagging by hand = %d %q, want 409 local_tag", code, refusal.Code)
+	}
+
+	if code := postJSON(t, srv.URL+"/api/v1/outbox", api.OutboxAction{MessageId: "m1", Action: api.OutboxActionUntag, TagId: &tagID}, nil); code != http.StatusAccepted {
+		t.Fatalf("untag = %d, want 202", code)
+	}
+	if stillNeeds(t, dbs, "ck:m1") {
+		t.Fatal("removing the placed tag left the flag on")
+	}
+	if m, _ := dbs.TagsForMessages(ctx, "acct-1", []string{"ck:m1"}); len(m["ck:m1"]) != 0 {
+		t.Fatalf("tags after removing = %v", m["ck:m1"])
+	}
+}
+
+func TestABatchUntagOfThePlacedTagDismissesEach(t *testing.T) {
+	t.Parallel()
+	srv, dbs := batchServer(t)
+	ctx := context.Background()
+	for _, k := range []string{"ck:m1", "ck:m2"} {
+		flagNeeds(t, dbs, k)
+		if err := dbs.PlaceNeedsTag(ctx, "acct-1", k); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tagID := store.NeedsTagID
+	var result api.OutboxBatchResult
+	code := postJSON(t, srv.URL+"/api/v1/outbox/batch", api.OutboxBatch{
+		MessageIds: []string{"m1"}, Action: api.OutboxBatchActionUntag, TagId: &tagID,
+	}, &result)
+	if code != http.StatusAccepted {
+		t.Fatalf("status = %d", code)
+	}
+	if stillNeeds(t, dbs, "ck:m1") || !stillNeeds(t, dbs, "ck:m2") {
+		t.Fatal("the batch should clear m1's flag only")
+	}
+	code = postJSON(t, srv.URL+"/api/v1/outbox/batch", api.OutboxBatch{
+		MessageIds: []string{"m2"}, Action: api.OutboxBatchActionTag, TagId: &tagID,
+	}, &result)
+	if code != http.StatusAccepted || len(result.Skipped) != 1 || result.Skipped[0].Code != "local_tag" {
+		t.Fatalf("batch tag of a local tag = %d %+v, want it skipped as local_tag", code, result.Skipped)
+	}
+}

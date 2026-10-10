@@ -36,6 +36,9 @@ const (
 	TagSourceOperator = "operator"
 	// TagSourceServer is a tag learned from a keyword another client set.
 	TagSourceServer = "server"
+	// TagSourcePlaced is a tag Ivy placed for the operator (needs attention), local
+	// and removable. It is never an IMAP keyword.
+	TagSourcePlaced = "placed"
 )
 
 // ErrTagName reports a tag name that is empty or longer than MaxTagNameLen.
@@ -400,8 +403,52 @@ const (
 	readingColor   = "lilac"
 )
 
+// The "placed for you" tag for mail that needs the operator. Reserved like Reading,
+// and local only: it is never written to the server as a keyword, applied from the
+// tag picker as one, or read back from one.
+const (
+	NeedsTagID   = "t-needs-you"
+	NeedsSlug    = "needs-you"
+	NeedsTagName = "Needs you"
+	needsColor   = "coral"
+)
+
 // IsReservedTag reports whether a tag is reserved and must not be deleted.
-func IsReservedTag(id string) bool { return id == ReadingTagID }
+func IsReservedTag(id string) bool { return id == ReadingTagID || id == NeedsTagID }
+
+// LocalOnly reports whether a tag lives only in Ivy. Placed tags are decided by the
+// layer and removable by the operator, but they are not the operator's labels and
+// must not appear on the server as keywords.
+func (t Tag) LocalOnly() bool { return t.ID == NeedsTagID || t.Slug == NeedsSlug }
+
+// EnsureNeedsTag creates the reserved "Needs you" tag if it is missing. A tag that
+// already uses the slug is adopted rather than duplicated.
+func (d *DBs) EnsureNeedsTag(ctx context.Context) (Tag, error) {
+	tag, err := d.TagBySlug(ctx, NeedsSlug)
+	if err == nil {
+		return tag, nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return Tag{}, err
+	}
+	_, err = d.State.Write.ExecContext(ctx,
+		`INSERT OR IGNORE INTO tags (id, slug, name, color) VALUES (?, ?, ?, ?)`,
+		NeedsTagID, NeedsSlug, NeedsTagName, needsColor)
+	if err != nil {
+		return Tag{}, fmt.Errorf("ensure needs tag: %w", err)
+	}
+	return d.TagBySlug(ctx, NeedsSlug)
+}
+
+// PlaceNeedsTag puts the "Needs you" tag on a message, creating the tag if needed.
+// Placing twice is a no-op.
+func (d *DBs) PlaceNeedsTag(ctx context.Context, accountID, contentKey string) error {
+	tag, err := d.EnsureNeedsTag(ctx)
+	if err != nil {
+		return err
+	}
+	return d.TagMessage(ctx, accountID, contentKey, tag.ID, TagSourcePlaced)
+}
 
 // EnsureReadingTag creates the reserved Reading tag if it is missing, so the
 // Reading view always has a tag to read. A tag that already uses the slug is
