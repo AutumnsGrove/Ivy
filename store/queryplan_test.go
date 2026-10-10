@@ -31,6 +31,15 @@ func TestReadQueriesUseIndexes(t *testing.T) {
 			// the arrival expression index the pass depends on.
 			"idx_messages_classify_arrival",
 		},
+		{
+			// Every pass of the needs-attention worker; the decisions primary key leads
+			// with the content key, so only a question-keyed index avoids reading all of
+			// an account's answers.
+			"stage two queue",
+			"SELECT m.id " + stage2Queue,
+			[]any{"acct", "needs_me", "h", "jev", "none", 0.65, 0.65, "needs_me_stage2", "p", "chat"},
+			"idx_decisions_question",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

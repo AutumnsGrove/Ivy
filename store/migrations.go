@@ -557,6 +557,17 @@ var mirrorMigrations = []migration{
 				ON messages(account_id, (COALESCE(NULLIF(internaldate, ''), date)))`,
 		},
 	},
+	{
+		version: 20,
+		statements: []string{
+			// Stage two of needs-attention asks "which answers to this question, at this
+			// wording and model, flagged a message?" every pass. The primary key leads
+			// with the content key, so without this the planner walks every message of
+			// the account and probes decisions one by one.
+			`CREATE INDEX idx_decisions_question
+				ON decisions(account_id, question_id, instruction_hash, model, choice)`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.
