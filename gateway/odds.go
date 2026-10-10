@@ -55,5 +55,17 @@ func (s *Server) handleMessageOdds(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
+	row, found, err := s.dbs.GetNeedsMe(r.Context(), m.AccountID, m.ContentKey)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if found {
+		stage2 := api.OddsStage2{Verdict: api.OddsStage2Verdict(row.Verdict), Model: row.Model, Dismissed: row.State == store.NeedsDismissed}
+		if row.Reason != "" {
+			stage2.Reason = &row.Reason
+		}
+		view.Stage2 = &stage2
+	}
 	writeJSON(w, http.StatusOK, view)
 }

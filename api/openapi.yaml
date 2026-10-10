@@ -2363,6 +2363,26 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OddsUnanswered"
+        stage2:
+          $ref: "#/components/schemas/OddsStage2"
+    OddsStage2:
+      type: object
+      description: >
+        The second stage of the needs-attention cascade: the chat model's verdict on a
+        message the first stage flagged. Absent when stage two never decided it.
+      required: [verdict, model, dismissed]
+      properties:
+        verdict:
+          type: string
+          enum: [needs, not]
+        reason:
+          type: string
+          description: One plain sentence; present only for a `needs` verdict. Rendered as text.
+        model:
+          type: string
+        dismissed:
+          type: boolean
+          description: The owner cleared the flag or handled the message. The verdict is kept.
     MessagePrivacy:
       type: object
       required: [state, reasons, overridden]

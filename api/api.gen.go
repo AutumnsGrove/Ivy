@@ -271,6 +271,24 @@ func (e MessagePrivacyState) Valid() bool {
 	}
 }
 
+// Defines values for OddsStage2Verdict.
+const (
+	Needs OddsStage2Verdict = "needs"
+	Not   OddsStage2Verdict = "not"
+)
+
+// Valid indicates whether the value is a known member of the OddsStage2Verdict enum.
+func (e OddsStage2Verdict) Valid() bool {
+	switch e {
+	case Needs:
+		return true
+	case Not:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OddsUnansweredReason.
 const (
 	OddsUnansweredReasonInvalidAnswer OddsUnansweredReason = "invalid_answer"
@@ -1320,7 +1338,10 @@ type MessageOdds struct {
 	Answers []OddsAnswer `json:"answers"`
 
 	// Model The model id the answers were read for; empty when none is configured.
-	Model      string           `json:"model"`
+	Model string `json:"model"`
+
+	// Stage2 The second stage of the needs-attention cascade: the chat model's verdict on a message the first stage flagged. Absent when stage two never decided it.
+	Stage2     *OddsStage2      `json:"stage2,omitempty"`
 	Unanswered []OddsUnanswered `json:"unanswered"`
 }
 
@@ -1366,6 +1387,20 @@ type OddsAnswer struct {
 	Suppressed bool    `json:"suppressed"`
 	Threshold  float64 `json:"threshold"`
 }
+
+// OddsStage2 The second stage of the needs-attention cascade: the chat model's verdict on a message the first stage flagged. Absent when stage two never decided it.
+type OddsStage2 struct {
+	// Dismissed The owner cleared the flag or handled the message. The verdict is kept.
+	Dismissed bool   `json:"dismissed"`
+	Model     string `json:"model"`
+
+	// Reason One plain sentence; present only for a `needs` verdict. Rendered as text.
+	Reason  *string           `json:"reason,omitempty"`
+	Verdict OddsStage2Verdict `json:"verdict"`
+}
+
+// OddsStage2Verdict defines model for OddsStage2.Verdict.
+type OddsStage2Verdict string
 
 // OddsUnanswered defines model for OddsUnanswered.
 type OddsUnanswered struct {

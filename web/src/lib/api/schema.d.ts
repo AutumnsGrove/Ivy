@@ -1394,6 +1394,17 @@ export interface components {
             model: string;
             answers: components["schemas"]["OddsAnswer"][];
             unanswered: components["schemas"]["OddsUnanswered"][];
+            stage2?: components["schemas"]["OddsStage2"];
+        };
+        /** @description The second stage of the needs-attention cascade: the chat model's verdict on a message the first stage flagged. Absent when stage two never decided it. */
+        OddsStage2: {
+            /** @enum {string} */
+            verdict: "needs" | "not";
+            /** @description One plain sentence; present only for a `needs` verdict. Rendered as text. */
+            reason?: string;
+            model: string;
+            /** @description The owner cleared the flag or handled the message. The verdict is kept. */
+            dismissed: boolean;
         };
         MessagePrivacy: {
             /** @enum {string} */

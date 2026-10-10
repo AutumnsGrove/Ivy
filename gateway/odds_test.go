@@ -106,3 +106,46 @@ func TestOddsFailureIsAServerErrorWithoutLeakingTheCause(t *testing.T) {
 		t.Fatal("the error cause reached the client")
 	}
 }
+
+// Stage two's verdict is read from the needs_me row, not the question cache, so the
+// sheet can show both stages of the cascade for one message.
+func TestOddsCarryStageTwoWhenItHasDecided(t *testing.T) {
+	t.Parallel()
+	srv, dbs := newConfiguredServer(t, func(s *Server) { s.WithOdds(&fakeOdds{}) })
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox})
+	mustMessage(t, dbs, inboxMessage("m1", "acct-1", "inbox-1", testNow, false))
+	mustMessage(t, dbs, inboxMessage("m2", "acct-1", "inbox-1", testNow, false))
+	if err := dbs.PutNeedsMe(context.Background(), store.NeedsMeRow{
+		AccountID: "acct-1", ContentKey: "ck:m1", Verdict: "needs", Reason: "Dana asks you to confirm Friday",
+		Model: "chat-model", State: store.NeedsOpen,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	base := srv.URL + "/api/v1"
+
+	var got api.MessageOdds
+	if code := getJSON(t, base+"/messages/m1/odds", &got); code != http.StatusOK {
+		t.Fatalf("status = %d", code)
+	}
+	s := got.Stage2
+	if s == nil || s.Verdict != "needs" || s.Reason == nil || *s.Reason != "Dana asks you to confirm Friday" ||
+		s.Model != "chat-model" || s.Dismissed {
+		t.Fatalf("stage2 = %+v", s)
+	}
+
+	if err := dbs.DismissNeedsMe(context.Background(), "acct-1", "ck:m1"); err != nil {
+		t.Fatal(err)
+	}
+	got = api.MessageOdds{}
+	getJSON(t, base+"/messages/m1/odds", &got)
+	if got.Stage2 == nil || !got.Stage2.Dismissed {
+		t.Fatalf("a dismissed verdict must still show, marked dismissed: %+v", got.Stage2)
+	}
+
+	got = api.MessageOdds{}
+	getJSON(t, base+"/messages/m2/odds", &got)
+	if got.Stage2 != nil {
+		t.Fatalf("a message stage two never decided has no stage2: %+v", got.Stage2)
+	}
+}
