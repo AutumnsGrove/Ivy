@@ -29,6 +29,8 @@ type MessageSummary struct {
 	Unread     bool
 	Flagged    bool
 	Needs      bool
+	// NeedsReason is the one-line reason stage two gave, empty unless Needs.
+	NeedsReason string
 }
 
 // InboxQuery selects a page of inbox summaries. An empty AccountID means the
@@ -135,11 +137,11 @@ func (d *DBs) scanInboxCounts(ctx context.Context, role, accountID string, hide 
 const inboxSelect = `
 	SELECT m.id, m.account_id, COALESCE(m.from_json, ''), COALESCE(m.subject, ''),
 	       COALESCE(m.snippet, ''), COALESCE(m.date, ''), m.seen, m.flagged,
-	       CASE WHEN n.account_id IS NULL THEN 0 ELSE 1 END, m.content_key
+	       CASE WHEN n.account_id IS NULL THEN 0 ELSE 1 END, COALESCE(n.reason, ''), m.content_key
 	FROM messages m
 	JOIN folders f ON f.id = m.folder_id
 	LEFT JOIN needs_me n ON n.account_id = m.account_id
-		AND n.content_key = m.content_key AND n.verdict = 'needs'
+		AND n.content_key = m.content_key AND n.verdict = 'needs' AND n.state <> 'dismissed'
 	WHERE f.role = ?
 	  AND m.disabled_at IS NULL
 	  AND (? = '' OR m.account_id = ?)
@@ -155,7 +157,7 @@ const inboxCountsSelect = `
 	FROM messages m
 	JOIN folders f ON f.id = m.folder_id
 	LEFT JOIN needs_me n ON n.account_id = m.account_id
-		AND n.content_key = m.content_key AND n.verdict = 'needs'
+		AND n.content_key = m.content_key AND n.verdict = 'needs' AND n.state <> 'dismissed'
 	WHERE f.role = ?
 	  AND m.disabled_at IS NULL
 	  AND (? = '' OR m.account_id = ?)
@@ -171,7 +173,7 @@ func scanInboxSummary(s scanner) (MessageSummary, error) {
 		needs    bool
 	)
 	err := s.Scan(&summary.ID, &summary.AccountID, &fromJSON, &summary.Subject,
-		&summary.Snippet, &date, &unread, &flagged, &needs, &summary.ContentKey)
+		&summary.Snippet, &date, &unread, &flagged, &needs, &summary.NeedsReason, &summary.ContentKey)
 	if err != nil {
 		return MessageSummary{}, err
 	}
@@ -283,10 +285,10 @@ func (d *DBs) MessagesByContentRefs(ctx context.Context, accountID string, refs 
 const messagesByRefsSelect = `
 	SELECT m.id, m.account_id, COALESCE(m.from_json, ''), COALESCE(m.subject, ''),
 	       COALESCE(m.snippet, ''), COALESCE(m.date, ''), m.seen, m.flagged,
-	       CASE WHEN n.account_id IS NULL THEN 0 ELSE 1 END, m.content_key
+	       CASE WHEN n.account_id IS NULL THEN 0 ELSE 1 END, COALESCE(n.reason, ''), m.content_key
 	FROM messages m
 	LEFT JOIN needs_me n ON n.account_id = m.account_id
-		AND n.content_key = m.content_key AND n.verdict = 'needs'
+		AND n.content_key = m.content_key AND n.verdict = 'needs' AND n.state <> 'dismissed'
 	WHERE m.disabled_at IS NULL
 	  AND (? = '' OR m.account_id = ?)
 	  AND (m.account_id || char(31) || m.content_key) IN (SELECT value FROM json_each(?))

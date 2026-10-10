@@ -239,3 +239,93 @@ func TestAWithheldSkipExpiresAndTheOverrideEndsIt(t *testing.T) {
 		t.Fatalf("the override did not end the withheld skip: %v", keysOf(got))
 	}
 }
+
+func flaggedInbox(t *testing.T, dbs *DBs) {
+	t.Helper()
+	seedClassify(t, dbs, "a",
+		classifySeed{id: "m1", folder: "inbox", key: "k1", arrived: classifyNow},
+		classifySeed{id: "m2", folder: "inbox", key: "k2", arrived: classifyNow.Add(time.Hour)},
+	)
+	for _, k := range []string{"k1", "k2"} {
+		if err := dbs.PutNeedsMe(context.Background(), NeedsMeRow{
+			AccountID: "a", ContentKey: k, Verdict: "needs", Reason: "reason for " + k, Model: "m", State: NeedsOpen,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// The inbox row carries the reason, so the marker can say why without a second call.
+func TestTheInboxRowCarriesTheReason(t *testing.T) {
+	t.Parallel()
+	dbs := openTemp(t)
+	flaggedInbox(t, dbs)
+	page, err := dbs.ListInbox(context.Background(), InboxQuery{AccountID: "a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].NeedsReason != "reason for k2" || page.Items[1].NeedsReason != "reason for k1" {
+		t.Fatalf("items = %+v", page.Items)
+	}
+}
+
+// Decision 2: tapping dismiss clears the flag for that one message, kept locally so it
+// does not come back on a re-read or when stage two runs again.
+func TestDismissingClearsTheFlagEverywhereAndItStaysCleared(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	flaggedInbox(t, dbs)
+
+	if err := dbs.DismissNeedsMe(ctx, "a", "k1"); err != nil {
+		t.Fatal(err)
+	}
+	page, _ := dbs.ListInbox(ctx, InboxQuery{AccountID: "a"})
+	if page.NeedCount != 1 || page.Items[1].Needs || page.Items[1].NeedsReason != "" || !page.Items[0].Needs {
+		t.Fatalf("after dismissing k1: %+v", page)
+	}
+	if on, _ := dbs.MessageNeeds(ctx, "a", "k1"); on {
+		t.Error("MessageNeeds still reports a dismissed message")
+	}
+	if on, _ := dbs.MessageNeeds(ctx, "a", "k2"); !on {
+		t.Error("dismissing k1 cleared k2")
+	}
+	byRef, err := dbs.MessagesByContentRefs(ctx, "a", []ContentRef{{AccountID: "a", ContentKey: "k1"}}, "", 10)
+	if err != nil || len(byRef.Items) != 1 || byRef.Items[0].Needs {
+		t.Fatalf("by-ref view = %+v, %v; want the message unflagged", byRef, err)
+	}
+
+	// The verdict is kept, so stage two does not decide it again, and a later write of
+	// the same verdict does not bring the flag back.
+	row, ok, _ := dbs.GetNeedsMe(ctx, "a", "k1")
+	if !ok || row.State != NeedsDismissed {
+		t.Fatalf("row = %+v, %v; want it kept as dismissed", row, ok)
+	}
+	if err := dbs.PutNeedsMe(ctx, NeedsMeRow{AccountID: "a", ContentKey: "k1", Verdict: "needs", Reason: "again", Model: "m", State: NeedsOpen}); err != nil {
+		t.Fatal(err)
+	}
+	if on, _ := dbs.MessageNeeds(ctx, "a", "k1"); on {
+		t.Error("rewriting the verdict resurrected a dismissed flag")
+	}
+	if got, _ := dbs.Stage2Candidates(ctx, "a", stage2Q, 10); len(got) != 0 {
+		t.Errorf("a dismissed message was queued for stage two again: %v", keysOf(got))
+	}
+}
+
+func TestDismissingTwiceOrWithoutAVerdictIsHarmless(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	flaggedInbox(t, dbs)
+	for i := 0; i < 2; i++ {
+		if err := dbs.DismissNeedsMe(ctx, "a", "k1"); err != nil {
+			t.Fatalf("dismiss #%d: %v", i+1, err)
+		}
+	}
+	if err := dbs.DismissNeedsMe(ctx, "a", "never-judged"); err != nil {
+		t.Fatalf("dismissing a message with no verdict: %v", err)
+	}
+	if _, ok, _ := dbs.GetNeedsMe(ctx, "a", "never-judged"); ok {
+		t.Error("dismissing a message with no verdict invented a row")
+	}
+}

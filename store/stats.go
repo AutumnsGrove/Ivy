@@ -101,7 +101,7 @@ func (d *DBs) MessageNeeds(ctx context.Context, accountID, contentKey string) (b
 	var one int
 	err := d.Mirror.Read.QueryRowContext(ctx, `
 		SELECT 1 FROM needs_me
-		WHERE account_id = ? AND content_key = ? AND verdict = 'needs'
+		WHERE account_id = ? AND content_key = ? AND verdict = 'needs' AND state <> 'dismissed'
 		LIMIT 1`, accountID, contentKey).Scan(&one)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil

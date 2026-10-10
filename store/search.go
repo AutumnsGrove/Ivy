@@ -199,7 +199,7 @@ func (d *DBs) PendingExtractions(ctx context.Context, accountID string, limit in
 func (d *DBs) SummaryForContent(ctx context.Context, accountID, contentKey string) (MessageSummary, error) {
 	row := d.Mirror.Read.QueryRowContext(ctx, `
 		SELECT m.id, m.account_id, COALESCE(m.from_json, ''), COALESCE(m.subject, ''),
-		       COALESCE(m.snippet, ''), COALESCE(m.date, ''), m.seen, m.flagged, 0, m.content_key
+		       COALESCE(m.snippet, ''), COALESCE(m.date, ''), m.seen, m.flagged, 0, '', m.content_key
 		FROM messages m
 		WHERE m.account_id = ? AND m.content_key = ? AND m.disabled_at IS NULL
 		ORDER BY m.date DESC, m.id DESC

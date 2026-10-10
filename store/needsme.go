@@ -23,7 +23,28 @@ type NeedsMeRow struct {
 	State string
 }
 
-// PutNeedsMe stores a verdict, replacing any earlier one for the message.
+// A verdict is open until the operator dismisses it or handles the message. The
+// inbox flag shows only open verdicts; a dismissed row is kept so stage two does not
+// decide the message again and the flag does not return on a re-read.
+const (
+	NeedsOpen      = "open"
+	NeedsDismissed = "dismissed"
+)
+
+// DismissNeedsMe clears the flag for one message and keeps the verdict. Dismissing
+// twice, or a message with no verdict, changes nothing.
+func (d *DBs) DismissNeedsMe(ctx context.Context, accountID, contentKey string) error {
+	_, err := d.Mirror.Write.ExecContext(ctx,
+		`UPDATE needs_me SET state = ? WHERE account_id = ? AND content_key = ? AND state <> ?`,
+		NeedsDismissed, accountID, contentKey, NeedsDismissed)
+	if err != nil {
+		return fmt.Errorf("dismiss needs_me: %w", err)
+	}
+	return nil
+}
+
+// PutNeedsMe stores a verdict, replacing any earlier one for the message. A
+// dismissal is the operator's and is never undone by a newer verdict.
 func (d *DBs) PutNeedsMe(ctx context.Context, r NeedsMeRow) error {
 	if r.AccountID == "" || r.ContentKey == "" {
 		return errors.New("put needs_me: a verdict needs an account and a content key")
@@ -36,7 +57,8 @@ func (d *DBs) PutNeedsMe(ctx context.Context, r NeedsMeRow) error {
 		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(account_id, content_key) DO UPDATE SET
 			verdict=excluded.verdict, reason=excluded.reason,
-			stage2_model=excluded.stage2_model, state=excluded.state`,
+			stage2_model=excluded.stage2_model,
+			state=CASE WHEN needs_me.state = 'dismissed' THEN needs_me.state ELSE excluded.state END`,
 		r.AccountID, r.ContentKey, r.Verdict, r.Reason, r.Model, r.State)
 	if err != nil {
 		return fmt.Errorf("put needs_me: %w", err)
