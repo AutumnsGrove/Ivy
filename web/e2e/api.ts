@@ -36,7 +36,8 @@ export const ODDS_FIXTURE: MessageOdds = {
 			confidence: 0.9, threshold: 0.75, quietOption: 'low', fires: true, suppressed: true, acts: false
 		}
 	],
-	unanswered: [{ questionId: 'category', reason: 'invalid_answer' }]
+	unanswered: [{ questionId: 'category', reason: 'invalid_answer' }],
+	stage2: { verdict: 'needs', reason: 'Mara asks whether you can move her old posts over.', model: 'chat-model', dismissed: false }
 };
 
 /** The mutable account state a customization flow edits, cloned per test. */
@@ -64,7 +65,17 @@ export type AccountState = {
 	smart: SmartState;
 	/** Messages the operator let helper features read despite a safety check. */
 	privacyAllowed: Set<string>;
+	/** Messages whose needs-attention flag was dismissed; the verdict stays, the flag goes. */
+	needsCleared: Set<string>;
 };
+
+/** The fixture inbox as the server would report it now: a dismissed flag and its reason are gone. */
+const liveInbox = (s: AccountState): MailSummary[] =>
+	mock.inbox.map((m) => {
+		if (!s.needsCleared.has(m.id)) return m;
+		const { needsReason: _reason, ...rest } = m;
+		return { ...rest, needs: false };
+	});
 
 /** The messages the fixture's safety checks withheld, and why. Every other message reads as unchecked. */
 const WITHHELD: Record<string, string[]> = { m3: ['injection'] };
@@ -90,7 +101,8 @@ const freshState = (): AccountState => ({
 	uploads: new Map(),
 	uploadSeq: 0,
 	smart: freshSmart(),
-	privacyAllowed: new Set()
+	privacyAllowed: new Set(),
+	needsCleared: new Set()
 });
 
 const TAG_COLORS = new Set(['sky', 'rose', 'teal', 'coral', 'lilac', 'mint', 'gold', 'sand', 'orchid', 'fern', 'slate', 'berry']);
@@ -200,7 +212,20 @@ function hostilePeople() {
 	}));
 }
 
-function inboxReply(accountId: string | null, scenario: string | null, folder: string | null, cursor: string | null): Reply {
+/** GET /needs-attention: the flagged mail, urgent first (the fixture lists the urgent one first). */
+function needsReply(rows: MailSummary[], scenario: string | null, cursor: string | null): Reply {
+	const flagged = rows.filter((m) => m.needs);
+	const page = paged(flagged, scenario, cursor, 3);
+	return { body: { items: page.rows, needCount: flagged.length, unreadCount: 0, readingWaiting: 0, nextCursor: page.nextCursor } };
+}
+
+function inboxReply(
+	rows: MailSummary[],
+	accountId: string | null,
+	scenario: string | null,
+	folder: string | null,
+	cursor: string | null
+): Reply {
 	if (folder === 'trash') {
 		// Two fixtures stand in for trashed mail; the other folder views are empty.
 		const items = mock.inbox.slice(0, 2);
@@ -212,7 +237,7 @@ function inboxReply(accountId: string | null, scenario: string | null, folder: s
 	if (scenario === 'empty') {
 		return { body: { items: [], needCount: 0, unreadCount: 0, readingWaiting: 3 } };
 	}
-	const all = mock.inbox.filter((m) => !accountId || m.accountId === accountId);
+	const all = rows.filter((m) => !accountId || m.accountId === accountId);
 	const page = paged(all, scenario, cursor, 3);
 	return {
 		body: {
@@ -225,9 +250,7 @@ function inboxReply(accountId: string | null, scenario: string | null, folder: s
 	};
 }
 
-function messageReply(id: string, scenario: string | null, tagIds: string[]): Reply {
-	const summary = mock.inbox.find((x) => x.id === id);
-	if (!summary) return notFound('No such message');
+function messageReply(summary: MailSummary, id: string, scenario: string | null, tagIds: string[]): Reply {
 	if (scenario === 'fetch-error') {
 		return { status: 502, body: { code: 'fetch_failed', message: "This message didn't load" } };
 	}
@@ -690,7 +713,16 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	if (smart) return smart;
 	const spend = spendReply(path, params, scenario, state.accounts, state.smart.caps);
 	if (spend) return spend;
-	if (path === '/inbox') return inboxReply(params.get('account_id'), scenario, params.get('folder'), params.get('cursor'));
+	if (path === '/inbox') {
+		return inboxReply(liveInbox(state), params.get('account_id'), scenario, params.get('folder'), params.get('cursor'));
+	}
+	if (path === '/needs-attention') return needsReply(liveInbox(state), scenario, params.get('cursor'));
+	const dismissal = /^\/messages\/([^/]+)\/needs\/dismiss$/.exec(path);
+	if (dismissal && method === 'POST') {
+		if (!mock.inbox.some((m) => m.id === dismissal[1])) return notFound('No such message');
+		state.needsCleared.add(dismissal[1]);
+		return { status: 204, body: null };
+	}
 	if (path === '/search') return searchReply(params.get('q') ?? '');
 	if (path === '/reading') {
 		const page = paged(mock.reading.issues, scenario, params.get('cursor'), 2);
@@ -865,7 +897,7 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	const match = /^\/messages\/([^/]+)(\/summary|\/body|\/odds|\/privacy|\/privacy\/override)?$/.exec(path);
 	if (match) {
 		const [, id, kind] = match;
-		const summary: MailSummary | undefined = mock.inbox.find((x) => x.id === id);
+		const summary: MailSummary | undefined = liveInbox(state).find((x) => x.id === id);
 		if (!summary) return notFound('No such message');
 		if (kind === '/summary') return { body: summary };
 		if (kind === '/privacy') return { body: privacyOf(state, id) };
@@ -875,9 +907,13 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 			else return notFound('No such route');
 			return { status: 204, body: null };
 		}
-		if (kind === '/odds') return { body: id === 'm1' ? ODDS_FIXTURE : { model: '', answers: [], unanswered: [] } };
+		if (kind === '/odds') {
+			if (id !== 'm1') return { body: { model: '', answers: [], unanswered: [] } };
+			const stage2 = { ...ODDS_FIXTURE.stage2!, dismissed: state.needsCleared.has(id) };
+			return { body: { ...ODDS_FIXTURE, stage2 } };
+		}
 		if (kind === '/body') return bodyDocument(id);
-		return messageReply(id, scenario, state.tagged.get(id) ?? []);
+		return messageReply(summary, id, scenario, state.tagged.get(id) ?? []);
 	}
 	return tagReply(state, path, method, raw);
 }

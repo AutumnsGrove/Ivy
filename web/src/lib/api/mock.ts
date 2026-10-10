@@ -123,6 +123,7 @@ export const inbox: MailSummary[] = [
 		preview: 'Hi! A friend pointed me to Grove and I wondered whether I can bring my old posts…',
 		unread: true,
 		needs: true,
+		needsReason: 'Mara asks whether you can move her old posts over.',
 		tag: 'contact form'
 	},
 	{
@@ -135,6 +136,7 @@ export const inbox: MailSummary[] = [
 		preview: 'We are writing on behalf of a rights holder to notify you of material hosted at…',
 		unread: true,
 		needs: true,
+		needsReason: 'A rights holder says you have a deadline to respond.',
 		tag: 'legal'
 	},
 	{

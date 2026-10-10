@@ -56,7 +56,9 @@
 			{#if ondismiss && m.needs}
 				<div class="dismiss">
 					<Button size="sm" variant="tonal" onclick={() => ondismiss(m)}>
-						Dismiss<span class="sr-only">: {m.subject}</span>
+						<!-- The spoken name carries the subject; a single text node, since a flex gap would split it. -->
+						<span class="sr-only">Dismiss: {m.subject}</span>
+						<span aria-hidden="true">Dismiss</span>
 					</Button>
 				</div>
 			{/if}

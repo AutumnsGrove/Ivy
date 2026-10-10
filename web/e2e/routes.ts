@@ -8,6 +8,7 @@ export const ROUTES: Record<string, string> = {
 	'message': '/m/m1',
 	'message-fetch-error': '/m/m1?scenario=fetch-error',
 	'message-attachment-error': '/m/m1?scenario=attachment-error',
+	'needs': '/needs',
 	'reading': '/reading',
 	'search': '/search?q=domain+renewal',
 	'search-none': '/search?q=xylophone+invoice',

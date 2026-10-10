@@ -1327,3 +1327,26 @@ dismissing the flag are the same action.**
 - **Not yet (5c.4):** every screen: the Needs attention view, the inline marker with its reason, the Smart-screen
   labels for the two switches, the odds sheet's second stage, and replacing the mock `needs` fixtures in E2E. Also 5c.5,
   the labelled evaluation (gate G3).
+
+## 5c.4 Screens for needs-attention (2026-10-10)
+
+The front half of the view; with it the needs-me cascade is usable end to end on the dev stack.
+
+- **Smart screen.** `needs_me` ("Needs you") and `needs_me_stage2` ("Needs you: reasons") now carry labels in the gate's
+  feature table, so they are listed on `/settings/smart`. Both still ship off: the operator turns them on per account.
+  This was the last thing keeping the switches unlisted.
+- **Odds endpoint.** `GET /messages/{id}/odds` gains an optional `stage2` (`verdict`, `reason`, `model`, `dismissed`) read
+  from the `needs_me` row, since stage two does not live in the question cache. A dismissed verdict still shows, marked.
+- **Needs attention view.** A `/needs` route over `GET /needs-attention` (paged, "Show older"), reached from a new
+  "Needs attention" row with the count in the nav panel (drawer on the phone, pane on desktop). Each row shows the marker and
+  its reason; a Dismiss button sits beside the card, not inside it, because a button cannot nest in the card's link. The row
+  leaves as soon as the server clears it.
+- **Inline marker.** Inbox rows show the reason under the "needs you" pill; the reader shows it with a Dismiss button.
+  Reasons are plain text (`dir="auto"`, never markup) and never labelled as AI.
+- **Odds sheet.** A "Second look" section shows stage two's verdict, reason, model and whether it was cleared.
+- **Tests.** Go: label listing, odds `stage2`. Unit: row marker and dismiss, the client calls, `dismissNeeds`, the sheet.
+  E2E (`e2e/needs.spec.ts`, phone and desktop): the view, dismiss and the inbox count, empty state, the nav row, the reader,
+  the sheet; the fake network gained `/needs-attention`, the dismiss endpoint and per-test cleared state. Full Playwright
+  suite (446 passed, 10 skipped), `make check` and 468 unit tests are green.
+- **Found on the way:** a flex gap split a button's accessible name ("Dismiss : subject"); the name is now one hidden text node.
+- **Not done:** 5c.5, the labelled evaluation (gate G3, the operator's ~100 labels); a visual look on the phone with real mail.
