@@ -12,6 +12,8 @@
 		unread?: boolean;
 		flagged?: boolean;
 		needs?: boolean;
+		/** Why it needs the owner: one plain sentence, shown only while `needs` is set. */
+		reason?: string;
 		tag?: string;
 		selected?: boolean;
 		/** Phone: navigates to the message. Omit on desktop, where `onselect` fills the reading pane. */
@@ -31,6 +33,7 @@
 		unread = false,
 		flagged = false,
 		needs = false,
+		reason,
 		tag,
 		selected = false,
 		href,
@@ -63,6 +66,7 @@
 			{#if tag}<Pill>{tag}</Pill>{/if}
 		</span>
 	{/if}
+	{#if needs && reason}<span class="reason" dir="auto">{reason}</span>{/if}
 {/snippet}
 
 {#if choosing}
@@ -174,6 +178,12 @@
 	.preview {
 		font-size: var(--fs-aside);
 		color: var(--muted);
+	}
+	.reason {
+		font-size: var(--fs-aside);
+		line-height: 1.4;
+		color: var(--text);
+		overflow-wrap: anywhere;
 	}
 	.tags {
 		display: flex;

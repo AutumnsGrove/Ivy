@@ -79,6 +79,14 @@ export const api = {
 	listInbox: (o: Opts & { accountId?: string; folder?: FolderView; tag?: string; cursor?: string } = {}): Promise<Inbox> =>
 		request<Inbox>(apiPath('/inbox', { account_id: o.accountId, folder: o.folder, tag: o.tag, cursor: o.cursor })),
 
+	/** Mail with an open needs-attention verdict, urgent first. Reads what is decided; never makes a request. */
+	listNeedsAttention: (o: { accountId?: string; cursor?: string } = {}): Promise<Inbox> =>
+		request<Inbox>(apiPath('/needs-attention', { account_id: o.accountId, cursor: o.cursor })),
+
+	/** Clear a message's flag. Local, safe to repeat, and the verdict is kept so it does not return. */
+	dismissNeedsAttention: (id: string): Promise<void> =>
+		request<void>(`/messages/${encodeURIComponent(id)}/needs/dismiss`, { method: 'POST' }),
+
 	getMessage: (id: string, _o: Opts = {}): Promise<MailMessage> =>
 		request<MailMessage>(`/messages/${encodeURIComponent(id)}`),
 

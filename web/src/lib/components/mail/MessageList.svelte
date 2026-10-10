@@ -5,6 +5,7 @@
 	import type { Account, MailSummary } from '#lib/types.js';
 	import { MAX_SELECTION, type Selection } from '#lib/selection.svelte.js';
 	import { toasts } from '#lib/toast.js';
+	import Button from '../ui/Button.svelte';
 	import MessageCard from './MessageCard.svelte';
 
 	type Props = {
@@ -17,8 +18,10 @@
 		onselect?: (m: MailSummary) => void;
 		/** While choosing several, cards toggle instead of opening. */
 		selection?: Selection;
+		/** The Needs attention view: a flagged row gets a button that clears its flag. */
+		ondismiss?: (m: MailSummary) => void;
 	};
-	let { items, accounts, selectedId, hrefFor, onselect, selection }: Props = $props();
+	let { items, accounts, selectedId, hrefFor, onselect, selection, ondismiss }: Props = $props();
 
 	function toggle(id: string) {
 		if (!selection?.toggle(id) && !selection?.has(id)) {
@@ -40,6 +43,7 @@
 				unread={live?.seen === undefined ? m.unread : !live.seen}
 				flagged={live?.flagged ?? m.flagged ?? false}
 				needs={m.needs}
+				reason={m.needsReason}
 				tag={m.tag}
 				selected={m.id === selectedId}
 				href={hrefFor?.(m)}
@@ -48,6 +52,14 @@
 				checked={selection?.has(m.id)}
 				ontoggle={() => toggle(m.id)}
 			/>
+			<!-- A sibling of the card, not inside it: a button cannot nest in the card's link. -->
+			{#if ondismiss && m.needs}
+				<div class="dismiss">
+					<Button size="sm" variant="tonal" onclick={() => ondismiss(m)}>
+						Dismiss<span class="sr-only">: {m.subject}</span>
+					</Button>
+				</div>
+			{/if}
 		</li>
 	{/each}
 </ul>
@@ -60,5 +72,10 @@
 		margin: 0;
 		padding: 0;
 		list-style: none;
+	}
+	.dismiss {
+		display: flex;
+		justify-content: flex-end;
+		margin-top: var(--sp-4);
 	}
 </style>
