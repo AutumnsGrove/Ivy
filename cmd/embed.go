@@ -71,6 +71,7 @@ func NewEmbedding(cfg *config.Config, dbs *store.DBs, apiKey string, opts ...Emb
 		gateOpts = append(gateOpts, llm.WithVetting(vetter))
 	}
 	gate := llm.NewGate(dbs, gateOpts...)
+	warnSmartCannotRun(context.Background(), dbs, gate)
 	providers, models := buildEmbedders(cfg, apiKey)
 	emb := &Embedding{Query: newQueryEmbedder(gate, providers, models), Caps: gate}
 	if regErr != nil {
@@ -247,4 +248,21 @@ func smartOf(accounts []config.Account) map[string]bool {
 		out[a.ID] = a.LLMEnabled
 	}
 	return out
+}
+
+// warnSmartCannotRun says at startup, once per account, what keeps switched-on smart
+// features from running. Without it a missing key looks exactly like a working
+// instance that has simply found nothing, and the Smart screen is the only other place
+// that says so.
+func warnSmartCannotRun(ctx context.Context, dbs *store.DBs, gate *llm.Gate) {
+	accounts, err := dbs.ListAccounts(ctx)
+	if err != nil {
+		slog.WarnContext(ctx, "could not check whether smart features can run", "error", err)
+		return
+	}
+	for _, a := range accounts {
+		for _, p := range gate.Problems(ctx, a.ID) {
+			slog.WarnContext(ctx, "smart features are on but cannot run", "account", a.ID, "problem", p.Message)
+		}
+	}
 }

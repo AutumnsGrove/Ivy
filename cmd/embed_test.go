@@ -477,3 +477,46 @@ func TestNeedsAttentionRunsStageOneThenStageTwo(t *testing.T) {
 		t.Fatalf("inbox = %+v, %v; want the message flagged", page, err)
 	}
 }
+
+// An opted-in account with no key looks identical to one that is working, and it cost
+// an hour to find on the first real mailbox. Starting must say so in the log.
+func TestStartingWithSmartOnAndNoKeySaysSoInTheLog(t *testing.T) {
+	// Not parallel: it swaps the default logger.
+	var logged bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	ctx := context.Background()
+	dbs, err := store.Open(ctx, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = dbs.Close() })
+	for _, id := range []string{"mine", "quiet"} {
+		if err := dbs.UpsertAccount(ctx, store.Account{ID: id, Address: id + "@example.test"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := &config.Config{
+		LLM:      config.LLM{OpenRouterBase: "http://127.0.0.1:1", EmbedModel: "m", MonthlyCapUSD: 5},
+		Accounts: []config.Account{{ID: "mine", LLMEnabled: true}, {ID: "quiet"}},
+	}
+
+	NewEmbedding(cfg, dbs, "")
+	out := logged.String()
+	for _, want := range []string{"smart features are on", "mine", "OPENROUTER_API_KEY"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the log does not mention %q: %s", want, out)
+		}
+	}
+	if strings.Contains(out, "quiet") {
+		t.Errorf("an account with smart features off was warned about: %s", out)
+	}
+
+	logged.Reset()
+	NewEmbedding(cfg, dbs, "a-key")
+	if strings.Contains(logged.String(), "smart features are on") {
+		t.Errorf("warned although a key was loaded: %s", logged.String())
+	}
+}
