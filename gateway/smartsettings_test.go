@@ -222,3 +222,28 @@ func TestAnEmptyOrMalformedPatch(t *testing.T) {
 		t.Error("a malformed patch changed the settings")
 	}
 }
+
+// An account that opted in but cannot reach OpenRouter looks exactly like one that is
+// quietly working, so the screen has to say why nothing is happening. This server's
+// gate has no provider, the state of an instance started without OPENROUTER_API_KEY.
+func TestAnOptedInAccountWithNoKeyIsToldWhyNothingRuns(t *testing.T) {
+	t.Parallel()
+	url, _, _ := smartServer(t)
+	got := getSmart(t, url)
+
+	a1, a2 := accountOf(t, got, "a1"), accountOf(t, got, "a2")
+	if len(a1.Problems) != 1 || a1.Problems[0].Code != "no_key" {
+		t.Fatalf("a1 problems = %+v, want one no_key", a1.Problems)
+	}
+	if msg := a1.Problems[0].Message; !strings.Contains(msg, "OPENROUTER_API_KEY") || !strings.Contains(msg, "restart") {
+		t.Errorf("message %q must name the variable and say a restart is needed", msg)
+	}
+	if len(a2.Problems) != 0 {
+		t.Errorf("a2 has smart features off, so nothing is expected to run, got %+v", a2.Problems)
+	}
+	for _, a := range []api.SmartAccount{a1, a2} {
+		if a.Problems == nil {
+			t.Errorf("%s: problems must be an empty list, not null", a.Id)
+		}
+	}
+}

@@ -59,3 +59,36 @@ func TestCanRunIsTheGatesAnswerWithoutMakingACall(t *testing.T) {
 		t.Fatalf("CanRun wrote to the ledger: %v, %v", rows, err)
 	}
 }
+
+func TestProblemsNameWhatStopsAnOptedInAccount(t *testing.T) {
+	ctx := context.Background()
+	dbs, err := store.Open(ctx, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = dbs.Close() })
+	save := func(smart bool) {
+		t.Helper()
+		if err := dbs.SaveAccountConfig(ctx, store.AccountConfig{
+			ID: "a", Address: "a@example.test", Username: "a",
+			IMAPHost: "i", IMAPPort: 993, SMTPHost: "s", SMTPPort: 465,
+			LLMEnabled: smart, CreatedAt: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	noKey := NewGate(dbs)
+	withKey := NewGate(dbs, WithProviders(ProviderConfig{OpenRouterBase: "http://127.0.0.1:1", APIKey: "k"}))
+
+	save(false)
+	if p := noKey.Problems(ctx, "a"); len(p) != 0 {
+		t.Fatalf("an account that has not opted in has problems %+v; nothing is expected of it", p)
+	}
+	save(true)
+	if p := noKey.Problems(ctx, "a"); len(p) != 1 || p[0].Code != ProblemNoKey {
+		t.Fatalf("problems without a key = %+v, want no_key", p)
+	}
+	if p := withKey.Problems(ctx, "a"); len(p) != 0 {
+		t.Fatalf("problems with a key = %+v, want none", p)
+	}
+}

@@ -23,6 +23,7 @@ const maxSmartBodyBytes = 8 << 10
 type SmartControls interface {
 	SpendCaps
 	FeatureEnabled(ctx context.Context, accountID, feature string) bool
+	Problems(ctx context.Context, accountID string) []llm.Problem
 	ChosenChatModel(ctx context.Context) string
 	ChosenFeatureModel(ctx context.Context, feature string) string
 	SetGlobalCap(ctx context.Context, usd float64) error
@@ -93,6 +94,10 @@ func (s *Server) smartSettings(r *http.Request) (api.SmartSettings, error) {
 			Id: v.Id, Address: v.Address, Short: v.Short, Smart: v.Smart,
 			CapUsd: ctl.AccountCapUSD(ctx, v.Id), MonthUsd: spent.USD,
 			Features: make(map[string]bool, len(listed)),
+			Problems: []api.SmartProblem{},
+		}
+		for _, p := range ctl.Problems(ctx, v.Id) {
+			acct.Problems = append(acct.Problems, api.SmartProblem{Code: p.Code, Message: p.Message})
 		}
 		for _, f := range listed {
 			acct.Features[f.Name] = ctl.FeatureEnabled(ctx, v.Id, f.Name)

@@ -190,3 +190,33 @@ func (g *Gate) CanRun(ctx context.Context, accountID, name string) bool {
 	s, err := g.policy.Settings(ctx, accountID)
 	return err == nil && s.Smart && (!spec.vision || s.Vision)
 }
+
+// Problem is something in the way of an account's switched-on features. Code is
+// stable for the client; Message is fit to show.
+type Problem struct {
+	Code    string
+	Message string
+}
+
+// ProblemNoKey means the hosted provider was not configured when Ivy started.
+const ProblemNoKey = "no_key"
+
+// Problems says why an account that opted in cannot reach the hosted provider right
+// now. An account with smart features off has none: nothing is expected to run, so
+// nothing is wrong. It is a read of the gate's own state, so it cannot disagree with
+// what admission will do.
+func (g *Gate) Problems(ctx context.Context, accountID string) []Problem {
+	problems := []Problem{}
+	s, err := g.policy.Settings(ctx, accountID)
+	if err != nil || !s.Smart {
+		return problems
+	}
+	if g.decider == nil && g.completer == nil {
+		problems = append(problems, Problem{
+			Code: ProblemNoKey,
+			Message: "Ivy has no OpenRouter key, so nothing here can run. Put OPENROUTER_API_KEY in the .env " +
+				"beside ivy.yaml (or in the environment) and restart Ivy.",
+		})
+	}
+	return problems
+}

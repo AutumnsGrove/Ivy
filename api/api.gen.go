@@ -1730,7 +1730,12 @@ type SmartAccount struct {
 
 	// MonthUsd Spent this calendar month (UTC), across every endpoint
 	MonthUsd float64 `json:"monthUsd"`
-	Short    string  `json:"short"`
+
+	// Problems Why switched-on features cannot run for this account right now (for example no
+	// provider key was loaded at start). Empty when nothing is in the way, and always
+	// empty while `smart` is off, since nothing is expected to run then.
+	Problems []SmartProblem `json:"problems"`
+	Short    string         `json:"short"`
 
 	// Smart The account's smart-features switch; nothing below runs while it is off
 	Smart bool `json:"smart"`
@@ -1764,6 +1769,15 @@ type SmartModel struct {
 
 	// OutPerM Listed dollars per million output tokens
 	OutPerM float64 `json:"outPerM"`
+}
+
+// SmartProblem defines model for SmartProblem.
+type SmartProblem struct {
+	// Code A stable machine name, for example `no_key`
+	Code string `json:"code"`
+
+	// Message Plain words for the operator, including what to do about it
+	Message string `json:"message"`
 }
 
 // SmartSettings defines model for SmartSettings.

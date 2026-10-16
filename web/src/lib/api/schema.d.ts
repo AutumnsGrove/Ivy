@@ -1126,12 +1126,24 @@ export interface components {
              */
             outPerM: number;
         };
+        SmartProblem: {
+            /** @description A stable machine name, for example `no_key` */
+            code: string;
+            /** @description Plain words for the operator, including what to do about it */
+            message: string;
+        };
         SmartAccount: {
             id: string;
             address: string;
             short: string;
             /** @description The account's smart-features switch; nothing below runs while it is off */
             smart: boolean;
+            /**
+             * @description Why switched-on features cannot run for this account right now (for example no
+             *     provider key was loaded at start). Empty when nothing is in the way, and always
+             *     empty while `smart` is off, since nothing is expected to run then.
+             */
+            problems: components["schemas"]["SmartProblem"][];
             /** Format: double */
             capUsd: number;
             /**
