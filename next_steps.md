@@ -89,8 +89,11 @@ her 41 messages, record her needs-me / not labels in a git-ignored file, and rep
 0.65 / 0.80 (gate G3: write the labelling plan down first). **Operator-owned, open:** confirm "Needs you also turns on
 `classify`" (qa-log); no progress display during a backfill; no startup log line for "opted in but no key".
 
-**Cleanups done, same day** (the marker shown once, a startup warning, backfill progress; `docs/BUILD-LOG.md`). **Next is
-5d.1** (the `category` question and its "placed for you" tag; plan in `docs/chunk5/5d-classifiers-and-safety.md`).
+**Cleanups done, same day** (the marker shown once, a startup warning, backfill progress; `docs/BUILD-LOG.md`).
+**5d.1 is built** (the `category` question, its seven removable local tags, a "Categories" switch that ships dark;
+`docs/BUILD-LOG.md` "5d.1", choices to confirm in qa-log). **Operator-owned, open:** turn Categories on at
+`/settings/smart`, press Look over for All mail, and see whether the tags fit her mail. **Next in 5d:** 5d.3 local
+signals (parse and store `X-Spam-Status`, show the spam score and auth verdicts, no model), then 5d.4 Junk rescue.
 
 **Update, same day: the backfill ran and the cascade works on real mail** (15 Inbox messages, 15 stage-one calls for about
 $0.0016, stage two kept the real requests). **5c.5's tooling is built** (`ivy eval sheet` and `ivy eval report`, plan in
