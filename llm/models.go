@@ -47,7 +47,7 @@ const (
 // estimates, since a response that reports its cost is ledgered at that cost).
 var registry = []Model{
 	// docs/JEV.md: $0.042/M input tokens, free output.
-	{ID: JevModelID, Name: "Helper decision model", Slug: "jev-latest", Kind: EndpointSystemOne, InPerM: 0.042},
+	{ID: JevModelID, Name: "Helper decision model", Slug: "jev-1.14", Kind: EndpointSystemOne, InPerM: 0.042},
 
 	// OpenRouter /api/v1/embeddings/models, 2026-10-05.
 	{ID: EmbedSmallModelID, Name: "Embeddings, small", Slug: "perplexity/pplx-embed-v1-0.6b", Kind: EndpointEmbeddings, InPerM: 0.004},

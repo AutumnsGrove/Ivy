@@ -212,7 +212,7 @@ func TestOneCallCarriesEveryQuestionAndStoresEachAnswer(t *testing.T) {
 		t.Fatalf("%d provider calls for one message, want 1", r.jev.count())
 	}
 	req := r.jev.last()
-	if len(req.Questions) != 2 || req.Questions["needs_me"].Type != "choice" || req.Model != "jev-latest" {
+	if len(req.Questions) != 2 || req.Questions["needs_me"].Type != "choice" || req.Model != "jev-1.14" {
 		t.Fatalf("request wrong: model=%q questions=%v", req.Model, req.Questions)
 	}
 	if !strings.Contains(req.State, "Subject: Lunch?") || strings.Contains(req.State, "<") && !strings.Contains(req.State, "<ada@example.com>") {
@@ -226,7 +226,7 @@ func TestOneCallCarriesEveryQuestionAndStoresEachAnswer(t *testing.T) {
 		t.Fatalf("stored %d decisions, want 2", len(ds))
 	}
 	for _, d := range ds {
-		if d.Model != "jev-latest" || d.InstructionHash == "" || d.Probabilities[d.Choice] != 1 {
+		if d.Model != "jev-1.14" || d.InstructionHash == "" || d.Probabilities[d.Choice] != 1 {
 			t.Fatalf("decision wrong: %+v", d)
 		}
 	}
@@ -559,7 +559,7 @@ func TestInjectionCorpusCannotChangeTheShapeOfACall(t *testing.T) {
 			r.decide(m)
 
 			req := r.jev.last()
-			if len(req.Questions) != 2 || req.Model != "jev-latest" {
+			if len(req.Questions) != 2 || req.Model != "jev-1.14" {
 				t.Fatalf("the call's structure changed: model=%q questions=%d", req.Model, len(req.Questions))
 			}
 			head, _, found := strings.Cut(req.State, "\n\n")
@@ -650,7 +650,7 @@ func TestOddsListsCurrentAnswersAndWhatCouldNotBeAnswered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if odds.Model != "jev-latest" || len(odds.Answers) != 1 || odds.Answers[0].QuestionID != "urgency" {
+	if odds.Model != "jev-1.14" || len(odds.Answers) != 1 || odds.Answers[0].QuestionID != "urgency" {
 		t.Fatalf("answers = %+v", odds)
 	}
 	if len(odds.Unanswered) != 1 || odds.Unanswered[0].QuestionID != "needs_me" || odds.Unanswered[0].Reason != store.MissInvalidAnswer {

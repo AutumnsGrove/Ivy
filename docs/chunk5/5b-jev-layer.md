@@ -23,8 +23,8 @@ questions in this registry.
 
 ## Settled
 
-- **Endpoint and model:** `POST {openrouter_base}/systemone`, model `jev-latest` (pin a versioned id
-  once thresholds are tuned); same key as chat (JEV.md 1).
+- **Endpoint and model:** `POST {openrouter_base}/systemone`, model `jev-1.14` (pinned 2026-10-16; the id
+  lives in the registry); same key as chat (JEV.md 1).
 - **Question shape:** `choice` with `criteria` as the option set; answer `{choice, probabilities,
   confidence}`. Model yes/no as `choice` with `yes`/`no`/`none` until `noul`/`score` are calibrated.
 - **Parallel, isolated, one call per message** with every enabled question in it; question text

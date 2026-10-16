@@ -67,7 +67,7 @@ before the one it depends on is finished and its checkpoint (section 5) is clear
 
 ## 2. Decisions that are settled (do not re-litigate; `docs/qa-log.md` and `docs/JEV.md` hold the reasoning)
 
-- **Jev through OpenRouter `/systemone`, model `jev-latest`**, behind a `decide()` interface whose
+- **Jev through OpenRouter `/systemone`, model `jev-1.14`**, behind a `decide()` interface whose
   fallback is a chat model with a JSON schema. `complete()` and `see()` sit beside it, all behind
   the gate (`docs/JEV.md` 2, `ARCHITECTURE.md` 7).
 - **Model yes/no as a `choice` with `yes`/`no` (+ `none`) options.** `noul` and `score` exist but
