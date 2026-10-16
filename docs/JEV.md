@@ -11,7 +11,7 @@ These come from live calls Polaris already made, so they outrank anything read f
 - **Endpoint:** `POST {openrouter_base}/systemone` (OpenRouter beta), `Authorization: Bearer <OpenRouter key>`.
   The same key as chat completions; no second secret. (An earlier web search suggested
   `/api/alpha/decisions`; Polaris's confirmed path is `/systemone`.)
-- **Model id:** Ivy pins `jev-1.14` (operator, 2026-10-16; not yet confirmed by a live call). `jev-latest` works; `jev-1.13` and `typesafe/jev-1.13` also work; `typesafe/jev-latest`
+- **Model id:** Ivy pins `jev-1.14` (operator, 2026-10-16). A live call the same day resolved it to `typesafe/jev-1.14-20261014` and billed 345 input tokens at exactly $0.042/M. `jev-latest` works; `jev-1.13` and `typesafe/jev-1.13` also work; `typesafe/jev-latest`
   and bare `jev` return 400.
 - **Question shape (Choice):** `{type: "choice", instructions, criteria: {optionKey: "when this applies"}}`.
   `criteria`'s keys ARE the option set (up to 255). An older `question` + `options[]` shape 400s.
