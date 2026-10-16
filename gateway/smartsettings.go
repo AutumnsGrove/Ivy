@@ -94,7 +94,7 @@ func (s *Server) smartSettings(r *http.Request) (api.SmartSettings, error) {
 			Id: v.Id, Address: v.Address, Short: v.Short, Smart: v.Smart,
 			CapUsd: ctl.AccountCapUSD(ctx, v.Id), MonthUsd: spent.USD,
 			Features: make(map[string]bool, len(listed)),
-			Problems: []api.SmartProblem{},
+			Problems: []api.SmartProblem{}, Waiting: s.waiting(ctx, v.Id),
 		}
 		for _, p := range ctl.Problems(ctx, v.Id) {
 			acct.Problems = append(acct.Problems, api.SmartProblem{Code: p.Code, Message: p.Message})

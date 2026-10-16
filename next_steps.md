@@ -89,6 +89,9 @@ her 41 messages, record her needs-me / not labels in a git-ignored file, and rep
 0.65 / 0.80 (gate G3: write the labelling plan down first). **Operator-owned, open:** confirm "Needs you also turns on
 `classify`" (qa-log); no progress display during a backfill; no startup log line for "opted in but no key".
 
+**Cleanups done, same day** (the marker shown once, a startup warning, backfill progress; `docs/BUILD-LOG.md`). **Next is
+5d.1** (the `category` question and its "placed for you" tag; plan in `docs/chunk5/5d-classifiers-and-safety.md`).
+
 **Update, same day: the backfill ran and the cascade works on real mail** (15 Inbox messages, 15 stage-one calls for about
 $0.0016, stage two kept the real requests). **5c.5's tooling is built** (`ivy eval sheet` and `ivy eval report`, plan in
 `docs/handoffs/2026-10-16-G3-needs-me-evaluation.md`; `docs/BUILD-LOG.md` "5c.5 tooling"). **Operator-owned, open:** fill the

@@ -1994,7 +1994,7 @@ components:
           description: Plain words for the operator, including what to do about it
     SmartAccount:
       type: object
-      required: [id, address, short, smart, capUsd, monthUsd, features, problems]
+      required: [id, address, short, smart, capUsd, monthUsd, features, problems, waiting]
       properties:
         id:
           type: string
@@ -2005,6 +2005,11 @@ components:
         smart:
           type: boolean
           description: The account's smart-features switch; nothing below runs while it is off
+        waiting:
+          type: integer
+          description: |
+            How many messages the helper features have yet to look at. Zero while nothing is
+            queued; it counts down while a backfill (or new mail) is being worked through.
         problems:
           type: array
           description: |

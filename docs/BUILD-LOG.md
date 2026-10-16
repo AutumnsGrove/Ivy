@@ -1396,3 +1396,16 @@ changed and nothing here calls a provider or costs money.
   bound), `cmd` (blind sheet, round trip, refusals, two accounts).
 - **Not done:** the operator's labels (her own pending line), then reading the report and choosing the bar. A pass/fail
   threshold is deliberately not computed: with a few dozen messages the figures are rough.
+
+## Cleanups from the first real run (2026-10-16)
+
+- **The needs marker is shown once.** The placed "Needs you" tag and the marker are one fact (clearing either is the
+  dismissal), so `displayTag` skips the reserved tag and the row's tag slot is left for real tags (inbox rows, the reader,
+  the summary).
+- **A startup warning** (`warnSmartCannotRun`): once per account, in the log, when smart features are on but nothing can
+  reach the provider (today: no key). Same source as the Smart screen's banner, `Gate.Problems`.
+- **Backfill progress.** `GET /smart` carries `waiting` per account (the worker's queue depth); the Smart screen shows
+  "N messages left to look at", disables a second start while any are queued, and polls every two seconds until the
+  queue is empty.
+- **Known, not mine:** `golangci-lint` reports 12 issues in `jev/` (shadowed `max`, three comment forms, an unused
+  parameter, test helpers without a context). They predate this work; not fixed here.

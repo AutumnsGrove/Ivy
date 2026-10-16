@@ -1186,6 +1186,11 @@ export interface components {
             /** @description The account's smart-features switch; nothing below runs while it is off */
             smart: boolean;
             /**
+             * @description How many messages the helper features have yet to look at. Zero while nothing is
+             *     queued; it counts down while a backfill (or new mail) is being worked through.
+             */
+            waiting: number;
+            /**
              * @description Why switched-on features cannot run for this account right now (for example no
              *     provider key was loaded at start). Empty when nothing is in the way, and always
              *     empty while `smart` is off, since nothing is expected to run then.

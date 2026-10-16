@@ -1766,6 +1766,10 @@ type SmartAccount struct {
 
 	// Smart The account's smart-features switch; nothing below runs while it is off
 	Smart bool `json:"smart"`
+
+	// Waiting How many messages the helper features have yet to look at. Zero while nothing is
+	// queued; it counts down while a backfill (or new mail) is being worked through.
+	Waiting int `json:"waiting"`
 }
 
 // SmartAccountPatch defines model for SmartAccountPatch.

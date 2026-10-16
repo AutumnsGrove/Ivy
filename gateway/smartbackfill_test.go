@@ -22,6 +22,7 @@ type startedBackfill struct {
 // (the worker has its own tests); what is under test here is the HTTP contract.
 type fakeBackfill struct {
 	est     jev.BackfillEstimate
+	depth   map[string]int
 	started []startedBackfill
 }
 
@@ -153,4 +154,32 @@ func TestABackfillIsRefusedWhileNothingCouldRunItAndSaysWhy(t *testing.T) {
 			t.Error("a refused request still started a backfill")
 		}
 	})
+}
+
+func (f *fakeBackfill) Depth(_ context.Context, account string) (int, error) {
+	return f.depth[account], nil
+}
+
+// While a backfill is being worked through the screen has to show it moving, so the
+// settings carry how many messages each account still has waiting.
+func TestTheSettingsSayHowManyMessagesAreStillWaiting(t *testing.T) {
+	t.Parallel()
+	var fake *fakeBackfill
+	srv, dbs := newConfiguredServer(t, func(s *Server) {
+		fake = &fakeBackfill{depth: map[string]int{"a1": 12}}
+		s.WithClock(func() time.Time { return spendNow })
+		s.WithSmartControls(llm.NewGate(s.dbs, llm.WithGateClock(func() time.Time { return spendNow })))
+		s.WithBackfill(fake)
+	})
+	mustAccount(t, dbs, store.Account{ID: "a1", Address: "me@example.com", LLMEnabled: true})
+	mustAccount(t, dbs, store.Account{ID: "a2", Address: "work@example.com", LLMEnabled: true})
+
+	got := getSmart(t, srv.URL+"/api/v1/smart")
+	if a1, a2 := accountOf(t, got, "a1"), accountOf(t, got, "a2"); a1.Waiting != 12 || a2.Waiting != 0 {
+		t.Fatalf("waiting = %d and %d, want 12 and 0", a1.Waiting, a2.Waiting)
+	}
+	fake.depth["a1"] = 3
+	if a1 := accountOf(t, getSmart(t, srv.URL+"/api/v1/smart"), "a1"); a1.Waiting != 3 {
+		t.Fatalf("waiting after some were done = %d, want 3", a1.Waiting)
+	}
 }

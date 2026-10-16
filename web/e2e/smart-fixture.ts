@@ -21,13 +21,16 @@ export type SmartState = {
 	features: Record<string, Record<string, boolean>>;
 	chatModel: string;
 	featureModels: Record<string, string>;
+	/** Account id to how many messages a started look-over still has to read; it drains as the screen polls. */
+	waiting: Record<string, number>;
 };
 
 export const freshSmart = (): SmartState => ({
 	caps: { global: DEFAULT_GLOBAL_CAP, account: {} },
 	features: {},
 	chatModel: 'deepseek',
-	featureModels: {}
+	featureModels: {},
+	waiting: {}
 });
 
 const bad = (message: string): Reply => ({ status: 400, body: { code: 'bad_request', message } });
@@ -57,6 +60,7 @@ function settings(state: SmartState, accounts: Account[], scenario: string | nul
 			monthUsd: spent.account[a.id] ?? 0,
 			features: Object.fromEntries(FEATURES.map((f) => [f.name, state.features[a.id]?.[f.name] ?? f.defaultOn])),
 			// The designed "no key" state: opted in, but nothing can reach the provider.
+			waiting: state.waiting[a.id] ?? 0,
 			problems: a.smart && scenario === 'no-key' ? [{ code: 'no_key', message: NO_KEY }] : []
 		})),
 		features: FEATURES,
@@ -69,7 +73,14 @@ function settings(state: SmartState, accounts: Account[], scenario: string | nul
 const isCap = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= MAX_CAP;
 const capMessage = `A cap must be between $0 and $${MAX_CAP}`;
 
-function backfillReply(path: string, method: string, params: URLSearchParams, accounts: Account[], scenario: string | null, raw: Buffer | null): Reply {
+function backfillReply(
+	method: string,
+	params: URLSearchParams,
+	state: SmartState,
+	accounts: Account[],
+	scenario: string | null,
+	raw: Buffer | null
+): Reply {
 	let account: string | null;
 	let window: string | null;
 	if (method === 'POST') {
@@ -101,6 +112,7 @@ function backfillReply(path: string, method: string, params: URLSearchParams, ac
 		accountHeadroomUsd: over ? 0 : 4.5,
 		globalHeadroomUsd: over ? 0 : 9
 	};
+	if (method === 'POST') state.waiting[found.id] = reply.items;
 	return { body: reply };
 }
 
@@ -113,9 +125,14 @@ export function smartReply(
 	scenario: string | null,
 	raw: Buffer | null
 ): Reply | null {
-	if (path === '/smart/backfill') return backfillReply(path, method, params, accounts, scenario, raw);
+	if (path === '/smart/backfill') return backfillReply(method, params, state, accounts, scenario, raw);
 	if (path !== '/smart') return null;
-	if (method === 'GET') return { body: settings(state, accounts, scenario) };
+	if (method === 'GET') {
+		const body = settings(state, accounts, scenario);
+		// The worker gets through a few messages between polls.
+		for (const id of Object.keys(state.waiting)) state.waiting[id] = Math.max(0, state.waiting[id] - 6);
+		return { body };
+	}
 	if (method !== 'PATCH') return null;
 
 	let patch: {

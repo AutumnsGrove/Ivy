@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/AutumnsGrove/Ivy/api"
@@ -14,6 +15,23 @@ import (
 type Backfiller interface {
 	EstimateBackfill(ctx context.Context, account string, win jev.Window) (jev.BackfillEstimate, error)
 	StartBackfill(ctx context.Context, account string, win jev.Window) error
+	// Depth is how many messages the account still has waiting.
+	Depth(ctx context.Context, account string) (int, error)
+}
+
+// waiting is how many messages an account still has queued for the helper features.
+// A server without the worker has none; a failure to count is logged and reads as
+// none, because a progress line is not worth failing the whole settings screen.
+func (s *Server) waiting(ctx context.Context, account string) int {
+	if s.backfill == nil {
+		return 0
+	}
+	n, err := s.backfill.Depth(ctx, account)
+	if err != nil {
+		slog.WarnContext(ctx, "could not count the waiting messages", "account", account, "error", err)
+		return 0
+	}
+	return n
 }
 
 // WithBackfill wires the Smart screen's "look at existing mail" button.

@@ -74,6 +74,23 @@
 	const messages = (n: number) => `${n.toLocaleString('en-US')} ${n === 1 ? 'message' : 'messages'}`;
 	const problemsOf = $derived(s.accounts.filter((a) => a.problems.length > 0));
 
+	/** Re-read the settings, for the queue count. A failed read keeps what is on screen. */
+	async function refresh() {
+		try {
+			s = await api.getSmartSettings();
+		} catch {
+			// The next poll tries again; nothing here is worth a toast.
+		}
+	}
+	// While anything is queued the count moves on its own, so look again every few seconds
+	// and stop as soon as the queue is empty.
+	const anyWaiting = $derived(s.accounts.some((a) => a.waiting > 0));
+	$effect(() => {
+		if (!anyWaiting) return;
+		const timer = setInterval(() => void refresh(), 2000);
+		return () => clearInterval(timer);
+	});
+
 	/**
 	 * Smart features only read mail that arrives after they are switched on. This reaches back, but
 	 * only after saying how much mail that is and the most it can cost, and only if she agrees.
@@ -97,6 +114,7 @@
 			if (!ok) return;
 			const started = await api.startSmartBackfill(accountId, window);
 			toasts.push({ text: `Looking over ${messages(started.items)}`, tone: 'ok' });
+			await refresh();
 		} catch (e) {
 			toasts.push({ text: e instanceof ApiError ? e.message : "That didn't start", tone: 'warn' });
 		}
@@ -180,7 +198,15 @@
 			{#each s.accounts.filter((a) => a.smart) as a (a.id)}
 				<ListRow tall>
 					{a.address}
-					<span class="sub">{a.problems.length > 0 ? 'Not available until the problem above is fixed' : 'Choose how far back to look'}</span>
+					<span class="sub">
+						{#if a.problems.length > 0}
+							Not available until the problem above is fixed
+						{:else if a.waiting > 0}
+							{messages(a.waiting)} left to look at
+						{:else}
+							Choose how far back to look
+						{/if}
+					</span>
 					{#snippet trailing()}
 						<span class="reach">
 							<Select
@@ -193,7 +219,7 @@
 								variant="tonal"
 								size="sm"
 								label="Look over mail for {a.address}"
-								disabled={a.problems.length > 0}
+								disabled={a.problems.length > 0 || a.waiting > 0}
 								onclick={() => void lookOver(a.id)}
 							>
 								Look over

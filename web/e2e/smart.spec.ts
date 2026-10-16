@@ -143,6 +143,19 @@ test.describe('smart features settings', () => {
 			await expect(toast(page, 'Looking over 41 messages')).toBeVisible();
 		});
 
+		test('shows how many messages are left while it works, and stops when it is done', async ({ page }) => {
+			await page.goto('/settings/smart');
+			await page.getByRole('combobox', { name: 'How far back, me@example.com' }).selectOption('30d');
+			await look(page).click();
+			await page.getByRole('dialog').getByRole('button', { name: 'Start' }).click();
+			await expect(page.getByText('12 messages left to look at')).toBeVisible();
+			// No second look-over can be started on top of the first.
+			await expect(look(page)).toBeDisabled();
+			// The screen polls while anything is waiting, and settles when the queue is empty.
+			await expect(page.getByText(/left to look at/)).toHaveCount(0, { timeout: 15_000 });
+			await expect(look(page)).toBeEnabled();
+		});
+
 		test('warns when it will not fit under a cap, and still lets the caps do their job', async ({ page }) => {
 			await page.goto('/settings/smart?scenario=over-cap');
 			await look(page).click();
