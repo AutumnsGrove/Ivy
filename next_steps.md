@@ -89,6 +89,13 @@ her 41 messages, record her needs-me / not labels in a git-ignored file, and rep
 0.65 / 0.80 (gate G3: write the labelling plan down first). **Operator-owned, open:** confirm "Needs you also turns on
 `classify`" (qa-log); no progress display during a backfill; no startup log line for "opted in but no key".
 
+**Update, same day: the backfill ran and the cascade works on real mail** (15 Inbox messages, 15 stage-one calls for about
+$0.0016, stage two kept the real requests). **5c.5's tooling is built** (`ivy eval sheet` and `ivy eval report`, plan in
+`docs/handoffs/2026-10-16-G3-needs-me-evaluation.md`; `docs/BUILD-LOG.md` "5c.5 tooling"). **Operator-owned, open:** fill the
+`needs_me` column of `~/ivy-real/data/eval/needs-me-labels.csv` with y or n, run `ivy eval report --config
+~/ivy-real/ivy.yaml`, and choose the bar. Small UI oddity seen in her screenshot: a row on `/needs` shows both the "needs you"
+marker and the "Needs you" tag chip.
+
 **5c.4 is done, 2026-10-10: the needs-attention screens are built.** The `/needs` view (nav row with the count, reason and
 Dismiss on each row), the reason under the marker in the inbox and reader, the second look on the odds sheet, and labels for
 `needs_me` ("Needs you") and `needs_me_stage2` ("Needs you: reasons") on the Smart screen (`docs/BUILD-LOG.md` "5c.4").
