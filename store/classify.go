@@ -117,3 +117,50 @@ func (d *DBs) MarkClassified(ctx context.Context, accountID string, contentKeys 
 	}
 	return nil
 }
+
+// ClassifiedMessages returns the visible Inbox and Junk mail the worker has
+// considered, newest first (at most limit), one per content key with its Inbox copy preferred. It is
+// what the needs-me evaluation asks the operator to label.
+func (d *DBs) ClassifiedMessages(ctx context.Context, accountID string, limit int) ([]Message, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	rows, err := d.Mirror.Read.QueryContext(ctx, `
+		SELECT m.id, MIN(CASE f.role WHEN 'inbox' THEN 0 ELSE 1 END),
+		       COALESCE(NULLIF(m.internaldate, ''), m.date) AS arrived
+		FROM messages m JOIN folders f ON f.id = m.folder_id
+		WHERE m.account_id = ? AND f.role IN ('inbox', 'junk') AND m.disabled_at IS NULL
+		  AND EXISTS (SELECT 1 FROM classified c
+		              WHERE c.account_id = m.account_id AND c.content_key = m.content_key)
+		GROUP BY m.content_key
+		ORDER BY arrived DESC, m.content_key
+		LIMIT ?`, accountID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list classified messages: %w", err)
+	}
+	var ids []string
+	for rows.Next() {
+		var id, arrived string
+		var pref int
+		if err := rows.Scan(&id, &pref, &arrived); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("list classified messages: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, fmt.Errorf("list classified messages: %w", err)
+	}
+	_ = rows.Close()
+
+	out := make([]Message, 0, len(ids))
+	for _, id := range ids {
+		m, err := d.GetMessage(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("list classified messages: %w", err)
+		}
+		out = append(out, m)
+	}
+	return out, nil
+}

@@ -1375,3 +1375,24 @@ to start the 5c.5 evaluation on real mail. Nothing was classified, and nothing s
   desktop (`no-key` and `over-cap` scenarios in the fake network).
 - **Not done:** progress while a backfill runs (the toast says it started; the queue depth is not shown); a startup log
   line for "opted in but no key"; the eval tooling itself (5c.5).
+
+## 5c.5 tooling: the needs-me evaluation (2026-10-16)
+
+Gate G3's plan is `docs/handoffs/2026-10-16-G3-needs-me-evaluation.md`; this is the tooling it describes. No threshold was
+changed and nothing here calls a provider or costs money.
+
+- **`eval/`** (pure): the labelling sheet and the scoring. `WriteSheet`/`ReadSheet` round-trip a CSV that shows each message
+  and **none of Ivy's answers** (she labels blind); regenerating keeps typed labels. Every cell that comes from mail is
+  defused against spreadsheet-formula injection (a leading `=`, `+`, `-`, `@` gets a `'`). `Score` computes the confusion
+  matrices for stage one at the shipped bar, a 0.30 to 0.95 sweep from the stored probabilities (the registry's own firing
+  rule), the cascade as she sees it, stage two alone, and the disagreements (missed first). A rate with nothing under it is
+  `n/a`, never 0 or 100.
+- **`store.ClassifiedMessages`**: classified Inbox and Junk mail, newest first, bounded, one per content key.
+- **`ivy eval sheet` / `ivy eval report`** (`cmd/evalcmd.go`): the thin shell. The sheet and labels live in
+  `<data_dir>/eval/` (private, 0600, never in the repo). A sheet that cannot be read is not overwritten, and regenerating
+  refuses rather than drop a label. The report refuses a label that is not `y` or `n` and names the row; a labelled message
+  with no stage-one answer (withheld, or not asked yet) is left out and counted.
+- **Tests:** `eval/` (counts, n/a, unlabelled leakage, sweep monotonic, CSV and formula hostility), `store` (listing,
+  bound), `cmd` (blind sheet, round trip, refusals, two accounts).
+- **Not done:** the operator's labels (her own pending line), then reading the report and choosing the bar. A pass/fail
+  threshold is deliberately not computed: with a few dozen messages the figures are rough.

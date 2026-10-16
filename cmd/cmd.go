@@ -47,6 +47,7 @@ func New(version string) *cobra.Command {
 		backupCmd(&configPath),
 		restoreCmd(&configPath),
 		doctorCmd(&configPath, version),
+		evalCmd(&configPath),
 	)
 	return root
 }

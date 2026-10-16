@@ -205,3 +205,64 @@ func TestMeanClassifiableBytes(t *testing.T) {
 		t.Fatalf("empty window = %d, %v", n, err)
 	}
 }
+
+func TestClassifiedMessagesAreOnlyWhatWasConsideredNewestFirstOnePerKey(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	h := func(n int) time.Time { return classifyNow.Add(-time.Duration(n) * time.Hour) }
+	seedClassify(t, dbs, "a",
+		classifySeed{id: "old", folder: "inbox", key: "k-old", arrived: h(48)},
+		classifySeed{id: "new", folder: "inbox", key: "k-new", arrived: h(1)},
+		classifySeed{id: "twin-junk", folder: "junk", key: "k-twin", arrived: h(5)},
+		classifySeed{id: "twin-inbox", folder: "inbox", key: "k-twin", arrived: h(5)},
+		classifySeed{id: "waiting", folder: "inbox", key: "k-waiting", arrived: h(2)},
+		classifySeed{id: "hidden", folder: "inbox", key: "k-hidden", arrived: h(3), disabled: true},
+		classifySeed{id: "filed", folder: "archive", key: "k-filed", arrived: h(4)},
+	)
+	if err := dbs.MarkClassified(ctx, "a", []string{"k-old", "k-new", "k-twin", "k-hidden", "k-filed"}, classifyNow); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := dbs.ClassifiedMessages(ctx, "a", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys []string
+	for _, m := range got {
+		keys = append(keys, m.ContentKey)
+	}
+	// Archive is never classified, a hidden message is not shown, one that is still
+	// waiting was never considered, and a message filed twice appears once.
+	if want := []string{"k-new", "k-twin", "k-old"}; !eq(keys, want) {
+		t.Fatalf("classified = %v, want %v", keys, want)
+	}
+	if got[1].ID != "twin-inbox" {
+		t.Errorf("the twin came from %q, want its Inbox copy", got[1].ID)
+	}
+	other, err := dbs.ClassifiedMessages(ctx, "someone-else", 100)
+	if err != nil || len(other) != 0 {
+		t.Errorf("another account's classified mail = %v, %v; want none", other, err)
+	}
+}
+
+func TestClassifiedMessagesAreBounded(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	seedClassify(t, dbs, "a",
+		classifySeed{id: "1", folder: "inbox", key: "k1", arrived: classifyNow.Add(-3 * time.Hour)},
+		classifySeed{id: "2", folder: "inbox", key: "k2", arrived: classifyNow.Add(-2 * time.Hour)},
+		classifySeed{id: "3", folder: "inbox", key: "k3", arrived: classifyNow.Add(-time.Hour)},
+	)
+	if err := dbs.MarkClassified(ctx, "a", []string{"k1", "k2", "k3"}, classifyNow); err != nil {
+		t.Fatal(err)
+	}
+	got, err := dbs.ClassifiedMessages(ctx, "a", 2)
+	if err != nil || len(got) != 2 || got[0].ContentKey != "k3" || got[1].ContentKey != "k2" {
+		t.Fatalf("two newest = %v, %v", got, err)
+	}
+	if none, err := dbs.ClassifiedMessages(ctx, "a", 0); err != nil || len(none) != 0 {
+		t.Fatalf("a limit of zero returned %v, %v", none, err)
+	}
+}
