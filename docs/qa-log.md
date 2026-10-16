@@ -1907,3 +1907,16 @@ already answered; these are what the build forced. Please confirm or change.
   strictly on arrival. Adding a schema parameter to the gate is possible later.
 - **Switches are unlisted** on the Smart features screen until the view exists (5c.4): a switch that spends money
   on answers only the odds sheet shows would mislead.
+
+## First real-mailbox run (2026-10-16, operator)
+
+- **Q: which Jev model?** A: pin `jev-1.14` (a new, slightly better model). Confirmed live the same day.
+- **Q: where does the evaluation mail come from?** A: her own autumn@grove.place mailbox (little mail, nothing sensitive;
+  the agent may read it). It runs as a separate instance in `~/ivy-real/`, never in `.dev/`, which belongs to the fake
+  stack. About 41 messages, so she labels all of them instead of a sample of 100.
+- **Q: backfill?** A: "we definitely need a backfill button". Built (see BUILD-LOG), with a price shown first.
+- **Q: errors in the UI?** A: yes, a missing key must show on the screen, not only in a log. Built as per-account
+  `problems`.
+- **Build-time choice (confirm or change):** turning on "Needs you" also turns on the `classify` call rather than adding
+  a second visible switch. Consequence: the always-on questions that ride `classify` (`is_automated`, the two safety
+  checks) are asked whenever Needs you is on.

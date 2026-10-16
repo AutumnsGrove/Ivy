@@ -1350,3 +1350,28 @@ The front half of the view; with it the needs-me cascade is usable end to end on
   suite (446 passed, 10 skipped), `make check` and 468 unit tests are green.
 - **Found on the way:** a flex gap split a button's accessible name ("Dismiss : subject"); the name is now one hidden text node.
 - **Not done:** 5c.5, the labelled evaluation (gate G3, the operator's ~100 labels); a visual look on the phone with real mail.
+
+## First real-mailbox run: what it found (2026-10-16)
+
+The operator pointed a second Ivy at her own grove.place mailbox (`~/ivy-real/`, outside the repo, `ivy run --config`)
+to start the 5c.5 evaluation on real mail. Nothing was classified, and nothing said why. Three causes, two fixes:
+
+- **No key was loaded (the real cause, now visible).** `OPENROUTER_API_KEY` is read from the environment or a `.env`
+  *beside the config in use*; the key lived in the repo's `.env`. With no key the gate has no provider and every Jev
+  feature silently reads as off. `GET /smart` now returns per-account `problems` (`no_key` today), `Gate.Problems` is the
+  source, and the Smart features screen shows a banner per affected account and disables the look-over button.
+  An account with smart features off reports none: nothing is expected of it.
+- **"Needs you" could not start stage one.** The shared Jev call runs under `classify`, which ships dark and has no
+  label, so the operator had no way to switch it on. A feature may now be `impliedBy` others (`classify` is implied by
+  `needs_me`), so the one visible switch is enough. The safety checks stage two relies on ride the same call.
+- **Existing mail was never read.** The worker only classifies mail that arrives after its watermark, by design. The
+  worker's `EstimateBackfill`/`StartBackfill` existed with no caller. `GET`/`POST /smart/backfill` expose them
+  (windows 7d, 30d, 90d, all; newest first; the caps still apply as it works), and the Smart screen has an "Existing
+  mail" group: pick a window, see the message count and the worst-case cost in a confirmation, then Start. A start is
+  refused with the reason (409 `not_ready`) when smart features are off or something is in the way.
+- **Also:** `jev-1.14` is pinned in the registry and was confirmed live (resolved to `typesafe/jev-1.14-20261014`, billed
+  exactly $0.042/M input). `Button` gained an optional `label` (accessible name).
+- **Tests:** Go (gate implication, problems, the backfill endpoints incl. refusals), unit (client), E2E on phone and
+  desktop (`no-key` and `over-cap` scenarios in the fake network).
+- **Not done:** progress while a backfill runs (the toast says it started; the queue depth is not shown); a startup log
+  line for "opted in but no key"; the eval tooling itself (5c.5).
