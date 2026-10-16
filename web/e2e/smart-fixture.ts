@@ -7,7 +7,10 @@ import { DEFAULT_ACCOUNT_CAP, DEFAULT_GLOBAL_CAP, monthSpend, type Caps } from '
 type Reply = { status?: number; contentType?: string; headers?: Record<string, string>; body: unknown };
 
 const MAX_CAP = 1000;
-const FEATURES = [{ name: 'search', label: 'Meaning search', defaultOn: true }];
+const FEATURES = [
+	{ name: 'category', label: 'Categories', defaultOn: false },
+	{ name: 'search', label: 'Meaning search', defaultOn: true }
+];
 const MODELS = [
 	{ id: 'deepseek', name: 'DeepSeek V4.1 Flash', multimodal: true, inPerM: 0.14, outPerM: 0.42 },
 	{ id: 'mimo', name: 'MiMo v2.6 Flash', multimodal: true, inPerM: 0.14, outPerM: 0.28 },

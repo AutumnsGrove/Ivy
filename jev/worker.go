@@ -116,6 +116,7 @@ type WorkerStore interface {
 	CountUnclassified(ctx context.Context, accountID string, since time.Time) (int, error)
 	MeanBodyBytes(ctx context.Context, accountID string, since time.Time) (int, error)
 	MarkClassified(ctx context.Context, accountID string, contentKeys []string, at time.Time) error
+	PlaceCategoryTag(ctx context.Context, accountID, contentKey, category string) error
 	ListAttachments(ctx context.Context, messageID string) ([]store.Attachment, error)
 	GetSetting(ctx context.Context, accountID, key string) (string, bool, error)
 	SetSetting(ctx context.Context, accountID, key, value string) error
@@ -254,6 +255,7 @@ func (w *Worker) process(ctx context.Context, account string, batch []store.Cand
 				// Its answer is already kept; marking it done must outlive a sibling's cancel
 				// too, or the message would be asked about again for nothing.
 				markCtx, markCancel := context.WithTimeout(context.WithoutCancel(ctx), storeWriteTimeout)
+				w.placeCategory(markCtx, account, c.Message.ContentKey)
 				err := w.store.MarkClassified(markCtx, account, []string{c.Message.ContentKey}, w.opts.Now())
 				markCancel()
 				if err != nil {

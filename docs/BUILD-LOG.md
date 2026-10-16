@@ -1409,3 +1409,25 @@ changed and nothing here calls a provider or costs money.
   queue is empty.
 - **Known, not mine:** `golangci-lint` reports 12 issues in `jev/` (shadowed `max`, three comment forms, an unused
   parameter, test helpers without a context). They predate this work; not fixed here.
+
+## 5d.1: categories place a removable tag (2026-10-16)
+
+The `category` question is built and ships dark. Nothing spends until the operator turns on **Categories** on
+`/settings/smart` (which also turns on the shared Jev call, as Needs you does).
+
+- **The question** (`jev/builtin.yaml`): `personal, contact_form, newsletter, receipt, notification, marketing,
+  security_report, legal_notice, other`; quiet option `other`; threshold **0.80** (a tag is visible, so it is not
+  eager); 900-byte budget held by `TestEveryShippedQuestionFitsTheEstimatesBudget`. Wording is a draft until G3.
+- **Tags** (`store/categorytags.go`): the seven categories except personal and other own a reserved, local-only tag
+  (`t-cat-<key>`, slug `cat-<key>`, never an IMAP keyword, the tag itself cannot be deleted, a message can lose it).
+  Personal mail is never tagged: it stays protected from automated handling.
+- **Placement** (`jev/placement.go`): as the worker marks a message done it reads the settled category from the kept
+  answer and places the tag. A message is decided once, so a tag the operator removes stays removed (tested).
+- **Found on the way, fixed:** a paid Jev answer could be lost. Switching an account off mid-pass cancelled the context of
+  calls already in flight, so `put decisions: context canceled` threw the answer away after the money was spent
+  (`TestTurningItOffMidPassIsNotAnError` flaked on it). The writes that keep a paid answer, and the mark-done write, now run
+  detached with their own 10 s deadline, like the gate's ledger write. Needs-me stage two has the same shape and was not checked.
+- **Tests:** store (tag placement, reserved and local-only), jev (question shape, dark until its switch, placement cases,
+  removal stays removed), llm (listed, implies the shared call), E2E (the switch on phone and desktop).
+- **Not done:** the category's other uses (routing to the newsletter feed 5f and the receipts ledger 5g); the accuracy of
+  the wording (needs labelled mail, G3); a nav or filter view of the category tags beyond the existing tag views.

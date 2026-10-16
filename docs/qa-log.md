@@ -1920,3 +1920,15 @@ already answered; these are what the build forced. Please confirm or change.
 - **Build-time choice (confirm or change):** turning on "Needs you" also turns on the `classify` call rather than adding
   a second visible switch. Consequence: the always-on questions that ride `classify` (`is_automated`, the two safety
   checks) are asked whenever Needs you is on.
+
+## 5d.1 build-time choices (2026-10-16, agent; please confirm or change)
+
+- **Which categories place a tag:** newsletter, receipt, notification, marketing, contact form, security, legal. Personal
+  and other place none (personal stays protected from automation; other says nothing).
+- **Tag names and colours:** Newsletter (sky), Receipt (gold), Notification (slate), Marketing (sand), Contact form (teal),
+  Security (berry), Legal (orchid). Their slugs are `cat-<key>`, so they never collide with a tag she made herself.
+- **One switch:** Categories, dark, on the Smart screen; it turns on the shared call (and with it the always-on
+  questions that ride it, as Needs you does).
+- **The bar is 0.80**, higher than Needs you's 0.65, because a wrong tag is visible and a missed one costs nothing.
+- **A removed tag is not re-placed:** a message is decided once. If the question's wording is edited and the message is
+  asked again, a tag she removed could come back; accepted as rare.
