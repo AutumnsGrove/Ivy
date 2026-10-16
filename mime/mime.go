@@ -73,7 +73,11 @@ type Parsed struct {
 	// many parts, an unreadable header) and only the headers were parsed.
 	BodySkipped bool
 	Auth        AuthResults
-	Errors      []string
+	// Spam is the provider's spam score, kept only when a trusted server also vouched
+	// for the message (Auth.AuthservID is set). A sender can write any X-Spam-Status,
+	// so with no trusted verdict beside it the score is dropped, not shown.
+	Spam   SpamStatus
+	Errors []string
 }
 
 // Parse decodes one raw message. It never returns an error: a message that
@@ -114,6 +118,9 @@ func Parse(raw []byte, trustedAuthservIDs ...string) (p Parsed) {
 	p.Attachments = parts(env.Attachments, false)
 	p.Inlines = parts(env.Inlines, true)
 	p.Auth = ParseAuthResults(env.GetHeaderValues("Authentication-Results"), trustedAuthservIDs)
+	if p.Auth.AuthservID != "" {
+		p.Spam = ParseSpamStatus(env.GetHeaderValues("X-Spam-Status"))
+	}
 	p.Errors = append(p.Errors, partErrors(env.Errors)...)
 	return p
 }
