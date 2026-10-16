@@ -55,6 +55,11 @@ func (b partyBuilder) list(in []store.Address) []api.MessageParty {
 // so; "unknown" must never read as an all-clear.
 func authView(a store.AuthResults) api.MessageAuth {
 	out := api.MessageAuth{State: api.None}
+	// The score stands on its own: it says nothing about who sent the message, so it
+	// never moves the state, and a score with no verdicts is still "unknown".
+	if a.SpamPresent {
+		out.Spam = &api.SpamScore{Score: a.SpamScore, Required: a.SpamRequired, Flagged: a.SpamFlagged}
+	}
 	verdicts := []string{a.SPF, a.DKIM, a.DMARC}
 	var seen, passed, failed int
 	for _, v := range verdicts {

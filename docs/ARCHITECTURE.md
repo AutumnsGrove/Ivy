@@ -422,9 +422,15 @@ the builder still validates every header and never runs an inbound reader policy
   header**: a later header cannot add a method it omitted. The trusted id is stored beside the
   verdicts (N9, `papercuts.md`). RFC 8601 does not let a consumer interpret the header until the
   operator configures the ids, so an empty list means no verdict, never a forged one. **Purelymail
-  adds no SPF/DKIM/DMARC verdicts** (spike S1: its header is only `mail.purelymail.com; auth=pass`),
-  so on Purelymail the signal is empty and the spoofed-sender discount stays off; verifying DKIM
-  ourselves is the later feature that would change that.
+  now does add real verdicts** (read on the operator's own mail, 2026-10-16: `Authentication-Results:
+  purelymail.com; spf=pass ...; dkim=pass ...; dmarc=pass ...`; spike S1 had seen only
+  `mail.purelymail.com; auth=pass`). A known provider's own id is therefore trusted by default by
+  its IMAP host (`config.TrustedAuthservIDs`, Purelymail only for now); an explicit
+  `trusted_authserv_ids` wins and an unknown provider trusts nothing.
+  **The provider's spam score** (`X-Spam-Status: No, score=-3.03 required=5 tests=...`) is kept with
+  the verdicts (in the same JSON column, so no migration) and believed only when a trusted server
+  also vouched for the message, since a sender can write any such header. It is shown as a hint and
+  never an all-clear. Mail mirrored before this heals through the re-derive pass (`DerivedVersion` 2).
 
 ## 6. Search and ask
 

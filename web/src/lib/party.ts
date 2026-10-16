@@ -36,3 +36,17 @@ export function authLine(auth: Pick<MessageAuth, 'state' | 'authservId' | 'spf' 
 	const detail = present.map(([key, label]) => `${label} ${auth[key]}`).join(', ');
 	return `${auth.state === 'fail' ? 'Failed a check' : 'Not fully verified'}: ${detail}.`;
 }
+
+/** A threshold as the provider writes it: 5, not 5.0. */
+const plain = (n: number) => `${Number(n.toFixed(2))}`;
+
+/**
+ * The provider's spam score in one honest sentence, or null when there is none. A low
+ * score is a hint and never an all-clear, so it is worded that way: sender-controlled
+ * mail can score low, and the score says nothing about who really sent it.
+ */
+export function spamLine(spam: MessageAuth['spam']): string | null {
+	if (!spam) return null;
+	if (spam.flagged) return `Your provider's spam filter flagged this: score ${plain(spam.score)}, limit ${plain(spam.required)}.`;
+	return `Spam score ${spam.score.toFixed(1)}; your provider flags ${plain(spam.required)} and above. A low score is a hint, not a guarantee.`;
+}

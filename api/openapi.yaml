@@ -2699,17 +2699,39 @@ components:
           description: >
             The People page for this address, after the operator's merges. Absent
             for the operator's own addresses, which People leaves out.
+    SpamScore:
+      type: object
+      description: >
+        The provider's own spam score (X-Spam-Status), present only when a trusted
+        server also vouched for the message, since a sender can write any such
+        header. It is a hint: a low score is never an all-clear.
+      required: [score, required, flagged]
+      properties:
+        score:
+          type: number
+          format: double
+          description: The total; negative for mail that looks wanted
+        required:
+          type: number
+          format: double
+          description: The score at which the provider calls a message spam
+        flagged:
+          type: boolean
+          description: The provider's own verdict
     MessageAuth:
       type: object
       description: >
         What the mail provider vouched for. Only a trusted server's verdicts are
-        believed, so a provider that adds none (Purelymail today) is `none`, which
-        means unknown and is never shown as an all-clear.
+        believed, so a message with no trusted verdict is `none`, which means
+        unknown and is never shown as an all-clear. A known provider (Purelymail) is
+        trusted by default; an unknown one is trusted only when configured.
       required: [state]
       properties:
         state:
           type: string
           enum: [none, pass, fail, mixed]
+        spam:
+          $ref: "#/components/schemas/SpamScore"
         authservId:
           type: string
           description: The server that attested the verdicts

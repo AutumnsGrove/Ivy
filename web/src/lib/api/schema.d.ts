@@ -1563,10 +1563,26 @@ export interface components {
             /** @description The People page for this address, after the operator's merges. Absent for the operator's own addresses, which People leaves out. */
             personId?: string;
         };
-        /** @description What the mail provider vouched for. Only a trusted server's verdicts are believed, so a provider that adds none (Purelymail today) is `none`, which means unknown and is never shown as an all-clear. */
+        /** @description The provider's own spam score (X-Spam-Status), present only when a trusted server also vouched for the message, since a sender can write any such header. It is a hint: a low score is never an all-clear. */
+        SpamScore: {
+            /**
+             * Format: double
+             * @description The total; negative for mail that looks wanted
+             */
+            score: number;
+            /**
+             * Format: double
+             * @description The score at which the provider calls a message spam
+             */
+            required: number;
+            /** @description The provider's own verdict */
+            flagged: boolean;
+        };
+        /** @description What the mail provider vouched for. Only a trusted server's verdicts are believed, so a message with no trusted verdict is `none`, which means unknown and is never shown as an all-clear. A known provider (Purelymail) is trusted by default; an unknown one is trusted only when configured. */
         MessageAuth: {
             /** @enum {string} */
             state: "none" | "pass" | "fail" | "mixed";
+            spam?: components["schemas"]["SpamScore"];
             /** @description The server that attested the verdicts */
             authservId?: string;
             spf?: string;

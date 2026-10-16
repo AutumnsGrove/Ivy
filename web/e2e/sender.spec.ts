@@ -23,6 +23,21 @@ test.describe('sender sheet', () => {
 		await expect(page).toHaveURL(/\/people\/p-ml$/);
 	});
 
+	test("shows the provider's spam score beside the verdicts, as a hint and never an all-clear", async ({ page }) => {
+		await page.goto('/m/m3');
+		await inReader(page, /GitHub/).click();
+		const sheet = sheetOf(page);
+		await expect(sheet.getByText('Passed SPF, DKIM and DMARC at purelymail.com.')).toBeVisible();
+		await expect(sheet.getByText(/Spam score -3\.0; your provider flags 5 and above\./)).toBeVisible();
+		await expect(sheet.getByText(/a hint, not a guarantee/)).toBeVisible();
+	});
+
+	test('says nothing about a score when the provider gave none', async ({ page }) => {
+		await page.goto('/m/m1');
+		await inReader(page, /Mara Linden/).click();
+		await expect(sheetOf(page).getByText(/Spam score/)).toHaveCount(0);
+	});
+
 	test('a Cc person opens the same sheet for them', async ({ page }) => {
 		await page.goto('/m/m1');
 		await inReader(page, /Mara Linden/).click();

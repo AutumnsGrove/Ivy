@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Copy, TriangleAlert } from '#lib/icons.js';
-	import { authLine, namesAnotherAddress } from '#lib/party.js';
+	import { authLine, namesAnotherAddress, spamLine } from '#lib/party.js';
 	import { formatMessageTime } from '#lib/time.js';
 	import { toasts } from '#lib/toast.js';
 	import type { MailMessage, MessageParty } from '#lib/types.js';
@@ -20,6 +20,7 @@
 	// Tapping someone else on the message swaps the sheet to them; closing resets it.
 	let picked = $state<MessageParty | null>(null);
 	const shown = $derived(picked ?? party);
+	const spam = $derived(spamLine(message.auth.spam));
 	const others = $derived([message.sender, ...message.to, ...message.cc]);
 	const spoof = $derived(namesAnotherAddress(shown));
 
@@ -55,6 +56,10 @@
 		<dd>{formatMessageTime(message.date)}</dd>
 		<dt>Checked</dt>
 		<dd>{authLine(message.auth)}</dd>
+		{#if spam}
+			<dt>Spam filter</dt>
+			<dd>{spam}</dd>
+		{/if}
 	</dl>
 
 	{#if others.length > 1}

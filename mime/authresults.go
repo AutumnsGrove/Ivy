@@ -15,9 +15,9 @@ var authMethods = map[string]bool{"spf": true, "dkim": true, "dmarc": true}
 //
 // RFC 8601 sections 2.5 and 4.1: a header is trustworthy only when its
 // authserv-id names the ADMD that added it, and a consumer must be configured
-// before it interprets any of them. Purelymail adds no SPF/DKIM/DMARC verdicts
-// (spike S1), so without this check a sender-supplied header is the only one and
-// its "pass" switches off the spoofed-sender discount (N9 in papercuts.md).
+// before it interprets any of them. A sender can write any such header, so without
+// this check a forged "pass" switches off the spoofed-sender discount (N9 in
+// papercuts.md). Purelymail's own id is `purelymail.com`, trusted by default in config.
 //
 // Only the first trusted header counts, not the first verdict per method. A
 // later header could otherwise add a method the trusted one deliberately omitted,

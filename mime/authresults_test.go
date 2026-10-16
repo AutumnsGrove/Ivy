@@ -9,9 +9,8 @@ import (
 
 // TestParseAuthResultsTrustsOnlyConfiguredAuthservID is the N9 fix. RFC 8601
 // 4.1: a consumer must not interpret an Authentication-Results header unless
-// configured to and its authserv-id is one the ADMD uses. Purelymail adds no
-// SPF/DKIM/DMARC verdicts, so a sender-supplied header is the only one a naive
-// parser sees; trusting it switches off the spoofed-sender discount.
+// configured to and its authserv-id is one the ADMD uses. A sender can supply any
+// such header, so trusting one blindly switches off the spoofed-sender discount.
 func TestParseAuthResultsTrustsOnlyConfiguredAuthservID(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

@@ -206,7 +206,18 @@ export function messageBody(id: string): Omit<MailMessage, keyof MailSummary> {
 		sender: { name: m?.from ?? '', address: 'sender@example.com', personId: 'sender@example.com' },
 		to: [{ name: '', address: 'me@example.com' }],
 		cc: [],
-		auth: { state: 'none' },
+		// One message shows a verified, scored mail so the sheet's spam line has a design to check.
+		auth:
+			id === 'm3'
+				? {
+						state: 'pass',
+						authservId: 'purelymail.com',
+						spf: 'pass',
+						dkim: 'pass',
+						dmarc: 'pass',
+						spam: { score: -3.03, required: 5, flagged: false }
+					}
+				: { state: 'none' },
 		html: `<p>${m?.preview.replace(/…$/, '.') ?? ''}</p><p>The rest of this message is a placeholder.</p>`,
 		paragraphs: [m?.preview.replace(/…$/, '.') ?? '', 'The rest of this message is a placeholder.'],
 		attachments: []

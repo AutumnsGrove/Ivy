@@ -1289,7 +1289,7 @@ type MailMessage struct {
 	AccountId   string       `json:"accountId"`
 	Attachments []Attachment `json:"attachments"`
 
-	// Auth What the mail provider vouched for. Only a trusted server's verdicts are believed, so a provider that adds none (Purelymail today) is `none`, which means unknown and is never shown as an all-clear.
+	// Auth What the mail provider vouched for. Only a trusted server's verdicts are believed, so a message with no trusted verdict is `none`, which means unknown and is never shown as an all-clear. A known provider (Purelymail) is trusted by default; an unknown one is trusted only when configured.
 	Auth MessageAuth    `json:"auth"`
 	Cc   []MessageParty `json:"cc"`
 
@@ -1347,14 +1347,17 @@ type MailSummary struct {
 	Unread      bool    `json:"unread"`
 }
 
-// MessageAuth What the mail provider vouched for. Only a trusted server's verdicts are believed, so a provider that adds none (Purelymail today) is `none`, which means unknown and is never shown as an all-clear.
+// MessageAuth What the mail provider vouched for. Only a trusted server's verdicts are believed, so a message with no trusted verdict is `none`, which means unknown and is never shown as an all-clear. A known provider (Purelymail) is trusted by default; an unknown one is trusted only when configured.
 type MessageAuth struct {
 	// AuthservId The server that attested the verdicts
-	AuthservId *string          `json:"authservId,omitempty"`
-	Dkim       *string          `json:"dkim,omitempty"`
-	Dmarc      *string          `json:"dmarc,omitempty"`
-	Spf        *string          `json:"spf,omitempty"`
-	State      MessageAuthState `json:"state"`
+	AuthservId *string `json:"authservId,omitempty"`
+	Dkim       *string `json:"dkim,omitempty"`
+	Dmarc      *string `json:"dmarc,omitempty"`
+
+	// Spam The provider's own spam score (X-Spam-Status), present only when a trusted server also vouched for the message, since a sender can write any such header. It is a hint: a low score is never an all-clear.
+	Spam  *SpamScore       `json:"spam,omitempty"`
+	Spf   *string          `json:"spf,omitempty"`
+	State MessageAuthState `json:"state"`
 }
 
 // MessageAuthState defines model for MessageAuth.State.
@@ -1867,6 +1870,18 @@ type SnoozeRequest struct {
 
 // SnoozeRequestPreset defines model for SnoozeRequest.Preset.
 type SnoozeRequestPreset string
+
+// SpamScore The provider's own spam score (X-Spam-Status), present only when a trusted server also vouched for the message, since a sender can write any such header. It is a hint: a low score is never an all-clear.
+type SpamScore struct {
+	// Flagged The provider's own verdict
+	Flagged bool `json:"flagged"`
+
+	// Required The score at which the provider calls a message spam
+	Required float64 `json:"required"`
+
+	// Score The total; negative for mail that looks wanted
+	Score float64 `json:"score"`
+}
 
 // SpendAccountRow An account's spend in the window and its calendar month against its own cap.
 type SpendAccountRow struct {

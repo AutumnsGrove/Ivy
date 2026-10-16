@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authLine, namesAnotherAddress } from './party.js';
+import { authLine, namesAnotherAddress, spamLine } from './party.js';
 
 describe('namesAnotherAddress', () => {
 	it.each([
@@ -35,5 +35,27 @@ describe('authLine', () => {
 		);
 		expect(authLine({ state: 'fail', spf: 'pass', dkim: 'fail' })).toBe('Failed a check: SPF pass, DKIM fail.');
 		expect(authLine({ state: 'mixed', dmarc: 'neutral' })).toBe('Not fully verified: DMARC neutral.');
+	});
+});
+
+describe('spamLine', () => {
+	it('gives the score and the provider threshold, and never calls a low score safe', () => {
+		const line = spamLine({ score: -3.03, required: 5, flagged: false });
+		expect(line).toBe('Spam score -3.0; your provider flags 5 and above. A low score is a hint, not a guarantee.');
+		expect(line).not.toMatch(/safe|clean|ok\b/i);
+	});
+
+	it('says plainly when the provider flagged the message', () => {
+		expect(spamLine({ score: 9.4, required: 5, flagged: true })).toBe(
+			"Your provider's spam filter flagged this: score 9.4, limit 5."
+		);
+	});
+
+	it('shows a score of zero and a fractional threshold', () => {
+		expect(spamLine({ score: 0, required: 4.5, flagged: false })).toContain('Spam score 0.0; your provider flags 4.5 and above');
+	});
+
+	it('is absent when the provider gave no score', () => {
+		expect(spamLine(undefined)).toBeNull();
 	});
 });

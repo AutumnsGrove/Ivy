@@ -1431,3 +1431,32 @@ The `category` question is built and ships dark. Nothing spends until the operat
   removal stays removed), llm (listed, implies the shared call), E2E (the switch on phone and desktop).
 - **Not done:** the category's other uses (routing to the newsletter feed 5f and the receipts ledger 5g); the accuracy of
   the wording (needs labelled mail, G3); a nav or filter view of the category tags beyond the existing tag views.
+
+## 5d.3: the provider's spam score and trusted verdicts (2026-10-16)
+
+No model, no spend. The score and the verdicts the provider already attaches are parsed, kept and shown.
+
+- **A finding that changed the plan.** Reading the operator's real Purelymail mail showed it adds both an
+  `Authentication-Results` line (authserv-id `purelymail.com`, real SPF/DKIM/DMARC) and SpamAssassin's
+  `X-Spam-Status: No, score=-3.03 required=5 tests=...`. Spike S1 had said it adds no verdicts. Her config trusted no
+  authserv-id, so every message read as "your provider did not check", and `docs/ARCHITECTURE.md` now says otherwise.
+- **Trust by provider** (`config.TrustedAuthservIDs`): a known provider's id is trusted by its IMAP host, matched on a
+  whole-domain boundary so a look-alike cannot borrow it (Purelymail only, because only a header read on real mail belongs
+  in the table). An explicit `trusted_authserv_ids` wins; an unknown provider and the dev fake trust nothing.
+  `accountsvc.SyncAccount` carries it, so app-connected accounts get it too.
+- **Parse** (`mime/spamstatus.go`): the topmost `X-Spam-Status` only (the receiving server prepends its own; a forged one
+  sits below), the first 256 bytes only, strict number forms, magnitudes bounded. Anything else is "no score", never a guess.
+  Believed only when a trusted server also vouched for the message.
+- **Stored in the existing `auth_results` JSON** (`spam_present/flagged/score/required`), so **no migration**; the plan had
+  expected one. `SpamPresent` keeps a real score of 0 from reading as none.
+- **Healing older mail.** `DerivedVersion` is now 2 and the derived record can rewrite `auth_results`. Re-deriving used to
+  parse with no trusted ids and never touched that column; it would have blanked verdicts. The fetcher now remembers each
+  account's trusted ids from its last Fetch, and an account it has not seen is left alone (tested both ways).
+- **API and screen:** `MessageAuth.spam` (`score`, `required`, `flagged`); the sender sheet shows a "Spam filter" line beside
+  "Checked": "Spam score -3.0; your provider flags 5 and above. A low score is a hint, not a guarantee." A flagged message
+  says so plainly. A score never moves the verdict state: a score with no verdicts is still "unknown".
+- **Tests:** mime (forms, hostile, huge, trust gate), sync (fetch keeps it, re-derive heals it, no known trust leaves verdicts
+  alone, a forged score is not kept), config (provider table, look-alikes), accountsvc, gateway, unit (wording), E2E on
+  phone and desktop.
+- **Not done:** using the score to skip or prioritise a Junk-rescue call (5d.4); the score in the message list or the Junk
+  view; other providers' header formats.
