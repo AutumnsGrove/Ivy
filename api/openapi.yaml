@@ -1153,6 +1153,80 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           $ref: "#/components/responses/NotFound"
+  /smart/backfill:
+    get:
+      operationId: getSmartBackfill
+      summary: What looking over existing mail would read and cost, at most
+      description: >
+        Smart features only look at mail that arrives after they are switched on. This
+        prices reaching back over mail already in the mirror, before anyone agrees to
+        it. It calls no provider and changes nothing. `usd` is the worst case, rounded
+        up to the cent.
+      parameters:
+        - name: account
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: window
+          in: query
+          required: true
+          description: How far back to reach
+          schema:
+            $ref: "#/components/schemas/BackfillWindow"
+      responses:
+        "200":
+          description: The estimate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmartBackfill"
+        "400":
+          description: The window is not one Ivy offers (`bad_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      operationId: startSmartBackfill
+      summary: Make existing mail eligible for the smart features
+      description: >
+        Lowers the account's watermark so the background worker reads mail inside the
+        window, newest first, a bounded batch at a time. It only ever reaches further
+        back. The monthly caps still apply as it works, and it pauses when one is
+        reached. Repeating the same request changes nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmartBackfillRequest"
+      responses:
+        "200":
+          description: Started; the estimate it was started on
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmartBackfill"
+        "400":
+          description: The window is not one Ivy offers (`bad_request`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: >
+            Nothing can run for this account right now (`not_ready`): smart features are
+            off for it, or something is in the way (see `problems` on the settings). The
+            message says which.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /spend:
     get:
       operationId: getSpend
@@ -1873,6 +1947,41 @@ components:
           type: number
           format: double
           description: Listed dollars per million output tokens
+    BackfillWindow:
+      type: string
+      enum: ["7d", "30d", "90d", "all"]
+    SmartBackfillRequest:
+      type: object
+      required: [account, window]
+      properties:
+        account:
+          type: string
+        window:
+          $ref: "#/components/schemas/BackfillWindow"
+    SmartBackfill:
+      type: object
+      required: [account, window, items, usd, fits, accountHeadroomUsd, globalHeadroomUsd]
+      properties:
+        account:
+          type: string
+        window:
+          $ref: "#/components/schemas/BackfillWindow"
+        items:
+          type: integer
+          description: The most messages this would read, not counting any already looked at
+        usd:
+          type: number
+          format: double
+          description: The worst-case cost
+        fits:
+          type: boolean
+          description: Whether it is under both monthly caps right now; they still apply as it runs
+        accountHeadroomUsd:
+          type: number
+          format: double
+        globalHeadroomUsd:
+          type: number
+          format: double
     SmartProblem:
       type: object
       required: [code, message]

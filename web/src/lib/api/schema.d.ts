@@ -703,6 +703,30 @@ export interface paths {
         patch: operations["updateSmartSettings"];
         trace?: never;
     };
+    "/smart/backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What looking over existing mail would read and cost, at most
+         * @description Smart features only look at mail that arrives after they are switched on. This prices reaching back over mail already in the mirror, before anyone agrees to it. It calls no provider and changes nothing. `usd` is the worst case, rounded up to the cent.
+         */
+        get: operations["getSmartBackfill"];
+        put?: never;
+        /**
+         * Make existing mail eligible for the smart features
+         * @description Lowers the account's watermark so the background worker reads mail inside the window, newest first, a bounded batch at a time. It only ever reaches further back. The monthly caps still apply as it works, and it pauses when one is reached. Repeating the same request changes nothing.
+         */
+        post: operations["startSmartBackfill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/spend": {
         parameters: {
             query?: never;
@@ -1125,6 +1149,29 @@ export interface components {
              * @description Listed dollars per million output tokens
              */
             outPerM: number;
+        };
+        /** @enum {string} */
+        BackfillWindow: "7d" | "30d" | "90d" | "all";
+        SmartBackfillRequest: {
+            account: string;
+            window: components["schemas"]["BackfillWindow"];
+        };
+        SmartBackfill: {
+            account: string;
+            window: components["schemas"]["BackfillWindow"];
+            /** @description The most messages this would read, not counting any already looked at */
+            items: number;
+            /**
+             * Format: double
+             * @description The worst-case cost
+             */
+            usd: number;
+            /** @description Whether it is under both monthly caps right now; they still apply as it runs */
+            fits: boolean;
+            /** Format: double */
+            accountHeadroomUsd: number;
+            /** Format: double */
+            globalHeadroomUsd: number;
         };
         SmartProblem: {
             /** @description A stable machine name, for example `no_key` */
@@ -3437,6 +3484,83 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    getSmartBackfill: {
+        parameters: {
+            query: {
+                account: string;
+                /** @description How far back to reach */
+                window: components["schemas"]["BackfillWindow"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The estimate */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmartBackfill"];
+                };
+            };
+            /** @description The window is not one Ivy offers (`bad_request`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    startSmartBackfill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SmartBackfillRequest"];
+            };
+        };
+        responses: {
+            /** @description Started; the estimate it was started on */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmartBackfill"];
+                };
+            };
+            /** @description The window is not one Ivy offers (`bad_request`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description Nothing can run for this account right now (`not_ready`): smart features are off for it, or something is in the way (see `problems` on the settings). The message says which. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     getSpend: {

@@ -74,6 +74,9 @@ type Server struct {
 	// smart is what the Smart features screen reads and writes; nil falls back to a
 	// gate with no providers.
 	smart SmartControls
+	// backfill prices and starts a look over existing mail; nil leaves the endpoints
+	// answering "not ready", which is a server with smart features absent.
+	backfill Backfiller
 	// embedBacklog is where Mirror health learns the embed queue; nil means no
 	// worker runs, which the page reports as meaning search being off.
 	embedBacklog EmbedBacklog
@@ -181,6 +184,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/search", s.handleSearch)
 	api.HandleFunc("GET /api/v1/smart", s.handleGetSmart)
 	api.HandleFunc("PATCH /api/v1/smart", s.handleUpdateSmart)
+	api.HandleFunc("GET /api/v1/smart/backfill", s.handleSmartBackfillEstimate)
+	api.HandleFunc("POST /api/v1/smart/backfill", s.handleSmartBackfillStart)
 	api.HandleFunc("GET /api/v1/spend", s.handleSpend)
 	api.HandleFunc("GET /api/v1/spend/calls", s.handleListCalls)
 	api.HandleFunc("GET /api/v1/spend/calls/export", s.handleExportCalls)

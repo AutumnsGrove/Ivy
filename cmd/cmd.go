@@ -142,6 +142,12 @@ func runCmd(configPath *string, version string) *cobra.Command {
 				WithAllowedHosts(cfg.HostAllowList()).WithBackupTargets(cfg.BackupTargets()).
 				WithAccountConnector(connector).WithConfiguredSmart(smartOf(ivyYAMLAccounts))
 
+			// A nil worker must not become a non-nil interface, so the endpoints would
+			// otherwise try to call through it.
+			if embedding.Classifier != nil {
+				api = api.WithBackfill(embedding.Classifier)
+			}
+
 			// The self-update path only makes sense in the container, where a host-side
 			// watcher reads the signal file. In dev it would write a file nothing reads
 			// and the UI would spin, so leave the endpoint reporting "unavailable".

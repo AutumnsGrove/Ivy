@@ -91,6 +91,30 @@ func (e AttachmentTone) Valid() bool {
 	}
 }
 
+// Defines values for BackfillWindow.
+const (
+	All  BackfillWindow = "all"
+	N30d BackfillWindow = "30d"
+	N7d  BackfillWindow = "7d"
+	N90d BackfillWindow = "90d"
+)
+
+// Valid indicates whether the value is a known member of the BackfillWindow enum.
+func (e BackfillWindow) Valid() bool {
+	switch e {
+	case All:
+		return true
+	case N30d:
+		return true
+	case N7d:
+		return true
+	case N90d:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BodyFormat.
 const (
 	Html     BodyFormat = "html"
@@ -895,6 +919,9 @@ type AttachmentInfo struct {
 	Name   string  `json:"name"`
 	Size   int64   `json:"size"`
 }
+
+// BackfillWindow defines model for BackfillWindow.
+type BackfillWindow string
 
 // BlockedRow defines model for BlockedRow.
 type BlockedRow struct {
@@ -1749,6 +1776,29 @@ type SmartAccountPatch struct {
 	Features *map[string]bool `json:"features,omitempty"`
 }
 
+// SmartBackfill defines model for SmartBackfill.
+type SmartBackfill struct {
+	Account            string  `json:"account"`
+	AccountHeadroomUsd float64 `json:"accountHeadroomUsd"`
+
+	// Fits Whether it is under both monthly caps right now; they still apply as it runs
+	Fits              bool    `json:"fits"`
+	GlobalHeadroomUsd float64 `json:"globalHeadroomUsd"`
+
+	// Items The most messages this would read, not counting any already looked at
+	Items int `json:"items"`
+
+	// Usd The worst-case cost
+	Usd    float64        `json:"usd"`
+	Window BackfillWindow `json:"window"`
+}
+
+// SmartBackfillRequest defines model for SmartBackfillRequest.
+type SmartBackfillRequest struct {
+	Account string         `json:"account"`
+	Window  BackfillWindow `json:"window"`
+}
+
 // SmartFeature A feature the operator can switch per account
 type SmartFeature struct {
 	DefaultOn bool   `json:"defaultOn"`
@@ -2057,6 +2107,14 @@ type ListSendsParams struct {
 	Limit     *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// GetSmartBackfillParams defines parameters for GetSmartBackfill.
+type GetSmartBackfillParams struct {
+	Account string `form:"account" json:"account"`
+
+	// Window How far back to reach
+	Window BackfillWindow `form:"window" json:"window"`
+}
+
 // GetSpendParams defines parameters for GetSpend.
 type GetSpendParams struct {
 	// From Start of the window, an RFC 3339 instant
@@ -2148,6 +2206,9 @@ type SendMessageJSONRequestBody = SendRequest
 
 // UpdateSmartSettingsJSONRequestBody defines body for UpdateSmartSettings for application/json ContentType.
 type UpdateSmartSettingsJSONRequestBody = SmartSettingsPatch
+
+// StartSmartBackfillJSONRequestBody defines body for StartSmartBackfill for application/json ContentType.
+type StartSmartBackfillJSONRequestBody = SmartBackfillRequest
 
 // CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
 type CreateTagJSONRequestBody = TagCreate
