@@ -355,6 +355,19 @@ func (g *Gate) hasProvider(kind string, spec feature) bool {
 // featureOn reads the per-account switch for one feature. A feature that ships
 // dark stays off until its switch says on.
 func (g *Gate) featureOn(ctx context.Context, accountID, name string, spec feature) bool {
+	if g.switchOn(ctx, accountID, name, spec) {
+		return true
+	}
+	for _, by := range spec.impliedBy {
+		if g.switchOn(ctx, accountID, by, features[by]) {
+			return true
+		}
+	}
+	return false
+}
+
+// switchOn reads one feature's own switch, ignoring what implies it.
+func (g *Gate) switchOn(ctx context.Context, accountID, name string, spec feature) bool {
 	v, ok, err := g.store.GetSetting(ctx, accountID, featureSwitchKey(name))
 	switch {
 	case err != nil:

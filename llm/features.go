@@ -26,6 +26,10 @@ type feature struct {
 	// per-feature switch says off. Features ship dark, so only the two that
 	// already shipped are on; each later stage turns its own on.
 	defaultOn bool
+	// impliedBy names features whose own switch also turns this one on. A listed
+	// feature whose questions ride a shared call needs that call's switch, and the
+	// screen has none to offer, so asking for the feature has to be enough.
+	impliedBy []string
 	// label is the operator-facing name. A feature with none is not listed on the
 	// Smart features screen: it has no code behind it yet, and gains a label when
 	// its stage ships.
@@ -43,7 +47,7 @@ var features = map[string]feature{
 
 	// Classifiers read clipped state only.
 	"needs_me":    {endpoint: EndpointSystemOne, label: "Needs you"},
-	"classify":    {endpoint: EndpointSystemOne},
+	"classify":    {endpoint: EndpointSystemOne, impliedBy: []string{"needs_me"}},
 	"junk_rescue": {endpoint: EndpointSystemOne},
 
 	"needs_me_stage2": {endpoint: EndpointChat, vetted: true, label: "Needs you: reasons"},

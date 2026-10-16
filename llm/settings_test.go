@@ -118,6 +118,34 @@ func TestAFeatureSwitchIsPerAccountAndShipsDark(t *testing.T) {
 	}
 }
 
+// "Needs you" is asked in the shared Jev call, which runs under classify, and the
+// safety checks stage two relies on ride that call too. The screen has no switch for
+// classify, so turning "Needs you" on must be enough on its own.
+func TestNeedsYouSwitchesOnTheSharedCallItRidesOn(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	g := NewGate(openStore(t))
+
+	if g.FeatureEnabled(ctx, "a", "classify") {
+		t.Fatal("the shared call is on before anyone asked for anything")
+	}
+	if err := g.SetFeatureEnabled(ctx, "a", "needs_me", true); err != nil {
+		t.Fatal(err)
+	}
+	if !g.FeatureEnabled(ctx, "a", "classify") {
+		t.Error("Needs you is on but the call it rides on is still off")
+	}
+	if g.FeatureEnabled(ctx, "b", "classify") {
+		t.Error("one account's switch turned on another account's shared call")
+	}
+	if err := g.SetFeatureEnabled(ctx, "a", "needs_me", false); err != nil {
+		t.Fatal(err)
+	}
+	if g.FeatureEnabled(ctx, "a", "classify") {
+		t.Error("turning Needs you back off left the shared call on")
+	}
+}
+
 // The screen lists only features that exist for the operator; the dark ones join as
 // their stages land.
 func TestOnlyShippedFeaturesAreListedForTheScreen(t *testing.T) {
