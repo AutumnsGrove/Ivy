@@ -414,12 +414,16 @@ const (
 )
 
 // IsReservedTag reports whether a tag is reserved and must not be deleted.
-func IsReservedTag(id string) bool { return id == ReadingTagID || id == NeedsTagID }
+func IsReservedTag(id string) bool {
+	return id == ReadingTagID || id == NeedsTagID || isCategoryTag(id)
+}
 
 // LocalOnly reports whether a tag lives only in Ivy. Placed tags are decided by the
 // layer and removable by the operator, but they are not the operator's labels and
 // must not appear on the server as keywords.
-func (t Tag) LocalOnly() bool { return t.ID == NeedsTagID || t.Slug == NeedsSlug }
+func (t Tag) LocalOnly() bool {
+	return t.ID == NeedsTagID || t.Slug == NeedsSlug || isCategoryTag(t.ID)
+}
 
 // EnsureNeedsTag creates the reserved "Needs you" tag if it is missing. A tag that
 // already uses the slug is adopted rather than duplicated.
