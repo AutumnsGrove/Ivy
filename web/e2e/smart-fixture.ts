@@ -1,7 +1,7 @@
 // GET and PATCH /smart at the network boundary, for the mock E2E suite. The Go gateway validates
 // and stores these through the gate (and its tests own the rules); this keeps the same shapes and
 // the same refusals over mutable state, so a change made on the screen survives a reload.
-import type { Account, SmartSettings } from '../src/lib/types';
+import type { Account, BackfillWindow, SmartBackfill, SmartSettings } from '../src/lib/types';
 import { DEFAULT_ACCOUNT_CAP, DEFAULT_GLOBAL_CAP, monthSpend, type Caps } from './spend-fixture';
 
 type Reply = { status?: number; contentType?: string; headers?: Record<string, string>; body: unknown };
@@ -32,7 +32,18 @@ export const freshSmart = (): SmartState => ({
 
 const bad = (message: string): Reply => ({ status: 400, body: { code: 'bad_request', message } });
 
-function settings(state: SmartState, accounts: Account[]): SmartSettings {
+const NO_KEY =
+	'Ivy has no OpenRouter key, so nothing here can run. Put OPENROUTER_API_KEY in the .env beside ivy.yaml (or in the environment) and restart Ivy.';
+
+/** What a window would read, as the worker would count it over the fixture's 41 messages. */
+const WINDOW_ITEMS: Record<BackfillWindow, { items: number; usd: number }> = {
+	'7d': { items: 3, usd: 0.01 },
+	'30d': { items: 12, usd: 0.01 },
+	'90d': { items: 41, usd: 0.02 },
+	all: { items: 41, usd: 0.02 }
+};
+
+function settings(state: SmartState, accounts: Account[], scenario: string | null): SmartSettings {
 	const spent = monthSpend(accounts);
 	return {
 		globalCapUsd: state.caps.global,
@@ -44,7 +55,9 @@ function settings(state: SmartState, accounts: Account[]): SmartSettings {
 			smart: a.smart,
 			capUsd: state.caps.account[a.id] ?? DEFAULT_ACCOUNT_CAP,
 			monthUsd: spent.account[a.id] ?? 0,
-			features: Object.fromEntries(FEATURES.map((f) => [f.name, state.features[a.id]?.[f.name] ?? f.defaultOn]))
+			features: Object.fromEntries(FEATURES.map((f) => [f.name, state.features[a.id]?.[f.name] ?? f.defaultOn])),
+			// The designed "no key" state: opted in, but nothing can reach the provider.
+			problems: a.smart && scenario === 'no-key' ? [{ code: 'no_key', message: NO_KEY }] : []
 		})),
 		features: FEATURES,
 		models: MODELS,
@@ -56,9 +69,53 @@ function settings(state: SmartState, accounts: Account[]): SmartSettings {
 const isCap = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= MAX_CAP;
 const capMessage = `A cap must be between $0 and $${MAX_CAP}`;
 
-export function smartReply(path: string, method: string, state: SmartState, accounts: Account[], raw: Buffer | null): Reply | null {
+function backfillReply(path: string, method: string, params: URLSearchParams, accounts: Account[], scenario: string | null, raw: Buffer | null): Reply {
+	let account: string | null;
+	let window: string | null;
+	if (method === 'POST') {
+		try {
+			const body = JSON.parse(raw?.toString('utf8') ?? '') as { account?: string; window?: string };
+			account = body.account ?? null;
+			window = body.window ?? null;
+		} catch {
+			return bad('That is not a request Ivy understands');
+		}
+	} else {
+		account = params.get('account');
+		window = params.get('window');
+	}
+	if (!window || !(window in WINDOW_ITEMS)) return bad('Pick 7 days, 30 days, 90 days or all mail');
+	const found = accounts.find((a) => a.id === account);
+	if (!found) return { status: 404, body: { code: 'not_found', message: 'No such account' } };
+	if (method === 'POST') {
+		if (!found.smart) return { status: 409, body: { code: 'not_ready', message: 'Smart features are off for this account, so there is nothing to look over mail with.' } };
+		if (scenario === 'no-key') return { status: 409, body: { code: 'not_ready', message: NO_KEY } };
+	}
+	const w = window as BackfillWindow;
+	const over = scenario === 'over-cap';
+	const reply: SmartBackfill = {
+		account: found.id,
+		window: w,
+		...WINDOW_ITEMS[w],
+		fits: !over,
+		accountHeadroomUsd: over ? 0 : 4.5,
+		globalHeadroomUsd: over ? 0 : 9
+	};
+	return { body: reply };
+}
+
+export function smartReply(
+	path: string,
+	method: string,
+	params: URLSearchParams,
+	state: SmartState,
+	accounts: Account[],
+	scenario: string | null,
+	raw: Buffer | null
+): Reply | null {
+	if (path === '/smart/backfill') return backfillReply(path, method, params, accounts, scenario, raw);
 	if (path !== '/smart') return null;
-	if (method === 'GET') return { body: settings(state, accounts) };
+	if (method === 'GET') return { body: settings(state, accounts, scenario) };
 	if (method !== 'PATCH') return null;
 
 	let patch: {
@@ -96,5 +153,5 @@ export function smartReply(path: string, method: string, state: SmartState, acco
 		if (typeof a.capUsd === 'number') state.caps.account[id] = a.capUsd;
 		state.features[id] = { ...state.features[id], ...a.features };
 	}
-	return { body: settings(state, accounts) };
+	return { body: settings(state, accounts, scenario) };
 }

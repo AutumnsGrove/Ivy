@@ -89,4 +89,64 @@ test.describe('smart features settings', () => {
 		await page.goto('/settings/spend');
 		await expect(page.getByText(/of \$7\.00/)).toBeVisible();
 	});
+
+	test.describe('when nothing can run', () => {
+		test('says so, per account, with what to do about it', async ({ page }) => {
+			await page.goto('/settings/smart?scenario=no-key');
+			// me@ and hello@ opted in, so each is told; support@ has smart features off and is not.
+			const notices = page.getByRole('status').filter({ hasText: 'OPENROUTER_API_KEY' });
+			await expect(notices).toHaveCount(2);
+			await expect(notices.first()).toContainText('restart Ivy');
+			await expect(page.getByText("can't run").first()).toBeVisible();
+		});
+
+		test('stays quiet when nothing is in the way', async ({ page }) => {
+			await page.goto('/settings/smart');
+			await expect(page.getByRole('heading', { name: 'Smart features', level: 1 })).toBeVisible();
+			await expect(page.getByText('OPENROUTER_API_KEY')).toHaveCount(0);
+		});
+
+		test('will not start a look over existing mail', async ({ page }) => {
+			await page.goto('/settings/smart?scenario=no-key');
+			await expect(page.getByRole('button', { name: 'Look over mail for me@example.com' })).toBeDisabled();
+		});
+	});
+
+	test.describe('looking over existing mail', () => {
+		const look = (page: import('@playwright/test').Page, who = 'me@example.com') =>
+			page.getByRole('button', { name: `Look over mail for ${who}` });
+
+		test('offers it only to accounts with smart features on', async ({ page }) => {
+			await page.goto('/settings/smart');
+			await expect(look(page)).toBeVisible();
+			await expect(look(page, 'hello@example.com')).toBeVisible();
+			await expect(look(page, 'support@example.com')).toHaveCount(0);
+		});
+
+		test('says what it will read and the most it can cost before anything starts', async ({ page }) => {
+			await page.goto('/settings/smart');
+			await page.getByRole('combobox', { name: 'How far back, me@example.com' }).selectOption('30d');
+			await look(page).click();
+			const dialog = page.getByRole('dialog');
+			await expect(dialog).toContainText('12 messages');
+			await expect(dialog).toContainText('$0.01');
+			// Backing out starts nothing.
+			await dialog.getByRole('button', { name: 'Cancel' }).click();
+			await expect(toast(page, /Looking over/)).toHaveCount(0);
+		});
+
+		test('starts when confirmed, and says how many messages', async ({ page }) => {
+			await page.goto('/settings/smart');
+			await page.getByRole('combobox', { name: 'How far back, me@example.com' }).selectOption('all');
+			await look(page).click();
+			await page.getByRole('dialog').getByRole('button', { name: 'Start' }).click();
+			await expect(toast(page, 'Looking over 41 messages')).toBeVisible();
+		});
+
+		test('warns when it will not fit under a cap, and still lets the caps do their job', async ({ page }) => {
+			await page.goto('/settings/smart?scenario=over-cap');
+			await look(page).click();
+			await expect(page.getByRole('dialog')).toContainText('over a monthly cap');
+		});
+	});
 });

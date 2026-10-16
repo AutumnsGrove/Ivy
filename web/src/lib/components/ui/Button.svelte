@@ -11,6 +11,8 @@
 		download?: boolean;
 		type?: 'button' | 'submit';
 		disabled?: boolean;
+		/** Accessible name when the visible text alone is ambiguous, as in a row of identical buttons. */
+		label?: string;
 		onclick?: (e: MouseEvent) => void;
 		children: Snippet;
 	};
@@ -22,6 +24,7 @@
 		download = false,
 		type = 'button',
 		disabled = false,
+		label,
 		onclick,
 		children
 	}: Props = $props();
@@ -32,7 +35,7 @@
 		>{@render children()}</a
 	>
 {:else}
-	<button {type} {disabled} class="btn {variant} {size}" class:block {onclick}>
+	<button {type} {disabled} aria-label={label} class="btn {variant} {size}" class:block {onclick}>
 		{@render children()}
 	</button>
 {/if}

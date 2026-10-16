@@ -113,6 +113,9 @@ export type SmartSettingsPatch = Schema['SmartSettingsPatch'];
 export type SmartAccount = Schema['SmartAccount'];
 export type SmartFeature = Schema['SmartFeature'];
 export type SmartModel = Schema['SmartModel'];
+export type SmartProblem = Schema['SmartProblem'];
+export type SmartBackfill = Schema['SmartBackfill'];
+export type BackfillWindow = Schema['BackfillWindow'];
 
 // --- Spend and calls (the LLM ledger), straight from the contract. Costs are the
 // ledger's own dollars (a number), summed by the server, so the screens never add.

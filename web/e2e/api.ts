@@ -709,7 +709,7 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 		if (scenario === 'no-spend') return { body: state.accounts.map((a) => ({ ...a, smart: false })) };
 		return { body: scenario === 'sync-error' ? state.accounts.map(mock.failingHello) : state.accounts };
 	}
-	const smart = smartReply(path, method, state.smart, state.accounts, raw);
+	const smart = smartReply(path, method, params, state.smart, state.accounts, scenario, raw);
 	if (smart) return smart;
 	const spend = spendReply(path, params, scenario, state.accounts, state.smart.caps);
 	if (spend) return spend;

@@ -196,3 +196,31 @@ describe('rules api (gateway backed)', () => {
 		expect(calls[0]).toBe('/api/v1/rules/r1');
 	});
 });
+
+describe('the smart backfill', () => {
+	const estimate = { account: 'a1', window: '30d', items: 41, usd: 0.01, fits: true, accountHeadroomUsd: 4.5, globalHeadroomUsd: 9 };
+
+	it('prices a window with a GET and starts it with a POST', async () => {
+		const calls: { url: string; init: RequestInit }[] = [];
+		vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+			calls.push({ url, init });
+			return reply(estimate);
+		});
+		await expect(api.getSmartBackfill('a1', '30d')).resolves.toEqual(estimate);
+		await expect(api.startSmartBackfill('a1', '30d')).resolves.toEqual(estimate);
+		expect(calls[0].url).toBe('/api/v1/smart/backfill?account=a1&window=30d');
+		expect(calls[1].url).toBe('/api/v1/smart/backfill');
+		expect(calls[1].init.method).toBe('POST');
+		expect(JSON.parse(calls[1].init.body as string)).toEqual({ account: 'a1', window: '30d' });
+	});
+
+	it('escapes an account id so it cannot add a query parameter', async () => {
+		const calls: string[] = [];
+		vi.stubGlobal('fetch', async (url: string) => {
+			calls.push(url);
+			return reply(estimate);
+		});
+		await api.getSmartBackfill('a&window=all', '7d');
+		expect(calls[0]).toBe('/api/v1/smart/backfill?account=a%26window%3Dall&window=7d');
+	});
+});

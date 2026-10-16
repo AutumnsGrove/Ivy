@@ -48,6 +48,8 @@ import type {
 	Settings,
 	SpendPeriod,
 	SmartSettings,
+	SmartBackfill,
+	BackfillWindow,
 	SmartSettingsPatch,
 	SpendSummary,
 	TagCreate,
@@ -163,6 +165,18 @@ export const api = {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(patch)
+		}),
+
+	/** What looking over existing mail would read and cost at most. Calls no provider. */
+	getSmartBackfill: (accountId: string, window: BackfillWindow): Promise<SmartBackfill> =>
+		request<SmartBackfill>(apiPath('/smart/backfill', { account: accountId, window })),
+
+	/** Makes existing mail eligible for the smart features. Refused (409) when nothing could run it. */
+	startSmartBackfill: (accountId: string, window: BackfillWindow): Promise<SmartBackfill> =>
+		request<SmartBackfill>('/smart/backfill', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ account: accountId, window })
 		}),
 
 	/** Clears the keyword from the server through the outbox, then removes the tag. */
