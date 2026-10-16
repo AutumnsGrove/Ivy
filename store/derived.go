@@ -17,6 +17,11 @@ type Derived struct {
 	BodyStatus     string
 	BodyHTML       string
 	Attachments    []Attachment
+	// Auth replaces the stored authentication results when set. It is nil when the
+	// caller does not know which servers the account trusts: parsing without trust
+	// reads every verdict as none, so writing that would erase what a trusted fetch
+	// stored.
+	Auth *AuthResults
 }
 
 // SetMessageDerived replaces a message's derived data and stamps its version,
@@ -41,6 +46,12 @@ func (d *DBs) SetMessageDerived(ctx context.Context, id string, v Derived) error
 			body_status = ?, body_html_sanitized = ?, derived_version = ?
 		WHERE id = ?`,
 		v.BodyText, v.Snippet, v.HasAttachments, parseErrors, v.BodyStatus, v.BodyHTML, v.Version, id)
+	if err == nil && v.Auth != nil {
+		var authResults any
+		if authResults, err = marshalAuthResults(*v.Auth); err == nil {
+			_, err = tx.ExecContext(ctx, `UPDATE messages SET auth_results = ? WHERE id = ?`, authResults, id)
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("set derived data of message %s: %w", id, err)
 	}

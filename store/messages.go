@@ -33,6 +33,14 @@ type AuthResults struct {
 	DKIM       string   `json:"dkim,omitempty"`
 	DMARC      string   `json:"dmarc,omitempty"`
 	Raw        []string `json:"raw,omitempty"`
+	// The provider's spam score, kept only when a trusted server vouched for the
+	// message (mime.Parsed.Spam). SpamPresent says there is a score at all, so a
+	// real score of 0 is not mistaken for none. Rows from before it was read lack
+	// these and heal through the re-derive pass.
+	SpamPresent  bool    `json:"spam_present,omitempty"`
+	SpamFlagged  bool    `json:"spam_flagged,omitempty"`
+	SpamScore    float64 `json:"spam_score,omitempty"`
+	SpamRequired float64 `json:"spam_required,omitempty"`
 }
 
 // Message is one mirrored message row. BodyHTML is the server-sanitized HTML;
@@ -681,7 +689,7 @@ func hasFlag(flags []string, name string) bool {
 // marshalAuthResults stores NULL for a message with no verdicts, so a scan
 // leaves the zero value rather than decoding an empty object.
 func marshalAuthResults(a AuthResults) (any, error) {
-	if a.AuthservID == "" && a.SPF == "" && a.DKIM == "" && a.DMARC == "" && len(a.Raw) == 0 {
+	if a.AuthservID == "" && a.SPF == "" && a.DKIM == "" && a.DMARC == "" && len(a.Raw) == 0 && !a.SpamPresent {
 		return nil, nil
 	}
 	b, err := json.Marshal(a)

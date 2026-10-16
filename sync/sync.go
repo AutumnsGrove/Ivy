@@ -87,6 +87,7 @@ type Fetcher struct {
 	max    int64         // largest message downloaded at all
 	stall  time.Duration // silence from the server that ends a command
 	newID  func() string // op ids for the keywords sync re-applies
+	trust  trustBook     // each account's trusted authserv-ids, for re-deriving
 }
 
 // Message size limits (STANDARDS.md 4a). A message up to InlineMessageBytes is
@@ -150,6 +151,7 @@ func NewFetcher(dbs *store.DBs, opts ...Option) *Fetcher {
 // apart (ARCHITECTURE.md 9b). The state write itself is best effort: a database
 // error is logged, never allowed to mask the sync's own result.
 func (f *Fetcher) Fetch(ctx context.Context, acct Account) (Result, error) {
+	f.trust.set(acct.ID, acct.TrustedAuthservIDs)
 	if err := f.EnsureAccount(ctx, acct); err != nil {
 		return Result{}, fmt.Errorf("sync account %s: %w", acct.ID, err)
 	}
@@ -968,7 +970,7 @@ func (f *Fetcher) storeInline(ctx context.Context, acct Account, folderID string
 	if err := f.dbs.UpsertMessage(ctx, m); err != nil {
 		return err
 	}
-	return f.commitDerived(ctx, m, parsed)
+	return f.commitDerived(ctx, m, parsed, false)
 }
 
 // StoreRaw mirrors one message whose bytes the caller already holds, applying
@@ -1062,13 +1064,18 @@ func (f *Fetcher) storeSpooled(ctx context.Context, acct Account, folderID strin
 	if err := f.dbs.UpsertMessage(ctx, m); err != nil {
 		return err
 	}
-	return f.commitDerived(ctx, m, parsed)
+	return f.commitDerived(ctx, m, parsed, false)
 }
 
 // commitDerived writes a message's derived data and refreshes its search
 // document in one place, so the FTS index never lags the body it indexes.
-func (f *Fetcher) commitDerived(ctx context.Context, m store.Message, parsed mailmime.Parsed) error {
-	if err := f.dbs.SetMessageDerived(ctx, m.ID, derivedFrom(m.ID, parsed)); err != nil {
+func (f *Fetcher) commitDerived(ctx context.Context, m store.Message, parsed mailmime.Parsed, trustKnown bool) error {
+	d := derivedFrom(m.ID, parsed)
+	if trustKnown {
+		auth := authResultsOf(parsed)
+		d.Auth = &auth
+	}
+	if err := f.dbs.SetMessageDerived(ctx, m.ID, d); err != nil {
 		return err
 	}
 	return f.dbs.ReindexContent(ctx, m.AccountID, m.ContentKey)
@@ -1090,7 +1097,7 @@ func (f *Fetcher) storeEnvelopeOnly(ctx context.Context, acct Account, folderID 
 // part walk changes**; every row behind it is then re-derived from its raw
 // message by Rederive (N10/N14 in papercuts.md, decided in round 32b). Rows
 // mirrored before versions existed are at 0, so they heal on the next run.
-const DerivedVersion = 1
+const DerivedVersion = 2
 
 // rederiveBatch bounds how many messages one sync run re-derives, so a large
 // backlog heals across runs instead of stalling a fetch.
@@ -1145,6 +1152,7 @@ func derivedFrom(id string, parsed mailmime.Parsed) store.Derived {
 // the pass.
 func (f *Fetcher) Rederive(ctx context.Context, accountID string, limit int) (int, error) {
 	healed := 0
+	trusted, trustKnown := f.trust.get(accountID)
 	for healed < limit {
 		ids, err := f.dbs.MessageIDsBehind(ctx, accountID, DerivedVersion, limit-healed)
 		if err != nil {
@@ -1162,7 +1170,7 @@ func (f *Fetcher) Rederive(ctx context.Context, accountID string, limit int) (in
 			if err != nil {
 				return healed, fmt.Errorf("rederive %s: %w", accountID, err)
 			}
-			parsed, err := f.parseRaw(m)
+			parsed, err := f.parseRaw(m, trusted)
 			switch {
 			case errors.Is(err, fs.ErrNotExist):
 				slog.WarnContext(ctx, "sync: raw message is gone, not re-deriving it", "message", id, "error", err)
@@ -1175,7 +1183,7 @@ func (f *Fetcher) Rederive(ctx context.Context, accountID string, limit int) (in
 				slog.WarnContext(ctx, "sync: cannot re-derive message yet", "message", id, "error", err)
 				continue
 			}
-			if err := f.commitDerived(ctx, m, parsed); err != nil {
+			if err := f.commitDerived(ctx, m, parsed, trustKnown); err != nil {
 				return healed, fmt.Errorf("rederive %s: %w", accountID, err)
 			}
 			healed++
@@ -1189,12 +1197,12 @@ func (f *Fetcher) Rederive(ctx context.Context, accountID string, limit int) (in
 }
 
 // parseRaw parses a mirrored message from wherever its raw bytes live.
-func (f *Fetcher) parseRaw(m store.Message) (mailmime.Parsed, error) {
+func (f *Fetcher) parseRaw(m store.Message, trusted []string) (mailmime.Parsed, error) {
 	if m.RawPath != "" {
-		parsed, _, err := parseSpooled(filepath.Join(f.dbs.Dir, filepath.FromSlash(m.RawPath)), nil)
+		parsed, _, err := parseSpooled(filepath.Join(f.dbs.Dir, filepath.FromSlash(m.RawPath)), trusted)
 		return parsed, err
 	}
-	return mailmime.ParseStream(bytes.NewReader(m.RawBlob)), nil
+	return mailmime.ParseStream(bytes.NewReader(m.RawBlob), trusted...), nil
 }
 
 // parseSpooled reads a spooled message from disk in a single pass, returning the
@@ -1274,11 +1282,19 @@ func applyParsed(m *store.Message, parsed mailmime.Parsed) {
 	}
 	m.ReplyTo = parsedAddresses(parsed.ReplyTo)
 	m.DeliveredTo = parsedAddresses(parsed.DeliveredTo)
-	m.AuthResults = store.AuthResults{
+	m.AuthResults = authResultsOf(parsed)
+	m.ParseErrors = parsed.Errors
+}
+
+// authResultsOf is what the mirror keeps of a parse's trust signals: the verdicts a
+// trusted server attached and the provider's spam score.
+func authResultsOf(parsed mailmime.Parsed) store.AuthResults {
+	return store.AuthResults{
 		AuthservID: parsed.Auth.AuthservID,
 		SPF:        parsed.Auth.SPF, DKIM: parsed.Auth.DKIM, DMARC: parsed.Auth.DMARC, Raw: parsed.Auth.Raw,
+		SpamPresent: parsed.Spam.Present, SpamFlagged: parsed.Spam.Flagged,
+		SpamScore: parsed.Spam.Score, SpamRequired: parsed.Spam.Required,
 	}
-	m.ParseErrors = parsed.Errors
 }
 
 // parsedAddresses converts the parser's own address type to the mirror's.

@@ -23,6 +23,9 @@ import (
 // a new entry here with the hash the failure prints. Never edit an old entry.
 var derivedFingerprints = map[int]string{
 	1: "6cfecf0cdc86a2e92feef6c057bc44c6747bd3134be6205148fd560d6806a80c",
+	// 2: the derived record can rewrite a message's authentication results, which now
+	// include the provider's spam score, so older mail heals into having one.
+	2: "fd191992df754fd4e784c5291a3d56b7179129e36bfef25bc5ae203e3a733d28",
 }
 
 // inlineCorpus covers the shapes the fixture files do not: a mangled
