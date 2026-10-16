@@ -259,3 +259,29 @@ func TestAStoredModelThatWasRetiredReadsAsTheDefault(t *testing.T) {
 		t.Errorf("override = %q, want none", got)
 	}
 }
+
+// Categories ride the same shared call as Needs you, so switching them on must be
+// enough on its own, and they are on the screen.
+func TestCategoriesAreListedAndSwitchOnTheSharedCall(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	var listed bool
+	for _, f := range UserFeatures() {
+		if f.Name == "category" {
+			listed = f.Label == "Categories" && !f.DefaultOn
+		}
+	}
+	if !listed {
+		t.Error("category is not listed as Categories, dark")
+	}
+	g := NewGate(openStore(t))
+	if g.FeatureEnabled(ctx, "a", "classify") {
+		t.Fatal("the shared call is on with nothing asked for")
+	}
+	if err := g.SetFeatureEnabled(ctx, "a", "category", true); err != nil {
+		t.Fatal(err)
+	}
+	if !g.FeatureEnabled(ctx, "a", "classify") {
+		t.Error("Categories is on but the call it rides on is still off")
+	}
+}

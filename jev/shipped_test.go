@@ -182,3 +182,54 @@ func TestTheUrgencyBarFollowsTheLiveQuestion(t *testing.T) {
 		t.Fatalf("an empty registry's bar = %+v, want none", got)
 	}
 }
+
+// 5d.1: the category question. Its options are the placed tags plus the two that
+// never place one, so a category can never be answered that no tag (or deliberate
+// absence of one) accounts for.
+func TestTheCategoryQuestionMatchesThePlacedTagsAndShipsDark(t *testing.T) {
+	q, ok := shipped(t)["category"]
+	if !ok {
+		t.Fatal("category is not shipped")
+	}
+	want := append([]string{"personal", "other"}, store.PlacedCategories()...)
+	if len(q.Criteria) != len(want) {
+		t.Errorf("category options = %v, want exactly %v", q.Criteria, want)
+	}
+	for _, o := range want {
+		if _, ok := q.Criteria[o]; !ok {
+			t.Errorf("category has no option %q", o)
+		}
+	}
+	if q.QuietOption != "other" {
+		t.Errorf("quiet option = %q: the answer that places nothing must be the quiet one", q.QuietOption)
+	}
+	if q.Feature != "category" {
+		t.Errorf("feature = %q: categories ship dark behind their own switch", q.Feature)
+	}
+	if q.Threshold != 0.80 {
+		t.Errorf("threshold = %v, want 0.80 (a tag is visible, so it is not eager)", q.Threshold)
+	}
+}
+
+func TestCategoriesAreAskedOnlyOnceTheirSwitchIsOn(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	qs, err := Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.reg.Set(qs, nil); err != nil {
+		t.Fatal(err)
+	}
+	r.decide(mail("k1"))
+	if _, asked := r.jev.last().Questions["category"]; asked {
+		t.Fatal("category was asked while its switch was off")
+	}
+	if err := r.gate.SetFeatureEnabled(ctx, rigAccount, "category", true); err != nil {
+		t.Fatal(err)
+	}
+	r.decide(mail("k2"))
+	if _, asked := r.jev.last().Questions["category"]; !asked {
+		t.Fatal("category was not asked with its switch on")
+	}
+}

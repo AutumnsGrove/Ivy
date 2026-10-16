@@ -47,7 +47,8 @@ var features = map[string]feature{
 
 	// Classifiers read clipped state only.
 	"needs_me":    {endpoint: EndpointSystemOne, label: "Needs you"},
-	"classify":    {endpoint: EndpointSystemOne, impliedBy: []string{"needs_me"}},
+	"category":    {endpoint: EndpointSystemOne, label: "Categories"},
+	"classify":    {endpoint: EndpointSystemOne, impliedBy: []string{"needs_me", "category"}},
 	"junk_rescue": {endpoint: EndpointSystemOne},
 
 	"needs_me_stage2": {endpoint: EndpointChat, vetted: true, label: "Needs you: reasons"},
