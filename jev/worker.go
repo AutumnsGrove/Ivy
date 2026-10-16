@@ -251,7 +251,12 @@ func (w *Worker) process(ctx context.Context, account string, batch []store.Cand
 			_, err = w.engine.Decide(ctx, FromStored(c.Message, c.Role, atts))
 			switch {
 			case err == nil:
-				if err := w.store.MarkClassified(ctx, account, []string{c.Message.ContentKey}, w.opts.Now()); err != nil {
+				// Its answer is already kept; marking it done must outlive a sibling's cancel
+				// too, or the message would be asked about again for nothing.
+				markCtx, markCancel := context.WithTimeout(context.WithoutCancel(ctx), storeWriteTimeout)
+				err := w.store.MarkClassified(markCtx, account, []string{c.Message.ContentKey}, w.opts.Now())
+				markCancel()
+				if err != nil {
 					stop(err)
 					return
 				}

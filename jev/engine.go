@@ -18,6 +18,10 @@ import (
 // only while that switch is also on.
 const CallFeature = "classify"
 
+// storeWriteTimeout bounds the write that keeps a paid answer. It runs detached from
+// the caller's cancellation, so it needs a deadline of its own.
+const storeWriteTimeout = 10 * time.Second
+
 // stateMargin keeps the request clear of the gate's limit after JSON framing.
 const stateMargin = 2 << 10
 
@@ -216,6 +220,8 @@ func (e *Engine) settled(ctx context.Context, m Message, model string) (map[stri
 }
 
 func (e *Engine) miss(ctx context.Context, m Message, model string, qs []Question, reason string) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), storeWriteTimeout)
+	defer cancel()
 	return e.store.PutDecisionMisses(ctx, e.misses(m, model, qs, reason))
 }
 
@@ -236,6 +242,11 @@ func (e *Engine) misses(m Message, model string, qs []Question, reason string) [
 // asked is ignored. Model output is data: a choice or probability outside what the
 // question allows is never stored as an answer.
 func (e *Engine) record(ctx context.Context, m Message, model string, qs []Question, res llm.DecideResult) error {
+	// The call is paid for, so keeping its answer must not depend on the caller still
+	// being there: switching an account off mid-pass cancels the rest of the batch,
+	// and an answer in flight would otherwise be lost on a cancelled write.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), storeWriteTimeout)
+	defer cancel()
 	at := e.now()
 	share := res.CostUSD / float64(len(qs))
 	var ds []store.Decision
