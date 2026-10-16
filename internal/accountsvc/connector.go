@@ -209,7 +209,7 @@ func SyncAccount(a config.Account) ivysync.Account {
 		SMTPHost: a.SMTPHost, SMTPPort: a.SMTPPort,
 		Username: a.Username, Password: a.Password,
 		Insecure:           a.Insecure,
-		TrustedAuthservIDs: a.TrustedAuthservIDs,
+		TrustedAuthservIDs: config.TrustedAuthservIDs(a),
 	}
 }
 
