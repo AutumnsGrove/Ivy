@@ -198,3 +198,47 @@ func TestNeedsAttentionViewHidesSnoozedAndDismissed(t *testing.T) {
 		t.Fatalf("items = %v, want only the one neither dismissed nor snoozed", got)
 	}
 }
+
+// The "needs you" marker and the placed "Needs you" tag are one fact (clearing either
+// is the dismissal), so a row must show it once and leave the tag slot to real tags.
+func TestThePlacedNeedsTagIsNotShownTwice(t *testing.T) {
+	t.Parallel()
+	base, dbs := needsServer(t)
+	ctx := context.Background()
+	if err := dbs.PlaceNeedsTag(ctx, "acct-1", "ck:m1"); err != nil {
+		t.Fatal(err)
+	}
+
+	var inbox api.Inbox
+	getJSON(t, base+"/inbox", &inbox)
+	if row := inbox.Items[0]; !row.Needs || row.Tag != nil {
+		t.Fatalf("row = needs %v tag %v; the marker is shown, so the tag must not repeat it", row.Needs, row.Tag)
+	}
+	var msg api.MailMessage
+	getJSON(t, base+"/messages/m1", &msg)
+	if !msg.Needs || msg.Tag != nil {
+		t.Fatalf("message = needs %v tag %v", msg.Needs, msg.Tag)
+	}
+	var sum api.MailSummary
+	getJSON(t, base+"/messages/m1/summary", &sum)
+	if sum.Tag != nil {
+		t.Fatalf("summary tag = %v", *sum.Tag)
+	}
+
+	// A real tag on the same message still shows, whichever order they were added in.
+	tag, err := dbs.CreateTag(ctx, "t-zzz", "Zebra", "#aabbcc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dbs.TagMessage(ctx, "acct-1", "ck:m1", tag.ID, "operator"); err != nil {
+		t.Fatal(err)
+	}
+	getJSON(t, base+"/inbox", &inbox)
+	if row := inbox.Items[0]; row.Tag == nil || *row.Tag != "Zebra" {
+		t.Fatalf("with a real tag as well, row tag = %v, want Zebra", row.Tag)
+	}
+	getJSON(t, base+"/messages/m1", &msg)
+	if msg.Tag == nil || *msg.Tag != "Zebra" {
+		t.Fatalf("message tag = %v, want Zebra", msg.Tag)
+	}
+}

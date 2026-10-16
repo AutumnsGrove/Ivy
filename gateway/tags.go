@@ -245,6 +245,18 @@ func (s *Server) clearOtherCopies(ctx context.Context, msg store.Message, expect
 	return nil
 }
 
+// displayTag is the one tag name a row or reader shows beside its marker. The placed
+// "Needs you" tag is skipped: the marker already says so, and clearing either is the
+// dismissal, so showing both is the same fact twice.
+func displayTag(tags []store.Tag) (string, bool) {
+	for _, t := range tags {
+		if t.ID != store.NeedsTagID {
+			return t.Name, true
+		}
+	}
+	return "", false
+}
+
 // tagNames returns the first tag name (by name) of each content key of one
 // account, for the list and the reader; the contract carries one.
 func (s *Server) tagNames(ctx context.Context, accountID string, keys []string) (map[string]string, error) {
@@ -254,8 +266,8 @@ func (s *Server) tagNames(ctx context.Context, accountID string, keys []string) 
 	}
 	out := make(map[string]string, len(byKey))
 	for key, tags := range byKey {
-		if len(tags) > 0 {
-			out[key] = tags[0].Name
+		if name, ok := displayTag(tags); ok {
+			out[key] = name
 		}
 	}
 	return out, nil

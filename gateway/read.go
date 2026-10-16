@@ -276,8 +276,9 @@ func (s *Server) messageView(r *http.Request, m store.Message) (api.MailMessage,
 		v.Html = &htmlBody
 	}
 	if mine := tags[m.ContentKey]; len(mine) > 0 {
-		first := mine[0].Name
-		v.Tag = &first
+		if name, ok := displayTag(mine); ok {
+			v.Tag = &name
+		}
 		ids := make([]string, len(mine))
 		for i, t := range mine {
 			ids[i] = t.ID
