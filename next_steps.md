@@ -5,7 +5,7 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-10 (5c.4 done; next is 5c.5, the labelled evaluation; 5b still waits at G2; see "▶ Now"). **Chunk 4 (send) is complete: 4a-4h are done.** **4h (rich text)** landed with the decisions settled in qa-log round 66 and `docs/handoffs/2026-10-06-4h-richtext-design.md`: the editor is `squire-rte` (MIT, zero deps, 16.1 KiB brotli, chosen over a 98.3 KiB minimal TipTap), both modes stay with rich as the default and the mode fixed once typed, a `bodyFormat` field is sanitised server-side with a derived `text/plain`, and the paste walker is our own allow-list. `docs/BUILD-LOG.md` has the entry. What is left is the operator's live checks. **4g is done** (outgoing attachments and images; round 65): gate G4 cleared the dependency question — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4f is done** (the compose screen; round 64): the client calls and the new
+last updated: 2026-10-16 (first real-mailbox run, see "▶ Now"; 5c.4 done; next is 5c.5, the labelled evaluation; 5b still waits at G2; see "▶ Now"). **Chunk 4 (send) is complete: 4a-4h are done.** **4h (rich text)** landed with the decisions settled in qa-log round 66 and `docs/handoffs/2026-10-06-4h-richtext-design.md`: the editor is `squire-rte` (MIT, zero deps, 16.1 KiB brotli, chosen over a 98.3 KiB minimal TipTap), both modes stay with rich as the default and the mode fixed once typed, a `bodyFormat` field is sanitised server-side with a derived `text/plain`, and the paste walker is our own allow-list. `docs/BUILD-LOG.md` has the entry. What is left is the operator's live checks. **4g is done** (outgoing attachments and images; round 65): gate G4 cleared the dependency question — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4f is done** (the compose screen; round 64): the client calls and the new
 `/drafts` screen, the From picker over the real identities, People autocomplete, reply/forward
 prefills, debounced autosave to the server's Drafts folder (and once on leave), the Sending/Undo
 toast, the Not-sent sheet and the resend-free `unconfirmed` notice. The operator chose autosave plus
@@ -79,6 +79,15 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 `cmd/` (`ivy`, `ivy-dev`, `ivy-assets`). No `Dockerfile` or image-publish workflow yet.
 
 ## ▶ Now
+
+**First real-mailbox run, 2026-10-16.** The operator runs a second Ivy on her own mailbox (`~/ivy-real/ivy.yaml`, port
+8419, `ivy run --config`; key and password in a `.env` beside it; 41 messages synced). Pinned `jev-1.14` (live-checked).
+Built: "Needs you" switches on the shared call, per-account `problems` with a banner on the Smart screen, and
+`/smart/backfill` with an "Existing mail" group (`docs/BUILD-LOG.md` "First real-mailbox run"). **Next:** (1) the operator
+restarts Ivy, presses Look over for All mail, and checks the Spend screen and Needs attention; (2) **5c.5 tooling**: list
+her 41 messages, record her needs-me / not labels in a git-ignored file, and report precision and recall per stage at
+0.65 / 0.80 (gate G3: write the labelling plan down first). **Operator-owned, open:** confirm "Needs you also turns on
+`classify`" (qa-log); no progress display during a backfill; no startup log line for "opted in but no key".
 
 **5c.4 is done, 2026-10-10: the needs-attention screens are built.** The `/needs` view (nav row with the count, reason and
 Dismiss on each row), the reason under the marker in the inbox and reader, the second look on the odds sheet, and labels for
