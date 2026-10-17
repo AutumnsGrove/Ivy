@@ -101,8 +101,10 @@ Not junk that is an IMAP move; the spam score can skip obvious spam before any c
 
 **5d.4 Junk rescue, 2026-10-17, in progress.** Stage 1 is done: the `junk_rescue` question ships (Junk only, quiet answer
 `junk`, threshold 0.90, dark behind its own "Junk rescue" switch on `/settings/smart`, which also turns the shared call on).
-Wording is provisional until G3. Still to build, in order: (2) skip rules (a flagged spam score or hard-failing auth makes no
-call), (3) a `looksReal` verdict on Junk rows in the API, (4) the chip and a one-tap Not junk (an outbox move, never automatic).
+Wording is provisional until G3. Stage 2 is done: a Junk message the provider's own signals condemn (spam score at least twice
+its `required` bar, DMARC fail, or SPF and DKIM both failing) makes no call and is still considered once
+(`jev/junkskip.go`). "Flagged" alone is not the bar, because the provider flags everything it files in Junk. Still to
+build, in order: (3) a `looksReal` verdict on Junk rows in the API, (4) the chip and a one-tap Not junk (an outbox move, never automatic).
 Nothing spends until the operator turns the switch on.
 
 **Update, same day: the backfill ran and the cascade works on real mail** (15 Inbox messages, 15 stage-one calls for about

@@ -38,6 +38,11 @@ func newWorkerRig(t *testing.T, opts WorkerOptions) *workerRig {
 // arrive stores a message that reached the server at t, in the folder with this role.
 func (w *workerRig) arrive(id, key, role string, t time.Time, subject, body string) {
 	w.t.Helper()
+	w.arriveWith(id, key, role, t, subject, body, store.AuthResults{})
+}
+
+func (w *workerRig) arriveWith(id, key, role string, t time.Time, subject, body string, auth store.AuthResults) {
+	w.t.Helper()
 	ctx := context.Background()
 	folder := rigAccount + "-" + role
 	if !w.folders[role] {
@@ -50,7 +55,7 @@ func (w *workerRig) arrive(id, key, role string, t time.Time, subject, body stri
 	if err := w.dbs.UpsertMessage(ctx, store.Message{
 		ID: id, AccountID: rigAccount, FolderID: folder, UID: w.nextUID, ContentKey: key,
 		Subject: subject, BodyText: body, Date: t, InternalDate: t,
-		From: store.Address{Name: "Ada", Address: "ada@example.com"},
+		From: store.Address{Name: "Ada", Address: "ada@example.com"}, AuthResults: auth,
 	}); err != nil {
 		w.t.Fatal(err)
 	}
@@ -476,5 +481,71 @@ func TestAMessageBecomesStateWithOnlyTheChosenFields(t *testing.T) {
 	}
 	if FromStored(m, store.RoleInbox, nil).Folder != FolderInbox {
 		t.Fatal("inbox role did not map to the inbox folder")
+	}
+}
+
+// 5d.4: Junk is the highest-volume folder and mostly real spam, so a message the
+// provider's own checks already condemn is not worth a call. The provider flags
+// everything in Junk, so "flagged" is not the bar: only an overwhelming score or a
+// hard authentication failure skips, and anything missing or uncertain is asked.
+func TestJunkTheLocalSignalsCondemnMakesNoCall(t *testing.T) {
+	spam := func(score, required float64) store.AuthResults {
+		return store.AuthResults{SpamPresent: true, SpamFlagged: score >= required, SpamScore: score, SpamRequired: required}
+	}
+	cases := []struct {
+		name string
+		auth store.AuthResults
+		asks bool
+	}{
+		{"a score far above the bar", spam(12, 5), false},
+		{"a score at twice the bar", spam(10, 5), false},
+		{"flagged but only just", spam(6, 5), true},
+		{"a score under the bar", spam(-2, 5), true},
+		{"DMARC fails", store.AuthResults{SPF: "pass", DKIM: "pass", DMARC: "fail"}, false},
+		{"SPF and DKIM both fail", store.AuthResults{SPF: "fail", DKIM: "fail"}, false},
+		{"only SPF fails", store.AuthResults{SPF: "fail", DKIM: "pass", DMARC: "pass"}, true},
+		{"passes everything", store.AuthResults{SPF: "pass", DKIM: "pass", DMARC: "pass"}, true},
+		{"the provider said nothing", store.AuthResults{}, true},
+		{"a zero required bar is no bar", spam(3, 0), true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorkerRig(t, WorkerOptions{})
+			qs, err := Builtin()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := w.reg.Set(qs, nil); err != nil {
+				t.Fatal(err)
+			}
+			if err := w.gate.SetFeatureEnabled(context.Background(), rigAccount, "junk_rescue", true); err != nil {
+				t.Fatal(err)
+			}
+			w.tick()
+			w.arriveWith("j1", "kj", store.RoleJunk, epoch.Add(time.Minute), "Hello", "Please reply", c.auth)
+			w.clock = epoch.Add(time.Hour)
+			if n := w.tick(); n != 1 {
+				t.Fatalf("processed = %d, want 1: a skipped message is still considered once", n)
+			}
+			if asked := w.jev.count() > 0; asked != c.asks {
+				t.Fatalf("calls = %d, asked = %v, want %v", w.jev.count(), asked, c.asks)
+			}
+			if n := w.tick(); n != 0 {
+				t.Fatalf("a skipped message came back (%d on the next pass)", n)
+			}
+		})
+	}
+}
+
+// The skip is for Junk. The same signals on Inbox mail change nothing here: needs-me
+// and the safety checks make their own decisions.
+func TestTheJunkSkipRuleDoesNotTouchTheInbox(t *testing.T) {
+	w := newWorkerRig(t, WorkerOptions{})
+	w.tick()
+	bad := store.AuthResults{SPF: "fail", DKIM: "fail", DMARC: "fail", SpamPresent: true, SpamScore: 20, SpamRequired: 5}
+	w.arriveWith("i1", "ki", store.RoleInbox, epoch.Add(time.Minute), "Hi", "text", bad)
+	w.clock = epoch.Add(time.Hour)
+	if w.tick() != 1 || w.jev.count() != 1 {
+		t.Fatalf("calls = %d; Inbox mail is asked whatever its spam score says", w.jev.count())
 	}
 }
