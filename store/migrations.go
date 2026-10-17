@@ -1004,6 +1004,24 @@ var stateMigrations = []migration{
 			) WITHOUT ROWID`,
 		},
 	},
+	{
+		version: 21,
+		statements: []string{
+			// What kind of mail one of the operator's own addresses receives (5d.5):
+			// a contact form, or security and abuse reports, which no model may read
+			// until llm_on says so. Normal is the absence of a row. It is the
+			// operator's own setting, so it lives here, backed up, and not in the
+			// rebuildable mirror. The address is case-insensitive, as in identities.
+			`CREATE TABLE address_types (
+				account_id TEXT NOT NULL,
+				address    TEXT NOT NULL COLLATE NOCASE,
+				kind       TEXT NOT NULL,
+				llm_on     INTEGER NOT NULL DEFAULT 0,
+				updated_at TEXT NOT NULL,
+				PRIMARY KEY (account_id, address)
+			) WITHOUT ROWID`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state
