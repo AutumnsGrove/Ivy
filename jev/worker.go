@@ -256,7 +256,7 @@ func (w *Worker) process(ctx context.Context, account string, batch []store.Cand
 			// is considered once here. An unreadable answer is retried, not marked.
 			guarded, err := w.store.ModelsBlockedFor(ctx, account, c.Message.ContentKey)
 			if err != nil {
-				if !(errors.Is(err, context.Canceled) && ctx.Err() != nil) {
+				if !errors.Is(err, context.Canceled) || ctx.Err() == nil {
 					stop(err) // cut short by an earlier outcome is that outcome's story
 				}
 				return

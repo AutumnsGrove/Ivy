@@ -315,8 +315,8 @@ func sanitize(s string) string {
 
 // field is sanitize for a one-line header value: newlines become spaces, so a
 // sender cannot start a forged header line, and the result is clipped.
-func field(s string, max int) string {
-	s = clipUTF8(s, max*2) // bound the work before mapping a huge value
+func field(s string, limit int) string {
+	s = clipUTF8(s, limit*2) // bound the work before mapping a huge value
 	s = sanitize(s)
 	s = strings.Map(func(r rune) rune {
 		if r == '\n' || r == '\t' {
@@ -325,18 +325,18 @@ func field(s string, max int) string {
 		return r
 	}, s)
 	s = strings.Join(strings.Fields(s), " ")
-	return clipUTF8(s, max)
+	return clipUTF8(s, limit)
 }
 
-// clipUTF8 cuts s to at most max bytes without splitting a multi-byte sequence.
-func clipUTF8(s string, max int) string {
-	if max <= 0 {
+// clipUTF8 cuts s to at most limit bytes without splitting a multi-byte sequence.
+func clipUTF8(s string, limit int) string {
+	if limit <= 0 {
 		return ""
 	}
-	if len(s) <= max {
+	if len(s) <= limit {
 		return s
 	}
-	cut := max
+	cut := limit
 	for cut > 0 && !utf8.RuneStart(s[cut]) {
 		cut--
 	}

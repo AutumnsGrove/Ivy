@@ -461,20 +461,19 @@ func TestNothingToReadMakesNoCallAndIsRecorded(t *testing.T) {
 }
 
 func TestOffMeansOff(t *testing.T) {
-	ctx := context.Background()
 	cases := map[string]func(*rig){
 		"account not opted in": func(r *rig) {
-			if err := r.dbs.SetAccountSmart(ctx, rigAccount, false); err != nil {
+			if err := r.dbs.SetAccountSmart(r.t.Context(), rigAccount, false); err != nil {
 				r.t.Fatal(err)
 			}
 		},
 		"classify feature off": func(r *rig) {
-			if err := r.gate.SetFeatureEnabled(ctx, rigAccount, CallFeature, false); err != nil {
+			if err := r.gate.SetFeatureEnabled(r.t.Context(), rigAccount, CallFeature, false); err != nil {
 				r.t.Fatal(err)
 			}
 		},
 		"cap of zero": func(r *rig) {
-			if err := r.gate.SetAccountCap(ctx, rigAccount, 0); err != nil {
+			if err := r.gate.SetAccountCap(r.t.Context(), rigAccount, 0); err != nil {
 				r.t.Fatal(err)
 			}
 		},
@@ -483,7 +482,7 @@ func TestOffMeansOff(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			r := newRig(t)
 			off(r)
-			_, err := r.engine.Decide(ctx, mail("ck1"))
+			_, err := r.engine.Decide(t.Context(), mail("ck1"))
 			var refusal *llm.Refusal
 			if !errors.As(err, &refusal) {
 				t.Fatalf("err = %v, want a gate refusal", err)

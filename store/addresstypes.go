@@ -13,6 +13,7 @@ import (
 type MailType string
 
 const (
+	// MailNormal is an address with no special handling.
 	MailNormal MailType = "normal"
 	// MailContactForm marks an address a website form writes to: replies go to the
 	// visitor, not the form's sender.

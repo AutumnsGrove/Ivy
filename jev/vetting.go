@@ -59,12 +59,12 @@ func (v *Vetter) Vetted(ctx context.Context, accountID, contentKey string) (bool
 type VetState string
 
 const (
-	// VetClear: both checks answered and neither fired.
+	// VetClear means both checks answered and neither fired.
 	VetClear VetState = "clear"
-	// VetUnchecked: the layer cannot say yet (a check is missing, off, unanswered or
+	// VetUnchecked means the layer cannot say yet (a check is missing, off, unanswered or
 	// stale). Nothing was found, so the reader stays quiet; the gate still withholds.
 	VetUnchecked VetState = "unchecked"
-	// VetWithheld: a check fired.
+	// VetWithheld means a check fired.
 	VetWithheld VetState = "withheld"
 )
 

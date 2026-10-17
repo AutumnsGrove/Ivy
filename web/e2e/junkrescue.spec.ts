@@ -27,19 +27,21 @@ test.describe('junk rescue', () => {
 		page.on('request', (r) => {
 			if (r.method() === 'POST' && r.url().endsWith('/api/v1/outbox')) posts.push(r.postDataJSON());
 		});
+		// Opening an unread message marks it read after a short dwell; that is a read-mark, not a move.
+		const moves = () => posts.filter((p) => p.action !== 'seen');
 		await page.goto('/m/m2');
 		await page.waitForTimeout(500);
-		expect(posts).toEqual([]);
+		expect(moves()).toEqual([]);
 
 		await page.getByRole('article').getByRole('button', { name: 'Not junk' }).click();
 		const dialog = page.getByRole('dialog', { name: 'Not junk?' });
 		await expect(dialog).toBeVisible();
 		await dialog.getByRole('button', { name: 'Cancel' }).click();
-		expect(posts).toEqual([]);
+		expect(moves()).toEqual([]);
 
 		await page.getByRole('article').getByRole('button', { name: 'Not junk' }).click();
 		await page.getByRole('dialog', { name: 'Not junk?' }).getByRole('button', { name: 'Not junk' }).click();
 		await expect(toast(page, 'Moved to Inbox')).toBeVisible();
-		expect(posts.map((p) => [p.action, p.messageId])).toEqual([['not_junk', 'm2']]);
+		expect(moves().map((p) => [p.action, p.messageId])).toEqual([['not_junk', 'm2']]);
 	});
 });

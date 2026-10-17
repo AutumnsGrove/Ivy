@@ -185,7 +185,7 @@ func TestAnAnswerUnderTheThresholdDoesNotWithhold(t *testing.T) {
 func TestACheckThatCouldNotBeAnsweredFailsClosed(t *testing.T) {
 	r := newVetRig(t)
 	r.jev.mu.Lock()
-	r.jev.reply = func(req jevRequest) map[string]answerJSON {
+	r.jev.reply = func(_ jevRequest) map[string]answerJSON {
 		out := map[string]answerJSON{"sensitive_content": {Choice: "none", Probabilities: map[string]float64{"none": 1}, Confidence: 1}}
 		out["injection_tripwire"] = answerJSON{Choice: "maybe", Probabilities: map[string]float64{"maybe": 1}, Confidence: 1} // not an option
 		return out

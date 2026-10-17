@@ -210,15 +210,14 @@ func TestAnOutageLeavesMailQueuedForTheNextPass(t *testing.T) {
 }
 
 func TestOffMeansOffForTheWorker(t *testing.T) {
-	ctx := context.Background()
 	cases := map[string]func(*workerRig){
 		"account not opted in": func(w *workerRig) {
-			if err := w.dbs.SetAccountSmart(ctx, rigAccount, false); err != nil {
+			if err := w.dbs.SetAccountSmart(w.t.Context(), rigAccount, false); err != nil {
 				w.t.Fatal(err)
 			}
 		},
 		"classify switch off": func(w *workerRig) {
-			if err := w.gate.SetFeatureEnabled(ctx, rigAccount, CallFeature, false); err != nil {
+			if err := w.gate.SetFeatureEnabled(w.t.Context(), rigAccount, CallFeature, false); err != nil {
 				w.t.Fatal(err)
 			}
 		},
@@ -230,13 +229,13 @@ func TestOffMeansOffForTheWorker(t *testing.T) {
 			w.arrive("m1", "k1", store.RoleInbox, epoch.Add(time.Minute), "Hi", "text")
 			w.clock = epoch.Add(time.Hour)
 			off(w)
-			if n, err := w.worker.RunOnce(ctx); err != nil || n != 0 {
+			if n, err := w.worker.RunOnce(t.Context()); err != nil || n != 0 {
 				t.Fatalf("processed=%d err=%v; an off account is skipped quietly", n, err)
 			}
 			if w.jev.count() != 0 {
 				t.Fatalf("%d requests for an account that is off", w.jev.count())
 			}
-			rows, _ := w.dbs.RecentAPICalls(ctx, rigAccount, 10)
+			rows, _ := w.dbs.RecentAPICalls(t.Context(), rigAccount, 10)
 			if len(rows) != 0 {
 				t.Fatalf("the worker polled the gate into %d refusal rows", len(rows))
 			}
