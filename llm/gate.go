@@ -159,6 +159,9 @@ type Gate struct {
 	seq     atomic.Uint64
 	policy  AccountPolicy
 	vetting Vetting
+	// exclusion keeps guarded addresses' mail from every feature; the gate's own
+	// store unless a test substitutes one.
+	exclusion Exclusion
 
 	embedders map[string]embedder // by provider kind
 	decider   decider
@@ -202,6 +205,12 @@ func WithVetting(v Vetting) GateOption {
 	return func(g *Gate) { g.vetting = v }
 }
 
+// WithExclusion replaces the guarded-address check. Only tests need it: the default
+// reads the operator's own settings from the gate's store.
+func WithExclusion(e Exclusion) GateOption {
+	return func(g *Gate) { g.exclusion = e }
+}
+
 // WithDefaultCaps sets the monthly caps used where the settings name none: per
 // account, and one global. A cap of zero or less allows no hosted spend.
 func WithDefaultCaps(account, global float64) GateOption {
@@ -241,6 +250,7 @@ func NewGate(dbs *store.DBs, opts ...GateOption) *Gate {
 		now:               time.Now,
 		policy:            NewAccountPolicy(dbs, nil),
 		vetting:           refuseAll{},
+		exclusion:         dbs,
 		embedders:         map[string]embedder{},
 		defaultAccountCap: DefaultAccountCapUSD,
 		defaultGlobalCap:  DefaultGlobalCapUSD,
@@ -328,6 +338,11 @@ func (g *Gate) admit(ctx context.Context, a admission) (*reservation, *Refusal, 
 		if spec.vision && !s.Vision {
 			return nil, &Refusal{Reason: ReasonVisionOff, AccountID: id}, nil
 		}
+	}
+	// Every feature, not only the vetted ones: a guarded address's mail is read by no
+	// model at all, the checks and the embedder included.
+	if g.blockedByAddress(ctx, a.accounts, a.keys) {
+		return nil, &Refusal{Reason: ReasonWithheld, Detail: "sent to a guarded address"}, nil
 	}
 	if spec.vetted && !g.vettedOrWithheld(ctx, a.accounts, a.keys) {
 		return nil, &Refusal{Reason: ReasonWithheld}, nil

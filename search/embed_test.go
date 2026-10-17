@@ -460,3 +460,51 @@ func TestEmbedWorkerFollowsTheSwitchWhileRunning(t *testing.T) {
 		t.Fatalf("pass after turning it back on = %d, %v; want 1", n, err)
 	}
 }
+
+// 5d.5: mail sent to a guarded security or abuse address is never sent to an embedding
+// provider, and it must not hold a place at the head of the newest-first queue either:
+// enough of it at the front would starve every older message of its embedding.
+func TestEmbedWorkerNeverSendsGuardedMailAndDoesNotStallBehindIt(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openStore(t)
+	seedDatedAccount(t, dbs)
+	if err := dbs.SetAddressType(ctx, store.AddressTypeInput{
+		AccountID: "acct", Address: "abuse@example.test", Kind: store.MailSecurity, Now: time.Now(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	day := func(d int) time.Time { return time.Date(2026, 9, d, 9, 0, 0, 0, time.UTC) }
+	seedDated(t, dbs, "old", "ck-old", "Invoice", "the domain invoice", day(1))
+	for i := range 3 {
+		if err := dbs.UpsertMessage(ctx, store.Message{
+			ID: fmt.Sprintf("g%d", i), AccountID: "acct", FolderID: "f1", UID: uint32(100 + i),
+			ContentKey: fmt.Sprintf("ck-g%d", i), Subject: "Vulnerability report", BodyText: "SECRET-REPORT exploit details",
+			Date: day(10 + i), To: []store.Address{{Address: "Abuse@Example.test"}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	optIn(t, dbs, "acct", true)
+	var secretCalls atomic.Int32
+	srv := markerServer(t, "SECRET-REPORT", http.StatusInternalServerError, &secretCalls)
+	worker := NewEmbedWorker(dbs, gateAt(dbs, srv.URL), []AccountConfig{hostedAccount}, WorkerOptions{Batch: 2})
+
+	for range 5 {
+		if _, err := worker.RunOnce(ctx); err != nil {
+			t.Fatalf("RunOnce: %v", err)
+		}
+	}
+	if n := secretCalls.Load(); n != 0 {
+		t.Fatalf("guarded mail reached the embedding provider %d times", n)
+	}
+	got := embeddedRefs(t, dbs)
+	if !got["ck-old"] {
+		t.Fatal("the ordinary older message was never embedded: the queue is stuck behind guarded mail")
+	}
+	for i := range 3 {
+		if got[fmt.Sprintf("ck-g%d", i)] {
+			t.Errorf("guarded message %d has a vector", i)
+		}
+	}
+}

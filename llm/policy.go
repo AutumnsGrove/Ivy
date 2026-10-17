@@ -103,3 +103,29 @@ func (g *Gate) vettedOrWithheld(ctx context.Context, accounts, keys []string) bo
 	}
 	return true
 }
+
+// Exclusion says whether no model may read a message, whatever the feature: mail sent
+// to a security or abuse address the operator has not turned on. The gate asks its own
+// store by default, so production cannot forget to wire it; an error is "blocked".
+type Exclusion interface {
+	ModelsBlockedFor(ctx context.Context, accountID, contentKey string) (bool, error)
+}
+
+// blockedByAddress reports whether any named message is guarded in any named account.
+// A multi-account call does not say which account holds a key, so the conservative
+// reading is that one account guarding it is enough.
+func (g *Gate) blockedByAddress(ctx context.Context, accounts, keys []string) bool {
+	for _, key := range keys {
+		for _, id := range accounts {
+			blocked, err := g.exclusion.ModelsBlockedFor(ctx, id, key)
+			if err != nil {
+				slog.WarnContext(ctx, "llm: cannot read the guarded addresses; keeping the mail back", "account", id, "error", err)
+				return true
+			}
+			if blocked {
+				return true
+			}
+		}
+	}
+	return false
+}

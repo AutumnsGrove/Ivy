@@ -43,7 +43,17 @@ func (w *workerRig) arrive(id, key, role string, t time.Time, subject, body stri
 
 func (w *workerRig) arriveWith(id, key, role string, t time.Time, subject, body string, auth store.AuthResults) {
 	w.t.Helper()
+	w.arriveTo(id, key, role, t, subject, body, auth, nil)
+}
+
+// arriveTo is arriveWith for a message addressed to these recipients.
+func (w *workerRig) arriveTo(id, key, role string, t time.Time, subject, body string, auth store.AuthResults, to []string) {
+	w.t.Helper()
 	ctx := context.Background()
+	var recipients []store.Address
+	for _, a := range to {
+		recipients = append(recipients, store.Address{Address: a})
+	}
 	folder := rigAccount + "-" + role
 	if !w.folders[role] {
 		if err := w.dbs.UpsertFolder(ctx, store.Folder{ID: folder, AccountID: rigAccount, Name: role, Role: role}); err != nil {
@@ -55,7 +65,7 @@ func (w *workerRig) arriveWith(id, key, role string, t time.Time, subject, body 
 	if err := w.dbs.UpsertMessage(ctx, store.Message{
 		ID: id, AccountID: rigAccount, FolderID: folder, UID: w.nextUID, ContentKey: key,
 		Subject: subject, BodyText: body, Date: t, InternalDate: t,
-		From: store.Address{Name: "Ada", Address: "ada@example.com"}, AuthResults: auth,
+		From: store.Address{Name: "Ada", Address: "ada@example.com"}, AuthResults: auth, To: recipients,
 	}); err != nil {
 		w.t.Fatal(err)
 	}
@@ -547,5 +557,42 @@ func TestTheJunkSkipRuleDoesNotTouchTheInbox(t *testing.T) {
 	w.clock = epoch.Add(time.Hour)
 	if w.tick() != 1 || w.jev.count() != 1 {
 		t.Fatalf("calls = %d; Inbox mail is asked whatever its spam score says", w.jev.count())
+	}
+}
+
+// 5d.5: mail sent to a guarded security or abuse address makes no call from the
+// worker, and is considered once so it does not hold a place at the head of the queue
+// (the queue is newest first and bounded, so a message that cannot leave it would
+// starve everything behind it).
+func TestMailToAGuardedAddressMakesNoCallAndDoesNotStallTheQueue(t *testing.T) {
+	ctx := context.Background()
+	w := newWorkerRig(t, WorkerOptions{Batch: 2})
+	if err := w.dbs.SetAddressType(ctx, store.AddressTypeInput{
+		AccountID: rigAccount, Address: "abuse@example.com", Kind: store.MailSecurity, Now: epoch,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	w.tick()
+	// Two guarded messages arrive after an ordinary one: with a batch of two they fill it.
+	w.arriveTo("ok", "kok", store.RoleInbox, epoch.Add(time.Minute), "Hello", "text", store.AuthResults{}, []string{"me@example.com"})
+	w.arriveTo("g1", "kg1", store.RoleInbox, epoch.Add(2*time.Minute), "Report", "text", store.AuthResults{}, []string{"Abuse@Example.com"})
+	w.arriveTo("g2", "kg2", store.RoleInbox, epoch.Add(3*time.Minute), "Report 2", "text", store.AuthResults{}, []string{"abuse@example.com"})
+	w.clock = epoch.Add(time.Hour)
+
+	for i := 0; i < 4 && w.tick() > 0; i++ {
+	}
+	if n := len(w.decisions("kok")); n == 0 {
+		t.Fatal("the ordinary message behind two guarded ones was never read: the queue stalled")
+	}
+	for _, k := range []string{"kg1", "kg2"} {
+		if n := len(w.decisions(k)); n != 0 {
+			t.Errorf("%s was decided (%d answers): guarded mail reached the model", k, n)
+		}
+	}
+	if w.jev.count() != 1 {
+		t.Fatalf("calls = %d, want 1 (only the ordinary message)", w.jev.count())
+	}
+	if n := w.tick(); n != 0 {
+		t.Fatalf("a considered message came back (%d)", n)
 	}
 }

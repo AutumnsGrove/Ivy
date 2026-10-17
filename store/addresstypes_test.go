@@ -163,3 +163,35 @@ func TestAnUnknownMessageFailsClosedOnlyWhenAddressesAreGuarded(t *testing.T) {
 		t.Fatal("a message the mirror cannot find was allowed while a security address is guarded: its recipients are unknown")
 	}
 }
+
+// Attachment text is embedded under the file's hash, not a message key, and one file
+// can arrive on several messages. A file carried by any guarded message is guarded.
+func TestAFileCarriedByAGuardedMessageIsGuardedToo(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbs := openTemp(t)
+	mailTo(t, dbs, "a", "guarded", []string{"abuse@example.com"}, nil, nil)
+	mailTo(t, dbs, "a", "plain", []string{"me@example.com"}, nil, nil)
+	for msg, hash := range map[string]string{"m-a-guarded": "h-shared", "m-a-plain": "h-shared"} {
+		if err := dbs.ReplaceMessageAttachments(ctx, msg, []Attachment{{ID: "att-" + msg, MessageID: msg, Filename: "f.pdf", ContentHash: hash}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := dbs.ReplaceMessageAttachments(ctx, "m-a-plain", []Attachment{
+		{ID: "att-p1", MessageID: "m-a-plain", Filename: "f.pdf", ContentHash: "h-shared"},
+		{ID: "att-p2", MessageID: "m-a-plain", Filename: "g.pdf", ContentHash: "h-own"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	setType(t, dbs, "a", "abuse@example.com", MailSecurity, false)
+
+	if !blocked(t, dbs, "a", "h-shared") {
+		t.Error("a file that also arrived on a guarded message was left readable")
+	}
+	if blocked(t, dbs, "a", "h-own") {
+		t.Error("a file only an ordinary message carried was blocked")
+	}
+	if blocked(t, dbs, "a", "plain") {
+		t.Error("an ordinary message was blocked because it shares a file")
+	}
+}

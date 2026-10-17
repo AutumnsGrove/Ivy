@@ -136,7 +136,9 @@ func (d *DBs) ListAddressTypes(ctx context.Context, accountID string) ([]Address
 
 // ModelsBlockedFor reports whether no model may read this message: it names, as a
 // recipient, Cc or Delivered-To, a security or abuse address the operator has not
-// turned on. It is the one question every model path asks, so it fails closed: if the
+// turned on. The key is a message's content key or an attachment's content hash (text
+// extracted from a file is embedded under its hash); a file is guarded when any
+// message carrying it is. It is the one question every model path asks, so it fails closed: if the
 // guarded set is non-empty and the message's recipients cannot be read (the mirror has
 // no such message, or the read fails), the answer is yes.
 func (d *DBs) ModelsBlockedFor(ctx context.Context, accountID, contentKey string) (bool, error) {
@@ -149,7 +151,9 @@ func (d *DBs) ModelsBlockedFor(ctx context.Context, accountID, contentKey string
 	}
 	rows, err := d.Mirror.Read.QueryContext(ctx, `
 		SELECT COALESCE(to_json, ''), COALESCE(cc_json, ''), COALESCE(delivered_to_json, '')
-		FROM messages WHERE account_id = ? AND content_key = ?`, accountID, contentKey)
+		FROM messages
+		WHERE account_id = ? AND (content_key = ?
+		   OR id IN (SELECT message_id FROM attachments WHERE content_hash = ?))`, accountID, contentKey, contentKey)
 	if err != nil {
 		return true, fmt.Errorf("recipients of %s: %w", contentKey, err)
 	}

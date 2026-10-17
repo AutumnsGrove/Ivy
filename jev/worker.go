@@ -117,6 +117,7 @@ type WorkerStore interface {
 	MeanBodyBytes(ctx context.Context, accountID string, since time.Time) (int, error)
 	MarkClassified(ctx context.Context, accountID string, contentKeys []string, at time.Time) error
 	PlaceCategoryTag(ctx context.Context, accountID, contentKey, category string) error
+	ModelsBlockedFor(ctx context.Context, accountID, contentKey string) (bool, error)
 	ListAttachments(ctx context.Context, messageID string) ([]store.Attachment, error)
 	GetSetting(ctx context.Context, accountID, key string) (string, bool, error)
 	SetSetting(ctx context.Context, accountID, key, value string) error
@@ -249,9 +250,20 @@ func (w *Worker) process(ctx context.Context, account string, batch []store.Cand
 				// Names are a hint; classify without them rather than not at all.
 				slog.WarnContext(ctx, "jev: cannot list attachments", "message", c.Message.ID, "error", err)
 			}
+			// Mail to a guarded security or abuse address is never read by a model. The gate
+			// would refuse it anyway, but a refused message left in the queue would sit at
+			// the head of a newest-first, bounded batch and starve what is behind it, so it
+			// is considered once here. An unreadable answer is retried, not marked.
+			guarded, err := w.store.ModelsBlockedFor(ctx, account, c.Message.ContentKey)
+			if err != nil {
+				if !(errors.Is(err, context.Canceled) && ctx.Err() != nil) {
+					stop(err) // cut short by an earlier outcome is that outcome's story
+				}
+				return
+			}
 			// Junk the provider's own signals already condemn costs nothing to leave
 			// alone, and is still considered once so it never comes back.
-			skipped := c.Role == store.RoleJunk && CondemnedByProvider(c.Message.AuthResults)
+			skipped := guarded || (c.Role == store.RoleJunk && CondemnedByProvider(c.Message.AuthResults))
 			if !skipped {
 				_, err = w.engine.Decide(ctx, FromStored(c.Message, c.Role, atts))
 			}

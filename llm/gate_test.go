@@ -687,3 +687,105 @@ func TestACallOverASlotWaitsOnItsContext(t *testing.T) {
 		t.Fatal("a call waiting for a slot ignored its context")
 	}
 }
+
+// blockKeys is an Exclusion that blocks the named content keys, standing in for the
+// operator's guarded security addresses.
+type blockKeys map[string]bool
+
+func (b blockKeys) ModelsBlockedFor(_ context.Context, _, key string) (bool, error) {
+	return b[key], nil
+}
+
+type blockError struct{}
+
+func (blockError) ModelsBlockedFor(context.Context, string, string) (bool, error) {
+	return false, errors.New("address types unreadable")
+}
+
+// 5d.5: mail to a guarded address reaches no model through any entry point, for any
+// feature, and the gate says why in the ledger. Mail to anywhere else is unaffected.
+func TestGuardedMailReachesNoProviderThroughAnyEntryPoint(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	dbs := openStore(t)
+	optIn(t, dbs, "a", true)
+	featuresOn(t, dbs, "a", "search", "needs_me", "injection_tripwire", "summary", "vision", "compiler")
+	g := gateFor(t, dbs, w, WithGateClock(func() time.Time { return gateEpoch }),
+		WithVetting(vetAll{}), WithExclusion(blockKeys{"k1": true}),
+		WithAccountPolicy(fixedPolicy{"a": {Smart: true, Vision: true}}))
+
+	if _, err := g.Embed(ctx, embedReq("a")); !errors.Is(err, ErrWithheld) {
+		t.Errorf("embed: err = %v, want withheld", err)
+	}
+	for _, name := range []string{"needs_me", "injection_tripwire"} {
+		req := decideReq("a")
+		req.Feature = name
+		if _, err := g.Decide(ctx, req); !errors.Is(err, ErrWithheld) {
+			t.Errorf("decide %s: err = %v, want withheld", name, err)
+		}
+	}
+	for _, name := range []string{"summary", "compiler"} {
+		req := completeReq("a")
+		req.Feature = name
+		if _, err := g.Complete(ctx, req); !errors.Is(err, ErrWithheld) {
+			t.Errorf("complete %s: err = %v, want withheld", name, err)
+		}
+	}
+	if _, err := g.See(ctx, seeReq("a")); !errors.Is(err, ErrWithheld) {
+		t.Errorf("see: err = %v, want withheld", err)
+	}
+	if n := len(w.Calls()); n != 0 {
+		t.Fatalf("guarded mail reached the provider %d times", n)
+	}
+	rows, _ := dbs.RecentAPICalls(ctx, "a", 20)
+	for _, r := range rows {
+		if r.Reason != ReasonWithheld || r.CostUSD != 0 {
+			t.Errorf("ledger row = %+v, want a zero-cost withheld refusal", r)
+		}
+	}
+
+	other := decideReq("a")
+	other.ContentKeys = []string{"k2"}
+	if _, err := g.Decide(ctx, other); err != nil {
+		t.Errorf("mail to an ordinary address: %v", err)
+	}
+}
+
+// A mail batch that includes even one guarded message is refused whole: the gate
+// cannot send part of a request.
+func TestOneGuardedMessageInABatchRefusesTheBatch(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	dbs := openStore(t)
+	optIn(t, dbs, "a", true)
+	featuresOn(t, dbs, "a", "needs_me")
+	g := gateFor(t, dbs, w, WithExclusion(blockKeys{"k2": true}))
+	req := decideReq("a")
+	req.ContentKeys = []string{"k1", "k2"}
+	if _, err := g.Decide(ctx, req); !errors.Is(err, ErrWithheld) {
+		t.Fatalf("err = %v, want withheld", err)
+	}
+	if n := len(w.Calls()); n != 0 {
+		t.Fatalf("provider calls = %d, want 0", n)
+	}
+}
+
+// The rule fails closed: if the gate cannot tell whether an address is guarded, the
+// mail is kept back.
+func TestAnUnreadableGuardListKeepsMailBack(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w := newWorld(t)
+	dbs := openStore(t)
+	optIn(t, dbs, "a", true)
+	featuresOn(t, dbs, "a", "needs_me")
+	g := gateFor(t, dbs, w, WithExclusion(blockError{}))
+	if _, err := g.Decide(ctx, decideReq("a")); !errors.Is(err, ErrWithheld) {
+		t.Fatalf("err = %v, want withheld", err)
+	}
+	if n := len(w.Calls()); n != 0 {
+		t.Fatalf("provider calls = %d, want 0", n)
+	}
+}

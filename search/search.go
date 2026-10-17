@@ -287,7 +287,21 @@ func (w *EmbedWorker) runJobs(ctx context.Context, acct AccountConfig, jobs []em
 			}
 			continue
 		}
-		err := w.embedChunks(ctx, acct, job.ref, job.kind, job.chunks)
+		// Mail to a guarded security or abuse address is never embedded. The gate would
+		// refuse it, but a refused document stays at the head of a newest-first, bounded
+		// queue and starves what is behind it, so it is recorded as done here, like one
+		// with nothing to embed.
+		guarded, err := w.dbs.ModelsBlockedFor(ctx, acct.ID, job.ref)
+		if err != nil {
+			return embedded, err
+		}
+		if guarded {
+			if err := w.dbs.MarkEmbeddingEmpty(ctx, acct.ID, job.ref, job.kind, acct.Model); err != nil {
+				return embedded, err
+			}
+			continue
+		}
+		err = w.embedChunks(ctx, acct, job.ref, job.kind, job.chunks)
 		switch {
 		case err == nil:
 			embedded++
