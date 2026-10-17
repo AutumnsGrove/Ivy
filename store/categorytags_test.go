@@ -49,8 +49,10 @@ func TestACategoryPlacesItsOwnLocalTagOnceAndOnlyForTaggedCategories(t *testing.
 
 func TestEveryPlacedCategoryHasAReadableNameAndAColourTheUIKnows(t *testing.T) {
 	t.Parallel()
-	known := map[string]bool{"sky": true, "rose": true, "teal": true, "coral": true, "lilac": true, "mint": true,
-		"gold": true, "sand": true, "orchid": true, "fern": true, "slate": true, "berry": true}
+	known := map[string]bool{
+		"sky": true, "rose": true, "teal": true, "coral": true, "lilac": true, "mint": true,
+		"gold": true, "sand": true, "orchid": true, "fern": true, "slate": true, "berry": true,
+	}
 	names := map[string]bool{}
 	for _, c := range PlacedCategories() {
 		tag, ok := categoryTag(c)
