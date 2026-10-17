@@ -23,7 +23,7 @@
 	<div class="groups">
 		<Group label="Your tags">
 			{#each data.tags.mine as t (t.id)}
-				<ListRow href="/tags/{t.id}" chevron>
+				<ListRow href="/?tag={t.id}" chevron>
 					{#snippet leading()}<TagTile color={t.color} />{/snippet}
 					{t.name}
 					{#snippet trailing()}<span class="cnt">{t.count}</span>{/snippet}
@@ -33,7 +33,7 @@
 
 		<Group label="Placed for you" note="These stay on your server and you can remove any of them.">
 			{#each data.tags.placed as t (t.id)}
-				<ListRow href="/search?q={encodeURIComponent(t.name)}" chevron>
+				<ListRow href="/?tag={t.id}" chevron>
 					{#snippet leading()}<TagTile />{/snippet}
 					{t.name}
 					{#snippet trailing()}<span class="cnt">{t.count}</span>{/snippet}

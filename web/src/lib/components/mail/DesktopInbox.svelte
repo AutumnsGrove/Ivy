@@ -27,16 +27,20 @@
 		tags: { id: string; name: string }[];
 		accountId: string | null;
 		folder?: FolderView;
+		/** Set when the list is everything under one tag instead of a folder. */
+		tag?: { id: string; name: string; editable: boolean } | null;
 		scenario: Scenario | null;
 		selectedId?: string;
 	};
-	let { accounts, inbox, tags, accountId, folder = 'inbox', scenario, selectedId }: Props = $props();
+	let { accounts, inbox, tags, accountId, folder = 'inbox', tag = null, scenario, selectedId }: Props = $props();
+	const heading = $derived(tag ? tag.name : folderTitle(folder));
 
 	// With nothing chosen yet the first message is open, like a mail client should feel on arrival.
 	// A message with a live move op is hidden until the server confirms (chunk 3d).
 	// The route loads the newest page; "Show older" appends the pages after it.
 	const pager = new Pager<Inbox['items'][number]>(
-		(cursor) => api.listInbox({ scenario: scenario ?? undefined, accountId: accountId ?? undefined, folder, cursor }),
+		(cursor) =>
+			api.listInbox({ scenario: scenario ?? undefined, accountId: accountId ?? undefined, folder, tag: tag?.id, cursor }),
 		"Couldn't load older mail"
 	);
 	$effect.pre(() => pager.reset({ items: inbox.items, nextCursor: inbox.nextCursor }));
@@ -81,9 +85,10 @@
 	<Glass radius="panel" as="section" class="list" aria-label="Messages">
 		<header class="head">
 			<div class="titles">
-				<h1>{folderTitle(folder)}</h1>
-				{#if folder === 'inbox'}<p>{subtitle}</p>{/if}
+				<h1>{heading}</h1>
+				{#if folder === 'inbox' && !tag}<p>{subtitle}</p>{/if}
 			</div>
+			{#if tag?.editable}<Button size="sm" variant="tonal" href="/tags/{tag.id}">Edit tag</Button>{/if}
 			{#if folder === 'trash' && visible.length}<EmptyTrashButton ids={visible.map((m) => m.id)} />{/if}
 			{#if visible.length && !selection.on}<Button size="sm" variant="tonal" onclick={() => selection.start()}>Select</Button>{/if}
 			<a href="/search" class="find"><Search />Search or ask</a>
@@ -110,10 +115,10 @@
 						<Button variant="tonal" onclick={() => pager.more()} disabled={pager.busy}>Show older</Button>
 					</div>
 				{/if}
-			{:else if folder === 'inbox'}
+			{:else if folder === 'inbox' && !tag}
 				<EmptyInbox readingWaiting={inbox.readingWaiting} />
 			{:else}
-				<FolderEmpty title={folderTitle(folder)} />
+				<FolderEmpty title={heading} />
 			{/if}
 		</div>
 	</Glass>

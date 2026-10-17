@@ -162,3 +162,30 @@ func TestReadingOneAccountsCopyKeepsTheOthersInItsInbox(t *testing.T) {
 		t.Errorf("reading = %d %d issues, want only acct-1's tagged copy", code, len(feed.Issues))
 	}
 }
+
+// A tag Ivy placed (a category, "Needs you") is an ordinary tag row, so it is listed with
+// the operator's own and its mail opens by id through the same `?tag=` view.
+func TestAPlacedTagOpensTheMailItWasPlacedOn(t *testing.T) {
+	t.Parallel()
+	srv, dbs := rulesServer(t)
+	if err := dbs.PlaceCategoryTag(t.Context(), "acct-1", "ck:m2", "newsletter"); err != nil {
+		t.Fatal(err)
+	}
+	var overview api.TagsOverview
+	if code := getJSON(t, srv.URL+"/api/v1/tags", &overview); code != http.StatusOK {
+		t.Fatalf("tags status = %d", code)
+	}
+	id := ""
+	for _, p := range overview.Mine {
+		if p.Name == "Newsletter" {
+			id = p.Id
+		}
+	}
+	if id == "" {
+		t.Fatalf("tags = %+v, want the placed Newsletter tag listed", overview.Mine)
+	}
+	var tagged api.Inbox
+	if code := getJSON(t, srv.URL+"/api/v1/inbox?tag="+id, &tagged); code != http.StatusOK || len(tagged.Items) != 1 || tagged.Items[0].Id != "m2" {
+		t.Errorf("placed tag view = %d %v, want [m2]", code, inboxIDs(tagged))
+	}
+}

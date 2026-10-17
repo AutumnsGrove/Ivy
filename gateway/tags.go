@@ -22,9 +22,9 @@ func userTag(t store.TagSummary) api.UserTag {
 	return api.UserTag{Id: t.ID, Slug: t.Slug, Name: t.Name, Color: api.TagColor(t.Color), Count: t.Count}
 }
 
-// handleListTags serves the operator's tags with their message counts. The
-// placed tags (Jev, chunk 5) and the active rule count (3g) do not exist yet, so
-// they are honestly empty and zero rather than invented.
+// handleListTags serves every tag with its message count. Tags Ivy placed (Needs you,
+// the categories) are ordinary tag rows, so they are listed here with the
+// operator's own; the separate `placed` list is kept empty for the contract.
 func (s *Server) handleListTags(w http.ResponseWriter, r *http.Request) {
 	tags, err := s.dbs.ListTags(r.Context())
 	if err != nil {

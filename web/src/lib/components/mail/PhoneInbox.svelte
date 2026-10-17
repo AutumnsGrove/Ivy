@@ -31,9 +31,12 @@
 		tags: { id: string; name: string }[];
 		accountId: string | null;
 		folder?: FolderView;
+		/** Set when the list is everything under one tag instead of a folder. */
+		tag?: { id: string; name: string; editable: boolean } | null;
 		scenario: Scenario | null;
 	};
-	let { accounts, inbox, tags, accountId, folder = 'inbox', scenario }: Props = $props();
+	let { accounts, inbox, tags, accountId, folder = 'inbox', tag = null, scenario }: Props = $props();
+	const heading = $derived(tag ? tag.name : folderTitle(folder));
 
 	const current = $derived(accounts.find((a) => a.id === accountId));
 	const failing = $derived(accounts.find((a) => a.sync === 'auth-failed'));
@@ -43,7 +46,8 @@
 	// archive or delete disappears at once and returns if the op fails.
 	// The route loads the newest page; "Show older" appends the pages after it.
 	const pager = new Pager<Inbox['items'][number]>(
-		(cursor) => api.listInbox({ scenario: scenario ?? undefined, accountId: accountId ?? undefined, folder, cursor }),
+		(cursor) =>
+			api.listInbox({ scenario: scenario ?? undefined, accountId: accountId ?? undefined, folder, tag: tag?.id, cursor }),
 		"Couldn't load older mail"
 	);
 	$effect.pre(() => pager.reset({ items: inbox.items, nextCursor: inbox.nextCursor }));
@@ -68,9 +72,10 @@
 		<IconButton label="Search" tone="glass" href="/search"><Search /></IconButton>
 	</div>
 
-	{#if visible.length}
-		<LargeHeader title={folderTitle(folder)} subtitle={folder === 'inbox' ? subtitle : undefined}>
+	{#if visible.length || tag}
+		<LargeHeader title={heading} subtitle={folder === 'inbox' && !tag ? subtitle : undefined}>
 			{#snippet trailing()}
+				{#if tag?.editable}<Button size="sm" variant="tonal" href="/tags/{tag.id}">Edit tag</Button>{/if}
 				{#if folder === 'trash'}<EmptyTrashButton ids={visible.map((m) => m.id)} />{/if}
 				{#if !selection.on}<Button size="sm" variant="tonal" onclick={() => selection.start()}>Select</Button>{/if}
 			{/snippet}
@@ -100,10 +105,10 @@
 					<Button variant="tonal" onclick={() => pager.more()} disabled={pager.busy}>Show older</Button>
 				</div>
 			{/if}
-		{:else if folder === 'inbox'}
+		{:else if folder === 'inbox' && !tag}
 			<EmptyInbox readingWaiting={inbox.readingWaiting} />
 		{:else}
-			<FolderEmpty title={folderTitle(folder)} />
+			<FolderEmpty title={heading} />
 		{/if}
 	</div>
 </Page>

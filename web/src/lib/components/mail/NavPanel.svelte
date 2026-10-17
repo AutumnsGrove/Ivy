@@ -68,7 +68,7 @@
 
 	<GroupLabel>Tags</GroupLabel>
 	{#each tags as t (t.id)}
-		<NavRow href="/tags/{t.id}">
+		<NavRow href="/?tag={t.id}">
 			{#snippet leading()}<span class="hash">#</span>{/snippet}
 			{t.name}
 		</NavRow>

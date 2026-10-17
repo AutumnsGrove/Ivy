@@ -76,3 +76,41 @@ test.describe('managing tags', () => {
 		await expect(page.getByRole('link', { name: /ideas/ })).toHaveCount(0);
 	});
 });
+
+// Tapping a tag shows everything under it; changing the tag is one step further, on its own button.
+test.describe('seeing everything under a tag', () => {
+	test('a tag in the tags list opens the mail that carries it', async ({ page }) => {
+		await page.goto('/tags');
+		await page.getByRole('link', { name: /contact form/ }).click();
+		await expect(page).toHaveURL(/\/\?tag=t3$/);
+		await expect(page.getByRole('heading', { name: 'contact form' })).toBeVisible();
+
+		const rows = page.locator('ul.list > li');
+		await expect(rows).toHaveCount(1);
+		await expect(rows.getByText('Moving my blog over to Grove?')).toBeVisible();
+	});
+
+	test('the tag view has an Edit tag button that goes to the tag settings', async ({ page }) => {
+		await page.goto('/?tag=t3');
+		await page.getByRole('link', { name: 'Edit tag' }).click();
+		await expect(page).toHaveURL(/\/tags\/t3$/);
+	});
+
+	test('a tag with no mail says so, and a tag that is gone is not found', async ({ page }) => {
+		await page.goto('/?tag=t5');
+		await expect(page.getByRole('heading', { name: 'ideas' })).toBeVisible();
+		await expect(page.locator('ul.list > li')).toHaveCount(0);
+
+		await page.goto('/?tag=nope');
+		await expect(page.getByText('Nothing here')).toBeVisible();
+	});
+
+	test('the drawer lists the same tags and opens the same view', async ({ page, isMobile }) => {
+		test.skip(!isMobile, 'the phone drawer');
+		await page.goto('/');
+		await page.getByRole('button', { name: 'All inboxes' }).click();
+		// The drawer's tag rows read "# grove"; a message about Grove would also match a loose name.
+		await page.getByRole('link', { name: /^#\s*grove$/ }).click();
+		await expect(page).toHaveURL(/\/\?tag=t4$/);
+	});
+});
