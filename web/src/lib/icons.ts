@@ -9,6 +9,7 @@ export { default as ChevronRight } from '@lucide/svelte/icons/chevron-right';
 export { default as ArrowLeft } from '@lucide/svelte/icons/arrow-left';
 export { default as Archive } from '@lucide/svelte/icons/archive';
 export { default as Trash2 } from '@lucide/svelte/icons/trash-2';
+export { default as MailWarning } from '@lucide/svelte/icons/mail-warning';
 export { default as Ellipsis } from '@lucide/svelte/icons/ellipsis';
 export { default as Flag } from '@lucide/svelte/icons/flag';
 export { default as ShieldAlert } from '@lucide/svelte/icons/shield-alert';

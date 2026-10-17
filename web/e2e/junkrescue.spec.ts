@@ -45,3 +45,13 @@ test.describe('junk rescue', () => {
 		expect(moves().map((p) => [p.action, p.messageId])).toEqual([['not_junk', 'm2']]);
 	});
 });
+
+// The Junk list is only useful if it can be reached: it is a folder in the navigation like Trash.
+test('Junk is in the folder navigation and opens the Junk list', async ({ page, isMobile }) => {
+	await page.goto('/');
+	if (isMobile) await page.getByRole('button', { name: 'All inboxes' }).click();
+	await page.getByRole('link', { name: 'Junk', exact: true }).click();
+	await expect(page).toHaveURL(/\/\?folder=junk$/);
+	await expect(page.getByRole('heading', { name: 'Junk' })).toBeVisible();
+	await expect(page.locator('ul.list > li')).toHaveCount(2);
+});
