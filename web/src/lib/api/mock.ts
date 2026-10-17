@@ -206,6 +206,8 @@ export function messageBody(id: string): Omit<MailMessage, keyof MailSummary> {
 		sender: { name: m?.from ?? '', address: 'sender@example.com', personId: 'sender@example.com' },
 		to: [{ name: '', address: 'me@example.com' }],
 		cc: [],
+		// A legal notice is the mail Junk rescue exists for, so one message shows its chip.
+		...(id === 'm2' ? { looksReal: true } : {}),
 		// One message shows a verified, scored mail so the sheet's spam line has a design to check.
 		auth:
 			id === 'm3'

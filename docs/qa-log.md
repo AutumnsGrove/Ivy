@@ -1932,3 +1932,16 @@ already answered; these are what the build forced. Please confirm or change.
 - **The bar is 0.80**, higher than Needs you's 0.65, because a wrong tag is visible and a missed one costs nothing.
 - **A removed tag is not re-placed:** a message is decided once. If the question's wording is edited and the message is
   asked again, a tag she removed could come back; accepted as rare.
+
+## 5d.4 build-time choices (2026-10-17, agent; please confirm or change)
+
+- **What "obviously spam" means for the skip rule.** I first proposed skipping anything the provider flagged, then dropped it:
+  the provider files mail into Junk because it is flagged, so that would have skipped almost the whole folder. The rule is a
+  score at least twice the provider's own `required` bar, a DMARC fail, or SPF and DKIM both failing. The factor 2 is a
+  guess; tune it on her real Junk folder.
+- **The bar is 0.90**, above Categories (0.80) and Needs you (0.65): the chip is the only thing this question produces, and
+  a wrong chip trains her to ignore it.
+- **The chip shows in the reader only.** List rows and the Junk view do not carry it yet, so a rescued message is found by
+  opening it. Say if the row should show it too.
+- **One switch, dark:** Junk rescue on `/settings/smart`; it turns the shared call on, as the other two do.
+- **Not junk is the existing confirmed move**, so the chip adds no new way to move mail and nothing moves unasked.

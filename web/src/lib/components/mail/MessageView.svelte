@@ -3,7 +3,7 @@
 	import { dismissNeeds } from '#lib/needsActions.js';
 	import { formatMessageTime } from '#lib/time.js';
 	import { Flag } from '#lib/icons.js';
-	import { markReadOnOpen } from '#lib/messageActions.js';
+	import { markNotJunk, markReadOnOpen } from '#lib/messageActions.js';
 	import { outbox } from '#lib/outbox.svelte.js';
 	import type { MailMessage, MessageParty } from '#lib/types.js';
 	import Avatar from '../ui/Avatar.svelte';
@@ -26,6 +26,7 @@
 			| 'toShort'
 			| 'needs'
 			| 'needsReason'
+			| 'looksReal'
 			| 'flagged'
 			| 'tag'
 			| 'summary'
@@ -77,6 +78,14 @@
 		<div class="why">
 			{#if message.needsReason}<p dir="auto">{message.needsReason}</p>{/if}
 			<Button size="sm" variant="tonal" onclick={() => void clear()}>Dismiss</Button>
+		</div>
+	{/if}
+
+	<!-- Only a hint: the button is the one way this message leaves Junk, and it asks first. -->
+	{#if message.looksReal}
+		<div class="why">
+			<p>This looks like real mail that was filed in Junk.</p>
+			<Button size="sm" variant="tonal" onclick={() => void markNotJunk(message.id)}>Not junk</Button>
 		</div>
 	{/if}
 

@@ -96,18 +96,16 @@ her 41 messages, record her needs-me / not labels in a git-ignored file, and rep
 spam score and trusted verdicts, no model; `docs/BUILD-LOG.md` "5d.3"): Purelymail turned out to add real verdicts, so it
 is now trusted by default. **Operator-owned, open:** restart Ivy (this re-derives all 41 messages once, `DerivedVersion` 2)
 and open the sender sheet on a message: it should say "Passed SPF, DKIM and DMARC at purelymail.com" and show a spam
-score. **Next in 5d:** 5d.4 Junk rescue (the `junk_rescue` question on Junk mail only, the "looks real" chip and a one-tap
-Not junk that is an IMAP move; the spam score can skip obvious spam before any call).
+score. **Next in 5d:** 5d.4 Junk rescue, built the next day (see below).
 
-**5d.4 Junk rescue, 2026-10-17, in progress.** Stage 1 is done: the `junk_rescue` question ships (Junk only, quiet answer
-`junk`, threshold 0.90, dark behind its own "Junk rescue" switch on `/settings/smart`, which also turns the shared call on).
-Wording is provisional until G3. Stage 2 is done: a Junk message the provider's own signals condemn (spam score at least twice
-its `required` bar, DMARC fail, or SPF and DKIM both failing) makes no call and is still considered once
-(`jev/junkskip.go`). "Flagged" alone is not the bar, because the provider flags everything it files in Junk. Still to
-build, in order: stage 3 is done (`MailMessage.looksReal`, true only for a message in Junk now whose kept answer acts, so a
-stale answer never outlives a move out of Junk; list rows do not carry it yet). Still to build: (4) the chip and a one-tap Not
-junk in the reader (an outbox move, never automatic).
-Nothing spends until the operator turns the switch on.
+**5d.4 Junk rescue is built, 2026-10-17** (`docs/BUILD-LOG.md` "5d.4", choices to confirm in qa-log). The `junk_rescue`
+question ships dark (Junk only, quiet answer `junk`, bar 0.90) behind its own "Junk rescue" switch on `/settings/smart`; a
+Junk message the provider already condemns (score at twice its bar, DMARC fail, SPF and DKIM both failing) makes no call;
+`MailMessage.looksReal` drives a quiet row in the reader with a confirmed Not junk move. Nothing spends until the switch is on.
+**Operator-owned, open:** turn Junk rescue on at `/settings/smart`, press Look over for All mail, and open a Junk message;
+tell me whether the 2x skip factor and the wording fit her real Junk. **Not done:** the hint on list rows and the Junk view.
+**Next in 5d:** 5d.5 mail types (security/abuse addresses LLM-off by default; contact-form and personal-correspondence
+protections made explicit and tested), then 5d.6 `phishing_risk`.
 
 **Update, same day: the backfill ran and the cascade works on real mail** (15 Inbox messages, 15 stage-one calls for about
 $0.0016, stage two kept the real requests). **5c.5's tooling is built** (`ivy eval sheet` and `ivy eval report`, plan in

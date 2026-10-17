@@ -1460,3 +1460,22 @@ No model, no spend. The score and the verdicts the provider already attaches are
   phone and desktop.
 - **Not done:** using the score to skip or prioritise a Junk-rescue call (5d.4); the score in the message list or the Junk
   view; other providers' header formats.
+
+## 5d.4: Junk rescue (2026-10-17)
+
+Ships dark. Nothing spends until **Junk rescue** is switched on at `/settings/smart`, which also turns the shared call on.
+
+- **The question** (`jev/builtin.yaml`): `junk` / `unsure` / `looks_real`, quiet answer `junk`, threshold **0.90**, `folders:
+  [junk]`. It is the only question that reads Junk, so with its switch off Junk mail makes no provider call at all (tested).
+  Wording is provisional until G3.
+- **Skip rules** (`jev/junkskip.go`): a Junk message the provider's own signals condemn makes no call and is still
+  considered once: a spam score at least **twice** the provider's `required` bar, a DMARC fail, or SPF and DKIM both failing.
+  Plain "flagged" is deliberately not the bar, because the provider flags everything it files in Junk. Missing data never
+  skips. The rule is Junk-only; the same signals on Inbox mail change nothing (tested).
+- **API:** `MailMessage.looksReal`, true only while the message is in Junk **now** and its kept answer acts, so an answer left
+  over from before a Not junk move never shows. A failure to read it means no chip, never a failed page.
+- **Reader:** a quiet row ("This looks like real mail that was filed in Junk.") with a Not junk button. The button is the
+  existing confirmed `not_junk` outbox move; opening a message moves nothing (E2E on phone and desktop, request shape asserted).
+  No wording says it came from a model.
+- **Not done:** the hint on list rows and the Junk view (the reader is the only place it shows); the wording's accuracy
+  (needs labelled Junk, G3); the 2x score factor is a guess to tune on her real Junk folder.
