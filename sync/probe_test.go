@@ -47,21 +47,38 @@ func TestProbeSaysAuthFailedForAWrongPassword(t *testing.T) {
 	}
 }
 
+// refusedPort returns a local port with nothing listening. Binding and closing is not
+// enough on its own: with parallel tests another server can be handed the freed port
+// before it is dialled (an HTTP test server answered the probe once on CI), so each
+// candidate is dialled to prove it refuses right before it is used.
+func refusedPort(t *testing.T) int {
+	t.Helper()
+	for range 50 {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		port := l.Addr().(*net.TCPAddr).Port
+		_ = l.Close()
+		c, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), time.Second)
+		if err != nil {
+			return port
+		}
+		_ = c.Close()
+	}
+	t.Fatal("no local port refused a connection after 50 tries")
+	return 0
+}
+
 func TestProbeSaysUnreachableForAHostThatRefuses(t *testing.T) {
 	t.Parallel()
-	// Bind then close, so the port is known to have nothing listening.
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	port := l.Addr().(*net.TCPAddr).Port
-	_ = l.Close()
+	port := refusedPort(t)
 	acct := ivysync.Account{
 		ID: "purelymail", Address: "me@grove.test", Username: "me@grove.test",
 		Password: "secret", IMAPHost: "127.0.0.1", IMAPPort: port, Insecure: true,
 	}
 
-	err = ivysync.NewFetcher(newStore(t)).Probe(context.Background(), acct)
+	err := ivysync.NewFetcher(newStore(t)).Probe(context.Background(), acct)
 	if code := probeCode(t, err); code != "unreachable" {
 		t.Errorf("code = %q, want unreachable (err: %v)", code, err)
 	}
