@@ -250,6 +250,27 @@ func (e LivenessStatus) Valid() bool {
 	}
 }
 
+// Defines values for MailTypeKind.
+const (
+	ContactForm MailTypeKind = "contact_form"
+	Normal      MailTypeKind = "normal"
+	Security    MailTypeKind = "security"
+)
+
+// Valid indicates whether the value is a known member of the MailTypeKind enum.
+func (e MailTypeKind) Valid() bool {
+	switch e {
+	case ContactForm:
+		return true
+	case Normal:
+		return true
+	case Security:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MessageAuthState.
 const (
 	Fail  MessageAuthState = "fail"
@@ -865,6 +886,27 @@ type AccountProfile struct {
 // AccountSlot defines model for AccountSlot.
 type AccountSlot int
 
+// AddressType defines model for AddressType.
+type AddressType struct {
+	Address string       `json:"address"`
+	Kind    MailTypeKind `json:"kind"`
+
+	// Llm Whether models may read this address's mail. Always false unless the kind is `security` and the operator turned it on.
+	Llm bool `json:"llm"`
+}
+
+// AddressTypeInput defines model for AddressTypeInput.
+type AddressTypeInput struct {
+	Address string       `json:"address"`
+	Kind    MailTypeKind `json:"kind"`
+	Llm     *bool        `json:"llm,omitempty"`
+}
+
+// AddressTypeList defines model for AddressTypeList.
+type AddressTypeList struct {
+	Types []AddressType `json:"types"`
+}
+
 // AskAnswer defines model for AskAnswer.
 type AskAnswer struct {
 	Answer   []string    `json:"answer"`
@@ -1352,6 +1394,9 @@ type MailSummary struct {
 	Tag         *string `json:"tag,omitempty"`
 	Unread      bool    `json:"unread"`
 }
+
+// MailTypeKind defines model for MailTypeKind.
+type MailTypeKind string
 
 // MessageAuth What the mail provider vouched for. Only a trusted server's verdicts are believed, so a message with no trusted verdict is `none`, which means unknown and is never shown as an all-clear. A known provider (Purelymail) is trusted by default; an unknown one is trusted only when configured.
 type MessageAuth struct {
@@ -2186,6 +2231,9 @@ type ConnectAccountJSONRequestBody = ConnectAccount
 
 // UpdateAccountProfileJSONRequestBody defines body for UpdateAccountProfile for application/json ContentType.
 type UpdateAccountProfileJSONRequestBody = AccountProfile
+
+// SaveAddressTypeJSONRequestBody defines body for SaveAddressType for application/json ContentType.
+type SaveAddressTypeJSONRequestBody = AddressTypeInput
 
 // SaveIdentityJSONRequestBody defines body for SaveIdentity for application/json ContentType.
 type SaveIdentityJSONRequestBody = IdentityInput

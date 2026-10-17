@@ -266,6 +266,67 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /accounts/{id}/address-types:
+    get:
+      operationId: listAddressTypes
+      summary: The addresses the operator has marked as a contact form or a security inbox
+      description: >
+        Only marked addresses are listed; every other address is normal. Mail sent to a
+        security address is kept from every model until that address is turned on.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The marked addresses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddressTypeList"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: saveAddressType
+      summary: Mark an address, change its mark, or clear it
+      description: >
+        Keyed by address within the account, case-insensitively. Kind `normal` clears the
+        mark. `llm` only means something for a security address, which ships off.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddressTypeInput"
+      responses:
+        "200":
+          description: The address as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddressType"
+        "400":
+          description: The address or kind is not valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The account already marks the maximum number of addresses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /accounts/{id}/uploads:
     post:
       operationId: uploadAttachment
@@ -2430,6 +2491,42 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Identity"
+    MailTypeKind:
+      type: string
+      enum: [normal, contact_form, security]
+    AddressType:
+      type: object
+      required: [address, kind, llm]
+      properties:
+        address:
+          type: string
+          maxLength: 320
+        kind:
+          $ref: "#/components/schemas/MailTypeKind"
+        llm:
+          type: boolean
+          description: >
+            Whether models may read this address's mail. Always false unless the kind is
+            `security` and the operator turned it on.
+    AddressTypeInput:
+      type: object
+      required: [address, kind]
+      properties:
+        address:
+          type: string
+          maxLength: 320
+        kind:
+          $ref: "#/components/schemas/MailTypeKind"
+        llm:
+          type: boolean
+    AddressTypeList:
+      type: object
+      required: [types]
+      properties:
+        types:
+          type: array
+          items:
+            $ref: "#/components/schemas/AddressType"
     ConnectAccount:
       type: object
       required: [address, password]

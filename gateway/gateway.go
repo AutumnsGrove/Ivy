@@ -174,6 +174,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/accounts/{id}/identities", s.handleListIdentities)
 	api.HandleFunc("PUT /api/v1/accounts/{id}/identities", s.handleSaveIdentity)
 	api.HandleFunc("DELETE /api/v1/accounts/{id}/identities/{identityId}", s.handleDeleteIdentity)
+	api.HandleFunc("GET /api/v1/accounts/{id}/address-types", s.handleListAddressTypes)
+	api.HandleFunc("PUT /api/v1/accounts/{id}/address-types", s.handleSaveAddressType)
 	api.HandleFunc("POST /api/v1/accounts/{id}/uploads", s.handleUploadAttachment)
 	api.HandleFunc("GET /api/v1/accounts/{id}/uploads/{uploadId}", s.handleGetUpload)
 	api.HandleFunc("DELETE /api/v1/accounts/{id}/uploads/{uploadId}", s.handleDeleteUpload)

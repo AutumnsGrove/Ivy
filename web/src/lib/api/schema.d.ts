@@ -140,6 +140,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/{id}/address-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The addresses the operator has marked as a contact form or a security inbox
+         * @description Only marked addresses are listed; every other address is normal. Mail sent to a security address is kept from every model until that address is turned on.
+         */
+        get: operations["listAddressTypes"];
+        /**
+         * Mark an address, change its mark, or clear it
+         * @description Keyed by address within the account, case-insensitively. Kind `normal` clears the mark. `llm` only means something for a security address, which ships off.
+         */
+        put: operations["saveAddressType"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts/{id}/uploads": {
         parameters: {
             query?: never;
@@ -1429,6 +1453,22 @@ export interface components {
         IdentityList: {
             identities: components["schemas"]["Identity"][];
         };
+        /** @enum {string} */
+        MailTypeKind: "normal" | "contact_form" | "security";
+        AddressType: {
+            address: string;
+            kind: components["schemas"]["MailTypeKind"];
+            /** @description Whether models may read this address's mail. Always false unless the kind is `security` and the operator turned it on. */
+            llm: boolean;
+        };
+        AddressTypeInput: {
+            address: string;
+            kind: components["schemas"]["MailTypeKind"];
+            llm?: boolean;
+        };
+        AddressTypeList: {
+            types: components["schemas"]["AddressType"][];
+        };
         ConnectAccount: {
             address: string;
             /** @description An app password if the provider offers one. Never stored in a database and never returned. */
@@ -2422,6 +2462,74 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             /** @description The account's primary address cannot be removed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listAddressTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The marked addresses */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddressTypeList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    saveAddressType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddressTypeInput"];
+            };
+        };
+        responses: {
+            /** @description The address as it now stands */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddressType"];
+                };
+            };
+            /** @description The address or kind is not valid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description The account already marks the maximum number of addresses */
             409: {
                 headers: {
                     [name: string]: unknown;
