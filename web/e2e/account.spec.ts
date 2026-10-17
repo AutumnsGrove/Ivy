@@ -101,4 +101,42 @@ test.describe('send identities', () => {
 		await expect(toast(page, 'Address removed')).toBeVisible();
 		await expect(page.locator('.row', { hasText: 'hello@example.com' })).toHaveCount(0);
 	});
+
+	// 5d.5: a security or abuse address keeps its mail from every helper until it is turned on.
+	test('a security address starts with helpers off, can be turned on, and cleared', async ({ page }) => {
+		await page.goto('/settings/account/a1');
+		await page.getByRole('button', { name: 'Mark an address' }).click();
+		const form = page.getByRole('group', { name: 'Mark an address' });
+		await form.getByLabel('Address', { exact: true }).fill('abuse@example.com');
+		await form.getByLabel('Kind').selectOption('security');
+		await page.getByRole('button', { name: 'Save mark' }).click();
+		await expect(toast(page, 'Address marked')).toBeVisible();
+
+		const row = page.locator('.row', { hasText: 'abuse@example.com' });
+		await expect(row.getByText('Security and abuse')).toBeVisible();
+		const helpers = row.getByRole('switch', { name: 'Helpers can read abuse@example.com' });
+		await expect(helpers).not.toBeChecked();
+		await expect(row.getByText('No helper reads mail sent here')).toBeVisible();
+
+		await helpers.click();
+		await expect(helpers).toBeChecked();
+		await page.reload();
+		await expect(page.locator('.row', { hasText: 'abuse@example.com' }).getByRole('switch')).toBeChecked();
+
+		await page.locator('.row', { hasText: 'abuse@example.com' }).getByRole('button', { name: 'Clear abuse@example.com' }).click();
+		await expect(toast(page, 'Address cleared')).toBeVisible();
+		await expect(page.locator('.row', { hasText: 'abuse@example.com' })).toHaveCount(0);
+	});
+
+	test('a contact-form address has no helper switch, because nothing guards it', async ({ page }) => {
+		await page.goto('/settings/account/a1');
+		await page.getByRole('button', { name: 'Mark an address' }).click();
+		const form = page.getByRole('group', { name: 'Mark an address' });
+		await form.getByLabel('Address', { exact: true }).fill('hello@example.com');
+		await form.getByLabel('Kind').selectOption('contact_form');
+		await page.getByRole('button', { name: 'Save mark' }).click();
+		const row = page.locator('.row', { hasText: 'hello@example.com' });
+		await expect(row.getByText('Contact form')).toBeVisible();
+		await expect(row.getByRole('switch')).toHaveCount(0);
+	});
 });

@@ -15,7 +15,9 @@
 	import TopBar from '#lib/components/ui/TopBar.svelte';
 	import { PhotoError, squarePhoto } from '#lib/photo.js';
 	import { toasts } from '#lib/toast.js';
-	import type { Identity } from '#lib/types.js';
+	import Select from '#lib/components/ui/Select.svelte';
+	import Toggle from '#lib/components/ui/Toggle.svelte';
+	import type { Identity, MailTypeKind } from '#lib/types.js';
 
 	let { data } = $props();
 
@@ -118,6 +120,42 @@
 		} finally {
 			busy = false;
 		}
+	}
+
+	// Mail types: null while closed, otherwise the draft being marked.
+	let marking = $state<{ address: string; kind: MailTypeKind } | null>(null);
+	const KIND_LABELS: Record<string, string> = {
+		contact_form: 'Contact form',
+		security: 'Security and abuse'
+	};
+	const KIND_OPTIONS = [
+		{ value: 'contact_form', label: KIND_LABELS.contact_form },
+		{ value: 'security', label: KIND_LABELS.security }
+	];
+
+	async function setMark(address: string, kind: MailTypeKind, llm: boolean, done: string) {
+		busy = true;
+		try {
+			await api.saveAddressType(data.account.id, { address, kind, llm });
+			marking = null;
+			toasts.push({ text: done, tone: 'ok' });
+		} catch (err) {
+			report(err, 'Could not save that address');
+		} finally {
+			busy = false;
+			// Also resyncs a switch that was flipped but refused.
+			await invalidateAll();
+		}
+	}
+
+	function saveMark() {
+		if (!marking) return;
+		const address = marking.address.trim();
+		if (!address) {
+			toasts.push({ text: 'An address is needed', tone: 'danger' });
+			return;
+		}
+		void setMark(address, marking.kind, false, 'Address marked');
 	}
 
 	async function removeIdentity(id: Identity) {
@@ -233,6 +271,57 @@
 			<div class="idactions">
 				<Button variant="primary" disabled={busy} onclick={saveIdentity}><Check />Save address</Button>
 				<Button variant="tonal" onclick={() => (editing = null)}>Cancel</Button>
+			</div>
+		</Group>
+	{/if}
+
+	<Group
+		label="Special addresses"
+		note="Mark an address that a website form writes to, or that receives security and abuse reports. No helper reads mail sent to a security address unless you turn it on."
+	>
+		{#each data.addressTypes as t (t.address)}
+			<ListRow tall>
+				<span class="idrow">
+					<span class="idadr">{t.address}</span>
+					<span class="idsub">{KIND_LABELS[t.kind] ?? t.kind}</span>
+					{#if t.kind === 'security'}
+						<span class="idsig">{t.llm ? 'Helpers can read mail sent here' : 'No helper reads mail sent here'}</span>
+					{/if}
+				</span>
+				{#snippet trailing()}
+					<div class="idacts">
+						{#if t.kind === 'security'}
+							<Toggle
+								label="Helpers can read {t.address}"
+								checked={t.llm}
+								disabled={busy}
+								onchange={(on) => void setMark(t.address, t.kind, on, on ? 'Helpers can read this address' : 'Helpers are off for this address')}
+							/>
+						{/if}
+						<IconButton label="Clear {t.address}" onclick={() => setMark(t.address, 'normal', false, 'Address cleared')}><Trash2 /></IconButton>
+					</div>
+				{/snippet}
+			</ListRow>
+		{/each}
+		{#if !marking}
+			<div class="idadd">
+				<Button size="sm" onclick={() => (marking = { address: '', kind: 'contact_form' })}>Mark an address</Button>
+			</div>
+		{/if}
+	</Group>
+
+	{#if marking}
+		<Group label="Mark an address">
+			<div class="f">
+				<Field label="Address" bind:value={marking.address} type="email" placeholder="abuse@example.com" />
+			</div>
+			<div class="kind">
+				<span>Kind</span>
+				<Select label="Kind" options={KIND_OPTIONS} bind:value={marking.kind} />
+			</div>
+			<div class="idactions">
+				<Button variant="primary" disabled={busy} onclick={saveMark}><Check />Save mark</Button>
+				<Button variant="tonal" onclick={() => (marking = null)}>Cancel</Button>
 			</div>
 		</Group>
 	{/if}
@@ -378,6 +467,15 @@
 		color: var(--text);
 		font: 400 var(--fs-input) var(--font-ui);
 		resize: vertical;
+	}
+	.kind {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--sp-12);
+		margin: var(--sp-16) var(--sp-4);
+		font: 500 var(--fs-note) var(--font-ui);
+		color: var(--muted);
 	}
 	.idactions {
 		display: flex;

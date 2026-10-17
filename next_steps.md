@@ -105,8 +105,14 @@ Junk message the provider already condemns (score at twice its bar, DMARC fail, 
 **Operator-owned, open:** turn Junk rescue on at `/settings/smart`, press Look over for All mail, and open a Junk message;
 tell me whether the 2x skip factor and the wording fit her real Junk. The Junk list's rows carry the hint too
 (`MailSummary.looksReal`, Junk view only).
-**Next in 5d:** 5d.5 mail types (security/abuse addresses LLM-off by default; contact-form and personal-correspondence
-protections made explicit and tested), then 5d.6 `phishing_risk`.
+**5d.5 mail types is built, 2026-10-17** (`docs/BUILD-LOG.md` "5d.5", choices to confirm in qa-log). An address marked
+"Security and abuse" on `/settings/account/{id}` keeps its mail from every model, for every feature, through one rule in the
+gate (refused as `withheld`, zero cost); it ships off per address, with a "Helpers can read" switch. Both workers consider
+that mail once instead of stalling behind it. **Operator-owned, open:** mark `abuse@` and `security@` on her real account and
+confirm the Spend screen shows no calls for them. **Known gaps, stated:** mail that arrived while an address was off is not
+read after it is turned on; local Ollama is exempt; contact form is only a label until 5d.6.
+**Next in 5d:** 5d.6 `phishing_risk` (banner from the provider's auth verdicts, then `contact_form_quality`; `cold_outreach`
+stays deferred).
 
 **Update, same day: the backfill ran and the cascade works on real mail** (15 Inbox messages, 15 stage-one calls for about
 $0.0016, stage two kept the real requests). **5c.5's tooling is built** (`ivy eval sheet` and `ivy eval report`, plan in
@@ -465,7 +471,8 @@ Found by the round 32 audit; each needs a home before its milestone starts.
   polish. A reply-in-place box in the reader is still not built.
 - Stub actions are now all real (Update in 3h, send in 4f); keep the list here only for new stubs.
 - 3g leftovers: the reader has no snooze or show-in-Reading control (rules and the API only); the
-  `folder=snoozed` view and the inbox `tag=` filter are API-only with no screen; `rules/new/review`
+  `folder=snoozed` view is API-only with no screen (the `tag=` filter has one now: tapping a tag opens `/?tag=<id>`, with an
+  Edit tag button for its settings); `rules/new/review`
   is now a dead mock route (the free-form compiler is chunk 5); and the rule editor, People and
   Reading have no Playwright test beyond the screens pass that visits them. A rule action on a
   message kept in two folders queues the keyword op for the row the pass picked, so read-back can

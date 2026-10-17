@@ -1483,3 +1483,41 @@ Ships dark. Nothing spends until **Junk rescue** is switched on at `/settings/sm
   tag views, and not on search results.
 - **Not done:** the wording's accuracy (needs labelled Junk, G3); the 2x score factor is a guess to tune on her real Junk
   folder; the per-row read could become one batched query if a Junk page ever measures slow on the board.
+
+## Tag view: tapping a tag shows everything under it (2026-10-17, operator's request)
+
+Tapping a tag in the Tags list or the drawer went to that tag's settings, with no way to see its mail. Now it opens
+`/?tag=<id>` in the same list as the inbox (same paging, selection and desktop reading pane), titled with the tag's name,
+with an **Edit tag** button for the settings page. No backend change: `GET /inbox?tag=` already existed (3g). Tags Ivy placed
+(Needs you, the categories) are ordinary tag rows listed under "Your tags", so they open the same way (tested against the real
+handler). An unknown tag is the normal "Nothing here" page; a tag with no mail says so under its own name. Not done: the
+reader's tag chip is not a link to the view; the Placed-for-you group in the Tags list is empty on a real server.
+
+## 5d.5: mail types, and security and abuse mail kept from every model (2026-10-17)
+
+No new question and no spend. This is the plan's "security and abuse addresses are LLM-off by default" (brief invariant 8,
+trigger T17), enforced where every model call passes.
+
+- **The setting** (state migration 21, `address_types`; `store/addresstypes.go`): per account and address, case-insensitive,
+  kind `contact_form` or `security`, and `llm_on` (security only; it ships off). Normal is the absence of a row. 100 per
+  account, a defined 409 above it; the address is validated like an identity's, so a header injection is refused.
+- **One rule, at the gate** (`llm/gate.go`, `Exclusion`): for **every** feature and every entry point (embed, decide,
+  complete, see), a message named as a recipient, Cc or Delivered-To of a guarded address is refused as `withheld` at zero
+  cost, so the ledger and the Spend screen already say "mail kept private". The gate asks its own store, so production
+  cannot forget to wire it (a test hook, `WithExclusion`, exists only for tests). It fails closed: an unreadable guard list,
+  or a message the mirror cannot find while an address is guarded, is kept back. One guarded message refuses a whole batch.
+- **Files follow their messages.** Attachment text is embedded under the file's hash, so the lookup also takes a hash: a
+  file carried by any guarded message is guarded.
+- **Queues must not starve.** A refused message left in a newest-first, bounded queue would sit at the head forever (the
+  embed worker does not treat `withheld` as a pause). Both workers now consider guarded mail once without a call, like mail
+  with nothing to embed: the Jev worker marks it classified and the embed worker marks it empty. Found by reproducing the
+  stall in both workers first.
+- **Settings screen:** a "Special addresses" group on `/settings/account/{id}` lists marked addresses with their kind; a
+  security row has a "Helpers can read" switch (off) and every row can be cleared. API: `GET`/`PUT
+  /accounts/{id}/address-types`.
+- **Not done, on purpose:** (1) a message that arrived while its address was off is considered once and is **not** read if
+  the address is turned on later (nothing re-queues it); (2) the local Ollama embedder is not covered, because it never
+  leaves the device (the gate returns before the model checks for it); (3) contact-form addresses are recorded but nothing
+  reads the kind yet (`contact_form_quality` is 5d.6, and Reply-To handling already works for any mail); (4) the "personal
+  correspondence is never folded" protection has nothing to test until a quiet fold exists, and personal mail is already
+  never tagged (5d.1).

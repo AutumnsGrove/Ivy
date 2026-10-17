@@ -17,6 +17,9 @@ import type {
 	DraftSummary,
 	FolderView,
 	HealthOverview,
+	AddressType,
+	AddressTypeInput,
+	AddressTypeList,
 	Identity,
 	IdentityInput,
 	IdentityList,
@@ -241,6 +244,19 @@ export const api = {
 	deleteIdentity: (accountId: string, identityId: string): Promise<void> =>
 		request<void>(`/accounts/${encodeURIComponent(accountId)}/identities/${encodeURIComponent(identityId)}`, {
 			method: 'DELETE'
+		}),
+
+	// --- mail types (5d.5): contact-form and security addresses --------------
+	/** The addresses marked as a contact form or a security inbox; the rest are normal. */
+	listAddressTypes: (accountId: string): Promise<AddressTypeList> =>
+		request<AddressTypeList>(`/accounts/${encodeURIComponent(accountId)}/address-types`),
+
+	/** Mark an address, change its mark, or clear it (kind `normal`). */
+	saveAddressType: (accountId: string, input: AddressTypeInput): Promise<AddressType> =>
+		request<AddressType>(`/accounts/${encodeURIComponent(accountId)}/address-types`, {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(input)
 		}),
 
 	// --- outgoing attachments (4g): staged files and inline images ----------

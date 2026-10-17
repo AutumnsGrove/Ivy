@@ -2,7 +2,7 @@ import { test as base } from '@playwright/test';
 import * as mock from '../src/lib/api/mock';
 import { freshSmart, smartReply, type SmartState } from './smart-fixture';
 import { spendReply } from './spend-fixture';
-import type { Account, Attachment, DraftResume, DraftSummary, Identity, MailMessage, MailSummary, MessageOdds, MessagePrivacy, OutboxItem, SendStatus, TagsOverview, UpdateStatus, UserTag } from '../src/lib/types';
+import type { Account, AddressType, Attachment, DraftResume, DraftSummary, Identity, MailMessage, MailSummary, MessageOdds, MessagePrivacy, OutboxItem, SendStatus, TagsOverview, UpdateStatus, UserTag } from '../src/lib/types';
 
 // The reader client does real fetches, so the mock E2E suite serves the
 // contract from the same fixtures at the network boundary instead of inside
@@ -48,6 +48,8 @@ export type AccountState = {
 	tags: TagsOverview;
 	/** The send identities each account may use, beyond the synthetic primary. */
 	identities: Identity[];
+	/** The addresses marked as a contact form or a security inbox, by account id. */
+	addressTypes: Record<string, AddressType[]>;
 	/** The tags each message is in, by message id, as the gateway's `tagIds` reports them. */
 	tagged: Map<string, string[]>;
 	/** The self-update status the settings screen reads. */
@@ -92,6 +94,7 @@ const freshState = (): AccountState => ({
 	outbox: [],
 	tags: structuredClone(mock.tags),
 	identities: [],
+	addressTypes: {},
 	tagged: new Map(),
 	update: { unavailable: false, running: false, done: true, success: true, target: 'r1.test' },
 	drafts: [],
@@ -553,6 +556,27 @@ function updateProfile(
 	return { body: account };
 }
 
+/** The gateway's address-types endpoints: list the marked addresses, mark, change or clear one. */
+function addressTypeReply(state: AccountState, path: string, method: string, raw: Buffer | null): Reply | null {
+	const m = /^\/accounts\/([^/]+)\/address-types$/.exec(path);
+	if (!m) return null;
+	const account = state.accounts.find((a) => a.id === m[1]);
+	if (!account) return notFound('No such account');
+	const marked = state.addressTypes[account.id] ?? [];
+	if (method === 'GET') return { body: { types: marked } };
+	if (method !== 'PUT' || !raw) return null;
+	const b = jsonBody(raw);
+	const address = typeof b?.address === 'string' ? b.address.trim() : '';
+	if (!address || !address.includes('@') || /[\s\r\n\x00]/.test(address)) return badRequest('That is not a plain email address');
+	const kind = b?.kind;
+	if (kind !== 'normal' && kind !== 'contact_form' && kind !== 'security') return badRequest('That is not a kind of address Ivy knows');
+	// Like the server, the helper flag only means something for a security address.
+	const llm = kind === 'security' && b?.llm === true;
+	const rest = marked.filter((t) => t.address.toLowerCase() !== address.toLowerCase());
+	state.addressTypes[account.id] = kind === 'normal' ? rest : [...rest, { address, kind, llm }].sort((x, y) => x.address.localeCompare(y.address));
+	return { body: { address, kind, llm } };
+}
+
 /** The gateway's identities endpoints over mutable fixtures: list, upsert, delete. */
 function identityReply(state: AccountState, path: string, method: string, raw: Buffer | null): Reply | null {
 	const list = /^\/accounts\/([^/]+)\/identities$/.exec(path);
@@ -721,6 +745,14 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	if (smart) return smart;
 	const spend = spendReply(path, params, scenario, state.accounts, state.smart.caps);
 	if (spend) return spend;
+	if (path === '/inbox' && params.get('tag')) {
+		// Like the gateway: an unknown tag is 404, otherwise the mail that carries it.
+		const tagId = params.get('tag');
+		const tag = [...state.tags.mine, ...state.tags.placed].find((t) => t.id === tagId);
+		if (!tag) return notFound('No such tag');
+		const items = liveInbox(state).filter((m) => m.tag === tag.name || state.tagged.get(m.id)?.includes(tag.id));
+		return { body: { items, needCount: 0, unreadCount: 0, readingWaiting: 0 } };
+	}
 	if (path === '/inbox') {
 		return inboxReply(liveInbox(state), params.get('account_id'), scenario, params.get('folder'), params.get('cursor'));
 	}
@@ -828,6 +860,8 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 		}
 	}
 
+	const addressTypes = addressTypeReply(state, path, method, raw);
+	if (addressTypes) return addressTypes;
 	const identities = identityReply(state, path, method, raw);
 	if (identities) return identities;
 

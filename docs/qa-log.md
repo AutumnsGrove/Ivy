@@ -1945,3 +1945,14 @@ already answered; these are what the build forced. Please confirm or change.
   or the Needs, snoozed and tag views.
 - **One switch, dark:** Junk rescue on `/settings/smart`; it turns the shared call on, as the other two do.
 - **Not junk is the existing confirmed move**, so the chip adds no new way to move mail and nothing moves unasked.
+
+## 5d.5 build-time choices (2026-10-17, agent; please confirm or change)
+
+- **"Zero calls" is enforced at the gate for every feature**, not only the vetted ones, so the safety checks and meaning
+  search also never read it. A refused call is the existing `withheld` reason, so no new label appears on Spend.
+- **Where an address is matched:** the recipient, Cc and Delivered-To lines of the message, in any case. Bcc'd mail is caught
+  by Delivered-To. A forwarded copy that names the address in none of these is not caught.
+- **A message that arrived while an address was off is never read later**, even after you turn the address on: it was
+  considered once. Say if you want turning an address on to re-queue its old mail (it would need a way to clear those marks).
+- **Local Ollama is exempt**, since the mail never leaves the device. Say if "no model" should include local ones too.
+- **Contact-form is a label for now.** Reply-To handling already works for any mail, and `contact_form_quality` is 5d.6.

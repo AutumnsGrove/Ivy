@@ -8,5 +8,6 @@ export const load: PageLoad = async ({ params }) => {
 	const account = accounts.find((a) => a.id === params.id);
 	if (!account) error(404, 'No such account');
 	const identities = await guard(api.listIdentities(params.id));
-	return { account, identities: identities.identities };
+	const addressTypes = await guard(api.listAddressTypes(params.id));
+	return { account, identities: identities.identities, addressTypes: addressTypes.types };
 };
