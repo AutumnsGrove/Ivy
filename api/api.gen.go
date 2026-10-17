@@ -1304,7 +1304,10 @@ type MailMessage struct {
 	Html     *string `json:"html,omitempty"`
 	Id       string  `json:"id"`
 	Initials string  `json:"initials"`
-	Needs    bool    `json:"needs"`
+
+	// LooksReal True only for a message that is in Junk now and whose kept `junk_rescue` answer says it looks real. A hint for a quiet chip beside a Not junk button; nothing is ever moved because of it.
+	LooksReal *bool `json:"looksReal,omitempty"`
+	Needs     bool  `json:"needs"`
 
 	// NeedsReason One plain sentence on why the message needs the owner; present only while `needs` is true. Rendered as text, never as markup.
 	NeedsReason *string  `json:"needsReason,omitempty"`

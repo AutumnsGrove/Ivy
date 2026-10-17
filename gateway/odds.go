@@ -69,3 +69,27 @@ func (s *Server) handleMessageOdds(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, view)
 }
+
+// looksRealHint says whether a quiet "looks real" chip may show on a message. It needs
+// the message to be in Junk now (a stale answer must not outlive a move out of Junk)
+// and the kept junk_rescue answer to act. A failure to read either is a message with
+// no chip, never a failed page: the chip is only a hint.
+func (s *Server) looksRealHint(ctx context.Context, m store.Message) bool {
+	if s.odds == nil {
+		return false
+	}
+	folder, err := s.dbs.GetFolderByID(ctx, m.FolderID)
+	if err != nil || folder.Role != store.RoleJunk {
+		return false
+	}
+	odds, err := s.odds.Odds(ctx, m.AccountID, m.ContentKey)
+	if err != nil {
+		return false
+	}
+	for _, v := range odds.Answers {
+		if v.QuestionID == jev.JunkRescueQuestion && v.Choice == jev.LooksReal && v.Acts() {
+			return true
+		}
+	}
+	return false
+}

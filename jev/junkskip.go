@@ -17,3 +17,10 @@ func CondemnedByProvider(a store.AuthResults) bool {
 	}
 	return a.DMARC == "fail" || (a.SPF == "fail" && a.DKIM == "fail")
 }
+
+// JunkRescueQuestion is the id of the Junk rescue question, and LooksReal the one
+// answer that may show a chip.
+const (
+	JunkRescueQuestion = "junk_rescue"
+	LooksReal          = "looks_real"
+)

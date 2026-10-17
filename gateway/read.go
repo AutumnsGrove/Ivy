@@ -271,6 +271,9 @@ func (s *Server) messageView(r *http.Request, m store.Message) (api.MailMessage,
 		Paragraphs:  paragraphs(m.BodyText),
 		Attachments: s.attachments(r, m),
 	}
+	if s.looksRealHint(r.Context(), m) {
+		v.LooksReal = boolPtr(true)
+	}
 	if m.BodyHTML != "" {
 		htmlBody := m.BodyHTML
 		v.Html = &htmlBody

@@ -104,7 +104,9 @@ Not junk that is an IMAP move; the spam score can skip obvious spam before any c
 Wording is provisional until G3. Stage 2 is done: a Junk message the provider's own signals condemn (spam score at least twice
 its `required` bar, DMARC fail, or SPF and DKIM both failing) makes no call and is still considered once
 (`jev/junkskip.go`). "Flagged" alone is not the bar, because the provider flags everything it files in Junk. Still to
-build, in order: (3) a `looksReal` verdict on Junk rows in the API, (4) the chip and a one-tap Not junk (an outbox move, never automatic).
+build, in order: stage 3 is done (`MailMessage.looksReal`, true only for a message in Junk now whose kept answer acts, so a
+stale answer never outlives a move out of Junk; list rows do not carry it yet). Still to build: (4) the chip and a one-tap Not
+junk in the reader (an outbox move, never automatic).
 Nothing spends until the operator turns the switch on.
 
 **Update, same day: the backfill ran and the cascade works on real mail** (15 Inbox messages, 15 stage-one calls for about

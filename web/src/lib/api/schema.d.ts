@@ -1543,6 +1543,8 @@ export interface components {
             needs: boolean;
             /** @description One plain sentence on why the message needs the owner; present only while `needs` is true. Rendered as text, never as markup. */
             needsReason?: string;
+            /** @description True only for a message that is in Junk now and whose kept `junk_rescue` answer says it looks real. A hint for a quiet chip beside a Not junk button; nothing is ever moved because of it. */
+            looksReal?: boolean;
             tag?: string;
             /** @description Every tag the message is in, for the tag picker; `tag` is the first by name */
             tagIds?: string[];

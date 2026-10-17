@@ -149,3 +149,70 @@ func TestOddsCarryStageTwoWhenItHasDecided(t *testing.T) {
 		t.Fatalf("a message stage two never decided has no stage2: %+v", got.Stage2)
 	}
 }
+
+func looksRealAnswer(choice string, fires, suppressed bool) jev.Odds {
+	return jev.Odds{Answers: []jev.Verdict{{
+		QuestionID: "junk_rescue", Choice: choice, Probabilities: map[string]float64{choice: 0.95},
+		Confidence: 0.95, Threshold: 0.9, QuietOption: "junk", Fires: fires, Suppressed: suppressed,
+	}}}
+}
+
+// junkServer has one message in Junk (j1) and one in the Inbox (i1).
+func junkServer(t *testing.T, src OddsSource) string {
+	t.Helper()
+	srv, dbs := newConfiguredServer(t, func(s *Server) {
+		if src != nil {
+			s.WithOdds(src)
+		}
+	})
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox})
+	mustFolder(t, dbs, store.Folder{ID: "junk-1", AccountID: "acct-1", Name: "Junk", Role: store.RoleJunk})
+	mustMessage(t, dbs, inboxMessage("j1", "acct-1", "junk-1", testNow, false))
+	mustMessage(t, dbs, inboxMessage("i1", "acct-1", "inbox-1", testNow, false))
+	return srv.URL + "/api/v1"
+}
+
+// 5d.4: the chip is a hint on a Junk message and nothing else. It needs the answer to
+// act, and it follows the folder: once the operator moves a message out of Junk the
+// stale answer must not keep calling it rescued.
+func TestAJunkMessageThatLooksRealCarriesTheChipHint(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		id   string
+		odds jev.Odds
+		want bool
+	}{
+		{"looks real in Junk", "j1", looksRealAnswer("looks_real", true, false), true},
+		{"unsure does not fire", "j1", looksRealAnswer("unsure", false, false), false},
+		{"junk does not fire", "j1", looksRealAnswer("junk", false, false), false},
+		{"a suppressed answer does not act", "j1", looksRealAnswer("looks_real", true, true), false},
+		{"the same answer after a move to the Inbox", "i1", looksRealAnswer("looks_real", true, false), false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			base := junkServer(t, &fakeOdds{odds: c.odds})
+			var got api.MailMessage
+			if code := getJSON(t, base+"/messages/"+c.id, &got); code != http.StatusOK {
+				t.Fatalf("status = %d", code)
+			}
+			if has := got.LooksReal != nil && *got.LooksReal; has != c.want {
+				t.Fatalf("looksReal = %v, want %v", got.LooksReal, c.want)
+			}
+		})
+	}
+}
+
+func TestNoChipHintWhenNothingIsWired(t *testing.T) {
+	t.Parallel()
+	base := junkServer(t, nil)
+	var got api.MailMessage
+	if code := getJSON(t, base+"/messages/j1", &got); code != http.StatusOK {
+		t.Fatalf("status = %d", code)
+	}
+	if got.LooksReal != nil && *got.LooksReal {
+		t.Fatal("a chip appeared with no Jev wired")
+	}
+}
