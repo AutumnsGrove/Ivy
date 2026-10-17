@@ -170,7 +170,9 @@ func TestJunkIsOnlyAskedTheQuestionsThatNameJunk(t *testing.T) {
 
 func TestOneBatchPerPassAndConcurrencyIsBounded(t *testing.T) {
 	w := newWorkerRig(t, WorkerOptions{Batch: 6, Concurrency: 2})
-	w.jev.setDelay(25 * time.Millisecond)
+	// Long enough that two calls overlap even when the runner is slow (the race detector on a
+	// shared CI machine once started the second call after the first had finished).
+	w.jev.setDelay(100 * time.Millisecond)
 	w.tick()
 	for i := 0; i < 15; i++ {
 		id := fmt.Sprintf("m%02d", i)
