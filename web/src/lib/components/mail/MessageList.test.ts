@@ -64,3 +64,18 @@ describe('MessageList needs-attention marker', () => {
 		expect(seen).toEqual(['m1']);
 	});
 });
+
+describe('MessageList junk rescue marker', () => {
+	it('marks a Junk row that looks real, and leaves other rows alone', () => {
+		render(MessageList, {
+			items: [{ ...item('m1', '2026-10-09T12:00:00Z'), looksReal: true }, item('m2', '2026-10-09T11:00:00Z')],
+			accounts
+		});
+		expect(screen.getAllByText('looks real')).toHaveLength(1);
+	});
+
+	it('says nothing about a model', () => {
+		render(MessageList, { items: [{ ...item('m1', '2026-10-09T12:00:00Z'), looksReal: true }], accounts });
+		expect(screen.queryByText(/\bAI\b|model|smart/i)).not.toBeInTheDocument();
+	});
+});

@@ -1340,7 +1340,10 @@ type MailSummary struct {
 	From     string `json:"from"`
 	Id       string `json:"id"`
 	Initials string `json:"initials"`
-	Needs    bool   `json:"needs"`
+
+	// LooksReal Set only on rows of the Junk view, and only when the kept `junk_rescue` answer says the message looks real. A hint for a quiet marker; nothing moves because of it.
+	LooksReal *bool `json:"looksReal,omitempty"`
+	Needs     bool  `json:"needs"`
 
 	// NeedsReason One plain sentence on why the message needs the owner; present only while `needs` is true. Rendered as text, never as markup.
 	NeedsReason *string `json:"needsReason,omitempty"`

@@ -70,6 +70,9 @@ func (s *Server) handleInbox(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	if q.Get("folder") == store.RoleJunk {
+		s.markLooksReal(r.Context(), page, &out)
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 

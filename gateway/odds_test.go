@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/AutumnsGrove/Ivy/api"
 	"github.com/AutumnsGrove/Ivy/jev"
@@ -214,5 +215,58 @@ func TestNoChipHintWhenNothingIsWired(t *testing.T) {
 	}
 	if got.LooksReal != nil && *got.LooksReal {
 		t.Fatal("a chip appeared with no Jev wired")
+	}
+}
+
+// oddsByKey answers per content key, so one page can hold a message that looks real and
+// one that does not.
+type oddsByKey map[string]jev.Odds
+
+func (o oddsByKey) Odds(_ context.Context, _, key string) (jev.Odds, error) { return o[key], nil }
+
+func junkListServer(t *testing.T, src OddsSource) string {
+	t.Helper()
+	srv, dbs := newConfiguredServer(t, func(s *Server) { s.WithOdds(src) })
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox})
+	mustFolder(t, dbs, store.Folder{ID: "junk-1", AccountID: "acct-1", Name: "Junk", Role: store.RoleJunk})
+	mustMessage(t, dbs, inboxMessage("j1", "acct-1", "junk-1", testNow, false))
+	mustMessage(t, dbs, inboxMessage("j2", "acct-1", "junk-1", testNow.Add(-time.Minute), false))
+	mustMessage(t, dbs, inboxMessage("i1", "acct-1", "inbox-1", testNow, false))
+	return srv.URL + "/api/v1"
+}
+
+func rowFlags(in api.Inbox) map[string]bool {
+	out := map[string]bool{}
+	for _, m := range in.Items {
+		out[m.Id] = m.LooksReal != nil && *m.LooksReal
+	}
+	return out
+}
+
+// 5d.4: the Junk list carries the same hint as the reader, so a rescued message can be
+// found without opening each one. It is a property of the Junk view alone.
+func TestTheJunkListMarksOnlyTheRowsThatLookReal(t *testing.T) {
+	t.Parallel()
+	base := junkListServer(t, oddsByKey{
+		"ck:j1": looksRealAnswer("looks_real", true, false),
+		"ck:j2": looksRealAnswer("junk", false, false),
+		"ck:i1": looksRealAnswer("looks_real", true, false),
+	})
+	var junk api.Inbox
+	if code := getJSON(t, base+"/inbox?folder=junk", &junk); code != http.StatusOK {
+		t.Fatalf("status = %d", code)
+	}
+	got := rowFlags(junk)
+	if len(got) != 2 || !got["j1"] || got["j2"] {
+		t.Fatalf("junk rows = %v, want only j1 marked", got)
+	}
+
+	var inbox api.Inbox
+	if code := getJSON(t, base+"/inbox", &inbox); code != http.StatusOK {
+		t.Fatalf("status = %d", code)
+	}
+	if got := rowFlags(inbox); got["i1"] {
+		t.Fatal("an Inbox row carries the Junk hint: the hint belongs to the Junk view only")
 	}
 }

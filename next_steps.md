@@ -103,7 +103,8 @@ question ships dark (Junk only, quiet answer `junk`, bar 0.90) behind its own "J
 Junk message the provider already condemns (score at twice its bar, DMARC fail, SPF and DKIM both failing) makes no call;
 `MailMessage.looksReal` drives a quiet row in the reader with a confirmed Not junk move. Nothing spends until the switch is on.
 **Operator-owned, open:** turn Junk rescue on at `/settings/smart`, press Look over for All mail, and open a Junk message;
-tell me whether the 2x skip factor and the wording fit her real Junk. **Not done:** the hint on list rows and the Junk view.
+tell me whether the 2x skip factor and the wording fit her real Junk. The Junk list's rows carry the hint too
+(`MailSummary.looksReal`, Junk view only).
 **Next in 5d:** 5d.5 mail types (security/abuse addresses LLM-off by default; contact-form and personal-correspondence
 protections made explicit and tested), then 5d.6 `phishing_risk`.
 

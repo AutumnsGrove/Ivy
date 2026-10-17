@@ -1519,6 +1519,8 @@ export interface components {
             needs: boolean;
             /** @description One plain sentence on why the message needs the owner; present only while `needs` is true. Rendered as text, never as markup. */
             needsReason?: string;
+            /** @description Set only on rows of the Junk view, and only when the kept `junk_rescue` answer says the message looks real. A hint for a quiet marker; nothing moves because of it. */
+            looksReal?: boolean;
             tag?: string;
         };
         MailMessage: {

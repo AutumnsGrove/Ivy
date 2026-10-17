@@ -231,7 +231,15 @@ function inboxReply(
 		const items = mock.inbox.slice(0, 2);
 		return { body: { items, needCount: 0, unreadCount: 0, readingWaiting: 0 } };
 	}
-	if (folder === 'archive' || folder === 'junk') {
+	if (folder === 'junk') {
+		// The legal notice is the one the filter got wrong; the other row is ordinary junk.
+		const items = [
+			{ ...mock.inbox[1], looksReal: true },
+			{ ...mock.inbox[3], needs: false, needsReason: undefined }
+		];
+		return { body: { items, needCount: 0, unreadCount: 0, readingWaiting: 0 } };
+	}
+	if (folder === 'archive') {
 		return { body: { items: [], needCount: 0, unreadCount: 0, readingWaiting: 0 } };
 	}
 	if (scenario === 'empty') {

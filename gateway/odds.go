@@ -82,7 +82,27 @@ func (s *Server) looksRealHint(ctx context.Context, m store.Message) bool {
 	if err != nil || folder.Role != store.RoleJunk {
 		return false
 	}
-	odds, err := s.odds.Odds(ctx, m.AccountID, m.ContentKey)
+	return s.keptAnswerLooksReal(ctx, m.AccountID, m.ContentKey)
+}
+
+// markLooksReal sets the hint on the rows of a Junk page. The caller has already
+// established that every row is in Junk. One indexed read per row, and a page is
+// bounded by the inbox page size.
+func (s *Server) markLooksReal(ctx context.Context, page store.InboxPage, out *api.Inbox) {
+	if s.odds == nil {
+		return
+	}
+	for i, m := range page.Items {
+		if s.keptAnswerLooksReal(ctx, m.AccountID, m.ContentKey) {
+			out.Items[i].LooksReal = boolPtr(true)
+		}
+	}
+}
+
+// keptAnswerLooksReal is the one rule for the chip, shared by the reader and the list:
+// the kept junk_rescue answer is looks_real and clears its bar unsuppressed.
+func (s *Server) keptAnswerLooksReal(ctx context.Context, accountID, contentKey string) bool {
+	odds, err := s.odds.Odds(ctx, accountID, contentKey)
 	if err != nil {
 		return false
 	}

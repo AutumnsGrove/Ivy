@@ -13,6 +13,15 @@ test.describe('junk rescue', () => {
 		await expect(page.getByText('This looks like real mail that was filed in Junk.')).toHaveCount(0);
 	});
 
+	test('the Junk list marks the row that looks real, so it can be found without opening each one', async ({ page }) => {
+		await page.goto('/?folder=junk');
+		// Scoped to the list: on desktop the reading pane opens the first message beside it.
+		const rows = page.locator('ul.list > li');
+		await expect(rows).toHaveCount(2);
+		await expect(rows.getByText('looks real')).toHaveCount(1);
+		await expect(rows.filter({ hasText: 'Notice of alleged infringement' }).getByText('looks real')).toBeVisible();
+	});
+
 	test('opening it moves nothing, and Not junk asks before one move to the Inbox', async ({ page }) => {
 		const posts: { action?: string; messageId?: string }[] = [];
 		page.on('request', (r) => {

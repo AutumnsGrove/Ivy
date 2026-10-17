@@ -44,6 +44,7 @@
 				flagged={live?.flagged ?? m.flagged ?? false}
 				needs={m.needs}
 				reason={m.needsReason}
+				looksReal={m.looksReal ?? false}
 				tag={m.tag}
 				selected={m.id === selectedId}
 				href={hrefFor?.(m)}

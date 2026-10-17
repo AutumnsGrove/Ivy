@@ -1477,5 +1477,9 @@ Ships dark. Nothing spends until **Junk rescue** is switched on at `/settings/sm
 - **Reader:** a quiet row ("This looks like real mail that was filed in Junk.") with a Not junk button. The button is the
   existing confirmed `not_junk` outbox move; opening a message moves nothing (E2E on phone and desktop, request shape asserted).
   No wording says it came from a model.
-- **Not done:** the hint on list rows and the Junk view (the reader is the only place it shows); the wording's accuracy
-  (needs labelled Junk, G3); the 2x score factor is a guess to tune on her real Junk folder.
+- **List rows (same day):** `MailSummary.looksReal` is set only on rows of `GET /inbox?folder=junk`, by the same rule as the
+  reader (`keptAnswerLooksReal`, so a retuned bar moves both). One indexed read per row, bounded by the page size; the Inbox
+  and every other view never carry it. A quiet "looks real" pill sits in the row's tag line. Not on the Needs, snoozed or
+  tag views, and not on search results.
+- **Not done:** the wording's accuracy (needs labelled Junk, G3); the 2x score factor is a guess to tune on her real Junk
+  folder; the per-row read could become one batched query if a Junk page ever measures slow on the board.

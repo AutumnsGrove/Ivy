@@ -14,6 +14,8 @@
 		needs?: boolean;
 		/** Why it needs the owner: one plain sentence, shown only while `needs` is set. */
 		reason?: string;
+		/** A Junk row whose mail looks real; the reader offers the Not junk button. */
+		looksReal?: boolean;
 		tag?: string;
 		selected?: boolean;
 		/** Phone: navigates to the message. Omit on desktop, where `onselect` fills the reading pane. */
@@ -34,6 +36,7 @@
 		flagged = false,
 		needs = false,
 		reason,
+		looksReal = false,
 		tag,
 		selected = false,
 		href,
@@ -60,9 +63,10 @@
 	</span>
 	<span class="subject ell" data-unread={unread}>{subject}</span>
 	<span class="preview ell">{preview}</span>
-	{#if needs || tag}
+	{#if needs || tag || looksReal}
 		<span class="tags">
 			{#if needs}<Pill tone="need">needs you</Pill>{/if}
+			{#if looksReal}<Pill>looks real</Pill>{/if}
 			{#if tag}<Pill>{tag}</Pill>{/if}
 		</span>
 	{/if}

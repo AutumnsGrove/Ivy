@@ -1941,7 +1941,7 @@ already answered; these are what the build forced. Please confirm or change.
   guess; tune it on her real Junk folder.
 - **The bar is 0.90**, above Categories (0.80) and Needs you (0.65): the chip is the only thing this question produces, and
   a wrong chip trains her to ignore it.
-- **The chip shows in the reader only.** List rows and the Junk view do not carry it yet, so a rescued message is found by
-  opening it. Say if the row should show it too.
+- **The hint shows in the reader and on the Junk list's rows** (asked for the same day). It does not show on search results
+  or the Needs, snoozed and tag views.
 - **One switch, dark:** Junk rescue on `/settings/smart`; it turns the shared call on, as the other two do.
 - **Not junk is the existing confirmed move**, so the chip adds no new way to move mail and nothing moves unasked.
