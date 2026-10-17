@@ -74,6 +74,17 @@ test.describe('smart features settings', () => {
 		await expect(page.getByRole('switch', { name: 'Categories for hello@example.com' })).not.toBeChecked();
 	});
 
+	test('junk rescue ships off and can be switched on for one account', async ({ page }) => {
+		await page.goto('/settings/smart');
+		const mine = page.getByRole('switch', { name: 'Junk rescue for me@example.com' });
+		await expect(mine).not.toBeChecked();
+		await mine.click();
+		await expect(mine).toBeChecked();
+		await page.reload();
+		await expect(mine).toBeChecked();
+		await expect(page.getByRole('switch', { name: 'Junk rescue for hello@example.com' })).not.toBeChecked();
+	});
+
 	test('an account with smart features off cannot have a feature switched on', async ({ page }) => {
 		await page.goto('/settings/smart');
 		const off = page.getByRole('switch', { name: 'Meaning search for support@example.com' });

@@ -146,6 +146,26 @@ func TestNeedsYouSwitchesOnTheSharedCallItRidesOn(t *testing.T) {
 	}
 }
 
+// Junk rescue is asked in the same shared call, so its switch has to be enough too.
+func TestJunkRescueSwitchesOnTheSharedCallItRidesOn(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	g := NewGate(openStore(t))
+
+	if err := g.SetFeatureEnabled(ctx, "a", "junk_rescue", true); err != nil {
+		t.Fatal(err)
+	}
+	if !g.FeatureEnabled(ctx, "a", "classify") {
+		t.Error("Junk rescue is on but the call it rides on is still off")
+	}
+	if err := g.SetFeatureEnabled(ctx, "a", "junk_rescue", false); err != nil {
+		t.Fatal(err)
+	}
+	if g.FeatureEnabled(ctx, "a", "classify") {
+		t.Error("turning Junk rescue back off left the shared call on")
+	}
+}
+
 // The screen lists only features that exist for the operator; the dark ones join as
 // their stages land.
 func TestOnlyShippedFeaturesAreListedForTheScreen(t *testing.T) {
@@ -160,9 +180,9 @@ func TestOnlyShippedFeaturesAreListedForTheScreen(t *testing.T) {
 	if !slices.Contains(names, "search") {
 		t.Errorf("listed = %v, want meaning search among them", names)
 	}
-	for _, shipped := range []string{"needs_me", "needs_me_stage2"} {
+	for _, shipped := range []string{"needs_me", "needs_me_stage2", "junk_rescue"} {
 		if !slices.Contains(names, shipped) {
-			t.Errorf("listed = %v, want %s: the needs-attention view ships it", names, shipped)
+			t.Errorf("listed = %v, want %s: it has a screen behind it", names, shipped)
 		}
 	}
 	if slices.Contains(names, "classify") {

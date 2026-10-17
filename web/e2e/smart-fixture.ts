@@ -9,6 +9,7 @@ type Reply = { status?: number; contentType?: string; headers?: Record<string, s
 const MAX_CAP = 1000;
 const FEATURES = [
 	{ name: 'category', label: 'Categories', defaultOn: false },
+	{ name: 'junk_rescue', label: 'Junk rescue', defaultOn: false },
 	{ name: 'search', label: 'Meaning search', defaultOn: true }
 ];
 const MODELS = [

@@ -99,6 +99,12 @@ and open the sender sheet on a message: it should say "Passed SPF, DKIM and DMAR
 score. **Next in 5d:** 5d.4 Junk rescue (the `junk_rescue` question on Junk mail only, the "looks real" chip and a one-tap
 Not junk that is an IMAP move; the spam score can skip obvious spam before any call).
 
+**5d.4 Junk rescue, 2026-10-17, in progress.** Stage 1 is done: the `junk_rescue` question ships (Junk only, quiet answer
+`junk`, threshold 0.90, dark behind its own "Junk rescue" switch on `/settings/smart`, which also turns the shared call on).
+Wording is provisional until G3. Still to build, in order: (2) skip rules (a flagged spam score or hard-failing auth makes no
+call), (3) a `looksReal` verdict on Junk rows in the API, (4) the chip and a one-tap Not junk (an outbox move, never automatic).
+Nothing spends until the operator turns the switch on.
+
 **Update, same day: the backfill ran and the cascade works on real mail** (15 Inbox messages, 15 stage-one calls for about
 $0.0016, stage two kept the real requests). **5c.5's tooling is built** (`ivy eval sheet` and `ivy eval report`, plan in
 `docs/handoffs/2026-10-16-G3-needs-me-evaluation.md`; `docs/BUILD-LOG.md` "5c.5 tooling"). **Operator-owned, open:** fill the

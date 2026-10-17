@@ -233,3 +233,68 @@ func TestCategoriesAreAskedOnlyOnceTheirSwitchIsOn(t *testing.T) {
 		t.Fatal("category was not asked with its switch on")
 	}
 }
+
+// 5d.4: junk rescue. A wrong "looks real" only shows a chip the operator can ignore,
+// but a wrong "junk" hides nothing either, so the quiet answer is the one that does
+// nothing. The bar is high because the chip is the only thing it ever produces.
+func TestTheJunkRescueQuestionIsShippedForJunkOnlyAndDark(t *testing.T) {
+	q, ok := shipped(t)["junk_rescue"]
+	if !ok {
+		t.Fatal("junk_rescue is not shipped")
+	}
+	for _, o := range []string{"junk", "unsure", "looks_real"} {
+		if _, ok := q.Criteria[o]; !ok {
+			t.Errorf("junk_rescue has no option %q", o)
+		}
+	}
+	if len(q.Criteria) != 3 {
+		t.Errorf("junk_rescue options = %v, want exactly junk, unsure, looks_real", q.Criteria)
+	}
+	if q.QuietOption != "junk" {
+		t.Errorf("quiet option = %q: leaving mail where the provider put it must be the quiet answer", q.QuietOption)
+	}
+	if q.Feature != "junk_rescue" {
+		t.Errorf("feature = %q: junk rescue ships dark behind its own switch", q.Feature)
+	}
+	if len(q.Folders) != 1 || q.Folders[0] != FolderJunk {
+		t.Errorf("folders = %v, want only junk: it must never read Inbox mail", q.Folders)
+	}
+	if q.Threshold < 0.90 {
+		t.Errorf("threshold = %v, want 0.90 or more: the chip is the only output, so it is not eager", q.Threshold)
+	}
+	if !strings.Contains(strings.ToLower(q.Instructions), "do not count") {
+		t.Error("instructions do not say what does not count")
+	}
+}
+
+func TestJunkRescueIsAskedOnlyOfJunkAndOnlyOnceItsSwitchIsOn(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	qs, err := Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.reg.Set(qs, nil); err != nil {
+		t.Fatal(err)
+	}
+	junk := mail("k1")
+	junk.Folder = FolderJunk
+	r.decide(junk)
+	if n := r.jev.count(); n != 0 {
+		t.Fatalf("Junk mail made %d provider calls with junk_rescue off: it is the only question that reads Junk", n)
+	}
+
+	if err := r.gate.SetFeatureEnabled(ctx, rigAccount, "junk_rescue", true); err != nil {
+		t.Fatal(err)
+	}
+	r.decide(mail("k2"))
+	if _, asked := r.jev.last().Questions["junk_rescue"]; asked {
+		t.Fatal("junk_rescue was asked of Inbox mail")
+	}
+	junk2 := mail("k3")
+	junk2.Folder = FolderJunk
+	r.decide(junk2)
+	if _, asked := r.jev.last().Questions["junk_rescue"]; !asked {
+		t.Fatal("junk_rescue was not asked of Junk mail with its switch on")
+	}
+}

@@ -159,3 +159,26 @@ questions:
     quiet_option: other
     threshold: 0.80
     feature: category
+
+  # Runs on Junk only, and its only output is a quiet chip with a one-tap Not junk
+  # that the operator presses (5d.4). It never moves anything, so a wrong answer costs
+  # one glance. The bar is high because the chip is the whole result. Ships dark behind
+  # its own switch. Provisional until G3.
+  - id: junk_rescue
+    instructions: >-
+      This message is in the owner's Junk folder. Is it real mail the owner would
+      want, filed there by mistake? Count a person writing to the owner, a contact
+      or enquiry form submission, a legal, abuse or security notice addressed to the
+      owner, a bill or account notice from a service they use, and a reply in a
+      conversation they started. Do not count bulk marketing, cold sales or
+      recruiting pitches, prize or lottery claims, requests for passwords or
+      payment, adult content, or anything pretending to be a known company. Exception:
+      a plain message from a real person stays real even when the topic is a sale.
+    criteria:
+      junk: it is unwanted mail and belongs in Junk
+      unsure: it might be real, or it is unclear
+      looks_real: it is real mail the owner would want to see
+    quiet_option: junk
+    threshold: 0.90
+    folders: [junk]
+    feature: junk_rescue
