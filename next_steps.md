@@ -105,6 +105,13 @@ Junk message the provider already condemns (score at twice its bar, DMARC fail, 
 **Operator-owned, open:** turn Junk rescue on at `/settings/smart`, press Look over for All mail, and open a Junk message;
 tell me whether the 2x skip factor and the wording fit her real Junk. The Junk list's rows carry the hint too
 (`MailSummary.looksReal`, Junk view only).
+**Deployed to the potato, 2026-10-17:** `ivy r546.130bd45` through `ivy update` (CI and the image publish were green; a backup
+was taken first, state migration 21 applied, the container went healthy in about 25 seconds, the watcher said `ok`). Checked on
+the real mailbox: `/address-types` answers, and `/inbox?tag=` returns exactly the mail under Marketing and Needs you. **Operator
+to look at on the phone:** tap a tag in Tags (it now opens its mail; Edit tag is the way to its settings), the Junk list's
+"looks real" pill, and the Special addresses group in account settings. CI on main had been red since 5d.3 (a format step hid 14
+lint findings); both are fixed, so main is green again.
+
 **5d.5 mail types is built, 2026-10-17** (`docs/BUILD-LOG.md` "5d.5", choices to confirm in qa-log). An address marked
 "Security and abuse" on `/settings/account/{id}` keeps its mail from every model, for every feature, through one rule in the
 gate (refused as `withheld`, zero cost); it ships off per address, with a "Helpers can read" switch. Both workers consider
