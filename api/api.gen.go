@@ -250,6 +250,24 @@ func (e LivenessStatus) Valid() bool {
 	}
 }
 
+// Defines values for MailMessagePhishingRisk.
+const (
+	Likely     MailMessagePhishingRisk = "likely"
+	Suspicious MailMessagePhishingRisk = "suspicious"
+)
+
+// Valid indicates whether the value is a known member of the MailMessagePhishingRisk enum.
+func (e MailMessagePhishingRisk) Valid() bool {
+	switch e {
+	case Likely:
+		return true
+	case Suspicious:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MailTypeKind.
 const (
 	ContactForm MailTypeKind = "contact_form"
@@ -1354,7 +1372,10 @@ type MailMessage struct {
 	// NeedsReason One plain sentence on why the message needs the owner; present only while `needs` is true. Rendered as text, never as markup.
 	NeedsReason *string  `json:"needsReason,omitempty"`
 	Paragraphs  []string `json:"paragraphs"`
-	Preview     string   `json:"preview"`
+
+	// PhishingRisk Present only when the kept `phishing_risk` answer acts. The provider's failed authentication can raise `suspicious` to `likely`, never lower it. A warning banner; nothing is hidden or moved because of it.
+	PhishingRisk *MailMessagePhishingRisk `json:"phishingRisk,omitempty"`
+	Preview      string                   `json:"preview"`
 
 	// Sender Someone on a message, exactly as the sender wrote it. The name is sender-controlled text and must be shown as plain text next to the real address, since a name that contains another address is the classic spoof.
 	Sender  MessageParty `json:"sender"`
@@ -1369,6 +1390,9 @@ type MailMessage struct {
 	ToShort string         `json:"toShort"`
 	Unread  bool           `json:"unread"`
 }
+
+// MailMessagePhishingRisk Present only when the kept `phishing_risk` answer acts. The provider's failed authentication can raise `suspicious` to `likely`, never lower it. A warning banner; nothing is hidden or moved because of it.
+type MailMessagePhishingRisk string
 
 // MailSummary defines model for MailSummary.
 type MailSummary struct {

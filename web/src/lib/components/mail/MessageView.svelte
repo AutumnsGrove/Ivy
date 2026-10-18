@@ -7,6 +7,7 @@
 	import { outbox } from '#lib/outbox.svelte.js';
 	import type { MailMessage, MessageParty } from '#lib/types.js';
 	import Avatar from '../ui/Avatar.svelte';
+	import Banner from '../ui/Banner.svelte';
 	import Button from '../ui/Button.svelte';
 	import Dot from '../ui/Dot.svelte';
 	import Pill from '../ui/Pill.svelte';
@@ -27,6 +28,7 @@
 			| 'needs'
 			| 'needsReason'
 			| 'looksReal'
+			| 'phishingRisk'
 			| 'flagged'
 			| 'tag'
 			| 'summary'
@@ -89,6 +91,21 @@
 		</div>
 	{/if}
 
+	<!-- Only a warning: it adds caution and offers no action, so a wrong one costs a glance. -->
+	{#if message.phishingRisk}
+		<div class="warning">
+			{#if message.phishingRisk === 'likely'}
+				<Banner tone="danger" title="This looks like a scam">
+					Don't open its links or files, and don't reply with a password, code or payment.
+				</Banner>
+			{:else}
+				<Banner title="Be careful with this message">
+					Parts of it look like an attempt to trick you. Check the sender before you click or reply.
+				</Banner>
+			{/if}
+		</div>
+	{/if}
+
 	<h1 class="subject">{message.subject}</h1>
 
 	<div class="from">
@@ -141,6 +158,9 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--sp-12);
+		margin-bottom: var(--sp-12);
+	}
+	.warning {
 		margin-bottom: var(--sp-12);
 	}
 	.why p {

@@ -56,3 +56,30 @@ describe('MessageView junk rescue chip', () => {
 		expect(screen.queryByText(/\bAI\b|model|assistant|smart/i)).not.toBeInTheDocument();
 	});
 });
+
+describe('MessageView phishing warning', () => {
+	it('warns plainly on a likely scam and offers nothing that acts', () => {
+		render(MessageView, { message: message({ phishingRisk: 'likely' }), color: 'var(--c1)' });
+		const note = screen.getByRole('status');
+		expect(note).toHaveTextContent(/looks like a scam/i);
+		expect(note).toHaveTextContent(/links/i);
+		expect(screen.queryByRole('button', { name: /junk|delete|move|block/i })).not.toBeInTheDocument();
+	});
+
+	it('words a suspicion more gently than a likelihood', () => {
+		render(MessageView, { message: message({ phishingRisk: 'suspicious' }), color: 'var(--c1)' });
+		const note = screen.getByRole('status');
+		expect(note).toHaveTextContent(/be careful/i);
+		expect(note).not.toHaveTextContent(/scam/i);
+	});
+
+	it('shows nothing for ordinary mail', () => {
+		render(MessageView, { message: message(), color: 'var(--c1)' });
+		expect(screen.queryByRole('status')).not.toBeInTheDocument();
+	});
+
+	it('does not label the warning as coming from a model', () => {
+		render(MessageView, { message: message({ phishingRisk: 'likely' }), color: 'var(--c1)' });
+		expect(screen.queryByText(/\bAI\b|model|assistant|smart/i)).not.toBeInTheDocument();
+	});
+});

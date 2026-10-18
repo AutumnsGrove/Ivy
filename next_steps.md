@@ -124,8 +124,11 @@ gate (refused as `withheld`, zero cost); it ships off per address, with a "Helpe
 that mail once instead of stalling behind it. **Operator-owned, open:** mark `abuse@` and `security@` on her real account and
 confirm the Spend screen shows no calls for them. **Known gaps, stated:** mail that arrived while an address was off is not
 read after it is turned on; local Ollama is exempt; contact form is only a label until 5d.6.
-**Next in 5d:** 5d.6 `phishing_risk` (banner from the provider's auth verdicts, then `contact_form_quality`; `cold_outreach`
-stays deferred).
+**5d.6a `phishing_risk` is built, 2026-10-18** (`docs/BUILD-LOG.md` "5d.6a", choices to confirm in qa-log). A dark "Phishing
+warnings" switch on `/settings/smart`; the reader shows a banner above the subject (`MailMessage.phishingRisk`), raised but
+never lowered by the provider's failed auth. **Operator-owned, open:** turn it on, press Look over for All mail, and tell me
+whether the banner's wording and the 0.80 bar fit her real Inbox. **Next in 5d:** 5d.6b `contact_form_quality` (runs only on
+addresses marked contact form in 5d.5); `cold_outreach` stays deferred.
 
 **Update, same day: the backfill ran and the cascade works on real mail** (15 Inbox messages, 15 stage-one calls for about
 $0.0016, stage two kept the real requests). **5c.5's tooling is built** (`ivy eval sheet` and `ivy eval report`, plan in

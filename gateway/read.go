@@ -277,6 +277,10 @@ func (s *Server) messageView(r *http.Request, m store.Message) (api.MailMessage,
 	if s.looksRealHint(r.Context(), m) {
 		v.LooksReal = boolPtr(true)
 	}
+	if level := s.phishingWarning(r.Context(), m); level != "" {
+		risk := api.MailMessagePhishingRisk(level)
+		v.PhishingRisk = &risk
+	}
 	if m.BodyHTML != "" {
 		htmlBody := m.BodyHTML
 		v.Html = &htmlBody

@@ -298,3 +298,59 @@ func TestJunkRescueIsAskedOnlyOfJunkAndOnlyOnceItsSwitchIsOn(t *testing.T) {
 		t.Fatal("junk_rescue was not asked of Junk mail with its switch on")
 	}
 }
+
+// 5d.6: phishing risk. The banner can only add caution, so the quiet answer is the one that
+// shows nothing, and the switch ships dark. The question reads Inbox mail: Junk is already
+// distrusted by the folder it sits in, and only junk_rescue reads it.
+func TestThePhishingRiskQuestionIsShippedForTheInboxAndDark(t *testing.T) {
+	q, ok := shipped(t)["phishing_risk"]
+	if !ok {
+		t.Fatal("phishing_risk is not shipped")
+	}
+	for _, o := range []string{"none", "suspicious", "likely"} {
+		if _, ok := q.Criteria[o]; !ok {
+			t.Errorf("phishing_risk has no option %q", o)
+		}
+	}
+	if len(q.Criteria) != 3 {
+		t.Errorf("phishing_risk options = %v, want exactly none, suspicious, likely", q.Criteria)
+	}
+	if q.QuietOption != "none" {
+		t.Errorf("quiet option = %q, want none", q.QuietOption)
+	}
+	if q.Feature != "phishing_risk" {
+		t.Errorf("feature = %q: phishing risk ships dark behind its own switch", q.Feature)
+	}
+	if len(q.Folders) != 0 {
+		t.Errorf("folders = %v, want the default (Inbox only)", q.Folders)
+	}
+	if !strings.Contains(strings.ToLower(q.Instructions), "do not count") {
+		t.Error("instructions do not say what does not count")
+	}
+}
+
+func TestPhishingRiskIsAskedOnlyOnceItsSwitchIsOn(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	qs, err := Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.reg.Set(qs, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.gate.SetFeatureEnabled(ctx, rigAccount, "needs_me", true); err != nil {
+		t.Fatal(err)
+	}
+	r.decide(mail("k1"))
+	if _, asked := r.jev.last().Questions["phishing_risk"]; asked {
+		t.Fatal("phishing_risk was asked while its switch was off")
+	}
+	if err := r.gate.SetFeatureEnabled(ctx, rigAccount, "phishing_risk", true); err != nil {
+		t.Fatal(err)
+	}
+	r.decide(mail("k2"))
+	if _, asked := r.jev.last().Questions["phishing_risk"]; !asked {
+		t.Fatal("phishing_risk was not asked with its switch on")
+	}
+}

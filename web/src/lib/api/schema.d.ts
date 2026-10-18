@@ -1587,6 +1587,11 @@ export interface components {
             needsReason?: string;
             /** @description True only for a message that is in Junk now and whose kept `junk_rescue` answer says it looks real. A hint for a quiet chip beside a Not junk button; nothing is ever moved because of it. */
             looksReal?: boolean;
+            /**
+             * @description Present only when the kept `phishing_risk` answer acts. The provider's failed authentication can raise `suspicious` to `likely`, never lower it. A warning banner; nothing is hidden or moved because of it.
+             * @enum {string}
+             */
+            phishingRisk?: "suspicious" | "likely";
             tag?: string;
             /** @description Every tag the message is in, for the tag picker; `tag` is the first by name */
             tagIds?: string[];

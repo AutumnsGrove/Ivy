@@ -20,6 +20,7 @@ const FEATURES: Record<string, string> = {
 	needs_me_stage2: 'Needs-me second look',
 	classify: 'Categories',
 	junk_rescue: 'Junk rescue',
+	phishing_risk: 'Phishing warnings',
 	summary: 'Summaries',
 	digest: 'Digest',
 	extraction: 'Receipts',

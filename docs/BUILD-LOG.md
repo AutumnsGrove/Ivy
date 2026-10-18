@@ -1540,3 +1540,22 @@ trigger T17), enforced where every model call passes.
   reads the kind yet (`contact_form_quality` is 5d.6, and Reply-To handling already works for any mail); (4) the "personal
   correspondence is never folded" protection has nothing to test until a quiet fold exists, and personal mail is already
   never tagged (5d.1).
+
+## 5d.6a: phishing warnings (2026-10-18)
+
+Ships dark. Nothing spends until **Phishing warnings** is switched on at `/settings/smart`, which also turns the shared call on.
+`contact_form_quality` is the next stage; `cold_outreach` stays deferred.
+
+- **The question** (`jev/builtin.yaml`): `none` / `suspicious` / `likely`, quiet answer `none`, threshold **0.80**, Inbox only
+  (Junk is read by `junk_rescue` alone). The wording judges only what the message says, not the sender's reputation, and lists
+  what does not count (marketing, receipts, a notice that asks for nothing). Provisional until G3.
+- **Only ever adds caution** (`jev/phishing.go`, `PhishingLevel`): the model's acting answer is the only thing that creates a
+  warning. The provider's verdicts (DMARC fail, or SPF and DKIM both failing) raise `suspicious` to `likely`; they never create a
+  warning alone and a pass never lowers one. Tested as a table, including a suppressed answer and another question's answer.
+- **No skip rule, on purpose.** Unlike Junk rescue, a hard auth failure on Inbox mail is exactly the mail worth asking about.
+- **API:** `MailMessage.phishingRisk` (`suspicious` | `likely`), reader only, not on list rows. A failure to read the kept
+  answers means no banner, never a failed page.
+- **Reader:** the existing `Banner` above the subject, warn for a suspicion and danger for a likelihood, with advice and no
+  button: nothing is moved, hidden or blocked. No wording says it came from a model.
+- **Not done:** the wording's accuracy (needs labelled mail, G3); no row marker in the list; the level is not stored locally, so
+  it follows the cache and the provider's current verdicts.

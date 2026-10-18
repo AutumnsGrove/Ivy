@@ -305,3 +305,23 @@ func TestCategoriesAreListedAndSwitchOnTheSharedCall(t *testing.T) {
 		t.Error("Categories is on but the call it rides on is still off")
 	}
 }
+
+// Phishing risk is asked in the shared call too, so its switch has to be enough.
+func TestPhishingRiskSwitchesOnTheSharedCallItRidesOn(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	g := NewGate(openStore(t))
+
+	if err := g.SetFeatureEnabled(ctx, "a", "phishing_risk", true); err != nil {
+		t.Fatal(err)
+	}
+	if !g.FeatureEnabled(ctx, "a", "classify") {
+		t.Error("Phishing warnings are on but the call they ride on is still off")
+	}
+	if err := g.SetFeatureEnabled(ctx, "a", "phishing_risk", false); err != nil {
+		t.Fatal(err)
+	}
+	if g.FeatureEnabled(ctx, "a", "classify") {
+		t.Error("turning Phishing warnings back off left the shared call on")
+	}
+}

@@ -182,3 +182,26 @@ questions:
     threshold: 0.90
     folders: [junk]
     feature: junk_rescue
+
+  # Inbox only. Its output is a warning banner that can only add caution (5d.6): a wrong
+  # "none" changes nothing from today, a wrong "suspicious" costs one glance. The provider's
+  # own verdicts can raise the level in the gateway but never lower it. Ships dark behind
+  # its own switch. Provisional until G3.
+  - id: phishing_risk
+    instructions: >-
+      Is this message an attempt to trick the owner into handing over a password,
+      payment, a code, remote access or personal details, or into opening a link or
+      file that does harm? Count a message that pretends to be a bank, a delivery, a
+      colleague, the owner's own provider or a government office and pushes urgency,
+      a login or a payment; an invoice or document the owner never asked for; a
+      request for gift cards or a wire transfer. Do not count ordinary marketing, a
+      newsletter, a receipt, a real notice from a service that does not ask for
+      anything, or a plain message from a person. Judge only what the message says,
+      not the reputation of its sender.
+    criteria:
+      none: it is not an attempt to deceive the owner
+      suspicious: some of it looks like a deception attempt, but it is unclear
+      likely: it is most probably a phishing or scam attempt
+    quiet_option: none
+    threshold: 0.80
+    feature: phishing_risk

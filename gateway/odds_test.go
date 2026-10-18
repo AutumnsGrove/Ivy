@@ -270,3 +270,81 @@ func TestTheJunkListMarksOnlyTheRowsThatLookReal(t *testing.T) {
 		t.Fatal("an Inbox row carries the Junk hint: the hint belongs to the Junk view only")
 	}
 }
+
+func phishingAnswer(choice string, fires, suppressed bool) jev.Odds {
+	return jev.Odds{Answers: []jev.Verdict{{
+		QuestionID: "phishing_risk", Choice: choice, Probabilities: map[string]float64{choice: 0.95},
+		Confidence: 0.95, Threshold: 0.8, QuietOption: "none", Fires: fires, Suppressed: suppressed,
+	}}}
+}
+
+// phishingServer has Inbox message p1 whose provider verdicts are as given.
+func phishingServer(t *testing.T, src OddsSource, auth store.AuthResults) string {
+	t.Helper()
+	srv, dbs := newConfiguredServer(t, func(s *Server) {
+		if src != nil {
+			s.WithOdds(src)
+		}
+	})
+	mustAccount(t, dbs, store.Account{ID: "acct-1", Address: "me@example.com"})
+	mustFolder(t, dbs, store.Folder{ID: "inbox-1", AccountID: "acct-1", Name: "INBOX", Role: store.RoleInbox})
+	m := inboxMessage("p1", "acct-1", "inbox-1", testNow, false)
+	m.AuthResults = auth
+	mustMessage(t, dbs, m)
+	return srv.URL + "/api/v1"
+}
+
+// 5d.6: the banner is a warning the model's acting answer creates; the provider's verdicts
+// only raise it, and nothing about the message moves.
+func TestAMessageTheModelDistrustsCarriesAWarningThatOnlyEverGrows(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		odds jev.Odds
+		auth store.AuthResults
+		want string
+	}{
+		{"suspicious", phishingAnswer("suspicious", true, false), store.AuthResults{}, "suspicious"},
+		{"likely", phishingAnswer("likely", true, false), store.AuthResults{}, "likely"},
+		{"a DMARC fail raises suspicious", phishingAnswer("suspicious", true, false), store.AuthResults{DMARC: "fail"}, "likely"},
+		{"none shows nothing", phishingAnswer("none", false, false), store.AuthResults{DMARC: "fail"}, ""},
+		{"a suppressed answer shows nothing", phishingAnswer("likely", true, true), store.AuthResults{}, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			base := phishingServer(t, &fakeOdds{odds: c.odds}, c.auth)
+			var got api.MailMessage
+			if code := getJSON(t, base+"/messages/p1", &got); code != http.StatusOK {
+				t.Fatalf("status = %d", code)
+			}
+			have := ""
+			if got.PhishingRisk != nil {
+				have = string(*got.PhishingRisk)
+			}
+			if have != c.want {
+				t.Fatalf("phishingRisk = %q, want %q", have, c.want)
+			}
+		})
+	}
+}
+
+func TestNoWarningWhenNothingIsWiredOrOddsCannotBeRead(t *testing.T) {
+	t.Parallel()
+	for name, src := range map[string]OddsSource{
+		"nothing wired": nil,
+		"odds fail":     &fakeOdds{err: errors.New("db down")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			base := phishingServer(t, src, store.AuthResults{DMARC: "fail"})
+			var got api.MailMessage
+			if code := getJSON(t, base+"/messages/p1", &got); code != http.StatusOK {
+				t.Fatalf("status = %d: the warning is only a hint, so the page must still load", code)
+			}
+			if got.PhishingRisk != nil {
+				t.Fatalf("phishingRisk = %q with no readable answer", *got.PhishingRisk)
+			}
+		})
+	}
+}

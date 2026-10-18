@@ -1956,3 +1956,14 @@ already answered; these are what the build forced. Please confirm or change.
   considered once. Say if you want turning an address on to re-queue its old mail (it would need a way to clear those marks).
 - **Local Ollama is exempt**, since the mail never leaves the device. Say if "no model" should include local ones too.
 - **Contact-form is a label for now.** Reply-To handling already works for any mail, and `contact_form_quality` is 5d.6.
+
+## 5d.6a build-time choices (2026-10-18, agent; please confirm or change)
+
+- **The warning is Inbox mail only.** Junk is already distrusted by its folder, and `junk_rescue` is the one question that
+  reads it. Say if a scam sitting in Junk should warn too.
+- **Provider verdicts raise, never lower or create.** A failed DMARC (or SPF and DKIM both failing) turns the model's
+  "suspicious" into "likely". A pass changes nothing, because a lookalike domain can pass its own checks.
+- **No skip rule**, unlike Junk rescue: a hard auth failure on Inbox mail is the mail most worth a second opinion.
+- **The bar is 0.80**, like Categories: the banner is visible and unsolicited, but a miss costs her nothing beyond today.
+- **Wording of the banner:** "This looks like a scam" with a danger tone for `likely`; "Be careful with this message" in warn
+  tone for `suspicious`. No button, and no mention of a model.

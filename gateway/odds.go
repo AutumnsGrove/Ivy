@@ -85,6 +85,19 @@ func (s *Server) looksRealHint(ctx context.Context, m store.Message) bool {
 	return s.keptAnswerLooksReal(ctx, m.AccountID, m.ContentKey)
 }
 
+// phishingWarning is the banner level for a message, or "". Like the chip it is only a
+// hint: a failure to read the kept answers means no banner, never a failed page.
+func (s *Server) phishingWarning(ctx context.Context, m store.Message) string {
+	if s.odds == nil {
+		return ""
+	}
+	odds, err := s.odds.Odds(ctx, m.AccountID, m.ContentKey)
+	if err != nil {
+		return ""
+	}
+	return jev.PhishingLevel(odds.Answers, m.AuthResults)
+}
+
 // markLooksReal sets the hint on the rows of a Junk page. The caller has already
 // established that every row is in Junk. One indexed read per row, and a page is
 // bounded by the inbox page size.
