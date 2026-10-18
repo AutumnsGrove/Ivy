@@ -1981,9 +1981,9 @@ already answered; these are what the build forced. Please confirm or change.
 
 ## 5d.6c: cold outreach (2026-10-18)
 
-- **Answered (operator): do `cold_outreach` now, folded into the category wording.** Recruiters and sales pitches become
-  `marketing` (the existing removable Marketing tag), not a separate question. A reply to something she asked for or applied
-  for stays `personal`.
-- **Build-time choice:** I kept the budget and trimmed the other criteria rather than raise `QuestionBytesBudget`, since the cost
-  estimate is priced on it. Say if you would rather have a separate Outreach category (a new tag) so recruiters and
-  promotions can be told apart.
+- **Answered (operator): do `cold_outreach` now, as part of the category question, and keep Outreach apart from Marketing.**
+  Recruiters and sales pitches become the `outreach` category with their own removable Outreach tag; promotions stay
+  `marketing`. A reply to something she asked for or applied for stays `personal`.
+- **Build-time choices:** the tag is mint; I kept the 900-byte question budget and trimmed the other criteria rather than
+  raise `QuestionBytesBudget`, since the cost estimate is priced on it. Mail already tagged Marketing is not re-sorted until
+  it is asked again.

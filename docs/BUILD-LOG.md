@@ -1583,19 +1583,23 @@ Ships dark behind **Contact form triage** at `/settings/smart` (which also turns
   is asked, so it overstates slightly; mail that arrived before an address was marked is not asked afterwards (same gap as
   5d.5); no row marker in lists.
 
-## 5d.6c: cold outreach folded into the category question (2026-10-18)
+## 5d.6c: cold outreach as a category of its own (2026-10-18)
 
 `cold_outreach` is closed without a question of its own, at the operator's choice. A recruiter's or a salesperson's
-unsolicited message is **marketing**, so it gets the removable Marketing tag already placed by 5d.1.
+unsolicited message is the new **`outreach`** option of the `category` question, with its own removable **Outreach** tag
+(mint), apart from Marketing (promotions).
 
-- **Wording** (`jev/builtin.yaml`, `category`): `marketing` is "a promotion, or unsolicited sales or recruiter outreach from a
-  stranger", and the instructions say a reply to something the owner asked for or applied for is **personal**, so a recruiter
-  answering her own application is never tagged. Tested (`TestTheMarketingCategoryCoversColdSalesAndRecruiting`).
-- **Budget:** the extra words pushed `category` over the estimate's 900-byte question budget (1,096 bytes), so the other
-  criteria were tightened to 863 bytes rather than raising the budget the cost estimate depends on.
+- **Wording** (`jev/builtin.yaml`): `outreach` is "unsolicited sales or recruiter outreach from a stranger"; `marketing` is
+  "a promotion or offer selling something". The instructions say a reply to something the owner asked for or applied for is
+  **personal**, so a recruiter answering her own application is never tagged. Tested
+  (`TestColdOutreachIsItsOwnCategoryApartFromMarketing`).
+- **Tag** (`store/categorytags.go`): `t-cat-outreach`, slug `cat-outreach`, like the other placed categories (local only,
+  removable, never an IMAP keyword). There are now eight.
+- **Budget:** `category` stays under the estimate's 900-byte question budget; other criteria were tightened rather than
+  raising the budget the cost estimate depends on.
 - **Cost:** editing the wording changes the question's hash, so a message not yet considered is asked the new wording; answers
   already kept under the old wording read as unanswered, and a Look over for All mail will ask them again (about $0.0001 per
-  message on the shared call). Nothing is re-asked on its own.
-- **No new switch, no new tag, no new API field.** The quiet auto-archive remains an idea that is not planned; if it is ever
-  built it can read the Marketing tag.
-- **5d is done.** Left for the operator: the live checks listed under 5d.1 to 5d.6, and the wording and thresholds at G3.
+  message on the shared call). Nothing is re-asked on its own. Mail already tagged Marketing keeps that tag until re-read.
+- **No new switch and no new API field:** the Categories switch covers it. A quiet auto-archive remains an idea that is not
+  planned; if it is ever built it can read the Outreach tag.
+- **5d is done.** Left for the operator: the live checks under 5d.1 to 5d.6, and the wording and thresholds at G3.

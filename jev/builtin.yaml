@@ -152,7 +152,8 @@ questions:
       newsletter: a publication the owner subscribed to
       receipt: proof of a purchase or payment
       notification: an automatic alert from a service
-      marketing: a promotion, or unsolicited sales or recruiter outreach from a stranger
+      marketing: a promotion or offer selling something
+      outreach: unsolicited sales or recruiter outreach from a stranger
       security_report: a vulnerability, abuse or security problem report
       legal_notice: a legal notice, takedown or formal demand
       other: none of these

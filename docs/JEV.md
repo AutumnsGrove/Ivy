@@ -101,7 +101,7 @@ Tiers: **A** ships with triage (milestone 4), **B** is soon after, **C** is idea
 | `junk_rescue` | junk, unsure, looks_real | Runs only on mail the provider put in Junk. `looks_real` (high threshold) shows a "this looks real" chip and a one-tap Not junk; it never moves anything itself. Highest value for hello@ contact forms and legal/abuse mail |
 | `is_spam` | no, maybe, yes | **Not planned (round 18: Junk rescue only); kept as an idea.** Would run on Inbox mail the provider let through. A hit only adds a local "looks like spam" tag and a soft fold, suppresses `needs_me` (rule 6). Skip the call when auth headers already fail hard or `X-Spam-Status` is high, to save spend |
 | `contact_form_quality` | genuine, solicitation, spam | hello@ triage |
-| `cold_outreach` | (folded into `category`'s marketing, 5d.6c) | Sales and recruiter outreach is tagged Marketing; no separate question |
+| `cold_outreach` | (the `outreach` option of `category`, 5d.6c) | Sales and recruiter outreach gets its own Outreach tag; no separate question |
 
 ### C. Threads, follow-up and writing help
 | Id | Options | Used for |

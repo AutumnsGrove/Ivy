@@ -94,7 +94,7 @@ types real: contact-form submissions, security and abuse reports, and protected 
 4. **Withheld mail shows a quiet marker with a reason** ("kept private from helpers: ...") and a
    per-message override.
 5. **Tier B ships in this order:** `junk_rescue` first (part of 5d proper), then `phishing_risk`, then
-   `contact_form_quality`. **`cold_outreach` is folded into `category` (5d.6c)** (groundwork for the deferred quiet
+   `contact_form_quality`. **`cold_outreach` is an `outreach` option of `category` (5d.6c)** (groundwork for the deferred quiet
    auto-archive).
 6. **A category also places a local "placed for you" tag** (newsletter, receipt, ...), removable, the
    operator's choice over routing-only. Like needs-me's tag, local and never an IMAP keyword.

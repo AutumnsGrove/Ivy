@@ -22,6 +22,7 @@ var placedCategories = []struct{ Key, Name, Color string }{
 	{"receipt", "Receipt", "gold"},
 	{"notification", "Notification", "slate"},
 	{"marketing", "Marketing", "sand"},
+	{"outreach", "Outreach", "mint"},
 	{"contact_form", "Contact form", "teal"},
 	{"security_report", "Security", "berry"},
 	{"legal_notice", "Legal", "orchid"},

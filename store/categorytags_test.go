@@ -64,7 +64,7 @@ func TestEveryPlacedCategoryHasAReadableNameAndAColourTheUIKnows(t *testing.T) {
 		}
 		names[tag.Name] = true
 	}
-	if len(names) != 7 {
-		t.Errorf("%d placed categories, want the seven that are not personal or other", len(names))
+	if len(names) != 8 {
+		t.Errorf("%d placed categories, want the eight that are not personal or other", len(names))
 	}
 }
