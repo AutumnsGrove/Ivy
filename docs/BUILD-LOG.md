@@ -1484,6 +1484,25 @@ Ships dark. Nothing spends until **Junk rescue** is switched on at `/settings/sm
 - **Not done:** the wording's accuracy (needs labelled Junk, G3); the 2x score factor is a guess to tune on her real Junk
   folder; the per-row read could become one batched query if a Junk page ever measures slow on the board.
 
+## The Update button no longer reports a working update as failed (2026-10-18, operator's report)
+
+The operator pressed Update in Settings several times and the screen said it failed, while the board had in fact updated to
+the newest build. The watcher's journal showed three runs, none failed, so the fault was in the screen. `runUpdate` put the
+request and the page refresh in one `try`; the host swaps the container a few seconds after the request, so the refresh
+landed in the restart gap, threw, and the catch said "Ivy can't update right now" for an update that had been accepted. Even
+when nothing threw there was no outcome to read: the in-memory status is gone after the restart.
+
+- **`web/src/lib/updateFlow.ts`** (pure, unit-tested): `followUpdate` takes a baseline of the watcher's last result, asks, then
+  polls every 2 s for up to 3 minutes, tolerating failed reads (the restart), and answers with the first watcher result that
+  differs from the baseline (compared as text, so the browser's and server's clocks never matter): updated to a new
+  version, already up to date, failed with the watcher's own reason, or still going.
+- **Only the request can say "can't update"**; a refused request is still "Ivy can't update right now" and a 409 still says
+  an update is running. The refresh afterwards is best effort.
+- **Test:** the E2E reads fail after the request, and was seen failing against the old page. Not done: the Settings screen
+  has no standing "last update" line (the watcher's result is in `GET /update`, unshown).
+- **CI was not the cause**, and had separately been red: two flaky tests (a 25 ms concurrency overlap in `jev`; the `sync` probe
+  test's "closed" port taken by another test's server) and 14 lint findings hidden behind an earlier format failure. All fixed.
+
 ## Tag view: tapping a tag shows everything under it (2026-10-17, operator's request)
 
 Tapping a tag in the Tags list or the drawer went to that tag's settings, with no way to see its mail. Now it opens

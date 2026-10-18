@@ -15,6 +15,7 @@
 	import { ApiError } from '#lib/api/errors.js';
 	import Select from '#lib/components/ui/Select.svelte';
 	import { toasts } from '#lib/toast.js';
+	import { followUpdate, outcomeToast } from '#lib/updateFlow.js';
 	import type { Settings } from '#lib/types.js';
 
 	let { data } = $props();
@@ -45,14 +46,28 @@
 	async function runUpdate() {
 		requesting = true;
 		try {
-			await api.requestUpdate();
-			toasts.push({ text: 'Looking for a new version\u2026', tone: 'ok' });
-			await invalidateAll();
+			// Only the request can fail the update. Once it is accepted the host swaps the container
+			// within seconds, so reads fail for a moment; followUpdate rides that out and answers.
+			const outcome = await followUpdate({
+				request: async () => {
+					await api.requestUpdate();
+					toasts.push({ text: 'Looking for a new version\u2026', tone: 'ok' });
+				},
+				status: () => api.getUpdateStatus(),
+				version: () => api.getVersion(),
+				sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+				now: () => Date.now(),
+				pollMs: 2000,
+				timeoutMs: 3 * 60_000
+			});
+			toasts.push(outcomeToast(outcome));
 		} catch (err) {
 			const running = err instanceof ApiError && err.code === 'update_running';
 			toasts.push({ text: running ? 'An update is already running' : "Ivy can't update right now", tone: 'warn' });
 		} finally {
 			requesting = false;
+			// Best effort: the page may still be reconnecting, and a failed refresh is not a failed update.
+			await invalidateAll().catch(() => {});
 		}
 	}
 

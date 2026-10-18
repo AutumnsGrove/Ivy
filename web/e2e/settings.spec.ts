@@ -1,4 +1,5 @@
 import { expect, test } from './api';
+import { toast } from './helpers';
 
 test.describe('behaviour settings', () => {
 	test('a changed picker and a flipped switch survive a reload', async ({ page }) => {
@@ -46,6 +47,50 @@ test.describe('self-update', () => {
 		await expect(update).toBeEnabled();
 		await update.click();
 		await expect(page.getByRole('button', { name: 'Updating…' })).toBeDisabled();
+	});
+
+	// The host swaps the container within seconds of the request, so the reads that follow fail for
+	// a moment. That is the update working: it must not be reported as "can't update", and the
+	// screen has to end with the real outcome.
+	test('reads that fail while the container restarts do not read as a failed update', async ({ page }) => {
+		await page.goto('/settings');
+		// Reads fail only after the update was asked for: that is when the container is swapped.
+		let asked = false;
+		let failures = 0;
+		await page.route('**/api/v1/update', async (route) => {
+			if (route.request().method() === 'POST') asked = true;
+			else if (asked && failures < 2) {
+				failures++;
+				await route.abort('connectionrefused');
+				return;
+			}
+			await route.fallback();
+		});
+		await page.getByRole('button', { name: 'Update' }).click();
+		await expect(toast(page, 'Looking for a new version')).toBeVisible();
+		await expect(toast(page, 'Ivy is up to date')).toBeVisible({ timeout: 20_000 });
+		await expect(toast(page, "can't update")).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Update' })).toBeEnabled();
+	});
+
+	test('a request Ivy refuses says so, and an update already running says that', async ({ page }) => {
+		await page.goto('/settings');
+		await page.route('**/api/v1/update', (route) =>
+			route.request().method() === 'POST'
+				? route.fulfill({ status: 503, json: { code: 'update_unavailable', message: 'This Ivy has no update path' } })
+				: route.fallback()
+		);
+		await page.getByRole('button', { name: 'Update' }).click();
+		await expect(toast(page, "Ivy can't update right now")).toBeVisible();
+
+		await page.unroute('**/api/v1/update');
+		await page.route('**/api/v1/update', (route) =>
+			route.request().method() === 'POST'
+				? route.fulfill({ status: 409, json: { code: 'update_running', message: 'An update is already in progress' } })
+				: route.fallback()
+		);
+		await page.getByRole('button', { name: 'Update' }).click();
+		await expect(toast(page, 'An update is already running')).toBeVisible();
 	});
 });
 

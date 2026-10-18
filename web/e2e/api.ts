@@ -96,7 +96,10 @@ const freshState = (): AccountState => ({
 	identities: [],
 	addressTypes: {},
 	tagged: new Map(),
-	update: { unavailable: false, running: false, done: true, success: true, target: 'r1.test' },
+	update: {
+		unavailable: false, running: false, done: true, success: true, target: 'r1.test',
+		watcher: { status: 'ok', detail: 'updated to r1.test', target: 'r1.test', finished_at: '2026-10-01T00:00:00Z' }
+	},
 	drafts: [],
 	draftBodies: new Map(),
 	sends: [],
@@ -728,10 +731,19 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	if (path === '/version') return { body: { version: 'r1.test' } };
 	if (path === '/update') {
 		if (method === 'POST') {
-			state.update = { unavailable: false, running: true, done: false, success: false };
+			// Like the real server: the slot is fresh and the watcher's last result is still the old one.
+			state.update = { ...state.update, running: true, done: false, success: false };
 			return { status: 202, body: state.update };
 		}
-		return { body: state.update };
+		const reply = { body: state.update };
+		if (state.update.running) {
+			// The watcher finishes by the next read, with a result newer than the one before.
+			state.update = {
+				...state.update, running: false, done: true, success: true,
+				watcher: { status: 'ok', detail: 'updated to r1.test', target: 'r1.test', finished_at: new Date().toISOString() }
+			};
+		}
+		return reply;
 	}
 	if (path === '/accounts' && method === 'POST') return connectReply(state, raw);
 	const passwordPath = /^\/accounts\/([^/]+)\/password$/.exec(path);
