@@ -131,7 +131,9 @@ whether the banner's wording and the 0.80 bar fit her real Inbox. She chose Inbo
 **5d.6b `contact_form_quality` is built, same day** (`docs/BUILD-LOG.md` "5d.6b"): a dark "Contact form triage" switch; the
 question is asked only of mail to an address marked contact form (new `mail_type` on a question); the reader shows a quiet
 note for a pitch or spam. **Operator-owned, open:** mark `hello@` as a contact form, turn the switch on, Look over All mail.
-**5d is done** apart from `cold_outreach` (deferred) and the operator's live checks. **Next:** 5c.5's labelling (hers), then
+**5d.6c: `cold_outreach` is closed**, folded into `category`'s marketing wording at her choice (recruiters and sales pitches
+get the Marketing tag; a reply to her own application stays personal; `docs/BUILD-LOG.md` "5d.6c"). **5d is done** apart from the
+operator's live checks. **Next:** 5c.5's labelling (hers), then
 5e (summaries and thread help) or 5b's G2 live run.
 
 **Update, same day: the backfill ran and the cascade works on real mail** (15 Inbox messages, 15 stage-one calls for about

@@ -390,3 +390,26 @@ func TestAQuestionMayOnlyBeLimitedToAKnownMailType(t *testing.T) {
 		t.Fatal("a question limited to security mail was accepted: only contact_form is a mail type a question may name")
 	}
 }
+
+// 5d.6c: cold outreach is folded into the category question rather than asked on its own.
+// A recruiter's or a salesperson's unsolicited message is "marketing", so it gets the
+// removable Marketing tag, and the question's wording has to say so.
+func TestTheMarketingCategoryCoversColdSalesAndRecruiting(t *testing.T) {
+	q, ok := shipped(t)["category"]
+	if !ok {
+		t.Fatal("category is not shipped")
+	}
+	if _, own := shipped(t)["cold_outreach"]; own {
+		t.Error("cold_outreach is asked on its own: it is folded into category")
+	}
+	marketing := strings.ToLower(q.Criteria["marketing"])
+	for _, word := range []string{"sales", "recruit"} {
+		if !strings.Contains(marketing, word) {
+			t.Errorf("marketing = %q, want it to cover %s outreach", marketing, word)
+		}
+	}
+	// A recruiter writing about a role the owner applied for is a person, not a pitch.
+	if !strings.Contains(strings.ToLower(q.Instructions), "applied for") {
+		t.Error("instructions do not keep a reply to something the owner asked for or applied for out of marketing")
+	}
+}

@@ -140,21 +140,21 @@ questions:
   # because a wrong tag is visible. Provisional until G3.
   - id: category
     instructions: >-
-      What kind of message is this? Choose the single best fit, judging by who sent
-      it and why, not by the topic. A message a person wrote to the owner is
-      personal even when short. Mass mail is never personal, even
-      with a person's name on it. A newsletter is reading the owner subscribed to;
-      marketing is selling. A receipt proves a payment; a notification reports an
-      event and asks for nothing. When unsure, choose other.
+      Which kind of message is this, judging by who sent it and why, not by the
+      topic? A message a person wrote to the owner is personal even when short, as
+      is a reply to something the owner asked for or applied for. Mass mail is never
+      personal. A newsletter is reading the owner subscribed to; marketing is
+      selling. A receipt proves a payment; a notification reports an event and asks
+      for nothing. When unsure, choose other.
     criteria:
       personal: a person wrote this to the owner
-      contact_form: someone submitted a website contact or enquiry form
-      newsletter: a publication or digest the owner subscribed to
-      receipt: proof of a purchase, payment or invoice
-      notification: an automatic alert or update from a service or account
-      marketing: a promotion or cold pitch selling something
+      contact_form: someone submitted a website contact form
+      newsletter: a publication the owner subscribed to
+      receipt: proof of a purchase or payment
+      notification: an automatic alert from a service
+      marketing: a promotion, or unsolicited sales or recruiter outreach from a stranger
       security_report: a vulnerability, abuse or security problem report
-      legal_notice: a legal or compliance notice, takedown or formal demand
+      legal_notice: a legal notice, takedown or formal demand
       other: none of these
     quiet_option: other
     threshold: 0.80

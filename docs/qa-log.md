@@ -1978,3 +1978,12 @@ already answered; these are what the build forced. Please confirm or change.
 - **Solicitation versus spam:** a pitch dressed as an enquiry is `solicitation`, junk is `spam`; both show a quiet note and
   nothing else. Bar 0.80, like Categories.
 - **No auto-action:** the note does not move, tag or hide the message.
+
+## 5d.6c: cold outreach (2026-10-18)
+
+- **Answered (operator): do `cold_outreach` now, folded into the category wording.** Recruiters and sales pitches become
+  `marketing` (the existing removable Marketing tag), not a separate question. A reply to something she asked for or applied
+  for stays `personal`.
+- **Build-time choice:** I kept the budget and trimmed the other criteria rather than raise `QuestionBytesBudget`, since the cost
+  estimate is priced on it. Say if you would rather have a separate Outreach category (a new tag) so recruiters and
+  promotions can be told apart.
