@@ -592,10 +592,14 @@ func TestInjectionCorpusCannotChangeTheShapeOfACall(t *testing.T) {
 // the gate's breaker and refused every later call.
 func TestACancelledCallIsStillLedgeredAndDoesNotBreakTheGate(t *testing.T) {
 	r := newRig(t)
-	r.jev.setDelay(150 * time.Millisecond)
+	r.jev.setDelay(500 * time.Millisecond)
 	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel once the request has reached the fake, not after a guessed pause: on a loaded
+	// machine a fixed pause landed before the call began or after the delay had ended.
 	go func() {
-		time.Sleep(40 * time.Millisecond)
+		for deadline := time.Now().Add(10 * time.Second); r.jev.count() == 0 && time.Now().Before(deadline); {
+			time.Sleep(time.Millisecond)
+		}
 		cancel()
 	}()
 	if _, err := r.engine.Decide(ctx, mail("ck1")); err == nil {
