@@ -105,6 +105,12 @@ Junk message the provider already condemns (score at twice its bar, DMARC fail, 
 **Operator-owned, open:** turn Junk rescue on at `/settings/smart`, press Look over for All mail, and open a Junk message;
 tell me whether the 2x skip factor and the wording fit her real Junk. The Junk list's rows carry the hint too
 (`MailSummary.looksReal`, Junk view only).
+**Update button fixed and deployed, 2026-10-18** (`r551.9f57f86`, `docs/BUILD-LOG.md` "The Update button no longer reports a working
+update as failed"). The "failed" screens were the screen's fault: the watcher never failed. The Junk row in the drawer, the tag
+view and the rest from yesterday are live. **Operator to try:** Settings, Update, on the phone: it should say "Ivy is up to
+date" (or "Updated to rNNN") a few seconds after the restart, and never "can't update" for a working update. **Not done:**
+Settings has no standing "last update" line.
+
 **Deployed to the potato, 2026-10-17:** `ivy r546.130bd45` through `ivy update` (CI and the image publish were green; a backup
 was taken first, state migration 21 applied, the container went healthy in about 25 seconds, the watcher said `ok`). Checked on
 the real mailbox: `/address-types` answers, and `/inbox?tag=` returns exactly the mail under Marketing and Needs you. **Operator
