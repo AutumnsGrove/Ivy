@@ -597,3 +597,35 @@ func TestMailToAGuardedAddressMakesNoCallAndDoesNotStallTheQueue(t *testing.T) {
 		t.Fatalf("a considered message came back (%d)", n)
 	}
 }
+
+// 5d.6b: a question that names a mail type is asked only of mail sent to an address the
+// operator marked with it; it is the one place Ivy reads which inbox a message came in by.
+func TestAContactFormQuestionIsAskedOnlyOfMailToAMarkedAddress(t *testing.T) {
+	w := newWorkerRig(t, WorkerOptions{})
+	q := Question{
+		ID: "cf", Instructions: "Is this contact form message genuine?", Feature: "phishing_risk", MailType: "contact_form",
+		Criteria: map[string]string{"genuine": "a real enquiry", "spam": "spam"}, QuietOption: "genuine", Threshold: 0.8,
+	}
+	if err := w.reg.Set(nil, []Question{q}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.gate.SetFeatureEnabled(context.Background(), rigAccount, "phishing_risk", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.dbs.SetAddressType(context.Background(), store.AddressTypeInput{
+		AccountID: rigAccount, Address: "hello@example.test", Kind: store.MailContactForm, Now: epoch,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	w.tick()
+	w.arriveTo("m1", "k1", store.RoleInbox, epoch.Add(time.Minute), "Enquiry", "Hi, do you ship?", store.AuthResults{}, []string{"hello@example.test"})
+	w.arriveTo("m2", "k2", store.RoleInbox, epoch.Add(2*time.Minute), "Hello", "Hi there", store.AuthResults{}, []string{"me@example.test"})
+	w.clock = epoch.Add(time.Hour)
+	w.tick()
+	if w.jev.count() != 1 {
+		t.Fatalf("calls = %d; only the message to the marked address has a question to ask", w.jev.count())
+	}
+	if len(w.decisions("k1")) != 1 || len(w.decisions("k2")) != 0 {
+		t.Fatal("the question was asked of the wrong mail")
+	}
+}

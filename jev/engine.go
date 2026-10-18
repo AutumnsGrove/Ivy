@@ -52,6 +52,10 @@ type Message struct {
 	ContentKey string
 	Folder     string
 	State      StateInput
+	// ContactForm says the message was sent to an address marked as a contact form, which
+	// is what a question with mail_type contact_form needs. The caller reads it; the
+	// engine owns no store of addresses.
+	ContactForm bool
 }
 
 // Outcome says what a Decide did, for the worker and the stats panel.
@@ -84,6 +88,9 @@ func (e *Engine) pending(ctx context.Context, m Message) []Question {
 	var out []Question
 	for _, q := range e.reg.Active(m.AccountID, m.Folder) {
 		if q.Feature != "" && (e.gate == nil || !e.gate.FeatureEnabled(ctx, m.AccountID, q.Feature)) {
+			continue
+		}
+		if q.MailType == MailTypeContactForm && !m.ContactForm {
 			continue
 		}
 		out = append(out, q)

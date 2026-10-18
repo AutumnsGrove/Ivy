@@ -354,3 +354,39 @@ func TestPhishingRiskIsAskedOnlyOnceItsSwitchIsOn(t *testing.T) {
 		t.Fatal("phishing_risk was not asked with its switch on")
 	}
 }
+
+// 5d.6b: contact-form triage. The question exists only for mail sent to an address the
+// operator marked as a contact form, so it ships dark and limited to them.
+func TestTheContactFormQuestionIsShippedLimitedToMarkedAddressesAndDark(t *testing.T) {
+	q, ok := shipped(t)["contact_form_quality"]
+	if !ok {
+		t.Fatal("contact_form_quality is not shipped")
+	}
+	for _, o := range []string{"genuine", "solicitation", "spam"} {
+		if _, ok := q.Criteria[o]; !ok {
+			t.Errorf("contact_form_quality has no option %q", o)
+		}
+	}
+	if len(q.Criteria) != 3 {
+		t.Errorf("options = %v, want exactly genuine, solicitation, spam", q.Criteria)
+	}
+	if q.QuietOption != "genuine" {
+		t.Errorf("quiet option = %q: a real enquiry must be the answer that does nothing", q.QuietOption)
+	}
+	if q.MailType != MailTypeContactForm {
+		t.Errorf("mail_type = %q: it must never read mail to an ordinary address", q.MailType)
+	}
+	if q.Feature != "contact_form_quality" {
+		t.Errorf("feature = %q: it ships dark behind its own switch", q.Feature)
+	}
+	if !strings.Contains(strings.ToLower(q.Instructions), "do not count") {
+		t.Error("instructions do not say what does not count")
+	}
+}
+
+func TestAQuestionMayOnlyBeLimitedToAKnownMailType(t *testing.T) {
+	src := "questions:\n  - id: q\n    instructions: hi\n    criteria: {no: n, yes: y}\n    quiet_option: no\n    threshold: 0.8\n    mail_type: security\n"
+	if _, err := Parse([]byte(src)); err == nil {
+		t.Fatal("a question limited to security mail was accepted: only contact_form is a mail type a question may name")
+	}
+}

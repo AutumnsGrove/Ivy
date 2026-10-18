@@ -29,6 +29,7 @@
 			| 'needsReason'
 			| 'looksReal'
 			| 'phishingRisk'
+			| 'contactForm'
 			| 'flagged'
 			| 'tag'
 			| 'summary'
@@ -103,6 +104,17 @@
 					Parts of it look like an attempt to trick you. Check the sender before you click or reply.
 				</Banner>
 			{/if}
+		</div>
+	{/if}
+
+	<!-- A contact form is the one inbox it is asked of; the note is only a hint. -->
+	{#if message.contactForm}
+		<div class="why">
+			<p>
+				{message.contactForm === 'spam'
+					? 'This contact form message looks like spam.'
+					: 'This contact form message looks like someone selling something.'}
+			</p>
 		</div>
 	{/if}
 

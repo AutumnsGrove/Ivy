@@ -1967,3 +1967,14 @@ already answered; these are what the build forced. Please confirm or change.
 - **The bar is 0.80**, like Categories: the banner is visible and unsolicited, but a miss costs her nothing beyond today.
 - **Wording of the banner:** "This looks like a scam" with a danger tone for `likely`; "Be careful with this message" in warn
   tone for `suspicious`. No button, and no mention of a model.
+
+## 5d.6a answers and 5d.6b build-time choices (2026-10-18)
+
+- **Answered (operator): a scam in Junk does not warn.** It is already Junk. Phishing warnings stay Inbox-only. She will tune
+  the wording and the bar later.
+- **A question names a mail type, not an address.** `mail_type: contact_form` runs it only on mail sent to an address marked
+  as a contact form on `/settings/account/{id}`; the question file never lists addresses. Say if form mail should also be read
+  in Junk (it is Inbox only today).
+- **Solicitation versus spam:** a pitch dressed as an enquiry is `solicitation`, junk is `spam`; both show a quiet note and
+  nothing else. Bar 0.80, like Categories.
+- **No auto-action:** the note does not move, tag or hide the message.

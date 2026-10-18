@@ -127,8 +127,12 @@ read after it is turned on; local Ollama is exempt; contact form is only a label
 **5d.6a `phishing_risk` is built, 2026-10-18** (`docs/BUILD-LOG.md` "5d.6a", choices to confirm in qa-log). A dark "Phishing
 warnings" switch on `/settings/smart`; the reader shows a banner above the subject (`MailMessage.phishingRisk`), raised but
 never lowered by the provider's failed auth. **Operator-owned, open:** turn it on, press Look over for All mail, and tell me
-whether the banner's wording and the 0.80 bar fit her real Inbox. **Next in 5d:** 5d.6b `contact_form_quality` (runs only on
-addresses marked contact form in 5d.5); `cold_outreach` stays deferred.
+whether the banner's wording and the 0.80 bar fit her real Inbox. She chose Inbox-only (a scam in Junk is already Junk) and will tune the wording later.
+**5d.6b `contact_form_quality` is built, same day** (`docs/BUILD-LOG.md` "5d.6b"): a dark "Contact form triage" switch; the
+question is asked only of mail to an address marked contact form (new `mail_type` on a question); the reader shows a quiet
+note for a pitch or spam. **Operator-owned, open:** mark `hello@` as a contact form, turn the switch on, Look over All mail.
+**5d is done** apart from `cold_outreach` (deferred) and the operator's live checks. **Next:** 5c.5's labelling (hers), then
+5e (summaries and thread help) or 5b's G2 live run.
 
 **Update, same day: the backfill ran and the cascade works on real mail** (15 Inbox messages, 15 stage-one calls for about
 $0.0016, stage two kept the real requests). **5c.5's tooling is built** (`ivy eval sheet` and `ivy eval report`, plan in

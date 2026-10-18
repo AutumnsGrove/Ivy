@@ -210,6 +210,7 @@ export function messageBody(id: string): Omit<MailMessage, keyof MailSummary> {
 		...(id === 'm2' ? { looksReal: true } : {}),
 		// One message carries the phishing warning so its banner has a design to check.
 		...(id === 'm4' ? { phishingRisk: 'likely' as const } : {}),
+		...(id === 'm5' ? { contactForm: 'solicitation' as const } : {}),
 		// One message shows a verified, scored mail so the sheet's spam line has a design to check.
 		auth:
 			id === 'm3'

@@ -325,3 +325,17 @@ func TestPhishingRiskSwitchesOnTheSharedCallItRidesOn(t *testing.T) {
 		t.Error("turning Phishing warnings back off left the shared call on")
 	}
 }
+
+// Contact-form triage rides the shared call too.
+func TestContactFormQualitySwitchesOnTheSharedCallItRidesOn(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	g := NewGate(openStore(t))
+
+	if err := g.SetFeatureEnabled(ctx, "a", "contact_form_quality", true); err != nil {
+		t.Fatal(err)
+	}
+	if !g.FeatureEnabled(ctx, "a", "classify") {
+		t.Error("Contact form triage is on but the call it rides on is still off")
+	}
+}

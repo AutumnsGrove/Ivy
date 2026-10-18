@@ -1592,6 +1592,11 @@ export interface components {
              * @enum {string}
              */
             phishingRisk?: "suspicious" | "likely";
+            /**
+             * @description Present only when the kept `contact_form_quality` answer acts, which is asked only of mail sent to an address marked as a contact form. A quiet note; nothing is hidden or moved because of it.
+             * @enum {string}
+             */
+            contactForm?: "solicitation" | "spam";
             tag?: string;
             /** @description Every tag the message is in, for the tag picker; `tag` is the first by name */
             tagIds?: string[];

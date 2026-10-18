@@ -1559,3 +1559,26 @@ Ships dark. Nothing spends until **Phishing warnings** is switched on at `/setti
   button: nothing is moved, hidden or blocked. No wording says it came from a model.
 - **Not done:** the wording's accuracy (needs labelled mail, G3); no row marker in the list; the level is not stored locally, so
   it follows the cache and the provider's current verdicts.
+
+## 5d.6b: contact-form triage (2026-10-18)
+
+Ships dark behind **Contact form triage** at `/settings/smart` (which also turns the shared call on). With 5d.6a this closes
+5d.6; `cold_outreach` stays deferred by decision.
+
+- **A question can now be limited to a mail type** (`mail_type: contact_form` in the question file; `jev/registry.go`). It is
+  a placement rule like `folders`, so it is not in the hash. Only `contact_form` is accepted; anything else is refused at
+  parse. This is the first question that depends on which address a message arrived at.
+- **How it is decided:** the worker asks the store (`DBs.AddressedToType`, which shares its recipient scan with the security
+  guard) whether the message names a marked address as recipient, Cc or Delivered-To, and hands the engine
+  `Message.ContactForm`. The engine owns no address list. A message the mirror lacks is not asked, rather than an error: a
+  question not asked costs nothing, unlike the guard, which fails closed.
+- **The question** (`jev/builtin.yaml`): `genuine` / `solicitation` / `spam`, quiet answer `genuine`, bar 0.80. Security
+  addresses are still withheld at the gate for every feature, so a form address also marked security is never read.
+- **API and reader:** `MailMessage.contactForm` (`solicitation` | `spam`), reader only, read with the phishing level from one
+  answers read (`readerWarnings`). A quiet line above the subject ("looks like someone selling something" / "looks like
+  spam"), no button, nothing moves, no mention of a model.
+- **Found writing the store test:** `mailTo` derives the UID from the key's length, so two same-length keys silently overwrote
+  each other. Fixed in the test by using distinct lengths.
+- **Not done:** wording accuracy (G3); the backfill estimate counts the question for every message even though only form mail
+  is asked, so it overstates slightly; mail that arrived before an address was marked is not asked afterwards (same gap as
+  5d.5); no row marker in lists.

@@ -85,17 +85,19 @@ func (s *Server) looksRealHint(ctx context.Context, m store.Message) bool {
 	return s.keptAnswerLooksReal(ctx, m.AccountID, m.ContentKey)
 }
 
-// phishingWarning is the banner level for a message, or "". Like the chip it is only a
-// hint: a failure to read the kept answers means no banner, never a failed page.
-func (s *Server) phishingWarning(ctx context.Context, m store.Message) string {
+// readerWarnings are the quiet hints from the kept answers that the reader may show above
+// a message: the phishing banner level and the contact-form note, each "" for none. Like
+// the chip they are only hints: a failure to read the answers means none, never a failed
+// page. One read serves both.
+func (s *Server) readerWarnings(ctx context.Context, m store.Message) (phishing, contactForm string) {
 	if s.odds == nil {
-		return ""
+		return "", ""
 	}
 	odds, err := s.odds.Odds(ctx, m.AccountID, m.ContentKey)
 	if err != nil {
-		return ""
+		return "", ""
 	}
-	return jev.PhishingLevel(odds.Answers, m.AuthResults)
+	return jev.PhishingLevel(odds.Answers, m.AuthResults), jev.ContactFormNote(odds.Answers)
 }
 
 // markLooksReal sets the hint on the rows of a Junk page. The caller has already

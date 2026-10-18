@@ -18,3 +18,11 @@ test.describe('phishing warning', () => {
 		await expect(page.getByRole('article').getByText('This looks like a scam')).toHaveCount(0);
 	});
 });
+
+// 5d.6b: a contact-form message the kept answer calls a pitch carries a quiet note and nothing else.
+test('a contact form that is a pitch says so, and ordinary mail does not', async ({ page }) => {
+	await page.goto('/m/m5');
+	await expect(page.getByRole('article').getByText('looks like someone selling something')).toBeVisible();
+	await page.goto('/m/m1');
+	await expect(page.getByRole('article').getByText('looks like someone selling something')).toHaveCount(0);
+});

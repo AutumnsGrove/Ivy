@@ -205,3 +205,25 @@ questions:
     quiet_option: none
     threshold: 0.80
     feature: phishing_risk
+
+  # Asked only of mail sent to an address marked as a contact form (5d.6b), so it never
+  # reads anyone's ordinary mail. Its output is a quiet note; nothing moves. Ships dark
+  # behind its own switch. Provisional until G3.
+  - id: contact_form_quality
+    instructions: >-
+      This message was sent through a website contact or enquiry form. Is it a genuine
+      enquiry from a person who wants something from the owner, a sales or services
+      pitch dressed up as an enquiry, or spam? Count as genuine a customer, reader,
+      collaborator or press question, a support request, and a business asking about
+      the owner's work. Count as a solicitation an offer of SEO, web design, leads,
+      marketing, funding, or a partnership nobody asked for. Count as spam link
+      dumps, gibberish, adult or pharmacy content, and automated junk. Do not count
+      a polite tone or a personal greeting as proof that it is genuine.
+    criteria:
+      genuine: a real person asking the owner something for themselves
+      solicitation: someone selling their own service or product to the owner
+      spam: automated or worthless junk
+    quiet_option: genuine
+    threshold: 0.80
+    mail_type: contact_form
+    feature: contact_form_quality

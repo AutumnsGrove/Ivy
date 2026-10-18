@@ -31,3 +31,25 @@ func PhishingLevel(answers []Verdict, a store.AuthResults) string {
 	}
 	return ""
 }
+
+// ContactFormQuestion is the id of the contact-form question; its non-quiet answers are
+// the notes a message may carry.
+const (
+	ContactFormQuestion = "contact_form_quality"
+	ContactSolicitation = "solicitation"
+	ContactSpam         = "spam"
+)
+
+// ContactFormNote is the quiet note for a contact-form message, or "" when its kept answer
+// is genuine, below its bar or suppressed. Like the phishing level it is a hint only.
+func ContactFormNote(answers []Verdict) string {
+	for _, v := range answers {
+		if v.QuestionID != ContactFormQuestion || !v.Acts() {
+			continue
+		}
+		if v.Choice == ContactSolicitation || v.Choice == ContactSpam {
+			return v.Choice
+		}
+	}
+	return ""
+}

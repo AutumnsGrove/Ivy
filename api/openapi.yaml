@@ -2769,6 +2769,13 @@ components:
             Present only when the kept `phishing_risk` answer acts. The provider's failed
             authentication can raise `suspicious` to `likely`, never lower it. A warning
             banner; nothing is hidden or moved because of it.
+        contactForm:
+          type: string
+          enum: [solicitation, spam]
+          description: >
+            Present only when the kept `contact_form_quality` answer acts, which is asked only of
+            mail sent to an address marked as a contact form. A quiet note; nothing is hidden or
+            moved because of it.
         tag:
           type: string
         tagIds:

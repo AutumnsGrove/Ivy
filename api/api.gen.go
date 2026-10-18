@@ -250,6 +250,24 @@ func (e LivenessStatus) Valid() bool {
 	}
 }
 
+// Defines values for MailMessageContactForm.
+const (
+	Solicitation MailMessageContactForm = "solicitation"
+	Spam         MailMessageContactForm = "spam"
+)
+
+// Valid indicates whether the value is a known member of the MailMessageContactForm enum.
+func (e MailMessageContactForm) Valid() bool {
+	switch e {
+	case Solicitation:
+		return true
+	case Spam:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MailMessagePhishingRisk.
 const (
 	Likely     MailMessagePhishingRisk = "likely"
@@ -1353,6 +1371,9 @@ type MailMessage struct {
 	Auth MessageAuth    `json:"auth"`
 	Cc   []MessageParty `json:"cc"`
 
+	// ContactForm Present only when the kept `contact_form_quality` answer acts, which is asked only of mail sent to an address marked as a contact form. A quiet note; nothing is hidden or moved because of it.
+	ContactForm *MailMessageContactForm `json:"contactForm,omitempty"`
+
 	// Date The message's instant, RFC 3339 in UTC (see MailSummary).
 	Date time.Time `json:"date"`
 
@@ -1390,6 +1411,9 @@ type MailMessage struct {
 	ToShort string         `json:"toShort"`
 	Unread  bool           `json:"unread"`
 }
+
+// MailMessageContactForm Present only when the kept `contact_form_quality` answer acts, which is asked only of mail sent to an address marked as a contact form. A quiet note; nothing is hidden or moved because of it.
+type MailMessageContactForm string
 
 // MailMessagePhishingRisk Present only when the kept `phishing_risk` answer acts. The provider's failed authentication can raise `suspicious` to `likely`, never lower it. A warning banner; nothing is hidden or moved because of it.
 type MailMessagePhishingRisk string

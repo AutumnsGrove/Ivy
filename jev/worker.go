@@ -118,6 +118,7 @@ type WorkerStore interface {
 	MarkClassified(ctx context.Context, accountID string, contentKeys []string, at time.Time) error
 	PlaceCategoryTag(ctx context.Context, accountID, contentKey, category string) error
 	ModelsBlockedFor(ctx context.Context, accountID, contentKey string) (bool, error)
+	AddressedToType(ctx context.Context, accountID, contentKey string, kind store.MailType) (bool, error)
 	ListAttachments(ctx context.Context, messageID string) ([]store.Attachment, error)
 	GetSetting(ctx context.Context, accountID, key string) (string, bool, error)
 	SetSetting(ctx context.Context, accountID, key, value string) error
@@ -265,7 +266,11 @@ func (w *Worker) process(ctx context.Context, account string, batch []store.Cand
 			// alone, and is still considered once so it never comes back.
 			skipped := guarded || (c.Role == store.RoleJunk && CondemnedByProvider(c.Message.AuthResults))
 			if !skipped {
-				_, err = w.engine.Decide(ctx, FromStored(c.Message, c.Role, atts))
+				in := FromStored(c.Message, c.Role, atts)
+				in.ContactForm, err = w.store.AddressedToType(ctx, account, c.Message.ContentKey, store.MailContactForm)
+				if err == nil {
+					_, err = w.engine.Decide(ctx, in)
+				}
 			}
 			switch {
 			case err == nil:

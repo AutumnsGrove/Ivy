@@ -195,3 +195,48 @@ func TestAFileCarriedByAGuardedMessageIsGuardedToo(t *testing.T) {
 		t.Error("an ordinary message was blocked because it shares a file")
 	}
 }
+
+// 5d.6b: a question about contact forms is asked only of mail sent to an address marked as one.
+func TestMailToAContactFormAddressIsRecognisedWhereverItIsNamed(t *testing.T) {
+	t.Parallel()
+	dbs := openTemp(t)
+	ctx := context.Background()
+	mailTo(t, dbs, "a", "k1", []string{"hello@example.com"}, nil, nil)
+	mailTo(t, dbs, "a", "k22", []string{"x@example.com"}, []string{"HELLO@example.com"}, nil)
+	mailTo(t, dbs, "a", "k333", []string{"x@example.com"}, nil, []string{"hello@example.com"})
+	mailTo(t, dbs, "a", "k4444", []string{"x@example.com"}, nil, nil)
+	mailTo(t, dbs, "a", "k55555", []string{"abuse@example.com"}, nil, nil)
+	mailTo(t, dbs, "c", "k666666", []string{"hello@example.com"}, nil, nil)
+	setType(t, dbs, "a", "Hello@Example.com", MailContactForm, false)
+	setType(t, dbs, "a", "abuse@example.com", MailSecurity, false)
+	setType(t, dbs, "b", "hello@example.com", MailContactForm, false)
+
+	for key, want := range map[string]bool{
+		"k1": true, "k22": true, "k333": true, "k4444": false,
+		"k55555": false, // a security address is not a contact form
+	} {
+		got, err := dbs.AddressedToType(ctx, "a", key, MailContactForm)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("%s: contact form = %v, want %v", key, got, want)
+		}
+	}
+	// Another account's mark never leaks across accounts.
+	got, err := dbs.AddressedToType(ctx, "c", "k666666", MailContactForm)
+	if err != nil || got {
+		t.Errorf("unmarked account: got %v, %v; want false", got, err)
+	}
+}
+
+func TestAnUnreadableMessageIsNotAContactForm(t *testing.T) {
+	t.Parallel()
+	dbs := openTemp(t)
+	mailTo(t, dbs, "a", "other", []string{"x@example.com"}, nil, nil)
+	setType(t, dbs, "a", "hello@example.com", MailContactForm, false)
+	got, err := dbs.AddressedToType(context.Background(), "a", "no-such-key", MailContactForm)
+	if err != nil || got {
+		t.Fatalf("got %v, %v: a message the mirror lacks is simply not asked, and not an error", got, err)
+	}
+}

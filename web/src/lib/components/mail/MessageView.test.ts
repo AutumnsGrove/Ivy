@@ -83,3 +83,24 @@ describe('MessageView phishing warning', () => {
 		expect(screen.queryByText(/\bAI\b|model|assistant|smart/i)).not.toBeInTheDocument();
 	});
 });
+
+describe('MessageView contact form note', () => {
+	it('says a pitch is a pitch and offers nothing that acts', () => {
+		render(MessageView, { message: message({ contactForm: 'solicitation' }), color: 'var(--c1)' });
+		expect(screen.getByText(/selling something/i)).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: /junk|delete|move|block/i })).not.toBeInTheDocument();
+	});
+
+	it('says spam is spam', () => {
+		render(MessageView, { message: message({ contactForm: 'spam' }), color: 'var(--c1)' });
+		expect(screen.getByText(/looks like spam/i)).toBeInTheDocument();
+	});
+
+	it('shows nothing for an ordinary or genuine message, and never calls itself a model', () => {
+		render(MessageView, { message: message(), color: 'var(--c1)' });
+		expect(screen.queryByText(/selling something|looks like spam/i)).not.toBeInTheDocument();
+		const { unmount } = render(MessageView, { message: message({ contactForm: 'spam' }), color: 'var(--c1)' });
+		expect(screen.queryByText(/\bAI\b|model|assistant|smart/i)).not.toBeInTheDocument();
+		unmount();
+	});
+});

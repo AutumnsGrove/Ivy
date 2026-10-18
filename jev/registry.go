@@ -43,6 +43,9 @@ const (
 	FolderJunk  = "junk"
 )
 
+// MailTypeContactForm is the one mail type a question may be limited to.
+const MailTypeContactForm = "contact_form"
+
 var idPattern = regexp.MustCompile(`^[a-z][a-z0-9_:]{0,63}$`)
 
 // Question is one thing Ivy asks Jev about a message. It is data: the wording lives
@@ -58,6 +61,10 @@ type Question struct {
 	Scope []string `yaml:"scope,omitempty"`
 	// Folders lists where it runs; empty means the Inbox only.
 	Folders []string `yaml:"folders,omitempty"`
+	// MailType limits the question to mail sent to an address the operator marked with
+	// that type (only contact_form). Like Folders it tunes where the question runs, not
+	// what it asks, so it is not in the hash.
+	MailType string `yaml:"mail_type,omitempty"`
 	// Enabled is a pointer so an absent key means on.
 	Enabled *bool `yaml:"enabled,omitempty"`
 	// Suppresses names questions whose result is held back when this one fires.
@@ -232,6 +239,9 @@ func validateOne(q Question) error {
 		if f != FolderInbox && f != FolderJunk {
 			return fmt.Errorf("folder %q is not %s or %s", f, FolderInbox, FolderJunk)
 		}
+	}
+	if q.MailType != "" && q.MailType != MailTypeContactForm {
+		return fmt.Errorf("mail_type %q is not %s", q.MailType, MailTypeContactForm)
 	}
 	return nil
 }

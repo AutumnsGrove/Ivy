@@ -21,6 +21,7 @@ const FEATURES: Record<string, string> = {
 	classify: 'Categories',
 	junk_rescue: 'Junk rescue',
 	phishing_risk: 'Phishing warnings',
+	contact_form_quality: 'Contact form triage',
 	summary: 'Summaries',
 	digest: 'Digest',
 	extraction: 'Receipts',

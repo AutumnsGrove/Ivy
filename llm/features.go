@@ -48,10 +48,12 @@ var features = map[string]feature{
 	// Classifiers read clipped state only.
 	"needs_me":    {endpoint: EndpointSystemOne, label: "Needs you"},
 	"category":    {endpoint: EndpointSystemOne, label: "Categories"},
-	"classify":    {endpoint: EndpointSystemOne, impliedBy: []string{"needs_me", "category", "junk_rescue", "phishing_risk"}},
+	"classify":    {endpoint: EndpointSystemOne, impliedBy: []string{"needs_me", "category", "junk_rescue", "phishing_risk", "contact_form_quality"}},
 	"junk_rescue": {endpoint: EndpointSystemOne, label: "Junk rescue"},
 	// Warns on the Inbox mail it is asked about; it never moves or hides anything.
 	"phishing_risk": {endpoint: EndpointSystemOne, label: "Phishing warnings"},
+	// Asked only of mail to an address marked as a contact form.
+	"contact_form_quality": {endpoint: EndpointSystemOne, label: "Contact form triage"},
 
 	"needs_me_stage2": {endpoint: EndpointChat, vetted: true, label: "Needs you: reasons"},
 	"summary":         {endpoint: EndpointChat, vetted: true},

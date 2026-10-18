@@ -348,3 +348,43 @@ func TestNoWarningWhenNothingIsWiredOrOddsCannotBeRead(t *testing.T) {
 		})
 	}
 }
+
+func contactFormAnswer(choice string, fires, suppressed bool) jev.Odds {
+	return jev.Odds{Answers: []jev.Verdict{{
+		QuestionID: "contact_form_quality", Choice: choice, Probabilities: map[string]float64{choice: 0.95},
+		Confidence: 0.95, Threshold: 0.8, QuietOption: "genuine", Fires: fires, Suppressed: suppressed,
+	}}}
+}
+
+// 5d.6b: a contact-form message the kept answer calls a pitch or junk carries a quiet note.
+func TestAContactFormThatIsAPitchOrJunkCarriesANote(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		odds jev.Odds
+		want string
+	}{
+		{"solicitation", contactFormAnswer("solicitation", true, false), "solicitation"},
+		{"spam", contactFormAnswer("spam", true, false), "spam"},
+		{"genuine says nothing", contactFormAnswer("genuine", false, false), ""},
+		{"below its bar says nothing", contactFormAnswer("spam", false, false), ""},
+		{"a suppressed answer says nothing", contactFormAnswer("spam", true, true), ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			base := phishingServer(t, &fakeOdds{odds: c.odds}, store.AuthResults{})
+			var got api.MailMessage
+			if code := getJSON(t, base+"/messages/p1", &got); code != http.StatusOK {
+				t.Fatalf("status = %d", code)
+			}
+			have := ""
+			if got.ContactForm != nil {
+				have = string(*got.ContactForm)
+			}
+			if have != c.want {
+				t.Fatalf("contactForm = %q, want %q", have, c.want)
+			}
+		})
+	}
+}

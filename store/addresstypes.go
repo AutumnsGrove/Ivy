@@ -150,38 +150,77 @@ func (d *DBs) ModelsBlockedFor(ctx context.Context, accountID, contentKey string
 	if len(guarded) == 0 {
 		return false, nil
 	}
+	hit, seen, err := d.namesAny(ctx, accountID, contentKey, guarded)
+	if err != nil {
+		return true, err
+	}
+	return hit || !seen, nil
+}
+
+// AddressedToType reports whether the message names, as a recipient, Cc or Delivered-To,
+// an address the operator marked with this kind, whether or not its models are on. A
+// message the mirror lacks is simply not addressed to one: unlike the guard, a question
+// that is not asked costs nothing, so there is nothing to fail closed on.
+func (d *DBs) AddressedToType(ctx context.Context, accountID, contentKey string, kind MailType) (bool, error) {
+	rows, err := d.State.Read.QueryContext(ctx,
+		`SELECT address FROM address_types WHERE account_id=? AND kind=?`, accountID, string(kind))
+	if err != nil {
+		return false, fmt.Errorf("addresses of type %s: %w", kind, err)
+	}
+	defer func() { _ = rows.Close() }()
+	marked := map[string]bool{}
+	for rows.Next() {
+		var a string
+		if err := rows.Scan(&a); err != nil {
+			return false, fmt.Errorf("addresses of type %s: %w", kind, err)
+		}
+		marked[strings.ToLower(a)] = true
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("addresses of type %s: %w", kind, err)
+	}
+	if len(marked) == 0 {
+		return false, nil
+	}
+	hit, _, err := d.namesAny(ctx, accountID, contentKey, marked)
+	return hit, err
+}
+
+// namesAny reports whether the message (or any message carrying the file with this
+// hash) names one of the lowercased addresses as a recipient, Cc or Delivered-To, and
+// whether the mirror had the message at all.
+func (d *DBs) namesAny(ctx context.Context, accountID, contentKey string, set map[string]bool) (hit, seen bool, err error) {
 	rows, err := d.Mirror.Read.QueryContext(ctx, `
 		SELECT COALESCE(to_json, ''), COALESCE(cc_json, ''), COALESCE(delivered_to_json, '')
 		FROM messages
 		WHERE account_id = ? AND (content_key = ?
 		   OR id IN (SELECT message_id FROM attachments WHERE content_hash = ?))`, accountID, contentKey, contentKey)
 	if err != nil {
-		return true, fmt.Errorf("recipients of %s: %w", contentKey, err)
+		return false, false, fmt.Errorf("recipients of %s: %w", contentKey, err)
 	}
 	defer func() { _ = rows.Close() }()
-	seen := false
 	for rows.Next() {
 		seen = true
 		var to, cc, delivered string
 		if err := rows.Scan(&to, &cc, &delivered); err != nil {
-			return true, fmt.Errorf("recipients of %s: %w", contentKey, err)
+			return false, seen, fmt.Errorf("recipients of %s: %w", contentKey, err)
 		}
 		for _, raw := range []string{to, cc, delivered} {
 			var list []Address
 			if err := decodeJSON(raw, &list); err != nil {
-				return true, fmt.Errorf("recipients of %s: %w", contentKey, err)
+				return false, seen, fmt.Errorf("recipients of %s: %w", contentKey, err)
 			}
 			for _, a := range list {
-				if guarded[strings.ToLower(strings.TrimSpace(a.Address))] {
-					return true, nil
+				if set[strings.ToLower(strings.TrimSpace(a.Address))] {
+					return true, seen, nil
 				}
 			}
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return true, fmt.Errorf("recipients of %s: %w", contentKey, err)
+		return false, seen, fmt.Errorf("recipients of %s: %w", contentKey, err)
 	}
-	return !seen, nil
+	return false, seen, nil
 }
 
 // guardedAddresses is the lowercased set of security addresses still off.
