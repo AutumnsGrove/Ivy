@@ -391,6 +391,71 @@ func TestAQuestionMayOnlyBeLimitedToAKnownMailType(t *testing.T) {
 	}
 }
 
+// 5e.1: worth_summarizing is the cheap filter in front of the one paid chat call a summary
+// costs. A wrong "yes" spends a few cents on a summary nobody needed; a wrong "no" shows no
+// chip, so the quiet answer is the one that spends nothing.
+func TestTheWorthSummarizingQuestionIsShippedAndDark(t *testing.T) {
+	q, ok := shipped(t)["worth_summarizing"]
+	if !ok {
+		t.Fatal("worth_summarizing is not shipped")
+	}
+	if len(q.Criteria) != 2 {
+		t.Errorf("options = %v, want exactly no and yes", q.Criteria)
+	}
+	for _, o := range []string{"no", "yes"} {
+		if _, ok := q.Criteria[o]; !ok {
+			t.Errorf("worth_summarizing has no option %q", o)
+		}
+	}
+	if q.QuietOption != "no" {
+		t.Errorf("quiet option = %q: the answer that spends nothing must be the quiet one", q.QuietOption)
+	}
+	// A question may only name a Jev feature, and the summary itself is a chat one, so
+	// the filter has its own name that the Summaries switch implies.
+	if q.Feature != "summary_filter" {
+		t.Errorf("feature = %q: summaries ship dark, behind the filter the Summaries switch implies", q.Feature)
+	}
+	if q.Threshold < 0.80 {
+		t.Errorf("threshold = %v, want 0.80 or more: a yes costs a paid call", q.Threshold)
+	}
+	if len(q.Suppresses) != 0 {
+		t.Errorf("suppresses %v: a long thread can still be a bill that needs the owner", q.Suppresses)
+	}
+	if !strings.Contains(strings.ToLower(q.Instructions), "do not count") {
+		t.Error("instructions do not say what does not count")
+	}
+	// Newsletters are the digest's job (5f), so a long one is not worth a summary here.
+	if !strings.Contains(strings.ToLower(q.Instructions), "newsletter") {
+		t.Error("instructions do not keep newsletters out: the digest covers them")
+	}
+}
+
+func TestSummariesAreAskedOnlyOnceTheirSwitchIsOn(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	qs, err := Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.reg.Set(qs, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.gate.SetFeatureEnabled(ctx, rigAccount, "needs_me", true); err != nil {
+		t.Fatal(err)
+	}
+	r.decide(mail("k1"))
+	if _, asked := r.jev.last().Questions["worth_summarizing"]; asked {
+		t.Fatal("worth_summarizing was asked while its switch was off")
+	}
+	if err := r.gate.SetFeatureEnabled(ctx, rigAccount, "summary", true); err != nil {
+		t.Fatal(err)
+	}
+	r.decide(mail("k2"))
+	if _, asked := r.jev.last().Questions["worth_summarizing"]; !asked {
+		t.Fatal("worth_summarizing was not asked with its switch on")
+	}
+}
+
 // 5d.6c: cold outreach is its own category, not its own question. A recruiter's or a
 // salesperson's unsolicited message gets the removable Outreach tag, apart from Marketing
 // (promotions), and a reply to something the owner asked for or applied for is personal.

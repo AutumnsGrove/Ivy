@@ -339,3 +339,17 @@ func TestContactFormQualitySwitchesOnTheSharedCallItRidesOn(t *testing.T) {
 		t.Error("Contact form triage is on but the call it rides on is still off")
 	}
 }
+
+// The summary filter question rides the shared call, so the Summaries switch is enough.
+func TestSummarySwitchesOnTheSharedCallItsFilterRidesOn(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	g := NewGate(openStore(t))
+
+	if err := g.SetFeatureEnabled(ctx, "a", "summary", true); err != nil {
+		t.Fatal(err)
+	}
+	if !g.FeatureEnabled(ctx, "a", "classify") {
+		t.Error("Summaries is on but the call its filter rides on is still off")
+	}
+}

@@ -136,6 +136,12 @@ their own Outreach tag, apart from Marketing; a reply to her own application sta
 operator's live checks. **Next:** 5c.5's labelling (hers), then
 5e (summaries and thread help) or 5b's G2 live run.
 
+**5e.1 started, 2026-10-19: the `worth_summarizing` filter is shipped (dark).** The question rides the shared Jev call
+(bar 0.80, quiet `no`) under the new Jev feature `summary_filter`, which the "Summaries" switch implies; a question may
+only name a Jev feature and `summary` is a chat one. **Not built yet:** the stored summary, `GET /threads/{id}/insight`,
+the chip. **Until they land, turning Summaries on only adds the filter question to the shared call (no chip, no chat
+spend).** The filter sees the newest message with its quoted trail, not the whole thread.
+
 **Update, same day: the backfill ran and the cascade works on real mail** (15 Inbox messages, 15 stage-one calls for about
 $0.0016, stage two kept the real requests). **5c.5's tooling is built** (`ivy eval sheet` and `ivy eval report`, plan in
 `docs/handoffs/2026-10-16-G3-needs-me-evaluation.md`; `docs/BUILD-LOG.md` "5c.5 tooling"). **Operator-owned, open:** fill the
