@@ -1603,3 +1603,47 @@ unsolicited message is the new **`outreach`** option of the `category` question,
 - **No new switch and no new API field:** the Categories switch covers it. A quiet auto-archive remains an idea that is not
   planned; if it is ever built it can read the Outreach tag.
 - **5d is done.** Left for the operator: the live checks under 5d.1 to 5d.6, and the wording and thresholds at G3.
+
+## 5e.1: the thread summary chip (2026-10-19)
+
+A quiet firefly chip under the sender, written the first time a worthwhile thread is opened and kept after that. Ships dark
+behind one **Summaries** switch on `/settings/smart`; nothing spends until it is on.
+
+- **The filter is a Jev question** (`worth_summarizing`, bar 0.80, quiet `no`), at the operator's choice. A question can only
+  name a Jev feature and `summary` is a chat one, so the question names the new Jev feature `summary_filter`, which the
+  `summary` switch implies (the same `impliedBy` that lets Categories turn on the shared call). One switch, no new screen
+  row. Turning Summaries on also turns the shared `classify` call on, as every other question's switch does.
+- **What Jev can see.** `jev.BuildState` strips quoted replies, so the filter sees one message's own text and its recipients,
+  never the trail above it. The question therefore asks only about what is visible (very long or dense, many recipients, a
+  reply that refers back to earlier points), and the service counts a thread as worth it when **any one** of its messages
+  says yes at the bar, so a short "thanks" at the bottom of a long thread does not take the chip away.
+- **Storage** (mirror migration 22, `thread_summaries`): one row per (account, thread) with `source_hash`, `prompt_hash`,
+  `model`, text, message count and `written_at`. The hash names exactly the messages read, the thread's total, the model and
+  the instructions, so a new message, a new model or new wording makes the row stale without recomputing anything.
+- **When it runs** (`insight/service.go`): on open, never in the background. A stored summary whose hash still matches is
+  returned free. A stale one **stands for 24 hours** (the plan's once-a-day ceiling), then the next open refreshes it. A thread
+  with no summary is written if any message was approved and none is withheld. Opens of one thread are serialised, so six at
+  once make one call and the other five read what it wrote.
+- **A thread with a withheld message gets no summary at all** (tripwire, sensitive, or an unreadable vetting answer fails
+  closed), rather than a summary that quietly skips the flagged message. The gate enforces the same rule; the service asks
+  first so it does not log a refused call on every open.
+- **Bounds.** At most 12 messages are read: the first and the newest 11, oldest first, each clipped to its share of 48 KiB;
+  `Earlier` says how many were left out and the chip says so quietly. Trash, Junk and hidden mail are not in the thread; Sent
+  is. The reply is cut to 700 runes at a word boundary. A reply over 8 KiB, with no text, or not valid UTF-8 is refused.
+- **Failure is quiet and not repeated.** A cap, a refusal or a provider failure returns the summary already kept, or none;
+  the endpoint is always 200 for a message that exists. A paid answer that cannot be used is recorded as a decision miss keyed
+  by the source hash, so reopening does not pay again until the thread changes.
+- **Plain text** (`insight.Clean`): entities decoded and then tags stripped, controls and invisible direction characters
+  removed, blank-line runs become one paragraph break. The chip renders it as a text node. Tested with hostile markup at both
+  ends.
+- **API:** `GET /messages/{id}/insight` returns `{summary?, earlier?}`, keyed by the opened message because the reader has no
+  thread screen; the thread is found from the message. `/messages/{id}/summary` keeps its meaning (the header alone). The dead
+  `MailMessage.summary` field, which the real server never filled and only the mock did, is **removed** from the contract.
+- **Frontend:** `ThreadInsight.svelte` loads beside the message (never in front of it), drops a late answer for a message no
+  longer open, and shows nothing on any failure. No label and no mention of a model.
+- **Tests:** insight (cleaner, service against the real gate and store with the fake provider, the off path, the cap, withheld
+  mail, the prompt wrapper, a 20-message thread, six simultaneous opens, a cancelled open, an architecture guard), store
+  (summary round trip, thread reads), gateway, a `cmd` chain on the shipped questions, 12 component tests, and the existing
+  E2E reader test now runs against the real request shape.
+- **Not done:** the live read of real summaries (the operator's, once Summaries is on); the filter's accuracy on real threads
+  (G3); no spend is shown per summary beyond the ledger rows under `summary`; no "refresh now" button.

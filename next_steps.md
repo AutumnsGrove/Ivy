@@ -5,7 +5,7 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-16 (first real-mailbox run, see "▶ Now"; 5c.4 done; next is 5c.5, the labelled evaluation; 5b still waits at G2; see "▶ Now"). **Chunk 4 (send) is complete: 4a-4h are done.** **4h (rich text)** landed with the decisions settled in qa-log round 66 and `docs/handoffs/2026-10-06-4h-richtext-design.md`: the editor is `squire-rte` (MIT, zero deps, 16.1 KiB brotli, chosen over a 98.3 KiB minimal TipTap), both modes stay with rich as the default and the mode fixed once typed, a `bodyFormat` field is sanitised server-side with a derived `text/plain`, and the paste walker is our own allow-list. `docs/BUILD-LOG.md` has the entry. What is left is the operator's live checks. **4g is done** (outgoing attachments and images; round 65): gate G4 cleared the dependency question — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4f is done** (the compose screen; round 64): the client calls and the new
+last updated: 2026-10-19 (5e.1, the summary chip, is built; see "▶ Now"). Earlier, 2026-10-16 (first real-mailbox run, see "▶ Now"; 5c.4 done; next is 5c.5, the labelled evaluation; 5b still waits at G2; see "▶ Now"). **Chunk 4 (send) is complete: 4a-4h are done.** **4h (rich text)** landed with the decisions settled in qa-log round 66 and `docs/handoffs/2026-10-06-4h-richtext-design.md`: the editor is `squire-rte` (MIT, zero deps, 16.1 KiB brotli, chosen over a 98.3 KiB minimal TipTap), both modes stay with rich as the default and the mode fixed once typed, a `bodyFormat` field is sanitised server-side with a derived `text/plain`, and the paste walker is our own allow-list. `docs/BUILD-LOG.md` has the entry. What is left is the operator's live checks. **4g is done** (outgoing attachments and images; round 65): gate G4 cleared the dependency question — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4f is done** (the compose screen; round 64): the client calls and the new
 `/drafts` screen, the From picker over the real identities, People autocomplete, reply/forward
 prefills, debounced autosave to the server's Drafts folder (and once on leave), the Sending/Undo
 toast, the Not-sent sheet and the resend-free `unconfirmed` notice. The operator chose autosave plus
@@ -58,7 +58,7 @@ screens**.
 | 2h `state.db` fast seeder + named-state Playwright | done except visual baselines (need CI harness) |
 | 3 Sync (backfill, QRESYNC/IDLE, outbox, tags, search, rules, backup, `ivy update`) | 3a done; 3b backend done (screens wait on C0); 3c done; 3d done; 3e done; 3f done; 3g done; **3h done** |
 | 4 Send (compose, identities, undo send, SMTP + APPEND to Sent) | **done** (4a-4h; rounds 60-66; see "Chunk 4 stages" and `docs/CHUNK4-BRIEF.md`) |
-| 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | **planned, not started** (2026-10-07): standing rules in `docs/CHUNK5-BRIEF.md`, one plan per feature in `docs/chunk5/` (5a-5j, foundation first); every plan's questions were answered with the operator on 2026-10-07 (see each plan's Decisions section and `docs/qa-log.md`); **5a.1 (the generalised gate) and 5a.2 (the spend API) are done**; **5a.3 (caps and settings) is in progress, all four stages done** (registry and estimate; mirror health; the `/smart` API; the Smart features screen), so **5a is done**; **5b (the Jev layer) is built against the fake and waits at gate G2 for the live run** (`docs/handoffs/2026-10-09-G2-jev-live-call.md`); **5c.0-5c.4 are done** (vetting, both stages, storage and API, the screens); 5c.5 (the labelled evaluation) is next |
+| 5 Triage (Jev, the gate and ledger, newsletters, receipts, vision, ask, stats) | **planned, not started** (2026-10-07): standing rules in `docs/CHUNK5-BRIEF.md`, one plan per feature in `docs/chunk5/` (5a-5j, foundation first); every plan's questions were answered with the operator on 2026-10-07 (see each plan's Decisions section and `docs/qa-log.md`); **5a.1 (the generalised gate) and 5a.2 (the spend API) are done**; **5a.3 (caps and settings) is in progress, all four stages done** (registry and estimate; mirror health; the `/smart` API; the Smart features screen), so **5a is done**; **5b (the Jev layer) is built against the fake and waits at gate G2 for the live run** (`docs/handoffs/2026-10-09-G2-jev-live-call.md`); **5c.0-5c.4 are done** (vetting, both stages, storage and API, the screens); 5c.5 (the labelled evaluation) is next; **5d is done** apart from live checks; **5e.1 (the summary chip) is built (2026-10-19)**, 5e.2-5e.5 are next |
 
 Frontend: SvelteKit 3 app in `web/`. The reader endpoints (`/accounts`, `/inbox`,
 `/messages/{id}`, `/summary`, `/mirror/health`, account profile and photo), tags (`/tags`, the
@@ -136,11 +136,15 @@ their own Outreach tag, apart from Marketing; a reply to her own application sta
 operator's live checks. **Next:** 5c.5's labelling (hers), then
 5e (summaries and thread help) or 5b's G2 live run.
 
-**5e.1 started, 2026-10-19: the `worth_summarizing` filter is shipped (dark).** The question rides the shared Jev call
-(bar 0.80, quiet `no`) under the new Jev feature `summary_filter`, which the "Summaries" switch implies; a question may
-only name a Jev feature and `summary` is a chat one. **Not built yet:** the stored summary, `GET /threads/{id}/insight`,
-the chip. **Until they land, turning Summaries on only adds the filter question to the shared call (no chip, no chat
-spend).** The filter sees the newest message with its quoted trail, not the whole thread.
+**5e.1 is built, 2026-10-19: the thread summary chip** (`docs/BUILD-LOG.md` "5e.1", choices to confirm in qa-log). A dark
+"Summaries" switch on `/settings/smart`; the shared Jev call then asks `worth_summarizing` (bar 0.80) of new Inbox mail, and
+the first time a thread with a yes is opened, one chat call writes a short plain summary that shows as the firefly chip
+(`GET /messages/{id}/insight`, `insight/`). Kept per thread, refreshed at most once a day. **Operator-owned, open:** turn
+Summaries on, press Look over for All mail, open a long thread and tell me whether the chip appears where it should and the
+wording fits; check the Spend screen shows the `summary` rows. **Known limit, stated:** Jev sees one message's own text, not
+the quoted trail, so a long thread whose every message is short may never be approved (a local message-count rule would
+cover it; not built). **Next in 5e:** 5e.2 thread state and the Waiting on list, then 5e.3 tag suggestion, 5e.4 reply help,
+5e.5 snooze suggestion; or 5b's G2 live run.
 
 **Update, same day: the backfill ran and the cascade works on real mail** (15 Inbox messages, 15 stage-one calls for about
 $0.0016, stage two kept the real requests). **5c.5's tooling is built** (`ivy eval sheet` and `ivy eval report`, plan in

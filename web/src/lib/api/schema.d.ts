@@ -1628,7 +1628,6 @@ export interface components {
             tagIds?: string[];
             toShort: string;
             toFull: string;
-            summary?: string;
             /** @description Server-sanitised HTML body, safe to place in the reader's sandboxed frame. Empty for a message with no HTML part; use paragraphs then. */
             html?: string;
             paragraphs: string[];

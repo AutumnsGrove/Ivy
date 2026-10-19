@@ -27,6 +27,7 @@ import type {
 	MailMessage,
 	MailSummary,
 	MailAttachmentList,
+	MessageInsight,
 	MessageOdds,
 	MessagePrivacy,
 	OutboxAction,
@@ -98,6 +99,10 @@ export const api = {
 	/** The header alone, for the screen that shows a failed body under a real subject line. */
 	getSummary: (id: string): Promise<MailSummary> =>
 		request<MailSummary>(`/messages/${encodeURIComponent(id)}/summary`),
+
+	/** A short summary of the message's thread, when it is worth one. The first open of a worthwhile thread can take a few seconds; empty for any other reason. */
+	getMessageInsight: (id: string): Promise<MessageInsight> =>
+		request<MessageInsight>(`/messages/${encodeURIComponent(id)}/insight`),
 
 	/** What the helper decision model said about a message, with its odds. Reads the cache; never makes a request. */
 	getMessageOdds: (id: string): Promise<MessageOdds> =>

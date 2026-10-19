@@ -1401,7 +1401,6 @@ type MailMessage struct {
 	// Sender Someone on a message, exactly as the sender wrote it. The name is sender-controlled text and must be shown as plain text next to the real address, since a name that contains another address is the classic spoof.
 	Sender  MessageParty `json:"sender"`
 	Subject string       `json:"subject"`
-	Summary *string      `json:"summary,omitempty"`
 	Tag     *string      `json:"tag,omitempty"`
 
 	// TagIds Every tag the message is in, for the tag picker; `tag` is the first by name

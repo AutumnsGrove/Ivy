@@ -11,10 +11,10 @@
 	import Button from '../ui/Button.svelte';
 	import Dot from '../ui/Dot.svelte';
 	import Pill from '../ui/Pill.svelte';
-	import SmartChip from '../ui/SmartChip.svelte';
 	import AttachmentGroup from './AttachmentGroup.svelte';
 	import MessageBody from './MessageBody.svelte';
 	import SenderSheet from './SenderSheet.svelte';
+	import ThreadInsight from './ThreadInsight.svelte';
 
 	type Props = {
 		message: Pick<
@@ -32,7 +32,6 @@
 			| 'contactForm'
 			| 'flagged'
 			| 'tag'
-			| 'summary'
 			| 'html'
 			| 'paragraphs'
 			| 'attachments'
@@ -134,9 +133,7 @@
 		</div>
 	</div>
 
-	{#if message.summary}
-		<div class="chip"><SmartChip>{message.summary}</SmartChip></div>
-	{/if}
+	<ThreadInsight id={message.id} />
 
 	<div class="body" class:rich={message.html}>
 		{#if message.html}
@@ -233,9 +230,6 @@
 		display: inline-flex;
 		color: var(--accent);
 		font-size: var(--fs-note);
-	}
-	.chip {
-		margin-top: var(--sp-16);
 	}
 	.body {
 		margin-top: var(--sp-16);

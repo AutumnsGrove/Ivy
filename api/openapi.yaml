@@ -2820,8 +2820,6 @@ components:
           type: string
         toFull:
           type: string
-        summary:
-          type: string
         html:
           type: string
           description: >-

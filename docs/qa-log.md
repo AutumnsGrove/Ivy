@@ -1987,3 +1987,17 @@ already answered; these are what the build forced. Please confirm or change.
 - **Build-time choices:** the tag is mint; I kept the 900-byte question budget and trimmed the other criteria rather than
   raise `QuestionBytesBudget`, since the cost estimate is priced on it. Mail already tagged Marketing is not re-sorted until
   it is asked again.
+
+## 5e.1: the summary chip (2026-10-19)
+
+- **Answered (operator): the "worth summarising" filter is a Jev question**, not a local rule: the Jev call is cheap, fast and
+  handles what is needed.
+- **Found while building:** Jev's state strips quoted replies, so it cannot see a thread's length, only one message's text and
+  recipients. The question was reworded to ask only about that, and a thread counts when any one message says yes. A local
+  count rule on the thread (messages, people) would be a free addition if the filter misses real long threads; not built.
+- **Build-time choices, to confirm:** (1) the endpoint is `GET /messages/{id}/insight`, keyed by the opened message, not
+  `/threads/{id}/insight`, because the reader has no thread view and the chip sits on the message; (2) the filter's Jev feature
+  is `summary_filter`, implied by the one Summaries switch; (3) one withheld message keeps the **whole thread** from the
+  model rather than being skipped; (4) a stale summary stands for 24 hours, then the next open refreshes it, so a quiet thread
+  costs at most one call a day; (5) 12 messages are read at most (the first and the newest), 700 characters kept; (6) a failed
+  or unusable answer is not retried until the thread changes; (7) the dead `MailMessage.summary` contract field is removed.

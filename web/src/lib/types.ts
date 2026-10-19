@@ -104,6 +104,7 @@ export type Settings = {
 
 // --- The odds sheet: what the helper decision model said about one message.
 export type MessageOdds = Schema['MessageOdds'];
+export type MessageInsight = Schema['MessageInsight'];
 export type OddsAnswer = Schema['OddsAnswer'];
 export type OddsUnanswered = Schema['OddsUnanswered'];
 export type OddsReason = OddsUnanswered['reason'];

@@ -948,7 +948,7 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	if (queued) return queued;	const drafts = draftReply(state, path, method, raw);
 	if (drafts) return drafts;
 
-	const match = /^\/messages\/([^/]+)(\/summary|\/body|\/odds|\/privacy|\/privacy\/override)?$/.exec(path);
+	const match = /^\/messages\/([^/]+)(\/summary|\/body|\/odds|\/insight|\/privacy|\/privacy\/override)?$/.exec(path);
 	if (match) {
 		const [, id, kind] = match;
 		const summary: MailSummary | undefined = liveInbox(state).find((x) => x.id === id);
@@ -965,6 +965,10 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 			if (id !== 'm1') return { body: { model: '', answers: [], unanswered: [] } };
 			const stage2 = { ...ODDS_FIXTURE.stage2!, dismissed: state.needsCleared.has(id) };
 			return { body: { ...ODDS_FIXTURE, stage2 } };
+		}
+		if (kind === '/insight') {
+			// Only m1's thread was judged worth a summary; every other message has none.
+			return { body: id === 'm1' ? { summary: 'Mara wonders if she can bring her old posts and images to Grove. No rush.' } : {} };
 		}
 		if (kind === '/body') return bodyDocument(id);
 		return messageReply(summary, id, scenario, state.tagged.get(id) ?? []);

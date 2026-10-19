@@ -42,7 +42,7 @@ machinery (withheld mail) that 5h and 5i also need; 5j needs 5b's registry and t
 | 5b | [The Jev layer](5b-jev-layer.md) | **built against the fake (2026-10-09); waiting at gate G2 for the live run** |
 | 5c | [Needs-me cascade](5c-needs-me-cascade.md) | planned; questions answered 2026-10-07 |
 | 5d | [Classifiers and safety](5d-classifiers-and-safety.md) | **5d.1 and 5d.3 built (2026-10-16)**; 5d.4 Junk rescue next |
-| 5e | [Summaries and thread help](5e-summaries-and-thread-help.md) | planned; questions answered 2026-10-07 |
+| 5e | [Summaries and thread help](5e-summaries-and-thread-help.md) | **5e.1 (the summary chip) built (2026-10-19)**; 5e.2 thread state next |
 | 5f | [Newsletters and the digest](5f-newsletters-and-digest.md) | planned; questions answered 2026-10-07 |
 | 5g | [Receipts and the ledger view](5g-receipts-and-ledger.md) | planned; questions answered 2026-10-07 |
 | 5h | [Vision](5h-vision.md) | planned; questions answered 2026-10-07 |

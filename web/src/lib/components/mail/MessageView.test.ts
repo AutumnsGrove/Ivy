@@ -1,12 +1,13 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MailMessage } from '#lib/types.js';
 
-const mocks = vi.hoisted(() => ({ notJunk: vi.fn(async () => true) }));
+const mocks = vi.hoisted(() => ({ notJunk: vi.fn(async () => true), insight: vi.fn() }));
 vi.mock('#lib/messageActions.js', () => ({
 	markNotJunk: mocks.notJunk,
 	markReadOnOpen: () => () => {}
 }));
+vi.mock('#lib/api/client.js', () => ({ api: { getMessageInsight: mocks.insight } }));
 vi.mock('$app/navigation', () => ({ invalidateAll: async () => {} }));
 
 import MessageView from './MessageView.svelte';
@@ -28,6 +29,23 @@ const message = (over: Partial<MailMessage> = {}) =>
 		cc: [],
 		...over
 	}) as unknown as MailMessage;
+
+beforeEach(() => mocks.insight.mockResolvedValue({}));
+
+describe('MessageView thread summary', () => {
+	it('shows the thread summary for the open message, under the sender', async () => {
+		mocks.insight.mockResolvedValue({ summary: 'Mara asks whether her old posts can come along.' });
+		render(MessageView, { message: message(), color: 'var(--c1)' });
+		expect(await screen.findByText('Mara asks whether her old posts can come along.')).toBeInTheDocument();
+		expect(mocks.insight).toHaveBeenCalledExactlyOnceWith('m1');
+	});
+
+	it('shows no chip when the thread has no summary', async () => {
+		render(MessageView, { message: message(), color: 'var(--c1)' });
+		await waitFor(() => expect(mocks.insight).toHaveBeenCalled());
+		expect(screen.queryByText(/Mara asks/)).not.toBeInTheDocument();
+	});
+});
 
 describe('MessageView junk rescue chip', () => {
 	beforeEach(() => mocks.notJunk.mockClear());
