@@ -103,11 +103,11 @@ func (d *DBs) ThreadMessagesFor(ctx context.Context, accountID, messageID string
 
 	var ids []string
 	if view.Total <= limit {
-		ids, err = d.threadIDs(ctx, args, "ASC", limit)
+		ids, err = d.threadIDs(ctx, threadOldestFirst, args, limit)
 	} else {
 		var first, newest []string
-		if first, err = d.threadIDs(ctx, args, "ASC", 1); err == nil {
-			newest, err = d.threadIDs(ctx, args, "DESC", limit-1)
+		if first, err = d.threadIDs(ctx, threadOldestFirst, args, 1); err == nil {
+			newest, err = d.threadIDs(ctx, threadNewestFirst, args, limit-1)
 		}
 		// The newest come back newest first; the view is oldest first.
 		for i := len(newest) - 1; i >= 0; i-- {
@@ -131,10 +131,14 @@ func (d *DBs) ThreadMessagesFor(ctx context.Context, accountID, messageID string
 	return view, nil
 }
 
-func (d *DBs) threadIDs(ctx context.Context, args []any, order string, limit int) ([]string, error) {
-	rows, err := d.Mirror.Read.QueryContext(ctx,
-		`SELECT id FROM messages WHERE `+liveThread+` ORDER BY COALESCE(date, '') `+order+`, id `+order+` LIMIT ?`,
-		append(append([]any{}, args...), limit)...)
+// The two orders are separate constants, so no part of a query is ever built at run time.
+const (
+	threadOldestFirst = `SELECT id FROM messages WHERE ` + liveThread + ` ORDER BY COALESCE(date, '') ASC, id ASC LIMIT ?`
+	threadNewestFirst = `SELECT id FROM messages WHERE ` + liveThread + ` ORDER BY COALESCE(date, '') DESC, id DESC LIMIT ?`
+)
+
+func (d *DBs) threadIDs(ctx context.Context, query string, args []any, limit int) ([]string, error) {
+	rows, err := d.Mirror.Read.QueryContext(ctx, query, append(append([]any{}, args...), limit)...)
 	if err != nil {
 		return nil, fmt.Errorf("list thread messages: %w", err)
 	}

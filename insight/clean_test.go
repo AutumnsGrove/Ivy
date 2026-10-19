@@ -7,6 +7,13 @@ import (
 	"unicode/utf8"
 )
 
+// Written as runes so no invisible character sits in the source where a reviewer
+// could not see it.
+const (
+	rightToLeftOverride = string(rune(0x202e))
+	zeroWidthSpace      = string(rune(0x200b))
+)
+
 func TestCleanKeepsPlainTextAsItIs(t *testing.T) {
 	got, err := Clean("Sam and Priya settle on Thursday for the venue walk-through.")
 	if err != nil || got != "Sam and Priya settle on Thursday for the venue walk-through." {
@@ -19,11 +26,11 @@ func TestCleanReducesMarkupAndControlsToPlainText(t *testing.T) {
 	cases := map[string]string{
 		"tags":        "<b>Agreed</b> on <script>alert(1)</script>Friday",
 		"entities":    "Agreed &lt;img src=x onerror=alert(1)&gt; on Friday",
-		"controls":    "Agreed\x00 on\x1b[31m Friday‮",
+		"controls":    "Agreed\x00 on\x1b[31m Friday" + rightToLeftOverride,
 		"whitespace":  "  Agreed \n\n on\t\tFriday  ",
-		"zero width":  "Agr​eed on Friday",
+		"zero width":  "Agr" + zeroWidthSpace + "eed on Friday",
 		"unclosed":    "Agreed on <img src=x onerror=alert(1) Friday",
-		"markdownish": "Agreed on Friday",
+		"markdownish": "**Agreed** on `Friday`",
 	}
 	for name, in := range cases {
 		got, err := Clean(in)
@@ -34,7 +41,7 @@ func TestCleanReducesMarkupAndControlsToPlainText(t *testing.T) {
 		if strings.ContainsAny(got, "<>") || strings.ContainsFunc(got, func(r rune) bool { return r < ' ' && r != '\n' }) {
 			t.Errorf("%s: %q still has markup or controls", name, got)
 		}
-		if strings.ContainsRune(got, '‮') || strings.ContainsRune(got, '​') {
+		if strings.Contains(got, rightToLeftOverride) || strings.Contains(got, zeroWidthSpace) {
 			t.Errorf("%s: %q keeps an invisible character", name, got)
 		}
 		if !strings.Contains(got, "Friday") {
@@ -62,10 +69,11 @@ func TestCleanCutsAtAWordBoundaryAndSaysSo(t *testing.T) {
 	if n := utf8.RuneCountInString(got); n > MaxSummaryRunes {
 		t.Fatalf("%d runes, want at most %d", n, MaxSummaryRunes)
 	}
-	if !strings.HasSuffix(got, "…") || strings.HasSuffix(strings.TrimSuffix(got, "…"), " ") {
+	cut, marked := strings.CutSuffix(got, "…")
+	if !marked || strings.HasSuffix(cut, " ") {
 		t.Fatalf("got a cut that does not end cleanly: %q", got[len(got)-20:])
 	}
-	if strings.Contains(strings.TrimSuffix(got, "…"), "plann…") || !strings.HasSuffix(strings.TrimSuffix(got, "…"), "planning") && !strings.HasSuffix(strings.TrimSuffix(got, "…"), "quarterly") {
+	if !strings.HasSuffix(cut, "planning") && !strings.HasSuffix(cut, "quarterly") {
 		t.Fatalf("cut a word in half: %q", got[len(got)-20:])
 	}
 }
