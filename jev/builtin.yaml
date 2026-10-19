@@ -231,23 +231,25 @@ questions:
 
   # The cheap filter in front of a summary (5e.1). It rides the shared call for every
   # new Inbox message, and only a yes lets the reader's chip spend one paid chat call,
-  # and then only when the thread is opened. The model sees the newest message with
-  # its quoted history, so a long thread shows up as a long quoted trail. A wrong yes
-  # costs one summary; a wrong no shows no chip. Ships dark behind the Summaries
-  # switch. Provisional until G3.
+  # and then only when the thread is opened. The state strips quoted replies, so the
+  # model sees one message's own text and its recipients, never the trail above it: the
+  # question asks only about what is visible (the length, the recipients and the signs
+  # of a continuing discussion). A thread counts when any one of its messages says yes.
+  # A wrong yes costs one summary; a wrong no shows no chip. Ships dark behind the
+  # Summaries switch. Provisional until G3.
   - id: worth_summarizing
     instructions: >-
       Would a short summary save the owner real reading time? Count a message that is
-      itself very long, and a message that carries a long back-and-forth between
-      several people in its quoted history, where the owner would otherwise have to
-      read the whole trail to catch up. Do not count short messages, a reply of a few
-      lines even when it quotes a few earlier lines, a conversation between two
-      people that fits on one screen, newsletters, marketing, receipts, automatic
+      itself very long or dense, and a message that is one step in a long discussion
+      among several people: many recipients, replies that refer back to earlier points,
+      decisions or options, or a thread the owner would have to read in full to catch
+      up. Do not count short messages, a quick reply or thanks, a conversation between
+      two people that fits on one screen, newsletters, marketing, receipts, automatic
       alerts and notifications. Exception: a long automated report the owner must act
       on still counts.
     criteria:
       "no": short or simple enough to read directly, or not the kind of mail to summarise
-      "yes": long, or a long multi-person thread, and a summary would save time
+      "yes": long, or part of a long multi-person discussion, and a summary would save time
     quiet_option: "no"
     threshold: 0.80
     feature: summary_filter
