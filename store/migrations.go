@@ -579,6 +579,25 @@ var mirrorMigrations = []migration{
 				WHERE verdict = 'needs' AND state <> 'dismissed'`,
 		},
 	},
+	{
+		version: 22,
+		statements: []string{
+			// The one summary a thread shows (5e.1). It is derived from mail and rebuildable,
+			// so it lives in the mirror. source_hash names the messages, instructions and
+			// model it came from; written_at bounds how often a thread may be re-summarised.
+			`CREATE TABLE thread_summaries (
+				account_id    TEXT NOT NULL,
+				thread_id     TEXT NOT NULL,
+				source_hash   TEXT NOT NULL,
+				prompt_hash   TEXT NOT NULL DEFAULT '',
+				model         TEXT NOT NULL,
+				summary       TEXT NOT NULL,
+				message_count INTEGER NOT NULL DEFAULT 0,
+				written_at    TEXT NOT NULL,
+				PRIMARY KEY (account_id, thread_id)
+			) WITHOUT ROWID`,
+		},
+	},
 }
 
 // stateMigrations is the schema of the locally owned, backed-up state.
