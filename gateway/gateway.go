@@ -66,6 +66,8 @@ type Server struct {
 	// odds is where the odds sheet reads cached Jev answers; nil means every sheet is
 	// empty (smart features absent).
 	odds OddsSource
+	// insight is where the summary chip comes from; nil means no thread has one.
+	insight InsightSource
 	// privacy is where the withheld marker reads the safety checks; nil reads as
 	// unchecked.
 	privacy PrivacySource
@@ -194,6 +196,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/messages/{id}", s.handleMessage)
 	api.HandleFunc("GET /api/v1/messages/{id}/summary", s.handleMessageSummary)
 	api.HandleFunc("GET /api/v1/messages/{id}/odds", s.handleMessageOdds)
+	api.HandleFunc("GET /api/v1/messages/{id}/insight", s.handleMessageInsight)
 	api.HandleFunc("GET /api/v1/needs-attention", s.handleNeedsAttention)
 	api.HandleFunc("POST /api/v1/messages/{id}/needs/dismiss", s.handleDismissNeeds)
 	api.HandleFunc("GET /api/v1/messages/{id}/privacy", s.handleMessagePrivacy)

@@ -316,6 +316,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/messages/{id}/insight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A short summary of the thread a message belongs to, when it is worth one
+         * @description Written on the first open of a thread the helper decision model judged worth reading in short, then kept; a thread that grows is summarised again at most once a day. Always 200: with smart features off, the Summaries switch off, a cap reached, withheld mail in the thread or a failed call there is simply no summary, and the reader shows no chip. The text is plain, never markup. Not related to `/messages/{id}/summary`, which is the header alone.
+         */
+        get: operations["getMessageInsight"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/messages/{id}/odds": {
         parameters: {
             query?: never;
@@ -1492,6 +1512,12 @@ export interface components {
             /** @enum {string} */
             tone?: "a" | "b";
             failed?: boolean;
+        };
+        MessageInsight: {
+            /** @description Plain text, a few sentences. Absent when there is no summary. */
+            summary?: string;
+            /** @description How many messages of a long thread the summary did not read (it reads the first and the newest). Absent when it read them all. */
+            earlier?: number;
         };
         MessageOdds: {
             /** @description The model id the answers were read for; empty when none is configured. */
@@ -2806,6 +2832,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MailSummary"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getMessageInsight: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The insight, empty when there is none */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageInsight"];
                 };
             };
             404: components["responses"]["NotFound"];

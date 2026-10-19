@@ -1462,6 +1462,15 @@ type MessageAuth struct {
 // MessageAuthState defines model for MessageAuth.State.
 type MessageAuthState string
 
+// MessageInsight defines model for MessageInsight.
+type MessageInsight struct {
+	// Earlier How many messages of a long thread the summary did not read (it reads the first and the newest). Absent when it read them all.
+	Earlier *int `json:"earlier,omitempty"`
+
+	// Summary Plain text, a few sentences. Absent when there is no summary.
+	Summary *string `json:"summary,omitempty"`
+}
+
 // MessageOdds defines model for MessageOdds.
 type MessageOdds struct {
 	Answers []OddsAnswer `json:"answers"`

@@ -589,6 +589,28 @@ paths:
                 $ref: "#/components/schemas/MailSummary"
         "404":
           $ref: "#/components/responses/NotFound"
+  /messages/{id}/insight:
+    get:
+      operationId: getMessageInsight
+      summary: A short summary of the thread a message belongs to, when it is worth one
+      description: >
+        Written on the first open of a thread the helper decision model judged worth
+        reading in short, then kept; a thread that grows is summarised again at most once
+        a day. Always 200: with smart features off, the Summaries switch off, a cap
+        reached, withheld mail in the thread or a failed call there is simply no summary,
+        and the reader shows no chip. The text is plain, never markup. Not related to
+        `/messages/{id}/summary`, which is the header alone.
+      parameters:
+        - $ref: "#/components/parameters/MessageID"
+      responses:
+        "200":
+          description: The insight, empty when there is none
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageInsight"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /messages/{id}/odds:
     get:
       operationId: getMessageOdds
@@ -2577,6 +2599,17 @@ components:
           enum: [a, b]
         failed:
           type: boolean
+    MessageInsight:
+      type: object
+      properties:
+        summary:
+          type: string
+          description: Plain text, a few sentences. Absent when there is no summary.
+        earlier:
+          type: integer
+          description: >
+            How many messages of a long thread the summary did not read (it reads the
+            first and the newest). Absent when it read them all.
     MessageOdds:
       type: object
       required: [model, answers, unanswered]

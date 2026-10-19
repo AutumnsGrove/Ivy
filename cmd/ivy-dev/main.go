@@ -249,9 +249,14 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool, llmKey string)
 	}
 
 	hub := events.New()
+	api := gateway.New(dbs, version, webui.FS).WithSearch(embedding.Query).WithSmartControls(embedding.Caps).WithEmbedBacklog(embedding.Backlog()).WithOdds(embedding.Odds).WithPrivacy(embedding.Privacy).WithNeedsAttention(embedding.Urgency).WithEvents(hub).WithAllowedHosts(stack.Config.HostAllowList())
+	// A nil service must not become a non-nil interface that the endpoint would call through.
+	if embedding.Insight != nil {
+		api = api.WithInsight(embedding.Insight)
+	}
 	srv := &http.Server{
 		Addr:              stack.Config.Listen,
-		Handler:           gateway.New(dbs, version, webui.FS).WithSearch(embedding.Query).WithSmartControls(embedding.Caps).WithEmbedBacklog(embedding.Backlog()).WithOdds(embedding.Odds).WithPrivacy(embedding.Privacy).WithNeedsAttention(embedding.Urgency).WithEvents(hub).WithAllowedHosts(stack.Config.HostAllowList()).Handler(),
+		Handler:           api.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}

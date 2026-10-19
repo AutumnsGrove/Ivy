@@ -148,6 +148,9 @@ func runCmd(configPath *string, version string) *cobra.Command {
 			if embedding.Classifier != nil {
 				api = api.WithBackfill(embedding.Classifier)
 			}
+			if embedding.Insight != nil {
+				api = api.WithInsight(embedding.Insight)
+			}
 
 			// The self-update path only makes sense in the container, where a host-side
 			// watcher reads the signal file. In dev it would write a file nothing reads

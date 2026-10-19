@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/AutumnsGrove/Ivy/config"
+	"github.com/AutumnsGrove/Ivy/insight"
 	"github.com/AutumnsGrove/Ivy/internal/mailworld"
 	"github.com/AutumnsGrove/Ivy/jev"
 	"github.com/AutumnsGrove/Ivy/llm"
@@ -518,5 +519,110 @@ func TestStartingWithSmartOnAndNoKeySaysSoInTheLog(t *testing.T) {
 	NewEmbedding(cfg, dbs, "a-key")
 	if strings.Contains(logged.String(), "smart features are on") {
 		t.Errorf("warned although a key was loaded: %s", logged.String())
+	}
+}
+
+// askedWorth counts shared Jev calls that carried the summary filter.
+func askedWorth(w *mailworld.World) int {
+	n := 0
+	for _, c := range w.Calls() {
+		if c.Endpoint == "systemone" && strings.Contains(string(c.Body), insight.Filter) {
+			n++
+		}
+	}
+	return n
+}
+
+// The whole summary chain on the shipped questions and the real gate: new mail is asked
+// worth_summarizing alongside the checks only once Summaries is on, and opening a thread
+// that the filter approved then makes the one chat call.
+func TestASummaryIsWrittenOnlyForAThreadTheShippedFilterApproved(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	w, err := mailworld.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = w.Close() })
+	dbs, err := store.Open(ctx, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = dbs.Close() })
+	if err := dbs.UpsertAccount(ctx, store.Account{ID: "a1", Address: "a1@example.test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := dbs.UpsertFolder(ctx, store.Folder{ID: "f1", AccountID: "a1", Name: "INBOX", Role: store.RoleInbox}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{
+		LLM:      config.LLM{OpenRouterBase: w.OpenRouterURL(), EmbedModel: "m", MonthlyCapUSD: 5},
+		Accounts: []config.Account{{ID: "a1", LLMEnabled: true}},
+	}
+	emb := NewEmbedding(cfg, dbs, "k")
+	if emb.Insight == nil {
+		t.Fatal("the summary service is missing from the shared builder")
+	}
+	// needs_me puts the shared call on, so the Summaries switch is the only difference.
+	if err := emb.Caps.SetFeatureEnabled(ctx, "a1", "needs_me", true); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := emb.Classifier.RunOnce(ctx); n != 0 { // the first pass only sets the watermark
+		t.Fatalf("the first pass read %d messages", n)
+	}
+	arrive := time.Now().Add(time.Minute)
+	put := func(id, thread string, uid uint32, at time.Time) {
+		t.Helper()
+		if err := dbs.UpsertMessage(ctx, store.Message{
+			ID: id, AccountID: "a1", FolderID: "f1", UID: uid, ContentKey: "ck-" + id, ThreadID: thread,
+			Subject: "Venue", BodyText: "Notes on the venue options, the budget and the dates.", Date: at, InternalDate: at,
+			From: store.Address{Name: "Ada", Address: "ada@example.com"},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Summaries off: the filter is not asked, and opening the thread asks nothing.
+	put("m1", "t1", 1, arrive)
+	if n, err := emb.Classifier.RunOnce(ctx); err != nil || n != 1 {
+		t.Fatalf("classifier processed=%d err=%v", n, err)
+	}
+	if askedWorth(w) != 0 {
+		t.Fatal("worth_summarizing was asked with the Summaries switch off")
+	}
+	if res, err := emb.Insight.ForMessage(ctx, "a1", "m1"); err != nil || res.Summary != "" || chatCalls(w) != 0 {
+		t.Fatalf("with the switch off: %+v, %v, chat %d", res, err, chatCalls(w))
+	}
+
+	// Summaries on: new mail is asked, and the approved thread is summarised once.
+	if err := emb.Caps.SetFeatureEnabled(ctx, "a1", insight.Feature, true); err != nil {
+		t.Fatal(err)
+	}
+	put("m2", "t2", 2, arrive.Add(time.Minute))
+	put("m3", "t2", 3, arrive.Add(2*time.Minute))
+	yes := mailworld.JevAnswer{Choice: "yes", Probabilities: map[string]float64{"yes": 0.95, "no": 0.05}, Confidence: 0.95}
+	quiet := func(c string) mailworld.JevAnswer {
+		return mailworld.JevAnswer{Choice: c, Probabilities: map[string]float64{c: 0.99}, Confidence: 0.99}
+	}
+	for range 2 {
+		w.QueueJev(map[string]mailworld.JevAnswer{
+			"injection_tripwire": quiet("no"), "sensitive_content": quiet("none"), "is_automated": quiet("no"),
+			"needs_me": quiet("none"), "urgency": quiet("normal"), "has_deadline": quiet("no"),
+			"asks_question": quiet("no"), insight.Filter: yes,
+		})
+	}
+	if n, err := emb.Classifier.RunOnce(ctx); err != nil || n != 2 {
+		t.Fatalf("classifier processed=%d err=%v", n, err)
+	}
+	if askedWorth(w) != 2 {
+		t.Fatalf("worth_summarizing was asked in %d calls, want one per new message", askedWorth(w))
+	}
+	w.QueueChat("Ada and the owner compared venue options and are waiting on the budget.")
+	res, err := emb.Insight.ForMessage(ctx, "a1", "m3")
+	if err != nil || res.Summary == "" || chatCalls(w) != 1 {
+		t.Fatalf("summary %+v, err %v, chat calls %d; want one summary for the approved thread", res, err, chatCalls(w))
+	}
+	if again, _ := emb.Insight.ForMessage(ctx, "a1", "m2"); again.Summary != res.Summary || chatCalls(w) != 1 {
+		t.Fatalf("reopening cost a call or changed the text: %+v, chat calls %d", again, chatCalls(w))
 	}
 }
