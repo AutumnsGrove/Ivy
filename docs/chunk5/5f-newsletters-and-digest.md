@@ -34,6 +34,10 @@ never touch personal correspondence.
   `complete()`.
 - **Local signals first:** `List-Id`/`List-Unsubscribe` (once parsed, 5f.1) and the "show in Reading"
   rule are the free baseline; the LLM improves, it does not replace them.
+- **The unsubscribe surface is the mailing-list strip** in the reader (planned as chunk 6b on
+  2026-10-22): `From a mailing list — Unsubscribe` above the subject, where the message is, not a chip
+  in the list row; the same strip explains a skipped newsletter in the feed. 5f.1 provides the action
+  the strip's button calls.
 - **Quiet auto-archive is a deferred idea,** and must never touch personal correspondence.
 - **Summaries are plain text and never labelled as AI;** a wrong guess costs a digest line, not mail.
 
@@ -42,7 +46,7 @@ never touch personal correspondence.
 1. **5f.1 Unsubscribe.** First parse and store `List-Id`, `List-Unsubscribe` (https URL, mailto) and
    `List-Unsubscribe-Post` (RFC 8058 one-click) with a mirror migration and a rederive of existing
    mail; build the guarded fetch client; a confirm step; the server-side POST with a timeout and size
-   bound; the outcome shown. A `mailto:` unsubscribe is a message and therefore goes through
+   bound; the outcome shown on 6b's strip. A `mailto:` unsubscribe is a message and therefore goes through
    the send queue and its confirmation.
 2. **5f.2 Feed signals.** `digest_worthy` and `same_topic` over Reading items, cached by content key.
 3. **5f.3 The digest.** Generation (a `Complete` over the selected items' clipped text), storage as

@@ -5,7 +5,8 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-19 (5e.1, the summary chip, is built; see "▶ Now"). Earlier, 2026-10-16 (first real-mailbox run, see "▶ Now"; 5c.4 done; next is 5c.5, the labelled evaluation; 5b still waits at G2; see "▶ Now"). **Chunk 4 (send) is complete: 4a-4h are done.** **4h (rich text)** landed with the decisions settled in qa-log round 66 and `docs/handoffs/2026-10-06-4h-richtext-design.md`: the editor is `squire-rte` (MIT, zero deps, 16.1 KiB brotli, chosen over a 98.3 KiB minimal TipTap), both modes stay with rich as the default and the mode fixed once typed, a `bodyFormat` field is sanitised server-side with a derived `text/plain`, and the paste walker is our own allow-list. `docs/BUILD-LOG.md` has the entry. What is left is the operator's live checks. **4g is done** (outgoing attachments and images; round 65): gate G4 cleared the dependency question — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4f is done** (the compose screen; round 64): the client calls and the new
+last updated: 2026-10-22 (chunk 6 planned after a Penguin Mail recon; see "▶ Now" and `docs/chunk6/`).
+Earlier, 2026-10-19 (5e.1, the summary chip, is built; see "▶ Now"). Earlier, 2026-10-16 (first real-mailbox run, see "▶ Now"; 5c.4 done; next is 5c.5, the labelled evaluation; 5b still waits at G2; see "▶ Now"). **Chunk 4 (send) is complete: 4a-4h are done.** **4h (rich text)** landed with the decisions settled in qa-log round 66 and `docs/handoffs/2026-10-06-4h-richtext-design.md`: the editor is `squire-rte` (MIT, zero deps, 16.1 KiB brotli, chosen over a 98.3 KiB minimal TipTap), both modes stay with rich as the default and the mode fixed once typed, a `bodyFormat` field is sanitised server-side with a derived `text/plain`, and the paste walker is our own allow-list. `docs/BUILD-LOG.md` has the entry. What is left is the operator's live checks. **4g is done** (outgoing attachments and images; round 65): gate G4 cleared the dependency question — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4f is done** (the compose screen; round 64): the client calls and the new
 `/drafts` screen, the From picker over the real identities, People autocomplete, reply/forward
 prefills, debounced autosave to the server's Drafts folder (and once on leave), the Sending/Undo
 toast, the Not-sent sheet and the resend-free `unconfirmed` notice. The operator chose autosave plus
@@ -79,6 +80,18 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 `cmd/` (`ivy`, `ivy-dev`, `ivy-assets`). No `Dockerfile` or image-publish workflow yet.
 
 ## ▶ Now
+
+**Chunk 6 is planned, 2026-10-22, and nothing has been built from it.** After reading Penguin Mail
+(`penguin-mail.com`, the Rust/GTK4 client, not the empty `penguinmail.app`) the operator had a recon
+and then a plan: `docs/chunk6/README.md` is the plan (six ranked, droppable stages — 6a a facet row
+above the list, 6b the mailing-list strip, 6c inline message details, 6d rules that say when they
+run, 6e switches that say why they are off, 6f an optional selection surface), and
+`docs/chunk6/penguin-mail-recon.md` is the reading behind it. **It runs after chunk 5**, not before
+5c.5 or 5b's gate. Two chunk-5 plans absorbed craft-only amendments in the same change: 5i's trace
+folds one line per step with a live line below it, and 5f's unsubscribe is 6b's strip. The assistant
+that acts through a shared undo stack is written down as a **direction only**, not a stage, because
+the triage undo stack does not exist yet. Calendar stays out entirely; the `.ics` chip in the reader
+stays precisely because it is a file handed to the phone's own calendar app.
 
 **First real-mailbox run, 2026-10-16.** The operator runs a second Ivy on her own mailbox (`~/ivy-real/ivy.yaml`, port
 8419, `ivy run --config`; key and password in a `.env` beside it; 41 messages synced). Pinned `jev-1.14` (live-checked).
@@ -456,6 +469,32 @@ run, S4 and S10 on synthetic data.
 
 Grouped by where it lands. Each item names its source so it can be found again.
 
+### Chunk 6, the craft pass (planned 2026-10-22, after chunk 5)
+
+The plan is `docs/chunk6/README.md`; the evidence is `docs/chunk6/penguin-mail-recon.md`. In build
+order, each droppable:
+
+- **6a The facet row** above the list (`All · Unread · With files · Flagged · Need you` with counts,
+  counted over the base view, one aggregate query, a scrolling one-line row). The biggest daily win
+  and the only stage with backend work.
+- **6b The mailing-list strip** (`From a mailing list — Unsubscribe` above the subject), the surface
+  5f's unsubscribe button plugs into; needs `List-Id`/`List-Unsubscribe` parsed and stored.
+- **6c Inline `Details`** in the reader header: To, Cc, Reply-To, full date, the identity it was sent
+  to, the auth verdict and the spam score, one tap, no sheet.
+- **6d Rules that say when they run:** one sentence above `/rules`, plus a note on a rule 5j compiled.
+- **6e Switches that say why they are off:** a `reason` on every dark settings descriptor, with a
+  guard test that fails on an off switch without one.
+- **6f The reader pane as the selection surface** (desktop/tablet only) — optional, first to drop.
+
+Two items from the recon are **deliberately not stages**:
+
+- **Send Later** (a scheduler, resumption across restarts, its own view) — the operator mostly
+  receives, and it costs an L. Worth revisiting only if sending becomes common.
+- **An assistant that acts through the shared undo stack.** The model is recorded as a direction in
+  `docs/chunk6/README.md`: separate act tools, volume (not category) as the approval trigger,
+  everything on the same undo stack as the UI. It is blocked on a triage undo stack, which does not
+  exist: today actions are outbox writes with a toast and only send is undoable.
+
 ### Open review findings (`papercuts.md`)
 
 - Re-measure the `References` scan (N13, 51 hostile messages: 4.2 s to 0.15 s on a laptop) on the
@@ -485,7 +524,9 @@ Found by the round 32 audit; each needs a home before its milestone starts.
 ### Frontend
 
 - **Calendar chip in the reader (operator wants it, 2026-10-09).** Apple Mail shows a card above the body
-  for a mail with an invite: title, day and time, place and an Add button. Today `.ics` is only read as
+  for a mail with an invite: title, day and time, place and an Add button. **This is not a calendar:**
+  the operator confirmed on 2026-10-22 that Ivy has no calendar, and the chip survives only because
+  downloading an `.ics` for the phone's own calendar app is a mail-shaped affordance. Today `.ics` is only read as
   text for search (tier 0 extraction) and RSVP is a v1 non-goal in `PLAN.md`, so nothing is planned for
   it. A first slice needs no RSVP: parse the `text/calendar` part server-side (title, start, end,
   location) into the message view, render the chip from it, and let Add download the `.ics` for the
@@ -571,6 +612,7 @@ replace the operator's mail client sooner); 4 and 5 can still be narrowed.
 | **3** Sync | Split into stages 3a-3h (table below). Highest-risk code: the convergence property test (3a) | `ARCHITECTURE.md` 4/9, `TESTING.md` 2/6 |
 | **4** Send | Compose (markdown then rich text), identities/signatures, undo send (delay setting), drafts in the server Drafts folder, Reply-To handling, SMTP + APPEND to Sent, EXIF strip / photo downscale, size checks against the provider | `PLAN.md` 5, `ARCHITECTURE.md` 5 |
 | **5** Triage | Jev layer + question registry, the single LLM gate + cost ledger (the embeddings-only piece shipped in 3f), needs-me cascade, categories, newsletters (feed/digest/unsubscribe), receipts/ledger/renewals, vision, Ask Ivy agent loop, full stats panel. Safety assertions are part of done | `JEV.md`, `ARCHITECTURE.md` 6/7, `TESTING.md` 4 |
+| **6** Craft | Planned 2026-10-22, after chunk 5, learns from Penguin Mail: the facet row, the mailing-list strip, inline `Details`, rule provenance, settings that say why, an optional selection surface. No subsystem, every stage droppable | `docs/chunk6/` |
 
 ### Chunk 3 stages (split in round 36)
 

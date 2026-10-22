@@ -2001,3 +2001,38 @@ already answered; these are what the build forced. Please confirm or change.
   model rather than being skipped; (4) a stale summary stands for 24 hours, then the next open refreshes it, so a quiet thread
   costs at most one call a day; (5) 12 messages are read at most (the first and the newest), 700 characters kept; (6) a failed
   or unusable answer is not retried until the thread changes; (7) the dead `MailMessage.summary` contract field is removed.
+
+## Round 68 — Penguin Mail recon and chunk 6, the craft pass (2026-10-22, operator)
+
+The operator saw Penguin Mail online and asked for reconnaissance, the pictures, and a plan for what
+Ivy could learn. Evidence: `docs/chunk6/penguin-mail-recon.md`; plan: `docs/chunk6/README.md`. Note
+which project this is, because two share the name: `penguin-mail.com` is the real one (Rust, GTK 4,
+libadwaita, GPL-3.0, one developer, 498 stars, 1.0 on 2026-10-07); `penguinmail.app` is an empty alpha
+landing page.
+
+- **Answered (operator): the deliverable is a doc *and* real backlog entries**, not a doc alone and
+  not "doc then build the first item". So `docs/chunk6/README.md` is a chunk plan with six ranked,
+  individually droppable stages, and `next_steps.md` carries the ranked list in its backlog.
+- **Answered (operator): the ideas in scope are "interface + assistant craft", screened for
+  feasibility first** (phone over Tailscale, and cheap). The screen kept five interface items and two
+  doc-level amendments; it **dropped Send Later** (an L: a scheduler, resumption across restarts, a
+  view, for an operator who mostly receives) and kept the reader-pane selection surface only as an
+  optional last stage, because Ivy's phone already has the better pattern (a floating bulk bar).
+- **Answered (operator): the assistant that acts through a shared undo stack is a direction only.**
+  Not a stage. Recorded in `docs/chunk6/README.md` with the three rules that would make it safe:
+  separate act tools, volume (not category) as the approval trigger, everything on the same undo
+  stack as the UI's own actions. It is blocked on a triage undo stack, which does not exist — today
+  Ivy's actions are outbox writes with a toast and only send is undoable.
+- **Answered (operator): timing is after chunk 5.** Nothing here delays 5c.5, 5b's gate or 5e.
+- **Answered (operator): no calendar.** Reading that against the backlog's "Calendar chip in the
+  reader (operator wants it, 2026-10-09)" item, she clarified the intent was narrower than the
+  backlog wording: **the goal was to download an `.ics` and open it in her own calendar app.** So no
+  calendar views, no CalDAV, no RSVP — the `.ics` chip stays, and the backlog item now says so.
+- **Craft amendments folded into chunk-5 plans the same day** (documentation only, no schedule
+  change): 5i's trace folds one line per step with a done/failed mark and a live line, the answer is
+  grouped under short subheadings with numbered claims, and a `+` starts a new conversation; 5f's
+  unsubscribe surface is 6b's mailing-list strip rather than a chip in the row.
+- **What Ivy already does better, recorded so it is not "fixed" to match:** sender identities (4e;
+  the second-most-upvoted complaint in their thread), the HTML path (server sanitise + sandboxed
+  frame + remote content blocked twice), quiet chips never labelled as AI, and the phone's floating
+  bulk bar.

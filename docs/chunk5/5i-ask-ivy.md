@@ -31,7 +31,9 @@ highest-risk consumer of untrusted mail, because a model reads many messages and
   database (optionally Jev `claim_supported` per claim); the final answer renders as plain text.
 - **No tool can send, move, delete or tag.** A proposed action ("archive these") is a button the
   operator must click.
-- **A short, quiet trace** of what it looked at.
+- **A short, quiet trace** of what it looked at: one folded line per step with a done or failed
+  mark, and a live line at the bottom saying what it is doing now (craft detail settled 2026-10-22
+  from Penguin Mail's assistant pane, `chunk6/README.md`).
 - **The old fixed pipeline** (retrieve → `answers_question` filter → answer) stays as the cheap
   fallback for the one-shot case and as the evaluation baseline.
 - **Ask mixes only operator-selected accounts** (brief invariant 4); the other automated features
@@ -47,10 +49,12 @@ highest-risk consumer of untrusted mail, because a model reads many messages and
 3. **5i.3 The tools,** each a small function over the existing search and the mirror, bounded in
    result count and bytes, with the selected-account restriction enforced inside them.
 4. **5i.4 The loop.** The chat-model driver with a schema for tool calls, the 25-step and per-step
-   token caps, the shared monthly caps (no per-question ceiling), cancellation, and the live SSE trace.
-   Conversations and follow-ups are stored (decision 3).
+   token caps, the shared monthly caps (no per-question ceiling), cancellation, and the live SSE trace
+   (each step a folded one-line row, the live line below it). Conversations and follow-ups are stored
+   (decision 3) with a `+` for a new one and the history reachable.
 5. **5i.5 Citations and rendering.** Verify every cited id was read in this run; strip anything else;
-   render as plain text; the optional `claim_supported` pass.
+   render as plain text, grouped under short subheadings with numbered claims (the 2026-10-22 craft
+   note); the optional `claim_supported` pass.
 6. **5i.6 The endpoint and screen,** replacing the mock (and its E2E fixtures), with the proposed
    action buttons.
 
