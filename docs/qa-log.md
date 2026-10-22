@@ -2036,3 +2036,40 @@ landing page.
   the second-most-upvoted complaint in their thread), the HTML path (server sanitise + sandboxed
   frame + remote content blocked twice), quiet chips never labelled as AI, and the phone's floating
   bulk bar.
+
+## Round 69 — accounts (Gmail, any IMAP) and Ivy that acts (2026-10-22, operator)
+
+Two new chunks planned in the same session as round 68: `docs/chunk7/` (accounts) and `docs/chunk8/`
+(Ivy that acts). The operator asked for both explicitly after the Penguin Mail reading, where the
+acting assistant had been only a direction.
+
+- **Answered (operator): Gmail signs in with OAuth2 (SASL XOAUTH2) first,** rather than an app password
+  as the primary path. `go-sasl` has `oauthbearer` and no XOAUTH2, so Ivy implements a ~20-line
+  `sasl.Client` instead of adding a dependency.
+- **Finding recorded with that choice:** an external Google Cloud project in **Testing** status issues
+  refresh tokens that **expire in 7 days**, and the IMAP/SMTP scope `https://mail.google.com/` is
+  **restricted**, so publishing it needs verification. The workable path for one operator is to publish
+  unverified and stay under the 100-user lifetime cap, or to use a Workspace **Internal** app. Because
+  a personal Gmail account may not want a Cloud project at all, **7d keeps the app password as a
+  first-class fallback** — the operator's ordering is honoured, not overruled.
+- **Answered (operator): normalise the mirror to multi-mailbox,** not a Gmail special case: one message
+  row and N mailbox memberships. Accepted cost: a migration and a join in every list query. This is the
+  largest architectural change since 3a and gets the 3a convergence property test extended to
+  memberships. Encouraging fact that decided its feasibility: the **outbox already speaks content keys
+  and folder ids**, so the write path does not change.
+- **Answered (operator): scope is Gmail plus generic IMAP** (provider profiles from the address, manual
+  host/port/TLS fields), not other provider APIs.
+- **Answered (operator): Proton is documented only.** Recorded honestly: Proton has no IMAP in the
+  cloud; Bridge needs a paid plan and its Linux build is **x86_64-only**, so it cannot run on the
+  aarch64 potato; hydroxide is Go but serves **unencrypted local IMAP only**. So **neither connects to
+  Ivy today without a code change** — chunk 7's open question 4 asks whether to add the
+  trusted-local-host stage (certificate pinning plus a plaintext-loopback allowance).
+- **Answered (operator): the assistant may propose the reversible set (archive, trash, tag, snooze,
+  read/unread), plus move and junk; the irreversible set (send, purge, unsubscribe, rules, settings) is
+  card-only, always.** The model never executes: a tool writes one `proposal` row and nothing else, the
+  targets are ids the loop read this run and are re-checked server-side, and every executed proposal is
+  one undo entry whose inverse is an ordinary outbox write.
+- **Ordering recorded:** **8a (the triage undo stack) comes first and is worth building alone**, because
+  triage has no undo today (only send does). Everything else in chunk 8 depends on 5i.
+- **Deliberately not copied from Penguin Mail:** its "Always Allow" per address/command. Ivy has no
+  extension ecosystem, so an always-allow would only ever be used to skip the guard on a bad proposal.

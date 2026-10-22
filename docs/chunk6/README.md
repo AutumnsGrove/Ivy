@@ -154,10 +154,11 @@ phone already has the better pattern. Drop it without regret if it does not feel
 **Tests.** Selection on/off restores the previously open message; the action set is the same objects
 `BulkBar` uses (one source of truth, not a second list); Escape and the back gesture both clear it.
 
-## Direction only: the assistant that acts
+## The assistant that acts: planned as chunk 8
 
-Not built here, and not scheduled. Recorded because Penguin Mail shows it can be done safely, and
-because it changes how 5i's proposals should be shaped later.
+**Planned 2026-10-22 in `docs/chunk8/`**, after this chunk and after 5i. It started as a paragraph
+here (the reading is still in `penguin-mail-recon.md`) and became a chunk because Penguin Mail shows
+it can be done safely, and because it changes how 5i's proposals should be shaped.
 
 The model: **the assistant executes only through the same command layer the buttons use**, so its
 actions land on the **same undo stack** as the operator's own triage, and "undo that" covers both.
@@ -172,7 +173,8 @@ Three rules make that safe:
    off — which is where 5i is today, deliberately.
 
 That direction needs a **triage undo stack** first, which does not exist: Ivy's actions are
-outbox writes with a toast, and only send has an undo. Until it does, this stays a paragraph.
+outbox writes with a toast, and only send has an undo. That stack is the first stage of
+`docs/chunk8/`, which now plans the whole thing.
 
 ## Amendments to chunk 5 plans
 

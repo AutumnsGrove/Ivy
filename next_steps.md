@@ -5,7 +5,8 @@ Working note, not a project doc: where we are, what is next, and the one backlog
 `docs/qa-log.md`, review findings are in `papercuts.md`. It is tracked in git; **update it and commit
 it in the same stage as the work**, so the next session can resume after a context clear.
 
-last updated: 2026-10-22 (chunk 6 planned after a Penguin Mail recon; see "▶ Now" and `docs/chunk6/`).
+last updated: 2026-10-22 (chunks 7 and 8 planned after the Penguin Mail recon; see "▶ Now" and
+`docs/chunk6/` to `docs/chunk8/`). Earlier, 2026-10-22 (chunk 6 planned; see "▶ Now").
 Earlier, 2026-10-19 (5e.1, the summary chip, is built; see "▶ Now"). Earlier, 2026-10-16 (first real-mailbox run, see "▶ Now"; 5c.4 done; next is 5c.5, the labelled evaluation; 5b still waits at G2; see "▶ Now"). **Chunk 4 (send) is complete: 4a-4h are done.** **4h (rich text)** landed with the decisions settled in qa-log round 66 and `docs/handoffs/2026-10-06-4h-richtext-design.md`: the editor is `squire-rte` (MIT, zero deps, 16.1 KiB brotli, chosen over a 98.3 KiB minimal TipTap), both modes stay with rich as the default and the mode fixed once typed, a `bodyFormat` field is sanitised server-side with a derived `text/plain`, and the paste walker is our own allow-list. `docs/BUILD-LOG.md` has the entry. What is left is the operator's live checks. **4g is done** (outgoing attachments and images; round 65): gate G4 cleared the dependency question — browser-first image preparation, no server decoder and no new dependency, 25 MiB limits, inline `cid:` included. **4f is done** (the compose screen; round 64): the client calls and the new
 `/drafts` screen, the From picker over the real identities, People autocomplete, reply/forward
 prefills, debounced autosave to the server's Drafts folder (and once on leave), the Sending/Undo
@@ -80,6 +81,17 @@ prune, mirror, restore), `internal/*` (mailworld, devstack, compress, asset, blo
 `cmd/` (`ivy`, `ivy-dev`, `ivy-assets`). No `Dockerfile` or image-publish workflow yet.
 
 ## ▶ Now
+
+**Chunks 7 and 8 are planned, 2026-10-22, and nothing has been built from either.** Chunk 7
+(`docs/chunk7/`) is accounts: Gmail by OAuth2 with the Gmail verbs and limits handled, generic IMAP
+with provider profiles, and the multi-mailbox mirror change that makes Gmail's labels honest; Proton
+is documented only, because its bridge is x86_64-only and hydroxide speaks plaintext local IMAP, so
+the plan says plainly that Proton does not connect today. Chunk 8 (`docs/chunk8/`) is Ivy that acts:
+the triage undo stack first (worth building alone — archiving has no undo today), then proposals the
+assistant may create but never execute, the reversible act tools, a 25-target threshold, and "undo
+that". Both are after chunk 6, which is after chunk 5; **none of them delay 5c.5 or 5b's gate.** The
+operator's four choices are recorded in qa-log round 69, including the one finding she should read
+before 7c starts: a Google Cloud project in *Testing* status gets 7-day refresh tokens.
 
 **Chunk 6 is planned, 2026-10-22, and nothing has been built from it.** After reading Penguin Mail
 (`penguin-mail.com`, the Rust/GTK4 client, not the empty `penguinmail.app`) the operator had a recon
@@ -486,14 +498,58 @@ order, each droppable:
   guard test that fails on an off switch without one.
 - **6f The reader pane as the selection surface** (desktop/tablet only) — optional, first to drop.
 
-Two items from the recon are **deliberately not stages**:
+Two items from the recon are **deliberately not stages** here:
 
 - **Send Later** (a scheduler, resumption across restarts, its own view) — the operator mostly
   receives, and it costs an L. Worth revisiting only if sending becomes common.
-- **An assistant that acts through the shared undo stack.** The model is recorded as a direction in
-  `docs/chunk6/README.md`: separate act tools, volume (not category) as the approval trigger,
-  everything on the same undo stack as the UI. It is blocked on a triage undo stack, which does not
-  exist: today actions are outbox writes with a toast and only send is undoable.
+- **An assistant that acts through the shared undo stack.** It was a direction when chunk 6 was
+  planned and is now **planned properly as chunk 8** (`docs/chunk8/`), whose first stage is the triage
+  undo stack it depends on.
+
+### Chunk 7, accounts: Gmail and any IMAP server (planned 2026-10-22)
+
+Plan: `docs/chunk7/README.md`. Mostly one architectural change, because Gmail's IMAP shows the same
+message in several labels at once and Ivy stores one mailbox per message.
+
+- **7a The mailbox model** (`message_mailboxes`; one message row, N memberships; a message with none is
+  disabled, never erased). The risky stage: a migration, a join in every list query, and the 3a
+  convergence property test extended to memberships. The outbox already speaks content keys, which is
+  why the write path needs no change.
+- **7b Provider profiles and discovery** (Gmail, iCloud, Fastmail, Yahoo, Purelymail, generic; manual
+  host/port/TLS fields; no MX/SRV lookups).
+- **7c Gmail by OAuth2** (SASL XOAUTH2, the operator's own Google Cloud project, the refresh token in
+  the secrets directory). **The trap is documented in the plan:** an external project in Testing
+  status gets 7-day refresh tokens, and `https://mail.google.com/` is a restricted scope, so the
+  workable path is to publish unverified and stay under 100 users — or use a Workspace Internal app.
+- **7d App password** kept as a first-class option (Gmail wants 2SV on), because it is the escape from
+  7c's trap and the path for every other IMAP server.
+- **7e Gmail's verbs and limits:** never APPEND to Sent (Gmail files its own copy), archive is a
+  membership delete and not a move, junk is `[Gmail]/Spam`, tags stay local because Gmail refuses
+  arbitrary keywords, From must be a verified alias, 2500 MB/day download and 500 MB/day upload, about
+  10 000 messages per label, and throttling is transient and must never mark the account broken.
+- **7f Proton, documented only.** Proton has no IMAP in the cloud. Bridge is paid and **x86_64-only on
+  Linux**, so it cannot run on the potato; hydroxide is Go but speaks plaintext local IMAP only. The
+  plan states plainly that **neither connects to Ivy today without a code change**, and asks (open
+  question 4) whether to add the trusted-local-host stage 7g.
+
+### Chunk 8, Ivy that acts (planned 2026-10-22)
+
+Plan: `docs/chunk8/README.md`, after chunk 7 and after 5i. Three rules make it safe: act tools only
+write proposals; a proposal's targets are ids the loop actually read, re-checked server-side; and every
+executed proposal is one undo entry whose inverse is an ordinary outbox write.
+
+- **8a The undo stack** (`state.db`, 200 entries or 14 days, one entry per user-visible change
+  including a bulk action, expected-state conflicts refused, the toast and `Ctrl/⌘+Z` and a **Recent
+  changes** list all on it). **Worth building on its own:** it makes plain triage undoable today,
+  which it is not.
+- **8b Proposals as data** (`proposal` rows, one hour lifetime, server-verified targets, an act tool's
+  only write).
+- **8c The act tools:** archive, trash, tag/untag, snooze, read/unread, move, junk/not-junk — the
+  reversible set, each with a dry run and a cap of 200.
+- **8d Volume and irreversibility:** one click under 25 targets, a second card above it, irreversible
+  cards always and with no always-allow (unlike Penguin Mail's per-address allow).
+- **8e "Undo that"**, resolved from the proposal record, sharing the stack with the operator's own
+  actions.
 
 ### Open review findings (`papercuts.md`)
 
@@ -613,6 +669,8 @@ replace the operator's mail client sooner); 4 and 5 can still be narrowed.
 | **4** Send | Compose (markdown then rich text), identities/signatures, undo send (delay setting), drafts in the server Drafts folder, Reply-To handling, SMTP + APPEND to Sent, EXIF strip / photo downscale, size checks against the provider | `PLAN.md` 5, `ARCHITECTURE.md` 5 |
 | **5** Triage | Jev layer + question registry, the single LLM gate + cost ledger (the embeddings-only piece shipped in 3f), needs-me cascade, categories, newsletters (feed/digest/unsubscribe), receipts/ledger/renewals, vision, Ask Ivy agent loop, full stats panel. Safety assertions are part of done | `JEV.md`, `ARCHITECTURE.md` 6/7, `TESTING.md` 4 |
 | **6** Craft | Planned 2026-10-22, after chunk 5, learns from Penguin Mail: the facet row, the mailing-list strip, inline `Details`, rule provenance, settings that say why, an optional selection surface. No subsystem, every stage droppable | `docs/chunk6/` |
+| **7** Accounts | Gmail (OAuth2/XOAUTH2, Gmail's verbs and limits), generic IMAP with provider profiles, and the multi-mailbox model that makes labels honest. Proton documented only | `docs/chunk7/` |
+| **8** Ivy that acts | The triage undo stack, then proposals executed by a click, act tools over the reversible set, a volume threshold, and "undo that". Needs 5i | `docs/chunk8/` |
 
 ### Chunk 3 stages (split in round 36)
 
