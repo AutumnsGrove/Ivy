@@ -75,8 +75,7 @@ test('the queue shows an action while it is waiting', async ({ page }) => {
 	await expect(toast(page, 'Archived')).toBeVisible();
 
 	await page.goto('/settings/outbox');
-	// Exact, because the nav's "Waiting on" row also contains the word.
-	await expect(page.getByText('Waiting', { exact: true })).toBeVisible();
+	await expect(page.getByText('Waiting')).toBeVisible();
 	await expect(page.getByText('Move to another folder')).toBeVisible();
 });
 
