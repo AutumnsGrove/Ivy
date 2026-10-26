@@ -27,10 +27,10 @@ const (
 	// SettingDays is how many days of silence make a sent message a wait.
 	SettingDays = "waiting_on.days"
 
-	// DefaultDays is the operator's choice (5e decision 4); MaxDays keeps a typo from
-	// meaning "never".
+	// DefaultDays is the operator's choice (5e decision 4).
 	DefaultDays = 3
-	MaxDays     = 60
+	// MaxDays keeps a typo from meaning "never".
+	MaxDays = 60
 
 	// MaxCandidates bounds how many sent messages one open considers.
 	MaxCandidates = 200
