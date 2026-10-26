@@ -41,7 +41,9 @@ never an action.
    content key (or thread) and hash of what it summarised; a new read endpoint and the chip.
 2. **5e.2 Thread state.** `thread_state` on threads where the operator sent last or is addressed;
    the "Waiting on" lists and a follow-up nudge as an in-app marker (no push: Apple Mail keeps that
-   job).
+   job). **Built 2026-10-26 as the list only**, with one Jev question on the sent message
+   (`expects_reply`) in place of the full `thread_state`, which Jev cannot judge from one message;
+   see `docs/BUILD-LOG.md` "5e.2". The in-reader marker is not built.
 3. **5e.3 Tag suggestion.** `tag_suggest` applying local tags from the operator's set, each
    removable and visibly "placed for you".
 4. **5e.4 Reply help.** `reply_identity` and `reply_tone` feeding a draft prompt in compose; a

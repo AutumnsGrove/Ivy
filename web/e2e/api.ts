@@ -2,7 +2,7 @@ import { test as base } from '@playwright/test';
 import * as mock from '../src/lib/api/mock';
 import { freshSmart, smartReply, type SmartState } from './smart-fixture';
 import { spendReply } from './spend-fixture';
-import type { Account, AddressType, Attachment, DraftResume, DraftSummary, Identity, MailMessage, MailSummary, MessageOdds, MessagePrivacy, OutboxItem, SendStatus, TagsOverview, UpdateStatus, UserTag } from '../src/lib/types';
+import type { Account, AddressType, Attachment, DraftResume, DraftSummary, Identity, MailMessage, MailSummary, MessageOdds, MessagePrivacy, OutboxItem, SendStatus, TagsOverview, UpdateStatus, UserTag, WaitingItem } from '../src/lib/types';
 
 // The reader client does real fetches, so the mock E2E suite serves the
 // contract from the same fixtures at the network boundary instead of inside
@@ -69,7 +69,15 @@ export type AccountState = {
 	privacyAllowed: Set<string>;
 	/** Messages whose needs-attention flag was dismissed; the verdict stays, the flag goes. */
 	needsCleared: Set<string>;
+	/** Sent messages the operator stopped waiting on. */
+	waitingStopped: Set<string>;
 };
+
+/** Two sent messages with no answer, longest wait first, as GET /waiting would report them. */
+const WAITING: WaitingItem[] = [
+	{ id: 'w1', accountId: 'a1', to: ['Hana Okafor'], subject: 'Quote for the hosting move', sentAt: '2026-10-20T09:00:00Z', days: 6 },
+	{ id: 'w2', accountId: 'a1', to: ['Sam', 'kim@example.com', 'Priya'], subject: 'Figures for Friday', sentAt: '2026-10-23T09:00:00Z', days: 3 }
+];
 
 /** The fixture inbox as the server would report it now: a dismissed flag and its reason are gone. */
 const liveInbox = (s: AccountState): MailSummary[] =>
@@ -108,7 +116,8 @@ const freshState = (): AccountState => ({
 	uploadSeq: 0,
 	smart: freshSmart(),
 	privacyAllowed: new Set(),
-	needsCleared: new Set()
+	needsCleared: new Set(),
+	waitingStopped: new Set()
 });
 
 const TAG_COLORS = new Set(['sky', 'rose', 'teal', 'coral', 'lilac', 'mint', 'gold', 'sand', 'orchid', 'fern', 'slate', 'berry']);
@@ -773,6 +782,16 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	if (dismissal && method === 'POST') {
 		if (!mock.inbox.some((m) => m.id === dismissal[1])) return notFound('No such message');
 		state.needsCleared.add(dismissal[1]);
+		return { status: 204, body: null };
+	}
+	if (path === '/waiting') {
+		const items = scenario === 'empty' ? [] : WAITING.filter((w) => !state.waitingStopped.has(w.id));
+		return { body: { items } };
+	}
+	const stopped = /^\/waiting\/([^/]+)\/stop$/.exec(path);
+	if (stopped && method === 'POST') {
+		if (!WAITING.some((w) => w.id === stopped[1])) return notFound('No such message');
+		state.waitingStopped.add(stopped[1]);
 		return { status: 204, body: null };
 	}
 	if (path === '/search') return searchReply(params.get('q') ?? '');

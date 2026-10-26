@@ -28,6 +28,7 @@ import type {
 	MailSummary,
 	MailAttachmentList,
 	MessageInsight,
+	WaitingOn,
 	MessageOdds,
 	MessagePrivacy,
 	OutboxAction,
@@ -92,6 +93,14 @@ export const api = {
 	/** Clear a message's flag. Local, safe to repeat, and the verdict is kept so it does not return. */
 	dismissNeedsAttention: (id: string): Promise<void> =>
 		request<void>(`/messages/${encodeURIComponent(id)}/needs/dismiss`, { method: 'POST' }),
+
+	/** Threads where you wrote last and have heard nothing back. Opening it can ask the helper model about a few sent messages it has not judged; answers are kept. */
+	listWaitingOn: (o: { accountId?: string } = {}): Promise<WaitingOn> =>
+		request<WaitingOn>(apiPath('/waiting', { account_id: o.accountId })),
+
+	/** "No answer needed" for one sent message. Local, safe to repeat; a later message in the thread is a new wait. */
+	stopWaiting: (id: string): Promise<void> =>
+		request<void>(`/waiting/${encodeURIComponent(id)}/stop`, { method: 'POST' }),
 
 	getMessage: (id: string, _o: Opts = {}): Promise<MailMessage> =>
 		request<MailMessage>(`/messages/${encodeURIComponent(id)}`),

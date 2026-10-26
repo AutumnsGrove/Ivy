@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Archive, CircleAlert, FileText, Inbox, MailWarning, PenLine, Trash2 } from '#lib/icons.js';
+	import { Archive, CircleAlert, Clock, FileText, Inbox, MailWarning, PenLine, Trash2 } from '#lib/icons.js';
 	import { accountAvatar } from '#lib/accounts.js';
 	import type { Account, FolderView } from '#lib/types.js';
 	import Avatar from '../ui/Avatar.svelte';
@@ -52,6 +52,10 @@
 	<NavRow href="/needs" meta={needCount ? String(needCount) : undefined}>
 		{#snippet leading()}<CircleAlert />{/snippet}
 		Needs attention
+	</NavRow>
+	<NavRow href="/waiting">
+		{#snippet leading()}<Clock />{/snippet}
+		Waiting on
 	</NavRow>
 	<NavRow href="/?folder=archive" on={folder === 'archive'}>
 		{#snippet leading()}<Archive />{/snippet}

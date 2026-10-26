@@ -1647,3 +1647,29 @@ behind one **Summaries** switch on `/settings/smart`; nothing spends until it is
   E2E reader test now runs against the real request shape.
 - **Not done:** the live read of real summaries (the operator's, once Summaries is on); the filter's accuracy on real threads
   (G3); no spend is shown per summary beyond the ledger rows under `summary`; no "refresh now" button.
+
+## 5e.2: the Waiting on list (2026-10-26)
+
+A new screen, `/waiting`, listing the threads where you wrote last and nobody has answered. Ships dark behind one **Waiting on**
+switch on `/settings/smart`; nothing spends until it is on. Choices to confirm are in qa-log "5e.2".
+
+- **The rule is data, the judgement is one question.** `store.WaitingOnCandidates` finds Sent messages with no newer live message
+  in their thread (a reply in Trash or a server-deleted one does not end the wait; a copy of the message itself in another folder
+  does not either), at least N days old, longest first. `expects_reply` (Jev, bar 0.65, folder `sent`, quiet `no`) is then asked
+  of each candidate not already answered.
+- **When it runs** (`waiting/service.go`): when the list is opened, serialised so two screens make one set of calls, at most 12
+  paid calls per open, longest wait first. A cap, a refusal or a provider failure stops asking for that open and lists what is
+  already known; the failed message is asked again next time (nothing is recorded against it). A settled failure (an unusable
+  answer) is read from the decision misses and not paid for again.
+- **Stop waiting** (`POST /waiting/{id}/stop`, `state.db` migration 22): per sent message, so a newer message is a new wait.
+- **API:** `GET /waiting?account_id=` returns `{items: [{id, accountId, to[], subject, sentAt, days}]}`, always 200.
+- **Frontend:** `WaitingRow` (a card that opens the sent message and a "Stop waiting" button whose spoken name carries the subject,
+  names and subjects rendered as text), the `/waiting` screen with its empty state and a pointer to Smart features, and a
+  "Waiting on" row in the nav.
+- **Tests:** store (candidates across six thread shapes and a second account, stop-waiting round trip and bound), jev (the shipped question, the
+  folder gate: asked of Sent only, never Inbox, never with the switch off), waiting (against the real gate, store and engine with
+  the fake provider: off, filter, cache, deterministic rules, days setting, per-open cap, provider failure and retry; two
+  mutation checks showed the cap and the stop list are really guarded; an architecture guard), gateway, client, component, and a
+  five-test E2E spec on phone and desktop.
+- **Not done:** the operator's live read on her real Sent mail; a marker in the reader; a count on the nav; whether sent mail
+  should go through a sensitive-content check first (qa-log 5e.2 choice 5); no "ask now" button for a backlog bigger than 12.

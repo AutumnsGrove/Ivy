@@ -2073,3 +2073,29 @@ acting assistant had been only a direction.
   triage has no undo today (only send does). Everything else in chunk 8 depends on 5i.
 - **Deliberately not copied from Penguin Mail:** its "Always Allow" per address/command. Ivy has no
   extension ecosystem, so an always-allow would only ever be used to skip the guard on a bad proposal.
+
+## 5e.2: Waiting on (2026-10-26, agent; please confirm or change)
+
+Decision 4 of 5e (a "Waiting on them" list after 3 days of silence, in the app, nothing sent) was already settled. These are the
+choices made while building it:
+
+1. **Local rules pick the candidates; Jev only filters.** A thread is a candidate when the newest message the owner still has
+   (not hidden, not in Trash or Junk) is in Sent and at least `waiting_on.days` days old (default 3, 1 to 60, a bad value falls
+   back to 3). Jev is then asked one question of that sent message, `expects_reply`, so a "thanks!" you sent never sits on the
+   list. The catalog's `thread_state` (open, waiting_on_me, waiting_on_them, resolved) is **not** built as such: Jev sees one
+   message's own text, never the trail, so it cannot judge a thread's state; "who wrote last" is plain data.
+2. **Sent mail is still never swept.** 5b decision 1 stands: the worker never classifies Sent. `expects_reply` names the new
+   folder `sent`, which only a caller asking about one sent message can reach, and the list asks **when it is opened**, never in
+   the background, like 5e.1. At most **12 paid calls per open**, longest wait first; answers are kept per content key, so the
+   second open is free and a large backlog is worked through over several opens.
+3. **The switch is `waiting_on`, labelled "Waiting on", dark by default,** and it implies the shared `classify` call like every
+   other Jev-question switch. The bar is **0.65**, low on purpose (a missed wait is silent; a false one is one tap to dismiss).
+4. **"Stop waiting" is the operator's own and lives in `state.db`** (migration 22, `waiting_stopped`), keyed by the **sent
+   message's content key**, not the thread: a later message in the same thread is a new wait. Bounded at 2000 (oldest forgotten).
+5. **Sent mail is sent to Jev on the same footing as Inbox mail** (the shared call carries the text; the safety checks run on the
+   same call). The two safety checks are Inbox-only, so a sent message holding a password is not checked first. Say if Waiting on
+   should skip sent mail until a check has run on it.
+6. **No count on the nav row.** Counting would mean asking Jev on every nav render. `GET /waiting` is always a 200; with the
+   switch off, a cap reached or a failed call there are simply fewer rows, and the empty state points at Smart features.
+7. **No in-reader marker and no "nudge" yet.** The plan said "a follow-up nudge as an in-app marker"; this stage is the list.
+   A marker on the thread in the reader is the obvious next piece and needs no new backend.

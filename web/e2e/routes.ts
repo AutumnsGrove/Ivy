@@ -9,6 +9,8 @@ export const ROUTES: Record<string, string> = {
 	'message-fetch-error': '/m/m1?scenario=fetch-error',
 	'message-attachment-error': '/m/m1?scenario=attachment-error',
 	'needs': '/needs',
+	'waiting': '/waiting',
+	'waiting-empty': '/waiting?scenario=empty',
 	'reading': '/reading',
 	'search': '/search?q=domain+renewal',
 	'search-none': '/search?q=xylophone+invoice',
