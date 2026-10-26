@@ -282,6 +282,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/waiting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Threads where the owner wrote last and has heard nothing back
+         * @description Sent messages with no newer message in their thread, at least a few days old (the `waiting_on.days` setting, three by default), that the helper decision model judged to be waiting for an answer. Longest wait first. Opening the list may ask that model about messages it has not judged yet, at most twelve per request, longest wait first; each answer is kept, so listing again is free. Always 200: with smart features off, the Waiting on switch off, a cap reached or a failed call there are simply fewer rows. Nothing is sent, moved or changed because of a row.
+         */
+        get: operations["listWaitingOn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/waiting/{id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop waiting on a sent message
+         * @description The operator's own "no answer needed", kept locally. It names this message, so a later message in the same thread is a new wait. Repeating it is not an error.
+         */
+        post: operations["stopWaiting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/messages/{id}": {
         parameters: {
             query?: never;
@@ -1512,6 +1552,21 @@ export interface components {
             /** @enum {string} */
             tone?: "a" | "b";
             failed?: boolean;
+        };
+        WaitingOn: {
+            items: components["schemas"]["WaitingItem"][];
+        };
+        WaitingItem: {
+            /** @description The sent message that began the wait */
+            id: string;
+            accountId: string;
+            /** @description Who it was sent to, as a name or an address */
+            to: string[];
+            subject: string;
+            /** Format: date-time */
+            sentAt: string;
+            /** @description Whole days since it was sent */
+            days: number;
         };
         MessageInsight: {
             /** @description Plain text, a few sentences. Absent when there is no summary. */
@@ -2788,6 +2843,49 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    listWaitingOn: {
+        parameters: {
+            query?: {
+                account_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitingOn"];
+                };
+            };
+        };
+    };
+    stopWaiting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stopped */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     getMessage: {

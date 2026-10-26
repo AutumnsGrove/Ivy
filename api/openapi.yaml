@@ -559,6 +559,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /waiting:
+    get:
+      operationId: listWaitingOn
+      summary: Threads where the owner wrote last and has heard nothing back
+      description: >
+        Sent messages with no newer message in their thread, at least a few days old (the
+        `waiting_on.days` setting, three by default), that the helper decision model judged
+        to be waiting for an answer. Longest wait first. Opening the list may ask that
+        model about messages it has not judged yet, at most twelve per request, longest
+        wait first; each answer is kept, so listing again is free. Always 200: with smart
+        features off, the Waiting on switch off, a cap reached or a failed call there are
+        simply fewer rows. Nothing is sent, moved or changed because of a row.
+      parameters:
+        - name: account_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WaitingOn"
+  /waiting/{id}/stop:
+    post:
+      operationId: stopWaiting
+      summary: Stop waiting on a sent message
+      description: >
+        The operator's own "no answer needed", kept locally. It names this message, so a
+        later message in the same thread is a new wait. Repeating it is not an error.
+      parameters:
+        - $ref: "#/components/parameters/MessageID"
+      responses:
+        "204":
+          description: Stopped
+        "404":
+          $ref: "#/components/responses/NotFound"
   /messages/{id}:
     get:
       operationId: getMessage
@@ -2599,6 +2637,36 @@ components:
           enum: [a, b]
         failed:
           type: boolean
+    WaitingOn:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WaitingItem"
+    WaitingItem:
+      type: object
+      required: [id, accountId, to, subject, sentAt, days]
+      properties:
+        id:
+          type: string
+          description: The sent message that began the wait
+        accountId:
+          type: string
+        to:
+          type: array
+          description: Who it was sent to, as a name or an address
+          items:
+            type: string
+        subject:
+          type: string
+        sentAt:
+          type: string
+          format: date-time
+        days:
+          type: integer
+          description: Whole days since it was sent
     MessageInsight:
       type: object
       properties:

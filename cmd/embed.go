@@ -13,6 +13,7 @@ import (
 	"github.com/AutumnsGrove/Ivy/needsme"
 	"github.com/AutumnsGrove/Ivy/search"
 	"github.com/AutumnsGrove/Ivy/store"
+	"github.com/AutumnsGrove/Ivy/waiting"
 )
 
 // Embedding is the search side of the one gate: what the gateway needs to embed a
@@ -48,6 +49,9 @@ type Embedding struct {
 	// when the layer is off. It asks nothing while the summary switch is off, which is
 	// its default.
 	Insight *insight.Service
+	// Waiting builds the Waiting on list when it is opened. Nil when the layer is off. It
+	// asks nothing while the waiting_on switch is off, which is its default.
+	Waiting *waiting.Service
 }
 
 // NewEmbedding builds the embedding stack from the operator's config. apiKey is
@@ -89,6 +93,7 @@ func NewEmbedding(cfg *config.Config, dbs *store.DBs, apiKey string, opts ...Emb
 		emb.Urgency = reg
 		emb.NeedsMe = needsme.NewWorker(reg, gate, dbs, vetter, jev.WorkerOptions{})
 		emb.Insight = insight.NewService(reg, gate, dbs, vetter)
+		emb.Waiting = waiting.NewService(engine, gate, dbs)
 	}
 	if accounts := embedAccounts(cfg, providers, models); len(accounts) > 0 {
 		emb.Worker = search.NewEmbedWorker(dbs, gate, accounts, search.WorkerOptions{})

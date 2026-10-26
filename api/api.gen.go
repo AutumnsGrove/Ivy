@@ -2116,6 +2116,27 @@ type Version struct {
 	Version string `json:"version"`
 }
 
+// WaitingItem defines model for WaitingItem.
+type WaitingItem struct {
+	AccountId string `json:"accountId"`
+
+	// Days Whole days since it was sent
+	Days int `json:"days"`
+
+	// Id The sent message that began the wait
+	Id      string    `json:"id"`
+	SentAt  time.Time `json:"sentAt"`
+	Subject string    `json:"subject"`
+
+	// To Who it was sent to, as a name or an address
+	To []string `json:"to"`
+}
+
+// WaitingOn defines model for WaitingOn.
+type WaitingOn struct {
+	Items []WaitingItem `json:"items"`
+}
+
 // CallAccount defines model for CallAccount.
 type CallAccount = string
 
@@ -2281,6 +2302,11 @@ type ExportCallsParamsFormat string
 
 // ExportCallsParamsOutcome defines parameters for ExportCalls.
 type ExportCallsParamsOutcome string
+
+// ListWaitingOnParams defines parameters for ListWaitingOn.
+type ListWaitingOnParams struct {
+	AccountId *string `form:"account_id,omitempty" json:"account_id,omitempty"`
+}
 
 // ConnectAccountJSONRequestBody defines body for ConnectAccount for application/json ContentType.
 type ConnectAccountJSONRequestBody = ConnectAccount

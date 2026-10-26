@@ -254,6 +254,9 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool, llmKey string)
 	if embedding.Insight != nil {
 		api = api.WithInsight(embedding.Insight)
 	}
+	if embedding.Waiting != nil {
+		api = api.WithWaiting(embedding.Waiting)
+	}
 	srv := &http.Server{
 		Addr:              stack.Config.Listen,
 		Handler:           api.Handler(),

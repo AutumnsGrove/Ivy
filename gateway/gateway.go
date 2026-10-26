@@ -68,6 +68,8 @@ type Server struct {
 	odds OddsSource
 	// insight is where the summary chip comes from; nil means no thread has one.
 	insight InsightSource
+	// waitingOn is where the Waiting on list comes from; nil means it is always empty.
+	waitingOn WaitingSource
 	// privacy is where the withheld marker reads the safety checks; nil reads as
 	// unchecked.
 	privacy PrivacySource
@@ -199,6 +201,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/v1/messages/{id}/insight", s.handleMessageInsight)
 	api.HandleFunc("GET /api/v1/needs-attention", s.handleNeedsAttention)
 	api.HandleFunc("POST /api/v1/messages/{id}/needs/dismiss", s.handleDismissNeeds)
+	api.HandleFunc("GET /api/v1/waiting", s.handleListWaitingOn)
+	api.HandleFunc("POST /api/v1/waiting/{id}/stop", s.handleStopWaiting)
 	api.HandleFunc("GET /api/v1/messages/{id}/privacy", s.handleMessagePrivacy)
 	api.HandleFunc("PUT /api/v1/messages/{id}/privacy/override", s.handleAllowForHelpers)
 	api.HandleFunc("DELETE /api/v1/messages/{id}/privacy/override", s.handleWithholdFromHelpers)

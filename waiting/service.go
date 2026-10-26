@@ -65,12 +65,12 @@ type Gate interface {
 	CanRun(ctx context.Context, accountID, feature string) bool
 }
 
-// Store is the mirror, the operator's "stop waiting" list and the settings.
+// Store is the mirror, the operator's "stop waiting" list and the settings. Writing to
+// that list is the gateway's job, on the operator's click.
 type Store interface {
 	ListAccounts(ctx context.Context) ([]store.Account, error)
 	WaitingOnCandidates(ctx context.Context, accountID string, sentBefore time.Time, limit int) ([]store.WaitingCandidate, error)
 	StoppedWaitingRefs(ctx context.Context, accountID string) ([]store.ContentRef, error)
-	StopWaiting(ctx context.Context, accountID, contentKey string, now time.Time) error
 	GetMessage(ctx context.Context, id string) (store.Message, error)
 	GetSetting(ctx context.Context, accountID, key string) (string, bool, error)
 }
@@ -220,19 +220,6 @@ func (s *Service) ask(ctx context.Context, accountID string, c store.WaitingCand
 	}
 	expects, _, err := s.known(ctx, accountID, c.ContentKey)
 	return expects, err
-}
-
-// Stop records that a sent message needs no answer. A later message in the thread is a
-// new wait, because the record names this message and not the thread.
-func (s *Service) Stop(ctx context.Context, accountID, messageID string) error {
-	m, err := s.st.GetMessage(ctx, messageID)
-	if err != nil {
-		return err
-	}
-	if m.AccountID != accountID {
-		return store.ErrNotFound
-	}
-	return s.st.StopWaiting(ctx, accountID, m.ContentKey, s.now())
 }
 
 // days is the account's silence line, falling back to the global setting and then the

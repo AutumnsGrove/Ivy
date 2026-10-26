@@ -242,7 +242,7 @@ func TestStoppingTheWaitRemovesItWithoutAskingAgain(t *testing.T) {
 	if got := r.list(); len(got) != 1 {
 		t.Fatalf("listed %v", ids(got))
 	}
-	if err := r.svc.Stop(ctx, acct, "s1"); err != nil {
+	if err := r.dbs.StopWaiting(ctx, acct, "ck-s1", seedNow); err != nil {
 		t.Fatal(err)
 	}
 	if got := r.list(); len(got) != 0 {
@@ -253,9 +253,6 @@ func TestStoppingTheWaitRemovesItWithoutAskingAgain(t *testing.T) {
 	r.w.QueueJev(yes())
 	if got := r.list(); !equal(ids(got), []string{"s2"}) {
 		t.Fatalf("listed %v, want the new message", ids(got))
-	}
-	if err := r.svc.Stop(ctx, acct, "no-such-message"); err == nil {
-		t.Error("Stop accepted a message that does not exist")
 	}
 }
 
