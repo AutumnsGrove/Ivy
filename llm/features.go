@@ -48,7 +48,7 @@ var features = map[string]feature{
 	// Classifiers read clipped state only.
 	"needs_me":    {endpoint: EndpointSystemOne, label: "Needs you"},
 	"category":    {endpoint: EndpointSystemOne, label: "Categories"},
-	"classify":    {endpoint: EndpointSystemOne, impliedBy: []string{"needs_me", "category", "junk_rescue", "phishing_risk", "contact_form_quality", "summary"}},
+	"classify":    {endpoint: EndpointSystemOne, impliedBy: []string{"needs_me", "category", "junk_rescue", "phishing_risk", "contact_form_quality", "summary", "waiting_on"}},
 	"junk_rescue": {endpoint: EndpointSystemOne, label: "Junk rescue"},
 	// Warns on the Inbox mail it is asked about; it never moves or hides anything.
 	"phishing_risk": {endpoint: EndpointSystemOne, label: "Phishing warnings"},
@@ -58,6 +58,9 @@ var features = map[string]feature{
 	// The filter in front of a summary. It has no label because the Summaries switch
 	// (the chat feature below) is the operator's one control for both.
 	"summary_filter": {endpoint: EndpointSystemOne, impliedBy: []string{"summary"}},
+
+	// Asked only of the owner's own sent mail, when the Waiting on list is opened (5e.2).
+	"waiting_on": {endpoint: EndpointSystemOne, label: "Waiting on"},
 
 	"needs_me_stage2": {endpoint: EndpointChat, vetted: true, label: "Needs you: reasons"},
 	// Its filter, worth_summarizing, rides the shared Jev call; the summary itself is

@@ -416,8 +416,11 @@ func (w *Worker) Depth(ctx context.Context, account string) (int, error) {
 // which come only from the provider's own authserv-id.
 func FromStored(m store.Message, role string, atts []store.Attachment) Message {
 	folder := FolderInbox
-	if role == store.RoleJunk {
+	switch role {
+	case store.RoleJunk:
 		folder = FolderJunk
+	case store.RoleSent:
+		folder = FolderSent
 	}
 	in := StateInput{
 		From:    Party{Name: m.From.Name, Address: m.From.Address},

@@ -253,3 +253,26 @@ questions:
     quiet_option: "no"
     threshold: 0.80
     feature: summary_filter
+
+  # Asked only of a message the owner sent, when the Waiting on list is opened, never
+  # in the background (5e.2). Whether the owner sent last and how long ago is plain
+  # data; this decides whether that message was waiting for an answer. A wrong yes
+  # lists one thread the owner can dismiss; a wrong no leaves a thread off a list
+  # nothing else would have shown, so the bar is low. Ships dark. Provisional until G3.
+  - id: expects_reply
+    instructions: >-
+      The owner of this mailbox wrote this message to someone else. Is the owner now
+      waiting to hear back? Count a direct question, a request for information, a
+      decision or a signature, a proposal or an invitation that needs an answer, and
+      an offer that asks the other person to confirm. Do not count a thank-you, an
+      acknowledgement, a confirmation of something already agreed, a reply that
+      settles the matter, an announcement, a forwarded message with no question, or
+      mail to a no-reply address or a mailing list. Exception: a polite request
+      without a question mark counts.
+    criteria:
+      "no": nothing in it needs an answer, or it closes the conversation
+      "yes": the owner asked or proposed something and is waiting for an answer
+    quiet_option: "no"
+    threshold: 0.65
+    feature: waiting_on
+    folders: [sent]

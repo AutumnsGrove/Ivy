@@ -484,3 +484,73 @@ func TestColdOutreachIsItsOwnCategoryApartFromMarketing(t *testing.T) {
 		t.Error("instructions do not keep a reply to something the owner asked for or applied for out of outreach")
 	}
 }
+
+// 5e.2: expects_reply is the Jev half of "Waiting on them". Whether a thread's newest message
+// is the owner's, and how long ago, is plain data; only whether that message was waiting for
+// an answer needs a model. A wrong "yes" lists one thread the owner can dismiss; a wrong "no"
+// leaves a thread off a list nothing else would have shown, so the bar is low on purpose.
+func TestTheExpectsReplyQuestionIsShippedDarkAndForSentMailOnly(t *testing.T) {
+	q, ok := shipped(t)["expects_reply"]
+	if !ok {
+		t.Fatal("expects_reply is not shipped")
+	}
+	if len(q.Criteria) != 2 {
+		t.Errorf("options = %v, want exactly no and yes", q.Criteria)
+	}
+	for _, o := range []string{"no", "yes"} {
+		if _, ok := q.Criteria[o]; !ok {
+			t.Errorf("expects_reply has no option %q", o)
+		}
+	}
+	if q.QuietOption != "no" {
+		t.Errorf("quiet option = %q, want no: silence must not put a thread on the list", q.QuietOption)
+	}
+	if q.Feature != "waiting_on" {
+		t.Errorf("feature = %q: Waiting on ships dark behind its own switch", q.Feature)
+	}
+	if len(q.Folders) != 1 || q.Folders[0] != FolderSent {
+		t.Errorf("folders = %v, want only sent: it reads the owner's own mail and nothing else", q.Folders)
+	}
+	if q.Threshold > 0.70 {
+		t.Errorf("threshold = %v, want 0.70 or less: a missed wait is silent", q.Threshold)
+	}
+	if !strings.Contains(strings.ToLower(q.Instructions), "do not count") {
+		t.Error("instructions do not say what does not count")
+	}
+}
+
+func TestExpectsReplyIsAskedOnlyOfSentMailOnceItsSwitchIsOn(t *testing.T) {
+	ctx := context.Background()
+	r := newRig(t)
+	qs, err := Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.reg.Set(qs, nil); err != nil {
+		t.Fatal(err)
+	}
+	sent := mail("s1")
+	sent.Folder = FolderSent
+	r.decide(sent)
+	if n := r.jev.count(); n != 0 {
+		t.Fatalf("Sent mail made %d provider calls with Waiting on off: it is the only question that reads Sent", n)
+	}
+	if err := r.gate.SetFeatureEnabled(ctx, rigAccount, "waiting_on", true); err != nil {
+		t.Fatal(err)
+	}
+	sent2 := mail("s2")
+	sent2.Folder = FolderSent
+	r.decide(sent2)
+	asked := r.jev.last().Questions
+	if _, ok := asked["expects_reply"]; !ok || len(asked) != 1 {
+		t.Fatalf("Sent mail was asked %v, want only expects_reply", asked)
+	}
+	// And it never leaks onto the Inbox.
+	if err := r.gate.SetFeatureEnabled(ctx, rigAccount, "needs_me", true); err != nil {
+		t.Fatal(err)
+	}
+	r.decide(mail("k3"))
+	if _, ok := r.jev.last().Questions["expects_reply"]; ok {
+		t.Fatal("expects_reply was asked of Inbox mail")
+	}
+}

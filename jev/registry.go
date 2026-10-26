@@ -38,9 +38,12 @@ const (
 
 // Folders a question may run on. Eligible mail is the Inbox, plus Junk for a
 // question that names it (junk_rescue); nothing else is classified automatically.
+// Sent is the exception that is never swept: a question naming it is asked only when
+// the caller asks about one sent message (the Waiting on list), never by the worker.
 const (
 	FolderInbox = "inbox"
 	FolderJunk  = "junk"
+	FolderSent  = "sent"
 )
 
 // MailTypeContactForm is the one mail type a question may be limited to.
@@ -236,8 +239,8 @@ func validateOne(q Question) error {
 		return fmt.Errorf("feature %q is not a Jev feature", q.Feature)
 	}
 	for _, f := range q.Folders {
-		if f != FolderInbox && f != FolderJunk {
-			return fmt.Errorf("folder %q is not %s or %s", f, FolderInbox, FolderJunk)
+		if f != FolderInbox && f != FolderJunk && f != FolderSent {
+			return fmt.Errorf("folder %q is not %s, %s or %s", f, FolderInbox, FolderJunk, FolderSent)
 		}
 	}
 	if q.MailType != "" && q.MailType != MailTypeContactForm {
