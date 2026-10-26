@@ -1041,6 +1041,20 @@ var stateMigrations = []migration{
 			) WITHOUT ROWID`,
 		},
 	},
+	{
+		version: 22,
+		statements: []string{
+			// "Stop waiting" (5e.2): the operator's own call that a sent message needs no
+			// answer. It names the sent message's content key, so a later message in the
+			// thread is a new wait. Operator-owned, so it lives here and is backed up.
+			`CREATE TABLE waiting_stopped (
+				account_id TEXT NOT NULL,
+				content_key TEXT NOT NULL,
+				created_at TEXT NOT NULL,
+				PRIMARY KEY (account_id, content_key)
+			) WITHOUT ROWID`,
+		},
+	},
 }
 
 // SchemaVersions reports the newest migration of the mirror and of the state
