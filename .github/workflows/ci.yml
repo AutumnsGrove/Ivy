@@ -23,7 +23,7 @@ env:
   GOFLAGS: -mod=readonly
   # The latest patch of the minor go.mod requires, so a fixed standard-library
   # vulnerability (govulncheck) never outlives the toolchain.
-  GO_VERSION: '1.26'
+  GO_VERSION: '1.27'
 
 jobs:
   go:
@@ -45,7 +45,7 @@ jobs:
         run: make lint
       - uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
         with:
-          version: v2.12.1
+          version: v2.15.0
           args: --config .golangci.yml
       - name: build
         run: CGO_ENABLED=0 go build ./...

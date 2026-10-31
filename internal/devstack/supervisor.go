@@ -136,8 +136,13 @@ func (s *Supervisor) Run(ctx context.Context) error {
 			}
 			continue
 		}
-		childDone := make(chan error, 1)
-		go func() { childDone <- cmd.Wait() }()
+		// The child's exit error is not interesting: it writes its own output to the
+		// log, and the supervisor only needs to know that the child is gone.
+		childDone := make(chan struct{}, 1)
+		go func() {
+			_ = cmd.Wait()
+			childDone <- struct{}{}
+		}()
 		ticker := time.NewTicker(interval)
 
 		restart := false

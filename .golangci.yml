@@ -34,7 +34,7 @@ linters:
       # A switch with a default is a deliberate "everything else".
       default-signifies-exhaustive: true
       # numOpKinds is the convergence harness's count sentinel, not an operation.
-      ignore-enum-members: "numOpKinds$"
+      ignore-constants: "numOpKinds$"
     revive:
       rules:
         - name: blank-imports

@@ -21,7 +21,7 @@ RUN pnpm run build
 # Also pinned to BUILDPLATFORM: Go cross-compiles natively with CGO_ENABLED=0,
 # so there is no C toolchain and no reason to emulate the target. TARGETOS and
 # TARGETARCH are the buildx-provided descriptors of what we compile for.
-FROM --platform=$BUILDPLATFORM golang:1.26.6-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
