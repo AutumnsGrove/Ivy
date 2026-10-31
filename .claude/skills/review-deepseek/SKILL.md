@@ -158,7 +158,7 @@ followed by a one-line status. At the end, report:
 
 - **Run the project's own whole gate at the end**: `make check`, the documented linter set at
   the CI-pinned version, `govulncheck` on the newest patch toolchain
-  (`GOTOOLCHAIN=go1.26.N go run golang.org/x/vuln/cmd/govulncheck@<pin> ./...`; older patches
+  (`GOTOOLCHAIN=go1.27.N go run golang.org/x/vuln/cmd/govulncheck@<pin> ./...`; older patches
   report stdlib CVEs that are not the code's), and a smoke run of the real binary.
 - **Measure growth, not one point**, when a parser looks slow: run depths or sizes
   1, 4, 8, 12, 16, 20 with a hard `timeout`. Super-linear growth is the finding.

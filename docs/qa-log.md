@@ -2099,3 +2099,30 @@ choices made while building it:
    switch off, a cap reached or a failed call there are simply fewer rows, and the empty state points at Smart features.
 7. **No in-reader marker and no "nudge" yet.** The plan said "a follow-up nudge as an in-app marker"; this stage is the list.
    A marker on the thread in the reader is the obvious next piece and needs no new backend.
+
+## Toolchain: Go 1.27.3 (2026-10-31, agent; operator chose the version)
+
+Asked whether the project should stay on the 1.26 line or move, she chose **the latest stable,
+everywhere**. The local `go` was 1.26.6 (Homebrew had 1.26.1, so the module's `go` directive was
+already pulling a downloaded toolchain), and `govulncheck` on it reported ten stdlib advisories
+fixed in 1.26.9/1.26.10 (`net/http`, `crypto/tls`, `crypto/x509`, `net/textproto`).
+
+1. **One patch level, declared in four places.** `go.mod` says `go 1.27.3`, the image builds from
+   `golang:1.27.3-alpine`, and CI's `GO_VERSION` is `1.27` with `check-latest`, so a build can never
+   resolve below the fixed toolchain and the `go` directive and the image can never disagree.
+2. **golangci-lint moves with the toolchain.** v2.12.1 was built with go1.26 and refuses a 1.27
+   module outright ("the Go language version used to build golangci-lint is lower than the targeted
+   Go version"), so the pinned version is now v2.15.0. It renamed `exhaustive`'s
+   `ignore-enum-members` to `ignore-constants` (the config follows) and it is the first release whose
+   errcheck flags a received-but-unused error, which caught a `chan error` in the dev-stack
+   supervisor whose value was never read; it is now a `chan struct{}`, which says what the code
+   means.
+3. **The newer toolchain exposed a shutdown race worth fixing.** `up`'s five-second
+   `srv.Shutdown` grace was exactly net/http's own rule for retiring a connection that never sent a
+   request (issue 22682), so a browser preconnect - or a test's own idle socket - made Ctrl-C exit
+   with `context deadline exceeded` instead of stopping cleanly. The grace now falls back to
+   `srv.Close()` with a line saying so, and a test opens a silent socket and proves the stop is clean.
+   The two `up` tests that had been flaking on it use a keep-alive-free client, so the transport
+   cannot leave a dialed-but-unused connection behind.
+4. **The siblings move too** (Polaris, Meridian, Cairn, Coffer, bwmon), each to 1.27.3 in its own
+   `go.mod` and Dockerfile, for the same reason: the stdlib fixes only exist at that patch level.

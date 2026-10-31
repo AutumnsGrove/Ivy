@@ -828,8 +828,6 @@ what remains besides it is the operator's live checks.
   back; check the editor on the real iPhone (the deferrable stage's whole point).
 - Repo visibility: **public** now (was private). The remaining `docs/CI.md` 6 items (gitleaks over
   full history, branch ruleset + required checks, secret scanning) are the operator's checklist.
-- Bump the local Go toolchain off 1.26.1, which `govulncheck` flags (fixed in 1.26.2+); CI resolves
-  the latest patch.
 - Lore feature names (deferred); Purelymail follow-ups (auth headers, Resend DMARC, alias/send-as
   scope, seeding the dev mailbox); a Jev labelled corpus for real-mail accuracy.
 - Housekeeping: the icon recipe is in `docs/design/brand/README.md`; the stray parent `node_modules`
