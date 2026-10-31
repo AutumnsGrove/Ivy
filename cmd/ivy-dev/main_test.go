@@ -272,7 +272,7 @@ func TestUpNoWebServesHealthAndShutsDown(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- cmd.ExecuteContext(ctx) }()
 
-	waitForHealth(t, "http://"+addr+"/api/v1/health")
+	waitForHealth(t, upClient(t), "http://"+addr+"/api/v1/health")
 	if _, err := os.Stat(devstack.ConfigPath(root)); err != nil {
 		t.Fatalf("config missing while up: %v", err)
 	}
@@ -304,8 +304,9 @@ func TestUpServesTheSeededInbox(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- cmd.ExecuteContext(ctx) }()
 
-	waitForHealth(t, "http://"+addr+"/api/v1/health")
-	resp, err := http.Get("http://" + addr + "/api/v1/inbox")
+	client := upClient(t)
+	waitForHealth(t, client, "http://"+addr+"/api/v1/health")
+	resp, err := client.Get("http://" + addr + "/api/v1/inbox")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,6 +332,42 @@ func TestUpServesTheSeededInbox(t *testing.T) {
 	}
 }
 
+// Safari preconnects, and a preconnected socket that never sends a request
+// counts as an active connection: net/http only retires one after it has been
+// open for five seconds (issue 22682). Ctrl-C on `make dev` must still be a
+// clean stop, not an error report.
+func TestUpStopsWithAPreconnectedSocket(t *testing.T) {
+	root := shortRoot(t)
+	addr := freeAddr(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cmd := newRootCommand()
+	cmd.SetArgs([]string{"--root", root, "up", "--no-web", "--watch=false", "--profile", "minimal", "--llm", "fake", "--listen", addr})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	done := make(chan error, 1)
+	go func() { done <- cmd.ExecuteContext(ctx) }()
+	waitForHealth(t, upClient(t), "http://"+addr+"/api/v1/health")
+
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("up returned %v with a silent socket open", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("up did not shut down")
+	}
+}
+
 func freeAddr(t *testing.T) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -341,11 +378,22 @@ func freeAddr(t *testing.T) string {
 	return ln.Addr().String()
 }
 
-func waitForHealth(t *testing.T, url string) {
+// upClient is the client the `up` tests use. Keep-alives are off so that no
+// connection is left in the server's pool for Shutdown to wait on: a request
+// that arrives while an idle connection is being returned can make net/http dial
+// a second, unused one, and a test must not depend on that race.
+func upClient(t *testing.T) *http.Client {
+	t.Helper()
+	client := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
+	t.Cleanup(client.CloseIdleConnections)
+	return client
+}
+
+func waitForHealth(t *testing.T, client *http.Client, url string) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(url)
+		resp, err := client.Get(url)
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
@@ -459,7 +507,8 @@ func TestUpEmbedsTheSeededMailAndSearchesByMeaning(t *testing.T) {
 	cmd.SetErr(io.Discard)
 	done := make(chan error, 1)
 	go func() { done <- cmd.ExecuteContext(ctx) }()
-	waitForHealth(t, "http://"+addr+"/api/v1/health")
+	client := upClient(t)
+	waitForHealth(t, client, "http://"+addr+"/api/v1/health")
 
 	type results struct {
 		Hits []struct {
@@ -469,7 +518,7 @@ func TestUpEmbedsTheSeededMailAndSearchesByMeaning(t *testing.T) {
 	var got results
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get("http://" + addr + "/api/v1/search?q=qzxjvk")
+		resp, err := client.Get("http://" + addr + "/api/v1/search?q=qzxjvk")
 		if err != nil {
 			t.Fatal(err)
 		}

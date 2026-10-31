@@ -278,6 +278,16 @@ func runUp(cmd *cobra.Command, opts devstack.Options, noWeb bool, llmKey string)
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		err := srv.Shutdown(shutdownCtx)
+		if err != nil {
+			// A connection that never sent a request (a preconnect, which browsers
+			// make) counts as active until net/http has had it for five seconds, so
+			// this grace period can lose that race by a millisecond. Closing the rest
+			// is not a failure: the dev stack is stopping either way, and Ctrl-C
+			// should not exit with an error because a socket sat idle.
+			fmt.Fprintln(out, "shutdown timed out, closing the remaining connections")
+			_ = srv.Close()
+			err = nil
+		}
 		if web != nil {
 			_ = web.Wait()
 		}
