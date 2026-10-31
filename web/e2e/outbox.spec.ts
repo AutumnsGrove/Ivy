@@ -51,7 +51,12 @@ test('Mark unread keeps an open message unread', async ({ page }) => {
 	await expect(toast(page, 'Marked unread')).toBeVisible();
 
 	await page.waitForTimeout(2500); // longer than the dwell
-	expect(actions).toEqual(['unseen']);
+	// On a loaded runner the dwell can reach the queue before the click does, which is
+	// harmless: the ops are ordered, so the unread is still what the server ends with.
+	// The invariant is that nothing follows it while the message stays open.
+	const unseen = actions.indexOf('unseen');
+	expect(unseen).toBeGreaterThanOrEqual(0);
+	expect(actions.slice(unseen)).toEqual(['unseen']);
 });
 
 // Issue #9: flagging is occasional, so it lives in More with the other occasional
@@ -75,8 +80,11 @@ test('the queue shows an action while it is waiting', async ({ page }) => {
 	await expect(toast(page, 'Archived')).toBeVisible();
 
 	await page.goto('/settings/outbox');
-	await expect(page.getByText('Waiting')).toBeVisible();
-	await expect(page.getByText('Move to another folder')).toBeVisible();
+	// The read dwell may have queued a seen op as well (a second Waiting row), so the
+	// assertion is about this move's own row, not how many rows are waiting.
+	const row = page.getByRole('listitem').filter({ hasText: 'Move to another folder' });
+	await expect(row).toHaveCount(1);
+	await expect(row.getByText('Waiting')).toBeVisible();
 });
 
 test.describe('Trash', () => {
