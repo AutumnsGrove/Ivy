@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -171,7 +172,7 @@ func TestRunHoldsTheDataDirLock(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- root.ExecuteContext(ctx) }()
 
-	waitForHealth(t, "http://"+addr+"/api/v1/health")
+	waitForHealth(t, http.DefaultClient, "http://"+addr+"/api/v1/health")
 	if _, err := lockfile.Acquire(filepath.Join(dir, backup.LockName)); !errors.Is(err, lockfile.ErrLocked) {
 		t.Errorf("Acquire while running = %v, want ErrLocked", err)
 	}

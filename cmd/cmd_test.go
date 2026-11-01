@@ -76,7 +76,7 @@ func TestRunServesAndShutsDown(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- root.ExecuteContext(ctx) }()
 
-	waitForHealth(t, "http://"+addr+"/api/v1/health")
+	waitForHealth(t, http.DefaultClient, "http://"+addr+"/api/v1/health")
 
 	cancel()
 	select {
@@ -105,9 +105,10 @@ func TestRunShutsDownPromptlyWithAnEventStreamOpen(t *testing.T) {
 	root.SetErr(os.Stderr)
 	done := make(chan error, 1)
 	go func() { done <- root.ExecuteContext(ctx) }()
-	waitForHealth(t, "http://"+addr+"/api/v1/health")
+	client := runClient(t)
+	waitForHealth(t, client, "http://"+addr+"/api/v1/health")
 
-	resp, err := http.Get("http://" + addr + "/api/v1/events")
+	resp, err := client.Get("http://" + addr + "/api/v1/events")
 	if err != nil {
 		t.Fatalf("open stream: %v", err)
 	}
@@ -165,7 +166,7 @@ accounts:
 	root.SetErr(os.Stderr)
 	done := make(chan error, 1)
 	go func() { done <- root.ExecuteContext(ctx) }()
-	waitForHealth(t, "http://"+addr+"/api/v1/health")
+	waitForHealth(t, http.DefaultClient, "http://"+addr+"/api/v1/health")
 
 	dbs, err := store.Open(context.Background(), dir)
 	if err != nil {
@@ -232,9 +233,10 @@ func TestRunConnectsAnAccountTypedIntoTheApp(t *testing.T) {
 	root.SetErr(os.Stderr)
 	done := make(chan error, 1)
 	go func() { done <- root.ExecuteContext(ctx) }()
-	waitForHealth(t, "http://"+addr+"/api/v1/health")
+	client := runClient(t)
+	waitForHealth(t, client, "http://"+addr+"/api/v1/health")
 
-	resp, err := http.Post("http://"+addr+"/api/v1/accounts", "application/json",
+	resp, err := client.Post("http://"+addr+"/api/v1/accounts", "application/json",
 		strings.NewReader(`{"address":"me@grove.test","password":"secret"}`))
 	if err != nil {
 		t.Fatal(err)
@@ -281,6 +283,42 @@ func TestRunConnectsAnAccountTypedIntoTheApp(t *testing.T) {
 	}
 }
 
+// A browser preconnects, and a socket that never speaks counts as an active
+// connection until net/http has had it for five seconds - the same length as the
+// shutdown grace itself - so `systemctl stop` could report a failed stop.
+func TestRunStopsWithAPreconnectedSocket(t *testing.T) {
+	t.Parallel()
+	addr := freeAddr(t)
+	dir := t.TempDir()
+	configPath := writeConfig(t, dir, "listen: "+addr+"\ndata_dir: "+dir+"\n")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	root := New("test")
+	root.SetArgs([]string{"--config", configPath, "run"})
+	root.SetOut(os.Stderr)
+	root.SetErr(os.Stderr)
+	done := make(chan error, 1)
+	go func() { done <- root.ExecuteContext(ctx) }()
+	waitForHealth(t, http.DefaultClient, "http://"+addr+"/api/v1/health")
+
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("run returned %v with a silent socket open", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("run did not shut down with a silent socket open")
+	}
+}
+
 func freeAddr(t *testing.T) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -291,11 +329,21 @@ func freeAddr(t *testing.T) string {
 	return ln.Addr().String()
 }
 
-func waitForHealth(t *testing.T, url string) {
+// runClient keeps no connection alive: a request that arrives while an idle
+// connection is being returned can make the transport dial a second, unused one,
+// and a test must not leave Shutdown waiting five seconds for it.
+func runClient(t *testing.T) *http.Client {
+	t.Helper()
+	client := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
+	t.Cleanup(client.CloseIdleConnections)
+	return client
+}
+
+func waitForHealth(t *testing.T, client *http.Client, url string) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(url)
+		resp, err := client.Get(url)
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
@@ -324,7 +372,8 @@ func TestRunRefusesAForeignHostUnlessAllowed(t *testing.T) {
 	root.SetErr(os.Stderr)
 	done := make(chan error, 1)
 	go func() { done <- root.ExecuteContext(ctx) }()
-	waitForHealth(t, "http://"+addr+"/api/v1/health")
+	client := runClient(t)
+	waitForHealth(t, client, "http://"+addr+"/api/v1/health")
 
 	for host, want := range map[string]int{
 		"evil.example":          http.StatusForbidden,
@@ -337,7 +386,7 @@ func TestRunRefusesAForeignHostUnlessAllowed(t *testing.T) {
 			t.Fatal(err)
 		}
 		req.Host = host
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}

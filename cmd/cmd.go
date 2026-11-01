@@ -235,7 +235,18 @@ func runCmd(configPath *string, version string) *cobra.Command {
 			case <-ctx.Done():
 				shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
-				return srv.Shutdown(shutdownCtx)
+				err := srv.Shutdown(shutdownCtx)
+				if err != nil {
+					// A connection that never sends a request (a browser preconnect)
+					// counts as active until net/http has had it for five seconds, which
+					// is exactly this grace, so the wait can lose by a millisecond.
+					// Dropping the rest is not a failed stop: the process is going away
+					// either way, and systemd should see a clean exit, so say it once.
+					slog.Warn("shutdown timed out, closing the remaining connections", "error", err)
+					_ = srv.Close()
+					return nil
+				}
+				return nil
 			case err := <-errCh:
 				if errors.Is(err, http.ErrServerClosed) {
 					return nil
