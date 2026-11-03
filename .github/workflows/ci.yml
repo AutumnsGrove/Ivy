@@ -54,8 +54,12 @@ jobs:
         run: CGO_ENABLED=1 go test -race ./...
       - name: cross-compile for the target architecture
         run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ./...
+      # Pinned, and must move with GO_VERSION: govulncheck builds SSA for every
+      # package, and an x/tools older than the toolchain panics on syntax it
+      # does not know (v1.1.4's x/tools v0.29.0 dies on Go 1.27 with
+      # "unexpected expr: *ast.KeyValueExpr" on a linux-only file).
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
   nocgo:
     name: nocgo

@@ -57,6 +57,12 @@ module cache, pnpm store and Playwright browsers.
 | `codeql` | CodeQL for Go and JavaScript/TypeScript (free on public repos), also on a weekly schedule |
 | `bench` | Short benchmarks compared with the base commit via `benchstat` in the same job; advisory (comment only) until numbers are trusted, then a regression tripwire |
 
+`govulncheck` is pinned (`ci.yml`, `golang.org/x/vuln/cmd/govulncheck@v1.9.0`) and the pin moves
+with `GO_VERSION` in the same commit: it builds SSA for every package, so an x/tools older than
+the toolchain panics on syntax it does not know (v1.1.4 carried x/tools v0.29.0 and died on Go
+1.27 with `unexpected expr: *ast.KeyValueExpr`). A red `go` job with a panic instead of a finding
+means the pin, not the code, is stale.
+
 Required status checks on main (ruleset): `go`, `nocgo`, `drift`, `web`, `e2e`, `guard`, `deps`,
 `codeql`. `bench` stays advisory.
 
