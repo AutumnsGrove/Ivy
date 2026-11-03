@@ -83,9 +83,7 @@ export const accounts: Account[] = [
 
 /** hello@ can't sign in; used by the sync-error scenario and the mirror health screen. */
 export const failingHello = (a: Account): Account =>
-	a.id === 'a2'
-		? { ...a, sync: 'auth-failed', syncNote: "Can't sign in", syncedAt: minutesAgo(14) }
-		: a;
+	a.id === 'a2' ? { ...a, sync: 'auth-failed', syncNote: "Can't sign in", syncedAt: minutesAgo(14) } : a;
 
 /** Mirror health shows the whole spread: healthy, failing, and still backfilling. */
 export const healthAccounts: Account[] = accounts.map((a) =>
@@ -229,8 +227,7 @@ export function messageBody(id: string): Omit<MailMessage, keyof MailSummary> {
 }
 
 export const reading: ReadingFeed = {
-	digest:
-		'Five issues today, mostly gardening. One long read on moss is worth saving for tonight.',
+	digest: 'Five issues today, mostly gardening. One long read on moss is worth saving for tonight.',
 	issues: [
 		{
 			id: 'i1',
@@ -267,8 +264,7 @@ export const searchCorpus: SearchHit[] = [
 		from: 'Cloudflare',
 		date: ago(4, 13, 5),
 		subject: 'Your domain renews soon',
-		preview:
-			'grove.place will renew on the 14th. No action is needed unless you want to change the domain settings…'
+		preview: 'grove.place will renew on the 14th. No action is needed unless you want to change the domain settings…'
 	},
 	{
 		id: 's2',

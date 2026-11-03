@@ -39,7 +39,13 @@ async function undo(messageId: string, inv: Inverse) {
 	}
 }
 
-async function send(messageId: string, action: OutboxActionName, ok: string, failure: string, destinationFolderId?: string): Promise<OutboxItem | null> {
+async function send(
+	messageId: string,
+	action: OutboxActionName,
+	ok: string,
+	failure: string,
+	destinationFolderId?: string
+): Promise<OutboxItem | null> {
 	try {
 		const op = await outbox.enqueue({ messageId, action, destinationFolderId });
 		const inv = inverse(op);
@@ -117,12 +123,7 @@ export async function deleteMessage(messageId: string): Promise<boolean> {
 /** Flagging changes no folder and erases nothing, so it needs no confirmation. */
 export async function flagMessage(messageId: string, on: boolean): Promise<boolean> {
 	return (
-		(await send(
-			messageId,
-			on ? 'flag' : 'unflag',
-			on ? 'Flagged' : 'Unflagged',
-			"Couldn't change the flag"
-		)) !== null
+		(await send(messageId, on ? 'flag' : 'unflag', on ? 'Flagged' : 'Unflagged', "Couldn't change the flag")) !== null
 	);
 }
 
@@ -178,7 +179,11 @@ export async function markSpam(messageId: string): Promise<boolean> {
 
 /** Not junk is a move back to the Inbox; confirmed. */
 export async function markNotJunk(messageId: string): Promise<boolean> {
-	const ok = await confirm.ask({ title: 'Not junk?', body: 'This moves the message back to your Inbox.', confirmLabel: 'Not junk' });
+	const ok = await confirm.ask({
+		title: 'Not junk?',
+		body: 'This moves the message back to your Inbox.',
+		confirmLabel: 'Not junk'
+	});
 	if (!ok) return false;
 	return (await send(messageId, 'not_junk', 'Moved to Inbox', "Couldn't move it")) !== null;
 }

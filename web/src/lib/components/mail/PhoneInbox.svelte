@@ -47,7 +47,13 @@
 	// The route loads the newest page; "Show older" appends the pages after it.
 	const pager = new Pager<Inbox['items'][number]>(
 		(cursor) =>
-			api.listInbox({ scenario: scenario ?? undefined, accountId: accountId ?? undefined, folder, tag: tag?.id, cursor }),
+			api.listInbox({
+				scenario: scenario ?? undefined,
+				accountId: accountId ?? undefined,
+				folder,
+				tag: tag?.id,
+				cursor
+			}),
 		"Couldn't load older mail"
 	);
 	$effect.pre(() => pager.reset({ items: inbox.items, nextCursor: inbox.nextCursor }));
@@ -84,22 +90,13 @@
 
 	<div class="body">
 		{#if failing}
-			<Banner
-				title="{failing.short} can't sign in"
-				actionLabel="Fix"
-				onaction={() => goto('/settings/health')}
-			>
+			<Banner title="{failing.short} can't sign in" actionLabel="Fix" onaction={() => goto('/settings/health')}>
 				The mail server didn't accept the saved password. Your mail is safe. Showing what Ivy already has.
 			</Banner>
 		{/if}
 
 		{#if visible.length}
-			<MessageList
-				items={visible}
-				{accounts}
-				hrefFor={(m) => withScenario(`/m/${m.id}`, scenario)}
-				{selection}
-			/>
+			<MessageList items={visible} {accounts} hrefFor={(m) => withScenario(`/m/${m.id}`, scenario)} {selection} />
 			{#if pager.cursor}
 				<div class="more">
 					<Button variant="tonal" onclick={() => pager.more()} disabled={pager.busy}>Show older</Button>

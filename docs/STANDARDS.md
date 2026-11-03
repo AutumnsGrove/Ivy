@@ -314,7 +314,13 @@ apply: **error or timeout, second call, limit exceeded, cancellation, hostile or
   targets; axe runs in every E2E flow.
 - Browser targets: current Safari on iOS and iPadOS (primary), current Firefox, current Safari on
   macOS, Chromium for CI. Evergreen only; no legacy polyfills.
-- Lint/format: ESLint, Prettier, `svelte-check`; zero warnings.
+- Lint/format: ESLint (flat config: `@eslint/js`, `typescript-eslint`, `eslint-plugin-svelte`,
+  `eslint-config-prettier`), Prettier (`prettier-plugin-svelte`), `svelte-check --fail-on-warnings`;
+  **zero warnings**. Run them with `pnpm lint`, `pnpm format:check` and `pnpm check` (or
+  `make web-check` for all three plus Vitest). The one rule that is off is
+  `svelte/no-navigation-without-resolve`: it exists to prefix links with `paths.base`, Ivy is served
+  from the root and builds most links from an `href` prop in a shared component. Turn it back on the
+  day `paths.base` is set.
 
 ## 6. API standards
 

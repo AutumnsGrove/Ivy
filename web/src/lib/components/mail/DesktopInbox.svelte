@@ -40,7 +40,13 @@
 	// The route loads the newest page; "Show older" appends the pages after it.
 	const pager = new Pager<Inbox['items'][number]>(
 		(cursor) =>
-			api.listInbox({ scenario: scenario ?? undefined, accountId: accountId ?? undefined, folder, tag: tag?.id, cursor }),
+			api.listInbox({
+				scenario: scenario ?? undefined,
+				accountId: accountId ?? undefined,
+				folder,
+				tag: tag?.id,
+				cursor
+			}),
 		"Couldn't load older mail"
 	);
 	$effect.pre(() => pager.reset({ items: inbox.items, nextCursor: inbox.nextCursor }));
@@ -90,7 +96,9 @@
 			</div>
 			{#if tag?.editable}<Button size="sm" variant="tonal" href="/tags/{tag.id}">Edit tag</Button>{/if}
 			{#if folder === 'trash' && visible.length}<EmptyTrashButton ids={visible.map((m) => m.id)} />{/if}
-			{#if visible.length && !selection.on}<Button size="sm" variant="tonal" onclick={() => selection.start()}>Select</Button>{/if}
+			{#if visible.length && !selection.on}<Button size="sm" variant="tonal" onclick={() => selection.start()}
+					>Select</Button
+				>{/if}
 			<a href="/search" class="find"><Search />Search or ask</a>
 		</header>
 		{#if selection.on}

@@ -16,7 +16,9 @@ test.describe('outgoing attachments', () => {
 		await page.getByLabel('Message body', { exact: true }).fill('See attached.');
 
 		await page.getByRole('button', { name: 'Attach' }).click();
-		await page.getByLabel('Files', { exact: true }).setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello attachment') });
+		await page
+			.getByLabel('Files', { exact: true })
+			.setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello attachment') });
 		await expect(page.getByText('notes.txt')).toBeVisible();
 
 		const sent = page.waitForResponse((r) => r.url().endsWith('/api/v1/send') && r.request().method() === 'POST');
@@ -35,7 +37,9 @@ test.describe('outgoing attachments', () => {
 	test('the image button inserts an inline cid reference', async ({ page }) => {
 		await page.goto('/compose');
 		await page.getByRole('button', { name: 'Insert image' }).click();
-		await page.getByLabel('Photos', { exact: true }).setInputFiles({ name: 'dot.png', mimeType: 'image/png', buffer: PNG });
+		await page
+			.getByLabel('Photos', { exact: true })
+			.setInputFiles({ name: 'dot.png', mimeType: 'image/png', buffer: PNG });
 		await expect(page.getByRole('button', { name: 'Remove dot.png' })).toBeVisible();
 		await expect(page.getByLabel('Message body', { exact: true }).locator('img[src^="cid:"]')).toHaveCount(1);
 	});

@@ -117,7 +117,10 @@ describe('outbox overlay', () => {
 
 	it('replaces the overlay from the server active list on refresh', async () => {
 		outbox.remember(op({ id: 'stale', kind: 'move', state: 'pending' }));
-		mocks.listOutbox.mockResolvedValue({ active: [op({ id: 'fresh', kind: 'flags', state: 'in_flight', flagsAdd: ['\\flagged'] })], recent: [] });
+		mocks.listOutbox.mockResolvedValue({
+			active: [op({ id: 'fresh', kind: 'flags', state: 'in_flight', flagsAdd: ['\\flagged'] })],
+			recent: []
+		});
 		await outbox.refresh('a1');
 		expect(outbox.hidden('m1')).toBe(false);
 		expect(outbox.flags('m1')).toEqual({ flagged: true });

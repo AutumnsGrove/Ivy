@@ -2,7 +2,14 @@
 	import { goto } from '$app/navigation';
 	import { ArrowLeft, Archive, Ellipsis, Reply, Tag, Trash2 } from '#lib/icons.js';
 	import { withScenario, type Scenario } from '#lib/api/scenario.js';
-	import { archiveMessage, deleteMessage, flagMessage, markNotJunk, markSpam, markUnread } from '#lib/messageActions.js';
+	import {
+		archiveMessage,
+		deleteMessage,
+		flagMessage,
+		markNotJunk,
+		markSpam,
+		markUnread
+	} from '#lib/messageActions.js';
 	import { outbox } from '#lib/outbox.svelte.js';
 	import type { Account, MailMessage } from '#lib/types.js';
 	import Button from '../ui/Button.svelte';
@@ -58,11 +65,41 @@
 
 	<Sheet bind:open={more} title="More actions">
 		<h2 class="sheet-title">More actions</h2>
-		<Button block onclick={async () => { more = false; await flagMessage(id, !flagged); }}>{flagged ? 'Remove flag' : 'Flag'}</Button>
-		<Button block onclick={async () => { more = false; await markUnread(id); }}>Mark unread</Button>
-		<Button block onclick={async () => { more = false; await markSpam(id); }}>Mark as spam</Button>
-		<Button block onclick={async () => { more = false; await markNotJunk(id); }}>Not junk</Button>
-		<Button block onclick={() => { more = false; odds = true; }}>Show the odds</Button>
+		<Button
+			block
+			onclick={async () => {
+				more = false;
+				await flagMessage(id, !flagged);
+			}}>{flagged ? 'Remove flag' : 'Flag'}</Button
+		>
+		<Button
+			block
+			onclick={async () => {
+				more = false;
+				await markUnread(id);
+			}}>Mark unread</Button
+		>
+		<Button
+			block
+			onclick={async () => {
+				more = false;
+				await markSpam(id);
+			}}>Mark as spam</Button
+		>
+		<Button
+			block
+			onclick={async () => {
+				more = false;
+				await markNotJunk(id);
+			}}>Not junk</Button
+		>
+		<Button
+			block
+			onclick={() => {
+				more = false;
+				odds = true;
+			}}>Show the odds</Button
+		>
 	</Sheet>
 
 	<OddsSheet {id} bind:open={odds} />

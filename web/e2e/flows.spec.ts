@@ -51,8 +51,14 @@ test.describe('settings', () => {
 
 	test('smart features are off by default for accounts that never opted in', async ({ page }) => {
 		await page.goto('/settings');
-		await expect(page.getByRole('switch', { name: 'Smart features for support@example.com' })).toHaveAttribute('aria-checked', 'false');
-		await expect(page.getByRole('switch', { name: 'Smart features for me@example.com' })).toHaveAttribute('aria-checked', 'true');
+		await expect(page.getByRole('switch', { name: 'Smart features for support@example.com' })).toHaveAttribute(
+			'aria-checked',
+			'false'
+		);
+		await expect(page.getByRole('switch', { name: 'Smart features for me@example.com' })).toHaveAttribute(
+			'aria-checked',
+			'true'
+		);
 	});
 });
 

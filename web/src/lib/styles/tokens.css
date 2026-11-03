@@ -169,9 +169,10 @@
 	--sky-low: #0c1f18;
 	--sky-base: #070d11;
 	--scene-image:
-		var(--vine), var(--vine), var(--vine), linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 50%, var(--sky-low) 100%);
-	--scene-size: var(--vine-size) var(--vine-size), var(--vine-size) var(--vine-size),
-		var(--vine-size) var(--vine-size), 100% 100%;
+		var(--vine), var(--vine), var(--vine),
+		linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 50%, var(--sky-low) 100%);
+	--scene-size:
+		var(--vine-size) var(--vine-size), var(--vine-size) var(--vine-size), var(--vine-size) var(--vine-size), 100% 100%;
 	--scene-repeat: repeat, repeat, repeat, no-repeat;
 	--stars-opacity: 1;
 	--danger: #f2957f;

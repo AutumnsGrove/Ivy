@@ -122,7 +122,15 @@ describe('OddsSheet', () => {
 	it('renders question ids and option names as text, never as markup', async () => {
 		mocks.getMessageOdds.mockResolvedValue({
 			model: 'x',
-			answers: [{ ...needsMe, questionId: 'a<img src=x onerror=alert(1)>', probabilities: { '<b>x</b>': 1 }, choice: '<b>x</b>', quietOption: 'n' }],
+			answers: [
+				{
+					...needsMe,
+					questionId: 'a<img src=x onerror=alert(1)>',
+					probabilities: { '<b>x</b>': 1 },
+					choice: '<b>x</b>',
+					quietOption: 'n'
+				}
+			],
 			unanswered: []
 		});
 		render(OddsSheet, { id: 'm1', open: true });

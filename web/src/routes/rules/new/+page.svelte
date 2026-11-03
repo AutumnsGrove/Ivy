@@ -4,7 +4,6 @@
 	import type { RuleAction, RuleCondition, SnoozePreset } from '#lib/types.js';
 	import Page from '#lib/components/shell/Page.svelte';
 	import Button from '#lib/components/ui/Button.svelte';
-	import Chip from '#lib/components/ui/Chip.svelte';
 	import Glass from '#lib/components/ui/Glass.svelte';
 	import GroupLabel from '#lib/components/ui/GroupLabel.svelte';
 	import TopBar from '#lib/components/ui/TopBar.svelte';
@@ -41,9 +40,7 @@
 
 	async function create() {
 		creating = true;
-		const conditions: RuleCondition[] = [
-			{ field, value: field === 'has_attachment' ? 'true' : value.trim() }
-		];
+		const conditions: RuleCondition[] = [{ field, value: field === 'has_attachment' ? 'true' : value.trim() }];
 		const actions: RuleAction[] = [
 			actionType === 'tag'
 				? { type: 'tag', tagId }
@@ -74,7 +71,7 @@
 				{#each fields as f (f.value)}<option value={f.value}>{f.label}</option>{/each}
 			</select>
 			{#if field !== 'has_attachment'}
-				<input bind:value={value} placeholder="Cloudflare, invoice, …" aria-label="Condition value" />
+				<input bind:value placeholder="Cloudflare, invoice, …" aria-label="Condition value" />
 			{/if}
 		</div>
 	</Glass>
@@ -102,7 +99,9 @@
 	<div class="cta">
 		<Button variant="primary" size="xl" block disabled={!canCreate || creating} onclick={create}>Create rule</Button>
 	</div>
-	<p class="safe">You can add more conditions and actions, check it against recent mail, and turn it off on the next screen.</p>
+	<p class="safe">
+		You can add more conditions and actions, check it against recent mail, and turn it off on the next screen.
+	</p>
 	<p class="foot">Rules can tag, sort into Reading, or snooze. Moving, deleting and sending always ask you first.</p>
 </Page>
 

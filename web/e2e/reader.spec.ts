@@ -48,7 +48,11 @@ test('a wide fixed-width mail is shrunk to the frame and the frame grows to it',
 		page.locator('iframe.body').evaluate((el) => {
 			const f = el as HTMLIFrameElement;
 			const doc = f.contentDocument!.documentElement;
-			return { frameH: f.getBoundingClientRect().height, docH: doc.scrollHeight, overflowX: doc.scrollWidth - f.clientWidth };
+			return {
+				frameH: f.getBoundingClientRect().height,
+				docH: doc.scrollHeight,
+				overflowX: doc.scrollWidth - f.clientWidth
+			};
 		});
 	// No inner scroll: the frame is as tall as what is in it (and taller than a
 	// screenful here), and nothing sticks out sideways.
@@ -62,9 +66,15 @@ test('a wide fixed-width mail is shrunk to the frame and the frame grows to it',
 // so a short mail must end up short, not stuck at the height it started with.
 test('a short mail gets a short frame', async ({ page }) => {
 	await page.route('**/api/v1/messages/m1/body*', (route) =>
-		route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><body style="margin:0"><p>Hi</p></body>' })
+		route.fulfill({
+			status: 200,
+			contentType: 'text/html; charset=utf-8',
+			body: '<!doctype html><body style="margin:0"><p>Hi</p></body>'
+		})
 	);
 	await page.goto('/m/m1');
 	await expect(page.frameLocator('iframe.body').getByText('Hi')).toBeVisible();
-	await expect.poll(() => page.locator('iframe.body').evaluate((el) => el.getBoundingClientRect().height)).toBeLessThan(120);
+	await expect
+		.poll(() => page.locator('iframe.body').evaluate((el) => el.getBoundingClientRect().height))
+		.toBeLessThan(120);
 });

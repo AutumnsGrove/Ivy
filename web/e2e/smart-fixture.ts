@@ -103,7 +103,14 @@ function backfillReply(
 	const found = accounts.find((a) => a.id === account);
 	if (!found) return { status: 404, body: { code: 'not_found', message: 'No such account' } };
 	if (method === 'POST') {
-		if (!found.smart) return { status: 409, body: { code: 'not_ready', message: 'Smart features are off for this account, so there is nothing to look over mail with.' } };
+		if (!found.smart)
+			return {
+				status: 409,
+				body: {
+					code: 'not_ready',
+					message: 'Smart features are off for this account, so there is nothing to look over mail with.'
+				}
+			};
 		if (scenario === 'no-key') return { status: 409, body: { code: 'not_ready', message: NO_KEY } };
 	}
 	const w = window as BackfillWindow;
@@ -153,10 +160,12 @@ export function smartReply(
 
 	// Check everything, then write: a refusal changes nothing, as on the server.
 	for (const id of Object.keys(patch.accounts ?? {})) {
-		if (!accounts.some((a) => a.id === id)) return { status: 404, body: { code: 'not_found', message: 'No such account' } };
+		if (!accounts.some((a) => a.id === id))
+			return { status: 404, body: { code: 'not_found', message: 'No such account' } };
 	}
 	if (patch.globalCapUsd !== undefined && !isCap(patch.globalCapUsd)) return bad(capMessage);
-	if (patch.chatModel !== undefined && !MODELS.some((m) => m.id === patch.chatModel)) return bad('That is not a chat model Ivy offers');
+	if (patch.chatModel !== undefined && !MODELS.some((m) => m.id === patch.chatModel))
+		return bad('That is not a chat model Ivy offers');
 	for (const a of Object.values(patch.accounts ?? {})) {
 		if (a.capUsd !== undefined && !isCap(a.capUsd)) return bad(capMessage);
 		for (const name of Object.keys(a.features ?? {})) {

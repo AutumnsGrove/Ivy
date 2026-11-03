@@ -21,7 +21,11 @@ describe('squareCrop', () => {
 
 const blob = (type: string) => new Blob(['x'], { type });
 
-function deps(width: number, height: number, out: Blob | null = blob('image/jpeg')): PhotoDeps & { close: ReturnType<typeof vi.fn> } {
+function deps(
+	width: number,
+	height: number,
+	out: Blob | null = blob('image/jpeg')
+): PhotoDeps & { close: ReturnType<typeof vi.fn> } {
 	const close = vi.fn();
 	return {
 		close,
@@ -80,7 +84,11 @@ import { prepareImage, PREPARE_EDGE, type PrepareDeps } from './photo';
 
 const file = (name: string, type: string) => new File(['x'], name, { type });
 
-function prepDeps(width: number, height: number, out: Blob | null = blob('image/jpeg')): PrepareDeps & { close: ReturnType<typeof vi.fn> } {
+function prepDeps(
+	width: number,
+	height: number,
+	out: Blob | null = blob('image/jpeg')
+): PrepareDeps & { close: ReturnType<typeof vi.fn> } {
 	const close = vi.fn();
 	return {
 		close,
@@ -141,7 +149,9 @@ describe('prepareImage', () => {
 
 	it('releases the decoded image even when encoding fails', async () => {
 		const d = prepDeps(600, 600, null);
-		await expect(prepareImage(file('a.jpg', 'image/jpeg'), { size: 'medium', stripLocation: true }, d)).rejects.toBeInstanceOf(PhotoError);
+		await expect(
+			prepareImage(file('a.jpg', 'image/jpeg'), { size: 'medium', stripLocation: true }, d)
+		).rejects.toBeInstanceOf(PhotoError);
 		expect(d.close).toHaveBeenCalledOnce();
 	});
 });

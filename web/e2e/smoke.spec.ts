@@ -64,13 +64,16 @@ test('tags a message through the real outbox and clears the tag again', async ({
 	const inbox = await (await request.get('/api/v1/inbox')).json();
 	const id: string = inbox.items[0].id;
 
-	const created = await request.post('/api/v1/tags', { data: { name: `smoke ${testInfo.project.name}`, color: 'mint' } });
+	const created = await request.post('/api/v1/tags', {
+		data: { name: `smoke ${testInfo.project.name}`, color: 'mint' }
+	});
 	expect(created.status()).toBe(201);
 	const tag = await created.json();
 
 	const queued = await request.post('/api/v1/outbox', { data: { messageId: id, action: 'tag', tagId: tag.id } });
 	expect(queued.status()).toBe(202);
-	const tagIds = async (): Promise<string[]> => ((await (await request.get(`/api/v1/messages/${id}`)).json()).tagIds ?? []) as string[];
+	const tagIds = async (): Promise<string[]> =>
+		((await (await request.get(`/api/v1/messages/${id}`)).json()).tagIds ?? []) as string[];
 	await expect.poll(tagIds, { timeout: 20_000 }).toContain(tag.id);
 
 	// Deleting the tag clears its keyword from the server first, then forgets it.
@@ -83,7 +86,12 @@ test('tags a message through the real outbox and clears the tag again', async ({
 // gateway, the totals add up, and the screens render them with nothing in the console.
 test('serves the spend roll-up and call log from the real ledger', async ({ request, page }) => {
 	const summary = await (await request.get('/api/v1/spend')).json();
-	expect(summary).toMatchObject({ totalUsd: expect.any(Number), capUsd: expect.any(Number), byFeature: expect.any(Array), blocked: expect.any(Array) });
+	expect(summary).toMatchObject({
+		totalUsd: expect.any(Number),
+		capUsd: expect.any(Number),
+		byFeature: expect.any(Array),
+		blocked: expect.any(Array)
+	});
 	const byFeature = (summary.byFeature as { usd: number }[]).reduce((n, f) => n + f.usd, 0);
 	expect(byFeature).toBeCloseTo(summary.totalUsd, 9);
 

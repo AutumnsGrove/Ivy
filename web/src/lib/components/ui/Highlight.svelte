@@ -5,7 +5,7 @@
 	const parts = $derived(highlight(text, query));
 </script>
 
-{#each parts as p}{#if p.hit}<mark>{p.text}</mark>{:else}{p.text}{/if}{/each}
+{#each parts as p, i (i)}{#if p.hit}<mark>{p.text}</mark>{:else}{p.text}{/if}{/each}
 
 <style>
 	mark {

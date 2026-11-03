@@ -20,7 +20,8 @@ const CHECKS = [
 	['dmarc', 'DMARC']
 ] as const;
 
-const list = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : (names[0] ?? ''));
+const list = (names: string[]) =>
+	names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : (names[0] ?? '');
 
 /**
  * One honest sentence about who vouched for the sender. No verdict is stated as
@@ -47,6 +48,7 @@ const plain = (n: number) => `${Number(n.toFixed(2))}`;
  */
 export function spamLine(spam: MessageAuth['spam']): string | null {
 	if (!spam) return null;
-	if (spam.flagged) return `Your provider's spam filter flagged this: score ${plain(spam.score)}, limit ${plain(spam.required)}.`;
+	if (spam.flagged)
+		return `Your provider's spam filter flagged this: score ${plain(spam.score)}, limit ${plain(spam.required)}.`;
 	return `Spam score ${spam.score.toFixed(1)}; your provider flags ${plain(spam.required)} and above. A low score is a hint, not a guarantee.`;
 }

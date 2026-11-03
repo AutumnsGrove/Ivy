@@ -21,7 +21,9 @@ test.describe('the odds sheet', () => {
 		await expect(needs.getByRole('meter', { name: 'likely' })).toHaveAttribute('aria-valuenow', '90');
 		await expect(sheet.getByRole('group', { name: 'Urgency' })).toContainText('Held back by another question');
 		await expect(sheet.getByText('The answer did not fit the options, so it was thrown away')).toBeVisible();
-		await expect(sheet.getByText('Nothing is moved, hidden or deleted because of them.', { exact: false })).toBeVisible();
+		await expect(
+			sheet.getByText('Nothing is moved, hidden or deleted because of them.', { exact: false })
+		).toBeVisible();
 	});
 
 	test('explains itself on a message nothing was asked about', async ({ page }) => {

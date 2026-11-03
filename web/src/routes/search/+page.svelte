@@ -15,6 +15,9 @@
 	import StateView from '#lib/components/ui/StateView.svelte';
 
 	let { data } = $props();
+	// The box is editable, so it cannot be a $derived of the URL: the effect re-seeds
+	// it when you navigate, which is the one thing derived state cannot do.
+	// eslint-disable-next-line svelte/prefer-writable-derived
 	let q = $state('');
 	// The box mirrors the URL, so back/forward and shared links show the query that produced the results.
 	$effect.pre(() => {
@@ -36,7 +39,8 @@
 			<span class="lead"><Search /></span>
 			<input type="search" bind:value={q} placeholder="Search your mail" aria-label="Search your mail" />
 			{#if q}
-				<button type="button" class="clear" aria-label="Clear" onclick={() => ((q = ''), goto('/search'))}><X /></button>
+				<button type="button" class="clear" aria-label="Clear" onclick={() => ((q = ''), goto('/search'))}><X /></button
+				>
 			{/if}
 		</Glass>
 	</form>

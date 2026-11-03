@@ -56,7 +56,14 @@
 		() => toasts.push({ text: 'Sent', tone: 'ok' }),
 		() => toasts.push({ text: 'Archived', action: { label: 'Undo', run: () => {} } }),
 		() => toasts.push({ text: 'Couldn’t archive yet', detail: 'Ivy will keep trying', tone: 'warn' }),
-		() => toasts.push({ text: 'Not sent', detail: 'Saved in Drafts', tone: 'danger', duration: 0, action: { label: 'Open', run: () => {} } }),
+		() =>
+			toasts.push({
+				text: 'Not sent',
+				detail: 'Saved in Drafts',
+				tone: 'danger',
+				duration: 0,
+				action: { label: 'Open', run: () => {} }
+			}),
 		() => toasts.push({ text: 'Back online. Catching up…', tone: 'info' })
 	];
 	const toastNames = ['Sending, with undo', 'Sent', 'Done, with undo', 'Will retry', 'Needs you', 'Reconnected'];

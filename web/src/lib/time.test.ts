@@ -56,7 +56,7 @@ describe('formatSince', () => {
 	const since = (iso: string, opts: Parameters<typeof formatSince>[1] = {}) =>
 		formatSince(iso, { now, locale: 'en-US', timeZone: 'UTC', ...opts });
 
-	it('says how long ago, in the viewer\'s language', () => {
+	it("says how long ago, in the viewer's language", () => {
 		expect(since('2026-10-03T15:29:50Z')).toBe('now');
 		expect(since('2026-10-03T15:26:00Z')).toBe('4 minutes ago');
 		expect(since('2026-10-03T12:30:00Z')).toBe('3 hours ago');

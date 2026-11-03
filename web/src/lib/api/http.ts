@@ -95,18 +95,13 @@ async function errorFrom(res: Response, path: string): Promise<ApiError> {
 	try {
 		body = await res.json();
 	} catch {
-		body = null;
+		// Not JSON: `body` stays null, so this reads as an unknown fault below.
 	}
-	const envelope =
-		body && typeof body === 'object' ? (body as { code?: unknown; message?: unknown }) : null;
-	const known =
-		typeof envelope?.code === 'string' && CODES.has(envelope.code)
-			? (envelope.code as ErrorCode)
-			: null;
+	const envelope = body && typeof body === 'object' ? (body as { code?: unknown; message?: unknown }) : null;
+	const known = typeof envelope?.code === 'string' && CODES.has(envelope.code) ? (envelope.code as ErrorCode) : null;
 	// A stale draft save answers 409 with the newer DraftResume, not the error envelope.
 	const code = known ?? (res.status === 409 && path === '/drafts' ? 'draft_conflict' : fallbackCode(res.status));
-	const message =
-		typeof envelope?.message === 'string' && envelope.message ? envelope.message : 'Something went wrong';
+	const message = typeof envelope?.message === 'string' && envelope.message ? envelope.message : 'Something went wrong';
 	return new ApiError(code, message, body ?? undefined);
 }
 

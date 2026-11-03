@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { api } from '#lib/api/client.js';
 	import { dismissNeeds } from '#lib/needsActions.js';
 	import { outbox } from '#lib/outbox.svelte.js';
@@ -20,12 +21,12 @@
 	$effect.pre(() => pager.reset({ items: data.needs.items, nextCursor: data.needs.nextCursor }));
 
 	// A row leaves as soon as the server has cleared it, without waiting for the reload.
-	let gone = $state<Set<string>>(new Set());
+	const gone = new SvelteSet<string>();
 	const visible = $derived(pager.items.filter((m) => !gone.has(m.id) && !outbox.hidden(m.id)));
 
 	async function dismiss(m: Inbox['items'][number]) {
 		if (!(await dismissNeeds(m.id))) return;
-		gone = new Set(gone).add(m.id);
+		gone.add(m.id);
 		await invalidateAll();
 	}
 </script>

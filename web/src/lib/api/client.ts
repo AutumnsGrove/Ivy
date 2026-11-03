@@ -40,7 +40,6 @@ import type {
 	Person,
 	ReadingFeed,
 	Rule,
-	RuleAction,
 	RuleApplyResult,
 	RuleCondition,
 	RuleDryRunResult,
@@ -78,12 +77,13 @@ type Opts = { scenario?: Scenario | null };
 
 const tick = <T>(value: T): Promise<T> => Promise.resolve(structuredClone(value));
 
-
 export const api = {
 	// --- reader: answered by the real gateway over the JSON contract ---------
 	listAccounts: (_o: Opts = {}): Promise<Account[]> => request<Account[]>('/accounts'),
 
-	listInbox: (o: Opts & { accountId?: string; folder?: FolderView; tag?: string; cursor?: string } = {}): Promise<Inbox> =>
+	listInbox: (
+		o: Opts & { accountId?: string; folder?: FolderView; tag?: string; cursor?: string } = {}
+	): Promise<Inbox> =>
 		request<Inbox>(apiPath('/inbox', { account_id: o.accountId, folder: o.folder, tag: o.tag, cursor: o.cursor })),
 
 	/** Mail with an open needs-attention verdict, urgent first. Reads what is decided; never makes a request. */
@@ -106,8 +106,7 @@ export const api = {
 		request<MailMessage>(`/messages/${encodeURIComponent(id)}`),
 
 	/** The header alone, for the screen that shows a failed body under a real subject line. */
-	getSummary: (id: string): Promise<MailSummary> =>
-		request<MailSummary>(`/messages/${encodeURIComponent(id)}/summary`),
+	getSummary: (id: string): Promise<MailSummary> => request<MailSummary>(`/messages/${encodeURIComponent(id)}/summary`),
 
 	/** A short summary of the message's thread, when it is worth one. The first open of a worthwhile thread can take a few seconds; empty for any other reason. */
 	getMessageInsight: (id: string): Promise<MessageInsight> =>
@@ -223,7 +222,10 @@ export const api = {
 		}),
 
 	/** Rename an account or choose its icon; omitted fields keep their value. */
-	updateAccountProfile: (id: string, profile: { displayName?: string; icon?: string; smart?: boolean }): Promise<Account> =>
+	updateAccountProfile: (
+		id: string,
+		profile: { displayName?: string; icon?: string; smart?: boolean }
+	): Promise<Account> =>
 		request<Account>(`/accounts/${encodeURIComponent(id)}`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },
@@ -330,8 +332,7 @@ export const api = {
 
 	getSend: (id: string): Promise<SendStatus> => request<SendStatus>(`/send/${encodeURIComponent(id)}`),
 
-	listSends: (accountId?: string): Promise<SendList> =>
-		request<SendList>(apiPath('/send', { account_id: accountId })),
+	listSends: (accountId?: string): Promise<SendList> => request<SendList>(apiPath('/send', { account_id: accountId })),
 
 	/** Cancel a queued send before the server's deadline; the reply carries the stored draft. */
 	undoSend: (id: string): Promise<SendStatus> =>
@@ -439,8 +440,7 @@ export const api = {
 			body: JSON.stringify({ enabled })
 		}),
 
-	deleteRule: (id: string): Promise<void> =>
-		request<void>(`/rules/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+	deleteRule: (id: string): Promise<void> => request<void>(`/rules/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
 	/** A free local preview: counts without writing anything. */
 	dryRunRule: (conditions: RuleCondition[], accountIds?: string[]): Promise<RuleDryRunResult> =>

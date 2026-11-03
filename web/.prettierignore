@@ -1,0 +1,12 @@
+# Build output and dependencies.
+build/
+.svelte-kit/
+node_modules/
+test-results/
+
+# Generated from api/openapi.yaml by `make generate`; `make drift` compares the
+# committed file byte for byte, so the formatter must not touch it.
+src/lib/api/schema.d.ts
+
+# pnpm owns this one.
+pnpm-lock.yaml

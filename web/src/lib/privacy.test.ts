@@ -23,11 +23,21 @@ describe('showsMarker', () => {
 
 describe('privacyNote', () => {
 	it('says why in plain words and never calls itself AI', () => {
-		expect(privacyNote(status())).toBe('Kept private from helpers: it reads like it is giving instructions to a program.');
-		expect(privacyNote(status({ reasons: ['credentials'] }))).toBe('Kept private from helpers: it may contain a password or a code.');
-		expect(privacyNote(status({ reasons: ['financial'] }))).toBe('Kept private from helpers: it may contain card or account numbers.');
-		expect(privacyNote(status({ reasons: ['health'] }))).toBe('Kept private from helpers: it may contain health details.');
-		expect(privacyNote(status({ reasons: ['id_document'] }))).toBe('Kept private from helpers: it may contain an identity document.');
+		expect(privacyNote(status())).toBe(
+			'Kept private from helpers: it reads like it is giving instructions to a program.'
+		);
+		expect(privacyNote(status({ reasons: ['credentials'] }))).toBe(
+			'Kept private from helpers: it may contain a password or a code.'
+		);
+		expect(privacyNote(status({ reasons: ['financial'] }))).toBe(
+			'Kept private from helpers: it may contain card or account numbers.'
+		);
+		expect(privacyNote(status({ reasons: ['health'] }))).toBe(
+			'Kept private from helpers: it may contain health details.'
+		);
+		expect(privacyNote(status({ reasons: ['id_document'] }))).toBe(
+			'Kept private from helpers: it may contain an identity document.'
+		);
 	});
 	it('joins several reasons', () => {
 		expect(privacyNote(status({ reasons: ['injection', 'financial'] }))).toBe(

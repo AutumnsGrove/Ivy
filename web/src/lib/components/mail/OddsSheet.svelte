@@ -52,8 +52,8 @@
 	{:else if odds}
 		{#if empty}
 			<p class="note">
-				Nothing has been asked about this message. Questions are only asked about mail that arrives after
-				smart features are switched on for its account.
+				Nothing has been asked about this message. Questions are only asked about mail that arrives after smart features
+				are switched on for its account.
 			</p>
 		{/if}
 
@@ -68,7 +68,9 @@
 				<ul class="opts">
 					{#each optionRows(a) as o (o.name)}
 						<li class:chosen={o.chosen}>
-							<span class="name" dir="auto">{o.name}{#if o.quiet}<span class="tag"> quiet</span>{/if}</span>
+							<span class="name" dir="auto"
+								>{o.name}{#if o.quiet}<span class="tag"> quiet</span>{/if}</span
+							>
 							<div
 								class="meter {state}"
 								class:chosen={o.chosen}
@@ -80,7 +82,10 @@
 								aria-valuetext="{o.pct}%"
 							>
 								<i style:width="{o.pct}%"></i>
-								{#if o.chosen && !o.quiet}<span class="tick" style:inset-inline-start="{Math.round(Math.min(1, Math.max(0, a.threshold)) * 100)}%"></span>{/if}
+								{#if o.chosen && !o.quiet}<span
+										class="tick"
+										style:inset-inline-start="{Math.round(Math.min(1, Math.max(0, a.threshold)) * 100)}%"
+									></span>{/if}
 							</div>
 							<span class="pct">{o.pct}%</span>
 						</li>
@@ -99,7 +104,8 @@
 				</header>
 				{#if odds.stage2.reason}<p class="reason" dir="auto">{odds.stage2.reason}</p>{/if}
 				<p class="facts">
-					{#if odds.stage2.dismissed}Cleared · {/if}Model {odds.stage2.model}
+					{#if odds.stage2.dismissed}Cleared ·
+					{/if}Model {odds.stage2.model}
 				</p>
 			</section>
 		{/if}

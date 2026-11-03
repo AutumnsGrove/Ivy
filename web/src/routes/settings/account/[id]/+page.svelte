@@ -38,9 +38,7 @@
 	// The photo URL is stable, so a bump forces the preview past its cached bytes.
 	let photoNonce = $state(0);
 
-	const photoSrc = $derived(
-		data.account.photo ? `${accountPhotoUrl(data.account.id)}?v=${photoNonce}` : undefined
-	);
+	const photoSrc = $derived(data.account.photo ? `${accountPhotoUrl(data.account.id)}?v=${photoNonce}` : undefined);
 
 	const report = (e: unknown, fallback: string) =>
 		toasts.push({ text: e instanceof ApiError || e instanceof PhotoError ? e.message : fallback, tone: 'danger' });
@@ -184,17 +182,18 @@
 	</div>
 
 	<div class="f">
-		<Field label="Name" bind:value={name} placeholder={data.account.address} hint="Shown wherever this account appears." />
+		<Field
+			label="Name"
+			bind:value={name}
+			placeholder={data.account.address}
+			hint="Shown wherever this account appears."
+		/>
 	</div>
 
 	<Group label="Icon" note="Used when there is no photo.">
 		<Glass radius="group" class="icons">
-			<button
-				type="button"
-				class="none"
-				class:on={icon === ''}
-				aria-pressed={icon === ''}
-				onclick={() => (icon = '')}>None</button
+			<button type="button" class="none" class:on={icon === ''} aria-pressed={icon === ''} onclick={() => (icon = '')}
+				>None</button
 			>
 			{#each ACCOUNT_ICONS as choice (choice.name)}
 				<button
@@ -231,7 +230,9 @@
 		{#each data.identities as id (id.address)}
 			<ListRow tall>
 				<span class="idrow">
-					<span class="idadr">{id.address}{#if id.primary}<span class="badge">Primary</span>{/if}</span>
+					<span class="idadr"
+						>{id.address}{#if id.primary}<span class="badge">Primary</span>{/if}</span
+					>
 					{#if id.name}<span class="idsub">{id.name}</span>{/if}
 					{#if id.signature}<span class="idsig">{id.signature}</span>{/if}
 				</span>
@@ -295,10 +296,18 @@
 								label="Helpers can read {t.address}"
 								checked={t.llm}
 								disabled={busy}
-								onchange={(on) => void setMark(t.address, t.kind, on, on ? 'Helpers can read this address' : 'Helpers are off for this address')}
+								onchange={(on) =>
+									void setMark(
+										t.address,
+										t.kind,
+										on,
+										on ? 'Helpers can read this address' : 'Helpers are off for this address'
+									)}
 							/>
 						{/if}
-						<IconButton label="Clear {t.address}" onclick={() => setMark(t.address, 'normal', false, 'Address cleared')}><Trash2 /></IconButton>
+						<IconButton label="Clear {t.address}" onclick={() => setMark(t.address, 'normal', false, 'Address cleared')}
+							><Trash2 /></IconButton
+						>
 					</div>
 				{/snippet}
 			</ListRow>

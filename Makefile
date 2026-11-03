@@ -47,7 +47,7 @@ test:
 	CGO_ENABLED=1 $(GO) test -race ./...
 
 web-check:
-	cd web && pnpm check && pnpm test
+	cd web && pnpm check && pnpm lint && pnpm format:check && pnpm test
 
 # Production build plus the frontend load budgets (PERFORMANCE.md section 2).
 web-budget:

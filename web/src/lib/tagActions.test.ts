@@ -59,7 +59,9 @@ describe('tagMessage', () => {
 	});
 
 	it('does not claim an Undo that the server refused', async () => {
-		mocks.enqueue.mockResolvedValueOnce({}).mockRejectedValueOnce(new ApiError('unknown_tag', 'That tag no longer exists'));
+		mocks.enqueue
+			.mockResolvedValueOnce({})
+			.mockRejectedValueOnce(new ApiError('unknown_tag', 'That tag no longer exists'));
 		const restored = vi.fn();
 		await tagMessage('m1', work, true, restored);
 		await mocks.push.mock.calls[0][0].action.run();

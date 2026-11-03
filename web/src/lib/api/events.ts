@@ -35,10 +35,7 @@ const PATH = '/api/v1/events';
  * on its own) calls `onReconnect`: whatever was missed while the stream was down
  * is only recovered by refetching what is on screen.
  */
-export function connectEvents(
-	onHint: (event: ServerEvent) => void,
-	onReconnect: () => void = () => {}
-): () => void {
+export function connectEvents(onHint: (event: ServerEvent) => void, onReconnect: () => void = () => {}): () => void {
 	const source = new EventSource(PATH);
 	let opened = false;
 	source.addEventListener('open', () => {

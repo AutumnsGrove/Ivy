@@ -45,7 +45,9 @@
 	<Field label="Name" bind:value={name} placeholder="receipts" />
 	<p class="lbl">Colour</p>
 	<TagColorPicker bind:value={color} />
-	<p class="custom"><span class="wheel"></span>Custom colour… <span class="grow"></span>Each colour has a matching shade for day</p>
+	<p class="custom">
+		<span class="wheel"></span>Custom colour… <span class="grow"></span>Each colour has a matching shade for day
+	</p>
 
 	<Glass radius="card" class="auto">
 		<div class="auto-text">
@@ -57,7 +59,9 @@
 
 	<div class="acts">
 		<Button size="lg" block onclick={() => (open = false)}>Cancel</Button>
-		<Button size="lg" variant="primary" block onclick={() => void create()} disabled={!name.trim() || saving}>Create tag</Button>
+		<Button size="lg" variant="primary" block onclick={() => void create()} disabled={!name.trim() || saving}
+			>Create tag</Button
+		>
 	</div>
 </Sheet>
 
@@ -88,7 +92,14 @@
 		width: var(--sp-14);
 		height: var(--sp-14);
 		border-radius: 50%;
-		background: conic-gradient(var(--tag-rose), var(--tag-gold), var(--tag-mint), var(--tag-sky), var(--tag-lilac), var(--tag-rose));
+		background: conic-gradient(
+			var(--tag-rose),
+			var(--tag-gold),
+			var(--tag-mint),
+			var(--tag-sky),
+			var(--tag-lilac),
+			var(--tag-rose)
+		);
 	}
 	.grow {
 		flex-grow: 1;

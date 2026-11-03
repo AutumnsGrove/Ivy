@@ -50,7 +50,7 @@ module cache, pnpm store and Playwright browsers.
 | `go` | `CGO_ENABLED=0 go build ./...`, `gofumpt -l` (must be empty), `go vet`, `staticcheck`, `golangci-lint`, `CGO_ENABLED=1 go test -race ./...` (cgo only for the race runtime; integration tests against `internal/mailworld`, fuzz seed corpora included), `govulncheck`, plus a `GOOS=linux GOARCH=arm64` compile check (the target architecture; nothing is published) |
 | `nocgo` | Fails if any package or dependency has cgo files (`go list -deps -f '{{.CgoFiles}}'`) |
 | `drift` | Regenerates OpenAPI (Go and TS types) and `sqlc` output, fails on any diff |
-| `web` | `pnpm install --frozen-lockfile`, `svelte-check`, ESLint, Prettier, Vitest, build in a scratch dir, compressed-size budgets (`PERFORMANCE.md` 2) |
+| `web` | `pnpm install --frozen-lockfile`, `svelte-check --fail-on-warnings`, ESLint (`eslint .`), Prettier (`prettier --check .`), Vitest, production build and compressed-size budgets (`PERFORMANCE.md` 2) — all of it through `make web-check` and `make web-budget`, so a human runs the same commands |
 | `e2e` | Playwright on WebKit and Chromium against `ivy-dev up --llm fake` (never live), sharded; visual baselines, axe; traces, screenshots and videos uploaded on failure |
 | `guard` | Rejects a PR that adds files under `internal/webui/build/` other than the placeholder, gitleaks on the diff, AGPL header check, a check that no test path can reach the live LLM provider |
 | `deps` | `dependency-review-action` (new dependencies: licence must be AGPL-compatible, no known vulnerabilities) |

@@ -57,7 +57,15 @@ describe('seedFromDraft', () => {
 	});
 
 	it('carries the body format so a rich draft reopens as rich text', () => {
-		const draft: DraftResume = { id: 'v1', accountId: 'a1', version: 0, source: 'local', to: [], text: '<p>Hi</p>', bodyFormat: 'html' };
+		const draft: DraftResume = {
+			id: 'v1',
+			accountId: 'a1',
+			version: 0,
+			source: 'local',
+			to: [],
+			text: '<p>Hi</p>',
+			bodyFormat: 'html'
+		};
 		expect(seedFromDraft(draft).bodyFormat).toBe('html');
 	});
 });

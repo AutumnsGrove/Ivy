@@ -9,7 +9,18 @@ describe('accountIcon', () => {
 	});
 
 	it('draws nothing for an empty, unknown, legacy or hostile value, so the badge falls back to the initial', () => {
-		for (const value of [undefined, '', 'not-an-icon', 'Leaf', '🌿', '☀️', '<script>', 'constructor', '__proto__', 'toString']) {
+		for (const value of [
+			undefined,
+			'',
+			'not-an-icon',
+			'Leaf',
+			'🌿',
+			'☀️',
+			'<script>',
+			'constructor',
+			'__proto__',
+			'toString'
+		]) {
 			expect(accountIcon(value), String(value)).toBeUndefined();
 		}
 	});

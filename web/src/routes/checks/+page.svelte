@@ -22,7 +22,10 @@
 </TopBar>
 
 <Page>
-	<p class="lede">Questions Ivy asks about each new message. Rules can use the answers, so “from Cloudflare” can mean only the receipts.</p>
+	<p class="lede">
+		Questions Ivy asks about each new message. Rules can use the answers, so “from Cloudflare” can mean only the
+		receipts.
+	</p>
 
 	<Group label="Yours">
 		{#each yours as c (c.id)}

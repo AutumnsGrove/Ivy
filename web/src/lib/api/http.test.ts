@@ -76,12 +76,23 @@ describe('request', () => {
 	});
 
 	it('treats a body it cannot parse as a server failure, not a success', async () => {
-		stub({ ok: false, status: 500, json: async () => { throw new SyntaxError('bad json'); } });
+		stub({
+			ok: false,
+			status: 500,
+			json: async () => {
+				throw new SyntaxError('bad json');
+			}
+		});
 		await expect(request('/inbox')).rejects.toMatchObject({ code: 'internal_error' });
 	});
 
 	it('maps a transport failure to the offline code, so the calm screen shows', async () => {
-		vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => {
+				throw new TypeError('Failed to fetch');
+			})
+		);
 		await expect(request('/inbox')).rejects.toMatchObject({ code: 'offline' });
 	});
 

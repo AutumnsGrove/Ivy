@@ -63,7 +63,16 @@ describe('outbox api', () => {
 		const calls: { url: string; method?: string }[] = [];
 		vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
 			calls.push({ url, method: init.method });
-			return reply({ id: 'op-1', accountId: 'a1', messageId: 'm1', kind: 'flags', state: 'pending', attempts: 0, createdAt: '', updatedAt: '' });
+			return reply({
+				id: 'op-1',
+				accountId: 'a1',
+				messageId: 'm1',
+				kind: 'flags',
+				state: 'pending',
+				attempts: 0,
+				createdAt: '',
+				updatedAt: ''
+			});
 		});
 		await api.retryOutbox('op-1');
 		expect(calls[0]).toEqual({ url: '/api/v1/outbox/op-1/retry', method: 'POST' });

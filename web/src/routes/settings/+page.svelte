@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { accountAvatar } from '#lib/accounts.js';
-	import { Activity, Archive, ChevronRight, Download, Eye, Plus, RefreshCw } from '#lib/icons.js';
+	import { Activity, Archive, Download, Eye, Plus, RefreshCw } from '#lib/icons.js';
 	import Page from '#lib/components/shell/Page.svelte';
 	import Avatar from '#lib/components/ui/Avatar.svelte';
 	import Button from '#lib/components/ui/Button.svelte';
@@ -128,7 +128,10 @@
 		</ListRow>
 	</Group>
 
-	<Group label="Smart features, per account" note="Off by default. When off, nothing from that account ever leaves your server. Turning one off takes effect at once; turning on an account that was connected with it off starts after Ivy next restarts.">
+	<Group
+		label="Smart features, per account"
+		note="Off by default. When off, nothing from that account ever leaves your server. Turning one off takes effect at once; turning on an account that was connected with it off starts after Ivy next restarts."
+	>
 		{#each data.accounts as a (a.id)}
 			<ListRow>
 				{a.short}
@@ -208,20 +211,33 @@
 		<ListRow>
 			Reply as the address it was sent to
 			{#snippet trailing()}
-				<Toggle label="Reply as the address it was sent to" checked={s.replyAsRecipient} onchange={(v) => save({ replyAsRecipient: v })} />
+				<Toggle
+					label="Reply as the address it was sent to"
+					checked={s.replyAsRecipient}
+					onchange={(v) => save({ replyAsRecipient: v })}
+				/>
 			{/snippet}
 		</ListRow>
 		<ListRow tall>
 			Photo size
 			<span class="sub">Applies to photos you attach</span>
 			{#snippet trailing()}
-				<Select label="Photo size" options={photoOptions} value={s.photoSize} onchange={(v) => save({ photoSize: v as Settings['photoSize'] })} />
+				<Select
+					label="Photo size"
+					options={photoOptions}
+					value={s.photoSize}
+					onchange={(v) => save({ photoSize: v as Settings['photoSize'] })}
+				/>
 			{/snippet}
 		</ListRow>
 		<ListRow>
 			Remove location from photos
 			{#snippet trailing()}
-				<Toggle label="Remove location from photos" checked={s.stripLocation} onchange={(v) => save({ stripLocation: v })} />
+				<Toggle
+					label="Remove location from photos"
+					checked={s.stripLocation}
+					onchange={(v) => save({ stripLocation: v })}
+				/>
 			{/snippet}
 		</ListRow>
 	</Group>
@@ -230,7 +246,12 @@
 		<ListRow>
 			Remote images
 			{#snippet trailing()}
-				<Select label="Remote images" options={remoteOptions} value={s.remoteImages} onchange={(v) => save({ remoteImages: v as Settings['remoteImages'] })} />
+				<Select
+					label="Remote images"
+					options={remoteOptions}
+					value={s.remoteImages}
+					onchange={(v) => save({ remoteImages: v as Settings['remoteImages'] })}
+				/>
 			{/snippet}
 		</ListRow>
 		<ListRow>
@@ -250,11 +271,19 @@
 		<ListRow tall>
 			Look for real mail in Junk
 			<span class="sub">Quietly point out anything that looks genuine</span>
-			{#snippet trailing()}<Toggle label="Look for real mail in Junk" checked={s.junkRescue} onchange={(v) => save({ junkRescue: v })} />{/snippet}
+			{#snippet trailing()}<Toggle
+					label="Look for real mail in Junk"
+					checked={s.junkRescue}
+					onchange={(v) => save({ junkRescue: v })}
+				/>{/snippet}
 		</ListRow>
 		<ListRow>
 			Show the spam score
-			{#snippet trailing()}<Toggle label="Show the spam score" checked={s.spamScore} onchange={(v) => save({ spamScore: v })} />{/snippet}
+			{#snippet trailing()}<Toggle
+					label="Show the spam score"
+					checked={s.spamScore}
+					onchange={(v) => save({ spamScore: v })}
+				/>{/snippet}
 		</ListRow>
 	</Group>
 
@@ -287,7 +316,8 @@
 					<span class="sub">Updated on the host</span>
 				{:else}
 					<Button size="sm" variant="tonal" disabled={updating} onclick={runUpdate}>
-						<Download /> {updating ? 'Updating\u2026' : 'Update'}
+						<Download />
+						{updating ? 'Updating\u2026' : 'Update'}
 					</Button>
 				{/if}
 			{/snippet}

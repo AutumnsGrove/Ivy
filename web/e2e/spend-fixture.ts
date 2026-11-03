@@ -160,7 +160,13 @@ function ledgerFor(accounts: Account[]): CallRecord[] {
 }
 
 /** Answers /spend, /spend/calls and /spend/calls/export, or null for any other path. */
-export function spendReply(path: string, params: URLSearchParams, scenario: string | null, accounts: Account[], caps: Caps): Reply | null {
+export function spendReply(
+	path: string,
+	params: URLSearchParams,
+	scenario: string | null,
+	accounts: Account[],
+	caps: Caps
+): Reply | null {
 	if (!path.startsWith('/spend')) return null;
 	const ledger = scenario === 'no-spend' ? [] : ledgerFor(accounts);
 	const from = params.get('from');

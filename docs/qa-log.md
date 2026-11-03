@@ -2126,3 +2126,58 @@ fixed in 1.26.9/1.26.10 (`net/http`, `crypto/tls`, `crypto/x509`, `net/textproto
    cannot leave a dialed-but-unused connection behind.
 4. **The siblings move too** (Polaris, Meridian, Cairn, Coffer, bwmon), each to 1.27.3 in its own
    `go.mod` and Dockerfile, for the same reason: the stdlib fixes only exist at that patch level.
+
+## The red CI on main: govulncheck's pin, and a toast that left too soon (2026-11-03, agent; operator
+chose the 10 s undo toast and the click that ignores the enter animation, and chose to leave the
+single shutdown flake alone)
+
+1. **govulncheck was pinned to a release older than the toolchain.** Monday's scheduled run died in
+   the `go` job with no finding at all: `panic: unexpected expr: *ast.KeyValueExpr` in `x/tools`
+   v0.29.0's SSA builder, which govulncheck v1.1.4 pins. It only reproduces under `GOOS=linux`,
+   which is why every push had been green and only the Linux runner ever saw it. The pin is now
+   v1.9.0 (x/tools v0.52.0) and `CI.md` records the rule: it moves with `GO_VERSION` in the same
+   commit, and a govulncheck step that panics means a stale pin, not a finding.
+2. **An undo toast now gets ten seconds, the same room undo-send's default delay gives.** The phone
+   e2e had gone red in two of three runs clicking `Tagged “receipts”` → Undo: the toast was still
+   animating in when the click started, Playwright never saw a stable box, and the four-second timer
+   removed the toast first. Four seconds was also the whole undo offer for a tag, a move or a
+   delete, which papercuts #91 had already flagged as a race for a person. A toast with no action
+   keeps its four seconds; an explicit `duration` still wins.
+3. **The test stops at the toast being visible.** A thumb taps the button wherever it is drawn, so
+   the e2e clicks without Playwright's stability check. The animation is not what the test is
+   about, and the "Undone" toast plus the switch going back still prove the undo happened.
+4. **The cmd shutdown flake was seen once** (`run did not shut down with a worker started from the
+   API`, commit 175933d), green on every run since, so it is left alone.
+
+## Frontend lint and format: ESLint and Prettier, for real (2026-11-03, agent; operator chose to
+adopt both rather than strike the promise from the docs)
+
+`CI.md`, `STACK.md` and `STANDARDS.md` had promised ESLint and Prettier since the first draft;
+neither was ever installed, configured or run, and what CI actually enforced was `svelte-check`,
+Vitest (with the token guard) and axe. Asked whether to correct the docs or make the promise true,
+she chose to make it true.
+
+1. **Prettier's settings were read off the tree, not picked from a blog.** Tabs, single quotes, no
+   trailing commas, 120 columns: measured at 110/120/130/140 columns against the existing files,
+   120 is where the hand-wrapping already sat (941 changed lines; 130 and 140 would have been
+   fewer, but they only reduce churn by making the setting meaningless). The one-time reformat is
+   its own commit so the next diff is readable.
+2. **Generated and owned files are ignored by both tools.** `src/lib/api/schema.d.ts` is regenerated
+   by `make generate` and compared byte for byte by `make drift`; Prettier reformatting it would
+   turn that job red. `pnpm-lock.yaml` and build output are ignored too.
+3. **`svelte/no-navigation-without-resolve` is the one rule switched off.** It wants every link
+   wrapped in `resolve()`, which exists to prefix `paths.base`. Ivy is served from the root and
+   builds most links from an `href` prop inside shared components (`Button`, `NavRow`, `ListRow`,
+   `TabBar`), so adopting it would rewrite every call site for a failure that cannot happen here.
+   The comment in `eslint.config.js` and the line in `STANDARDS.md` both say to turn it back on the
+   day `paths.base` is set.
+4. **Findings were fixed, not silenced.** Three dead imports, a dead assignment in `api/http.ts`,
+   seven unkeyed `{#each}` blocks, three `$state` + `$effect` pairs that were really derived state
+   (`ConfirmDialog` now derives `open` from the pending request), two plain `Set`s that were being
+   copied on every write (`needs`, `waiting`) are `SvelteSet` now. Three disables carry a reason:
+   a local lookup set, the two deliberately non-reactive caches in `sends.svelte.ts`, and the two
+   editable boxes that re-seed from the URL and so cannot be `$derived`. A leading `_` still marks
+   an argument as deliberately unused.
+5. **"Zero warnings" is now enforced, not hoped for.** `pnpm check` runs `svelte-check
+   --fail-on-warnings`; `pnpm lint` is ESLint; `pnpm format:check` is Prettier; `make web-check`
+   runs all three plus Vitest, and CI calls that target, so a human runs exactly what CI runs.

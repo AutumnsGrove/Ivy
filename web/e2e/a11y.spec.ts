@@ -6,8 +6,8 @@ import { expect, test } from './api';
 // viewports; a violation fails the run with the rule and the element.
 const SCREENS: Record<string, string> = {
 	inbox: '/',
-	'message': '/m/m1',
-	'settings': '/settings',
+	message: '/m/m1',
+	settings: '/settings',
 	'account profile': '/settings/account/a1',
 	'mirror health': '/settings/health',
 	spend: '/settings/spend',

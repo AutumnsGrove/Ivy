@@ -68,9 +68,32 @@
 		<button type="button" class="opt" onclick={() => pick(cameraInput)}><Camera />Camera</button>
 		<button type="button" class="opt" onclick={() => pick(filesInput)}><FolderOpen />Files</button>
 	</div>
-	<input bind:this={photoInput} class="sr" type="file" accept="image/*" multiple aria-label="Photos" onchange={() => chosen(photoInput)} />
-	<input bind:this={cameraInput} class="sr" type="file" accept="image/*" capture="environment" aria-label="Camera" onchange={() => chosen(cameraInput)} />
-	<input bind:this={filesInput} class="sr" type="file" multiple aria-label="Files" onchange={() => chosen(filesInput)} />
+	<input
+		bind:this={photoInput}
+		class="sr"
+		type="file"
+		accept="image/*"
+		multiple
+		aria-label="Photos"
+		onchange={() => chosen(photoInput)}
+	/>
+	<input
+		bind:this={cameraInput}
+		class="sr"
+		type="file"
+		accept="image/*"
+		capture="environment"
+		aria-label="Camera"
+		onchange={() => chosen(cameraInput)}
+	/>
+	<input
+		bind:this={filesInput}
+		class="sr"
+		type="file"
+		multiple
+		aria-label="Files"
+		onchange={() => chosen(filesInput)}
+	/>
 
 	<GroupLabel>From your mail</GroupLabel>
 	{#if mail.length}
@@ -85,7 +108,9 @@
 							onmail(r);
 						}}
 					>
-						<span class="th" class:img={isImage(r)}>{#if !isImage(r)}<FileText />{/if}</span>
+						<span class="th" class:img={isImage(r)}
+							>{#if !isImage(r)}<FileText />{/if}</span
+						>
 						<span class="m">
 							<span class="ell n">{r.name || 'attachment'}</span>
 							<span class="f">{formatSize(r.size)}</span>

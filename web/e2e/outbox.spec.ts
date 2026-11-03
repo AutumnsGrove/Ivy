@@ -100,7 +100,10 @@ test.describe('Trash', () => {
 		await expect(toast(page, 'Deleting 2 messages forever')).toHaveCount(0);
 
 		await page.getByRole('button', { name: 'Empty Trash' }).click();
-		await page.getByRole('dialog', { name: 'Permanently delete 2 messages?' }).getByRole('button', { name: 'Empty Trash' }).click();
+		await page
+			.getByRole('dialog', { name: 'Permanently delete 2 messages?' })
+			.getByRole('button', { name: 'Empty Trash' })
+			.click();
 		await expect(toast(page, 'Deleting 2 messages forever')).toBeVisible();
 	});
 

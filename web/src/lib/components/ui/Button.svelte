@@ -31,8 +31,13 @@
 </script>
 
 {#if href}
-	<a {href} class="btn {variant} {size}" class:block {onclick} download={download ? '' : undefined} data-sveltekit-reload={download ? '' : undefined}
-		>{@render children()}</a
+	<a
+		{href}
+		class="btn {variant} {size}"
+		class:block
+		{onclick}
+		download={download ? '' : undefined}
+		data-sveltekit-reload={download ? '' : undefined}>{@render children()}</a
 	>
 {:else}
 	<button {type} {disabled} aria-label={label} class="btn {variant} {size}" class:block {onclick}>

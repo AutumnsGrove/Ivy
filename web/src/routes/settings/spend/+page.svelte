@@ -55,7 +55,9 @@
 				</div>
 				<ProgressBar value={s.capUsd ? s.monthUsd / s.capUsd : 0} label="Spent this month against the monthly cap" />
 				{#if capReached}
-					<p class="why">The monthly cap is reached, so Ivy has paused smart features until next month. Nothing more is spent.</p>
+					<p class="why">
+						The monthly cap is reached, so Ivy has paused smart features until next month. Nothing more is spent.
+					</p>
 				{/if}
 			</div>
 		</Glass>
@@ -65,7 +67,11 @@
 				{#each s.byFeature as f (f.key)}
 					{@const label = featureLabel(f.key)}
 					<div class="line">
-						<div class="top"><span class="name">{label}</span><span class="n">{plural(f.calls, 'call')}</span><span>{formatUsd(f.usd)}</span></div>
+						<div class="top">
+							<span class="name">{label}</span><span class="n">{plural(f.calls, 'call')}</span><span
+								>{formatUsd(f.usd)}</span
+							>
+						</div>
 						<ProgressBar value={share(f.usd)} label="{label} share of the spend" />
 					</div>
 				{/each}

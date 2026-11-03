@@ -30,12 +30,7 @@
 {#if navigates}
 	<div class="seg {size}" class:glass role="group" aria-label={label}>
 		{#each options as o (o.value)}
-			<a
-				href={o.href}
-				class="opt"
-				class:on={o.value === value}
-				aria-current={o.value === value ? 'page' : undefined}
-			>
+			<a href={o.href} class="opt" class:on={o.value === value} aria-current={o.value === value ? 'page' : undefined}>
 				{@render inner(o)}
 			</a>
 		{/each}

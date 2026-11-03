@@ -19,8 +19,7 @@
 <svelte:window onkeydown={(e) => open && e.key === 'Escape' && close()} />
 
 {#if open}
-	<button type="button" class="scrim" data-testid="scrim" aria-label="Close" tabindex="-1" onclick={close}
-	></button>
+	<button type="button" class="scrim" data-testid="scrim" aria-label="Close" tabindex="-1" onclick={close}></button>
 	<div class="sheet" role="dialog" aria-modal="true" aria-label={title}>
 		<div class="handle" aria-hidden="true"></div>
 		{@render children()}

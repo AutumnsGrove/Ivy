@@ -41,7 +41,9 @@
 	</div>
 
 	{#if spoof}
-		<p class="warn" role="note"><TriangleAlert />The name contains a different address from the one this was sent from.</p>
+		<p class="warn" role="note">
+			<TriangleAlert />The name contains a different address from the one this was sent from.
+		</p>
 	{/if}
 
 	<div class="acts">
@@ -67,7 +69,13 @@
 		<ul class="people">
 			{#each others as o, i (i)}
 				<li>
-					<button type="button" class="person" aria-pressed={o.address === shown.address} onclick={() => (picked = o)} dir="auto">
+					<button
+						type="button"
+						class="person"
+						aria-pressed={o.address === shown.address}
+						onclick={() => (picked = o)}
+						dir="auto"
+					>
 						<span class="pn">{o.name || o.address}</span>
 						{#if o.name}<span class="pa">{o.address}</span>{/if}
 					</button>

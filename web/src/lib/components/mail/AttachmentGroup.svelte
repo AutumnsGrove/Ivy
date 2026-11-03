@@ -42,7 +42,9 @@
 			<ul class="files">
 				{#each listFiles as a (a.id)}
 					<li class="file" class:bad={a.failed}>
-						<span class="ficon">{#if a.failed}<CircleAlert />{:else}<FileText />{/if}</span>
+						<span class="ficon"
+							>{#if a.failed}<CircleAlert />{:else}<FileText />{/if}</span
+						>
 						<span class="meta">
 							<span>{a.name}</span>
 							<span class="size" class:err={a.failed}>{a.failed ? "Couldn't load" : a.size}</span>

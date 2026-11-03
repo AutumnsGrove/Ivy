@@ -13,7 +13,9 @@ function clean(html: string): string {
 
 describe('sanitizeToFragment', () => {
 	it('drops scripts, styles, frames and their content', () => {
-		const out = clean('<script>alert(1)</script><style>p{}</style><iframe src="https://evil.test"></iframe><p>kept</p>');
+		const out = clean(
+			'<script>alert(1)</script><style>p{}</style><iframe src="https://evil.test"></iframe><p>kept</p>'
+		);
 		expect(out).toBe('<p>kept</p>');
 		expect(out).not.toContain('alert');
 	});

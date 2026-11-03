@@ -231,10 +231,14 @@
 		</Group>
 	{/if}
 
-	<Group label="Models" note="Prices are what the provider lists, per million tokens. Ivy uses them to size caps and estimates; what you are charged is what the provider reports.">
+	<Group
+		label="Models"
+		note="Prices are what the provider lists, per million tokens. Ivy uses them to size caps and estimates; what you are charged is what the provider reports."
+	>
 		<ListRow tall>
 			Default chat model
-			{#if chosen}<span class="sub">{price(chosen.inPerM)} in, {price(chosen.outPerM)} out per million tokens</span>{/if}
+			{#if chosen}<span class="sub">{price(chosen.inPerM)} in, {price(chosen.outPerM)} out per million tokens</span
+				>{/if}
 			{#snippet trailing()}
 				<Select
 					label="Default chat model"

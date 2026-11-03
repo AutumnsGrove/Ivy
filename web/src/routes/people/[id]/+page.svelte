@@ -36,7 +36,7 @@
 
 	<GroupLabel>Tags</GroupLabel>
 	<div class="tags">
-		{#each p.tags as t}<Pill>{t}</Pill>{/each}
+		{#each p.tags as t (t)}<Pill>{t}</Pill>{/each}
 		<Pill>+ add</Pill>
 	</div>
 

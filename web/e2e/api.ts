@@ -2,7 +2,24 @@ import { test as base } from '@playwright/test';
 import * as mock from '../src/lib/api/mock';
 import { freshSmart, smartReply, type SmartState } from './smart-fixture';
 import { spendReply } from './spend-fixture';
-import type { Account, AddressType, Attachment, DraftResume, DraftSummary, Identity, MailMessage, MailSummary, MessageOdds, MessagePrivacy, OutboxItem, SendStatus, TagsOverview, UpdateStatus, UserTag, WaitingItem } from '../src/lib/types';
+import type {
+	Account,
+	AddressType,
+	Attachment,
+	DraftResume,
+	DraftSummary,
+	Identity,
+	MailMessage,
+	MailSummary,
+	MessageOdds,
+	MessagePrivacy,
+	OutboxItem,
+	SendStatus,
+	TagsOverview,
+	UpdateStatus,
+	UserTag,
+	WaitingItem
+} from '../src/lib/types';
 
 // The reader client does real fetches, so the mock E2E suite serves the
 // contract from the same fixtures at the network boundary instead of inside
@@ -28,16 +45,35 @@ export const ODDS_FIXTURE: MessageOdds = {
 	model: 'jev-latest',
 	answers: [
 		{
-			questionId: 'needs_me', choice: 'likely', probabilities: { likely: 0.9, maybe: 0.07, none: 0.03 },
-			confidence: 0.95, threshold: 0.8, quietOption: 'none', fires: true, suppressed: false, acts: true
+			questionId: 'needs_me',
+			choice: 'likely',
+			probabilities: { likely: 0.9, maybe: 0.07, none: 0.03 },
+			confidence: 0.95,
+			threshold: 0.8,
+			quietOption: 'none',
+			fires: true,
+			suppressed: false,
+			acts: true
 		},
 		{
-			questionId: 'urgency', choice: 'high', probabilities: { high: 0.9, low: 0.1 },
-			confidence: 0.9, threshold: 0.75, quietOption: 'low', fires: true, suppressed: true, acts: false
+			questionId: 'urgency',
+			choice: 'high',
+			probabilities: { high: 0.9, low: 0.1 },
+			confidence: 0.9,
+			threshold: 0.75,
+			quietOption: 'low',
+			fires: true,
+			suppressed: true,
+			acts: false
 		}
 	],
 	unanswered: [{ questionId: 'category', reason: 'invalid_answer' }],
-	stage2: { verdict: 'needs', reason: 'Mara asks whether you can move her old posts over.', model: 'chat-model', dismissed: false }
+	stage2: {
+		verdict: 'needs',
+		reason: 'Mara asks whether you can move her old posts over.',
+		model: 'chat-model',
+		dismissed: false
+	}
 };
 
 /** The mutable account state a customization flow edits, cloned per test. */
@@ -75,8 +111,22 @@ export type AccountState = {
 
 /** Two sent messages with no answer, longest wait first, as GET /waiting would report them. */
 const WAITING: WaitingItem[] = [
-	{ id: 'w1', accountId: 'a1', to: ['Hana Okafor'], subject: 'Quote for the hosting move', sentAt: '2026-10-20T09:00:00Z', days: 6 },
-	{ id: 'w2', accountId: 'a1', to: ['Sam', 'kim@example.com', 'Priya'], subject: 'Figures for Friday', sentAt: '2026-10-23T09:00:00Z', days: 3 }
+	{
+		id: 'w1',
+		accountId: 'a1',
+		to: ['Hana Okafor'],
+		subject: 'Quote for the hosting move',
+		sentAt: '2026-10-20T09:00:00Z',
+		days: 6
+	},
+	{
+		id: 'w2',
+		accountId: 'a1',
+		to: ['Sam', 'kim@example.com', 'Priya'],
+		subject: 'Figures for Friday',
+		sentAt: '2026-10-23T09:00:00Z',
+		days: 3
+	}
 ];
 
 /** The fixture inbox as the server would report it now: a dismissed flag and its reason are gone. */
@@ -105,7 +155,11 @@ const freshState = (): AccountState => ({
 	addressTypes: {},
 	tagged: new Map(),
 	update: {
-		unavailable: false, running: false, done: true, success: true, target: 'r1.test',
+		unavailable: false,
+		running: false,
+		done: true,
+		success: true,
+		target: 'r1.test',
 		watcher: { status: 'ok', detail: 'updated to r1.test', target: 'r1.test', finished_at: '2026-10-01T00:00:00Z' }
 	},
 	drafts: [],
@@ -120,7 +174,20 @@ const freshState = (): AccountState => ({
 	waitingStopped: new Set()
 });
 
-const TAG_COLORS = new Set(['sky', 'rose', 'teal', 'coral', 'lilac', 'mint', 'gold', 'sand', 'orchid', 'fern', 'slate', 'berry']);
+const TAG_COLORS = new Set([
+	'sky',
+	'rose',
+	'teal',
+	'coral',
+	'lilac',
+	'mint',
+	'gold',
+	'sand',
+	'orchid',
+	'fern',
+	'slate',
+	'berry'
+]);
 const slugOf = (name: string) =>
 	name
 		.toLowerCase()
@@ -145,7 +212,8 @@ function tagReply(state: AccountState, path: string, method: string, raw: Buffer
 		const name = typeof b?.name === 'string' ? b.name.trim() : '';
 		const color = typeof b?.color === 'string' ? b.color : 'lilac';
 		if (!name || [...name].length > 64 || !TAG_COLORS.has(color)) return badRequest('That tag is not valid');
-		if (state.tags.mine.length >= 200) return { status: 409, body: { code: 'too_many_tags', message: 'There are too many tags' } };
+		if (state.tags.mine.length >= 200)
+			return { status: 409, body: { code: 'too_many_tags', message: 'There are too many tags' } };
 		const base = slugOf(name) || 'tag';
 		let slug = base;
 		for (let n = 2; state.tags.mine.some((t) => t.slug === slug); n++) slug = `${base}-${n}`;
@@ -159,15 +227,21 @@ function tagReply(state: AccountState, path: string, method: string, raw: Buffer
 	if (!tag) return notFound('No such tag');
 	if (method === 'PATCH') {
 		const b = body();
-		if (b?.color !== undefined && (typeof b.color !== 'string' || !TAG_COLORS.has(b.color))) return badRequest('That colour is not available');
-		if (b?.name !== undefined && (typeof b.name !== 'string' || !b.name.trim())) return badRequest('A tag needs a name');
+		if (b?.color !== undefined && (typeof b.color !== 'string' || !TAG_COLORS.has(b.color)))
+			return badRequest('That colour is not available');
+		if (b?.name !== undefined && (typeof b.name !== 'string' || !b.name.trim()))
+			return badRequest('A tag needs a name');
 		if (typeof b?.name === 'string') tag.name = b.name.trim();
 		if (typeof b?.color === 'string') tag.color = b.color as UserTag['color'];
 		return { body: tag };
 	}
 	if (method === 'DELETE') {
 		state.tags.mine = state.tags.mine.filter((t) => t.id !== tag.id);
-		for (const [id, ids] of state.tagged) state.tagged.set(id, ids.filter((x) => x !== tag.id));
+		for (const [id, ids] of state.tagged)
+			state.tagged.set(
+				id,
+				ids.filter((x) => x !== tag.id)
+			);
 		return { status: 204, body: null };
 	}
 	return null;
@@ -175,10 +249,16 @@ function tagReply(state: AccountState, path: string, method: string, raw: Buffer
 
 /** The known image formats the server accepts; SVG is deliberately absent. */
 function sniffedImageType(bytes: Uint8Array): string {
-	if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
+	if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47)
+		return 'image/png';
 	if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
 	if (bytes.length >= 6 && String.fromCharCode(...bytes.slice(0, 6)).startsWith('GIF8')) return 'image/gif';
-	if (bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP') return 'image/webp';
+	if (
+		bytes.length >= 12 &&
+		String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' &&
+		String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP'
+	)
+		return 'image/webp';
 	return '';
 }
 
@@ -187,9 +267,7 @@ function searchReply(query: string): Reply {
 	const words = query.toLowerCase().split(/\s+/).filter(Boolean);
 	const hits = words.length
 		? mock.searchCorpus.filter(
-				(h) =>
-					h.semantic ||
-					words.some((w) => `${h.subject} ${h.preview} ${h.from}`.toLowerCase().includes(w))
+				(h) => h.semantic || words.some((w) => `${h.subject} ${h.preview} ${h.from}`.toLowerCase().includes(w))
 			)
 		: [];
 	// A query that only "matches" by meaning is still a miss: nothing contains the words.
@@ -202,7 +280,12 @@ function searchReply(query: string): Reply {
  * `?scenario=paged` serves a list in two pages the way the gateway does: the first `size` rows with a
  * `nextCursor`, and the rest when that cursor comes back.
  */
-function paged<T>(rows: T[], scenario: string | null, cursor: string | null, size: number): { rows: T[]; nextCursor?: string } {
+function paged<T>(
+	rows: T[],
+	scenario: string | null,
+	cursor: string | null,
+	size: number
+): { rows: T[]; nextCursor?: string } {
 	if (scenario !== 'paged') return { rows };
 	return cursor ? { rows: rows.slice(size) } : { rows: rows.slice(0, size), nextCursor: 'next-page' };
 }
@@ -231,7 +314,15 @@ function hostilePeople() {
 function needsReply(rows: MailSummary[], scenario: string | null, cursor: string | null): Reply {
 	const flagged = rows.filter((m) => m.needs);
 	const page = paged(flagged, scenario, cursor, 3);
-	return { body: { items: page.rows, needCount: flagged.length, unreadCount: 0, readingWaiting: 0, nextCursor: page.nextCursor } };
+	return {
+		body: {
+			items: page.rows,
+			needCount: flagged.length,
+			unreadCount: 0,
+			readingWaiting: 0,
+			nextCursor: page.nextCursor
+		}
+	};
 }
 
 function inboxReply(
@@ -287,7 +378,12 @@ function messageReply(summary: MailSummary, id: string, scenario: string | null,
 	const hostile = scenario === 'hostile-sender' ? (HOSTILE_SENDERS[id] ?? HOSTILE_SENDERS.default) : null;
 	if (hostile) body.sender = { name: hostile, address: 'phish@evil.test' };
 	return {
-		body: { ...summary, ...(hostile ? { from: hostile } : {}), ...body, ...(tagIds.length > 0 ? { tagIds } : {}) } satisfies MailMessage
+		body: {
+			...summary,
+			...(hostile ? { from: hostile } : {}),
+			...body,
+			...(tagIds.length > 0 ? { tagIds } : {})
+		} satisfies MailMessage
 	};
 }
 
@@ -374,14 +470,24 @@ const MAIL_ATTACHMENTS = [
 ];
 
 /** The staged uploads and "From your mail" list, over mutable fixtures. */
-function uploadReply(state: AccountState, path: string, method: string, params: URLSearchParams, raw: Buffer | null): Reply | null {
+function uploadReply(
+	state: AccountState,
+	path: string,
+	method: string,
+	params: URLSearchParams,
+	raw: Buffer | null
+): Reply | null {
 	const fromMail = /^\/accounts\/([^/]+)\/uploads\/from-mail$/.exec(path);
 	if (fromMail && method === 'POST') {
 		const b = jsonBody(raw);
-		const source = MAIL_ATTACHMENTS.find((a) => a.messageId === b?.messageId && a.path === b?.path) ?? MAIL_ATTACHMENTS[0];
+		const source =
+			MAIL_ATTACHMENTS.find((a) => a.messageId === b?.messageId && a.path === b?.path) ?? MAIL_ATTACHMENTS[0];
 		const id = `up-${++state.uploadSeq}`;
 		state.uploads.set(id, { name: source.name, mime: source.mime, bytes: Buffer.from(`bytes of ${source.name}`) });
-		return { status: 201, body: { id, name: source.name, mime: source.mime, size: state.uploads.get(id)!.bytes.length } };
+		return {
+			status: 201,
+			body: { id, name: source.name, mime: source.mime, size: state.uploads.get(id)!.bytes.length }
+		};
 	}
 	const upload = /^\/accounts\/([^/]+)\/uploads$/.exec(path);
 	if (upload && method === 'POST') {
@@ -418,12 +524,22 @@ function refAttachments(state: AccountState, b: Record<string, unknown> | null):
 	return out.length ? out : undefined;
 }
 
-function sendReply(state: AccountState, path: string, method: string, scenario: string | null, raw: Buffer | null): Reply | null {
+function sendReply(
+	state: AccountState,
+	path: string,
+	method: string,
+	scenario: string | null,
+	raw: Buffer | null
+): Reply | null {
 	if (path === '/send' && method === 'POST') {
 		const b = jsonBody(raw);
-		if (!b || typeof b.accountId !== 'string' || typeof b.from !== 'string') return badRequest('That message is not valid');
+		if (!b || typeof b.accountId !== 'string' || typeof b.from !== 'string')
+			return badRequest('That message is not valid');
 		if (scenario === 'send-failed') {
-			return { status: 400, body: { code: 'invalid_message', message: 'Ivy cannot send that message: it is too large' } };
+			return {
+				status: 400,
+				body: { code: 'invalid_message', message: 'Ivy cannot send that message: it is too large' }
+			};
 		}
 		const id = typeof b.id === 'string' && b.id ? b.id : `send-${state.sends.length + 1}`;
 		const now = new Date().toISOString();
@@ -444,7 +560,9 @@ function sendReply(state: AccountState, path: string, method: string, scenario: 
 		return { status: 202, body: send };
 	}
 	if (path === '/send' && method === 'GET') {
-		const active = state.sends.filter((s) => s.state === 'queued' || s.state === 'submitting' || s.state === 'submitted');
+		const active = state.sends.filter(
+			(s) => s.state === 'queued' || s.state === 'submitting' || s.state === 'submitted'
+		);
 		const recent = state.sends.filter((s) => !active.includes(s));
 		return { body: { active, recent } };
 	}
@@ -477,7 +595,8 @@ function draftReply(state: AccountState, path: string, method: string, raw: Buff
 	if (path === '/drafts' && method === 'GET') return { body: { drafts: state.drafts } };
 	if (path === '/drafts' && method === 'POST') {
 		const b = jsonBody(raw);
-		if (!b || typeof b.accountId !== 'string' || typeof b.from !== 'string') return badRequest('That draft is not valid');
+		if (!b || typeof b.accountId !== 'string' || typeof b.from !== 'string')
+			return badRequest('That draft is not valid');
 		const draftId = typeof b.draftId === 'string' && b.draftId ? b.draftId : `draft-${Date.now()}`;
 		const head = state.drafts.find((d) => d.draftId === draftId);
 		const base = typeof b.baseVersion === 'number' ? b.baseVersion : 0;
@@ -515,7 +634,8 @@ function draftReply(state: AccountState, path: string, method: string, raw: Buff
 			bcc: Array.isArray(b.bcc) ? (b.bcc as string[]) : [],
 			subject,
 			text: typeof b.text === 'string' ? b.text : '',
-			bodyFormat: b.bodyFormat === 'html' || b.bodyFormat === 'markdown' || b.bodyFormat === 'plain' ? b.bodyFormat : undefined,
+			bodyFormat:
+				b.bodyFormat === 'html' || b.bodyFormat === 'markdown' || b.bodyFormat === 'plain' ? b.bodyFormat : undefined,
 			inReplyTo: typeof b.inReplyTo === 'string' ? b.inReplyTo : undefined,
 			references: Array.isArray(b.references) ? (b.references as string[]) : [],
 			attachments: refAttachments(state, b)
@@ -538,7 +658,20 @@ function draftReply(state: AccountState, path: string, method: string, raw: Buff
 	return null;
 }
 
-const ACCOUNT_ICON_NAMES = ['leaf', 'moon', 'sun', 'flower', 'flower-2', 'sprout', 'tree-deciduous', 'bird', 'mail', 'droplets', 'cloud', 'star'];
+const ACCOUNT_ICON_NAMES = [
+	'leaf',
+	'moon',
+	'sun',
+	'flower',
+	'flower-2',
+	'sprout',
+	'tree-deciduous',
+	'bird',
+	'mail',
+	'droplets',
+	'cloud',
+	'star'
+];
 
 function updateProfile(
 	state: AccountState,
@@ -551,7 +684,10 @@ function updateProfile(
 	if (body.smart !== undefined) {
 		// An account declared in ivy.yaml is changed in the file, not from the app.
 		if (scenario === 'smart-yaml') {
-			return { status: 409, body: { code: 'configured_in_yaml', message: 'This account is set up in ivy.yaml; change smart features there' } };
+			return {
+				status: 409,
+				body: { code: 'configured_in_yaml', message: 'This account is set up in ivy.yaml; change smart features there' }
+			};
 		}
 		account.smart = body.smart;
 	}
@@ -562,7 +698,8 @@ function updateProfile(
 	if (body.icon !== undefined) {
 		if ([...body.icon].length > 16) return badRequest('That icon is too long');
 		// The gateway's closed list (store.AccountIcons); accountIcons.test.ts keeps the app's copy honest.
-		if (body.icon.trim() !== '' && !ACCOUNT_ICON_NAMES.includes(body.icon.trim())) return badRequest('That icon is not one Ivy offers');
+		if (body.icon.trim() !== '' && !ACCOUNT_ICON_NAMES.includes(body.icon.trim()))
+			return badRequest('That icon is not one Ivy offers');
 		account.icon = body.icon.trim();
 	}
 	return { body: account };
@@ -579,13 +716,15 @@ function addressTypeReply(state: AccountState, path: string, method: string, raw
 	if (method !== 'PUT' || !raw) return null;
 	const b = jsonBody(raw);
 	const address = typeof b?.address === 'string' ? b.address.trim() : '';
-	if (!address || !address.includes('@') || /[\s\r\n\x00]/.test(address)) return badRequest('That is not a plain email address');
+	if (!address || !isPlainAddress(address)) return badRequest('That is not a plain email address');
 	const kind = b?.kind;
-	if (kind !== 'normal' && kind !== 'contact_form' && kind !== 'security') return badRequest('That is not a kind of address Ivy knows');
+	if (kind !== 'normal' && kind !== 'contact_form' && kind !== 'security')
+		return badRequest('That is not a kind of address Ivy knows');
 	// Like the server, the helper flag only means something for a security address.
 	const llm = kind === 'security' && b?.llm === true;
 	const rest = marked.filter((t) => t.address.toLowerCase() !== address.toLowerCase());
-	state.addressTypes[account.id] = kind === 'normal' ? rest : [...rest, { address, kind, llm }].sort((x, y) => x.address.localeCompare(y.address));
+	state.addressTypes[account.id] =
+		kind === 'normal' ? rest : [...rest, { address, kind, llm }].sort((x, y) => x.address.localeCompare(y.address));
 	return { body: { address, kind, llm } };
 }
 
@@ -601,7 +740,14 @@ function identityReply(state: AccountState, path: string, method: string, raw: B
 			const merged = primary
 				? stored
 				: [
-						{ id: '', accountId: account.id, address: account.address, name: account.name, signature: '', primary: true } as Identity,
+						{
+							id: '',
+							accountId: account.id,
+							address: account.address,
+							name: account.name,
+							signature: '',
+							primary: true
+						} as Identity,
 						...stored
 					];
 			return { body: { identities: merged } };
@@ -609,7 +755,7 @@ function identityReply(state: AccountState, path: string, method: string, raw: B
 		if (method !== 'PUT' || !raw) return null;
 		const b = jsonBody(raw);
 		const address = typeof b?.address === 'string' ? b.address.trim() : '';
-		if (!address || !address.includes('@') || /[\s\r\n\x00]/.test(address)) {
+		if (!address || !isPlainAddress(address)) {
 			return badRequest('That is not a plain email address Ivy can send as');
 		}
 		const name = typeof b?.name === 'string' ? b.name.trim() : '';
@@ -641,7 +787,10 @@ function identityReply(state: AccountState, path: string, method: string, raw: B
 		const item = state.identities.find((i) => i.id === del[2] && i.accountId === account.id);
 		if (!item) return notFound('No such identity');
 		if (item.address.toLowerCase() === account.address.toLowerCase()) {
-			return { status: 409, body: { code: 'primary_identity', message: "The account's own address cannot be removed" } };
+			return {
+				status: 409,
+				body: { code: 'primary_identity', message: "The account's own address cannot be removed" }
+			};
 		}
 		state.identities = state.identities.filter((i) => i !== item);
 		return { status: 204, body: null };
@@ -657,7 +806,10 @@ const MOVE_DEST: Record<string, string> = {
 };
 
 /** The op the real gateway would build for a reader action, as the mock's reply. */
-function mockOutboxItem(state: AccountState, action: { messageId: string; action: string; destinationFolderId?: string; tagId?: string }): OutboxItem | Reply {
+function mockOutboxItem(
+	state: AccountState,
+	action: { messageId: string; action: string; destinationFolderId?: string; tagId?: string }
+): OutboxItem | Reply {
 	const accountId = mock.inbox.find((m) => m.id === action.messageId)?.accountId ?? 'a1';
 	const now = new Date().toISOString();
 	const base = {
@@ -680,19 +832,38 @@ function mockOutboxItem(state: AccountState, action: { messageId: string; action
 		else ids.delete(tag.id);
 		state.tagged.set(action.messageId, [...ids]);
 		const keyword = [`$ivy-${tag.slug}`];
-		return action.action === 'tag' ? { ...base, kind: 'flags', flagsAdd: keyword } : { ...base, kind: 'flags', flagsClear: keyword };
+		return action.action === 'tag'
+			? { ...base, kind: 'flags', flagsAdd: keyword }
+			: { ...base, kind: 'flags', flagsClear: keyword };
 	}
 	if (action.action === 'expunge') return { ...base, kind: 'expunge' };
 	if (action.action in MOVE_DEST || action.action === 'move') {
-		return { ...base, kind: 'move', destinationFolderId: action.destinationFolderId ?? MOVE_DEST[action.action] ?? 'archive-1' };
+		return {
+			...base,
+			kind: 'move',
+			destinationFolderId: action.destinationFolderId ?? MOVE_DEST[action.action] ?? 'archive-1'
+		};
 	}
 	const add = action.action === 'flag' ? ['\\flagged'] : action.action === 'seen' ? ['\\seen'] : undefined;
 	const clear = action.action === 'unflag' ? ['\\flagged'] : action.action === 'unseen' ? ['\\seen'] : undefined;
 	return { ...base, kind: 'flags', flagsAdd: add, flagsClear: clear };
 }
 
-const authFailed: Reply = { status: 422, body: { code: 'auth_failed', message: 'Your provider refused that email address and password' } };
-const unreachable: Reply = { status: 502, body: { code: 'unreachable', message: 'Ivy could not reach your mail provider' } };
+const authFailed: Reply = {
+	status: 422,
+	body: { code: 'auth_failed', message: 'Your provider refused that email address and password' }
+};
+const unreachable: Reply = {
+	status: 502,
+	body: { code: 'unreachable', message: 'Ivy could not reach your mail provider' }
+};
+
+/** A plain address: something before and after one `@`, no whitespace, no NUL. */
+function isPlainAddress(address: string): boolean {
+	// The NUL is the point: an address carrying one must be refused.
+	// eslint-disable-next-line no-control-regex
+	return address.includes('@') && !/[\s\r\n\x00]/.test(address);
+}
 
 function jsonBody(raw: Buffer | null): Record<string, unknown> | null {
 	try {
@@ -722,7 +893,16 @@ function connectReply(state: AccountState, raw: Buffer | null): Reply {
 	const id = 'purelymail';
 	state.accounts = [
 		...state.accounts,
-		{ ...structuredClone(mock.accounts[0]), id, address, short: `${address.split('@')[0]}@`, initial: address[0].toUpperCase(), smart: b?.smart === true, slot: 3, unread: 0 }
+		{
+			...structuredClone(mock.accounts[0]),
+			id,
+			address,
+			short: `${address.split('@')[0]}@`,
+			initial: address[0].toUpperCase(),
+			smart: b?.smart === true,
+			slot: 3,
+			unread: 0
+		}
 	];
 	return { status: 201, body: { id } };
 }
@@ -736,7 +916,14 @@ function passwordReply(state: AccountState, id: string, raw: Buffer | null): Rep
 	return { status: 204, body: null };
 }
 
-function storage(path: string, method: string, params: URLSearchParams, scenario: string | null, state: AccountState, raw: Buffer | null): Reply | null {
+function storage(
+	path: string,
+	method: string,
+	params: URLSearchParams,
+	scenario: string | null,
+	state: AccountState,
+	raw: Buffer | null
+): Reply | null {
 	if (path === '/version') return { body: { version: 'r1.test' } };
 	if (path === '/update') {
 		if (method === 'POST') {
@@ -748,8 +935,16 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 		if (state.update.running) {
 			// The watcher finishes by the next read, with a result newer than the one before.
 			state.update = {
-				...state.update, running: false, done: true, success: true,
-				watcher: { status: 'ok', detail: 'updated to r1.test', target: 'r1.test', finished_at: new Date().toISOString() }
+				...state.update,
+				running: false,
+				done: true,
+				success: true,
+				watcher: {
+					status: 'ok',
+					detail: 'updated to r1.test',
+					target: 'r1.test',
+					finished_at: new Date().toISOString()
+				}
 			};
 		}
 		return reply;
@@ -914,7 +1109,10 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	}
 
 	if (path === '/outbox') {
-		if (method === 'GET') return { body: { active: state.outbox.filter((o) => o.state === 'pending' || o.state === 'in_flight'), recent: [] } };
+		if (method === 'GET')
+			return {
+				body: { active: state.outbox.filter((o) => o.state === 'pending' || o.state === 'in_flight'), recent: [] }
+			};
 		if (method === 'POST' && raw) {
 			try {
 				const item = mockOutboxItem(state, JSON.parse(raw.toString('utf8')));
@@ -929,11 +1127,21 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	}
 
 	if (path === '/outbox/batch' && method === 'POST') {
-		const body = jsonBody(raw) as { messageIds?: string[]; action?: string; destinationFolderId?: string; tagId?: string } | null;
+		const body = jsonBody(raw) as {
+			messageIds?: string[];
+			action?: string;
+			destinationFolderId?: string;
+			tagId?: string;
+		} | null;
 		if (!body?.messageIds?.length || !body.action) return badRequest('Nothing is selected');
-		if (body.messageIds.length > 200) return { status: 400, body: { code: 'batch_too_large', message: 'Select fewer messages at once' } };
+		if (body.messageIds.length > 200)
+			return { status: 400, body: { code: 'batch_too_large', message: 'Select fewer messages at once' } };
 		// A full queue takes none of the batch, like the gateway.
-		if (scenario === 'batch-full') return { status: 409, body: { code: 'outbox_full', message: 'There are too many unsent actions; wait for them to finish' } };
+		if (scenario === 'batch-full')
+			return {
+				status: 409,
+				body: { code: 'outbox_full', message: 'There are too many unsent actions; wait for them to finish' }
+			};
 		const ops: OutboxItem[] = [];
 		const skipped: { messageId: string; code: string; message: string }[] = [];
 		for (const messageId of [...new Set(body.messageIds)]) {
@@ -941,7 +1149,12 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 				skipped.push({ messageId, code: 'not_found', message: 'That message is gone' });
 				continue;
 			}
-			const item = mockOutboxItem(state, { messageId, action: body.action, destinationFolderId: body.destinationFolderId, tagId: body.tagId });
+			const item = mockOutboxItem(state, {
+				messageId,
+				action: body.action,
+				destinationFolderId: body.destinationFolderId,
+				tagId: body.tagId
+			});
 			if (!('kind' in item)) {
 				skipped.push({ messageId, code: 'unknown_tag', message: 'That tag no longer exists' });
 				continue;
@@ -964,7 +1177,8 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 	if (uploads) return uploads;
 
 	const queued = sendReply(state, path, method, scenario, raw);
-	if (queued) return queued;	const drafts = draftReply(state, path, method, raw);
+	if (queued) return queued;
+	const drafts = draftReply(state, path, method, raw);
 	if (drafts) return drafts;
 
 	const match = /^\/messages\/([^/]+)(\/summary|\/body|\/odds|\/insight|\/privacy|\/privacy\/override)?$/.exec(path);
@@ -987,7 +1201,10 @@ function storage(path: string, method: string, params: URLSearchParams, scenario
 		}
 		if (kind === '/insight') {
 			// Only m1's thread was judged worth a summary; every other message has none.
-			return { body: id === 'm1' ? { summary: 'Mara wonders if she can bring her old posts and images to Grove. No rush.' } : {} };
+			return {
+				body:
+					id === 'm1' ? { summary: 'Mara wonders if she can bring her old posts and images to Grove. No rush.' } : {}
+			};
 		}
 		if (kind === '/body') return bodyDocument(id);
 		return messageReply(summary, id, scenario, state.tagged.get(id) ?? []);
@@ -1020,7 +1237,14 @@ export const test = base.extend({
 				await route.fulfill({ status: 200, contentType: 'text/event-stream', body: 'retry: 30000\n\n' });
 				return;
 			}
-			const reply = storage(path, request.method(), url.searchParams, scenario, state.current, request.postDataBuffer());
+			const reply = storage(
+				path,
+				request.method(),
+				url.searchParams,
+				scenario,
+				state.current,
+				request.postDataBuffer()
+			);
 			await route.fulfill({
 				status: reply?.status ?? 200,
 				contentType: reply?.contentType ?? 'application/json',

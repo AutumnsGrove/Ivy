@@ -48,7 +48,9 @@
 			</li>
 		{/each}
 	</ul>
-	<p class="foot">Rules can tag, sort into Reading, or snooze.<br />Moving, deleting and sending always ask you first.</p>
+	<p class="foot">
+		Rules can tag, sort into Reading, or snooze.<br />Moving, deleting and sending always ask you first.
+	</p>
 </Page>
 
 <style>

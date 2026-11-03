@@ -66,9 +66,9 @@
 					{/each}
 				</ol>
 				<Glass variant="panel" radius="note" class="answer">
-					{#each a.answer as para}
+					{#each a.answer as para, i (i)}
 						<p>
-							{#each splitCitations(para, a.sources.map((s) => s.n)) as part}
+							{#each splitCitations( para, a.sources.map((s) => s.n) ) as part, j (j)}
 								{#if 'cite' in part}<span class="cite">{part.cite}</span>{:else}{part.text}{/if}
 							{/each}
 						</p>
@@ -87,7 +87,9 @@
 				{@const limit = err instanceof ApiError && err.code === 'ask_limit'}
 				<Glass variant="panel" radius="note" class="note" role="alert">
 					<div class="nh">
-						<span class="orb" class:warn={limit}>{#if limit}<TriangleAlert />{:else}<CircleAlert />{/if}</span>
+						<span class="orb" class:warn={limit}
+							>{#if limit}<TriangleAlert />{:else}<CircleAlert />{/if}</span
+						>
 						<h2>{limit ? 'Ivy is resting' : "Ivy can't answer right now"}</h2>
 					</div>
 					<p>
@@ -110,7 +112,7 @@
 	<div class="clear" aria-hidden="true"></div>
 	<div class="dock">
 		<div class="sugg">
-			{#each suggestions as s}
+			{#each suggestions as s (s)}
 				<a class="chip" href="/ask?q={encodeURIComponent(s)}">{s}</a>
 			{/each}
 		</div>

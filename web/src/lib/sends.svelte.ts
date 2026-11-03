@@ -11,8 +11,10 @@ import type { SendState, SendStatus } from './types.js';
 let live = $state<SendStatus[]>([]);
 let recent = $state<SendStatus[]>([]);
 // The last state seen per send id, so only a transition is announced.
+// eslint-disable-next-line svelte/prefer-svelte-reactivity -- a cache nothing reads reactively
 const known = new Map<string, SendState>();
 // Ids already announced this session, so a refresh never repeats a toast.
+// eslint-disable-next-line svelte/prefer-svelte-reactivity -- a cache nothing reads reactively
 const announced = new Set<string>();
 
 function announce(send: SendStatus) {

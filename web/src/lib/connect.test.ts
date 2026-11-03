@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from './api/errors';
 import { connectErrorText } from './connect';
 
-const err = (code: ConstructorParameters<typeof ApiError>[0]) => new ApiError(code, 'server words that must not be shown');
+const err = (code: ConstructorParameters<typeof ApiError>[0]) =>
+	new ApiError(code, 'server words that must not be shown');
 
 describe('connectErrorText', () => {
 	it('says a refused password was refused, and that nothing was saved', () => {

@@ -22,7 +22,10 @@ export const DEFAULT_SETTINGS: Settings = {
 	spamScore: false
 };
 
-const isOneOf = <T>(list: readonly T[]) => (v: unknown): v is T => (list as readonly unknown[]).includes(v);
+const isOneOf =
+	<T>(list: readonly T[]) =>
+	(v: unknown): v is T =>
+		(list as readonly unknown[]).includes(v);
 const isBool = (v: unknown): v is boolean => typeof v === 'boolean';
 
 /** One check per key; a key with no check is an unknown key. */

@@ -1,14 +1,6 @@
 <script lang="ts">
 	import { Archive, Ellipsis, Trash2 } from '#lib/icons.js';
-	import {
-		archiveMany,
-		flagMany,
-		notJunkMany,
-		readMany,
-		spamMany,
-		tagMany,
-		trashMany
-	} from '#lib/bulkActions.js';
+	import { archiveMany, flagMany, notJunkMany, readMany, spamMany, tagMany, trashMany } from '#lib/bulkActions.js';
 	import { MAX_SELECTION, type Selection } from '#lib/selection.svelte.js';
 	import { toasts } from '#lib/toast.js';
 	import Button from '../ui/Button.svelte';
@@ -55,8 +47,12 @@
 		</div>
 		<Button size="sm" variant="tonal" onclick={toggleAll}>{all ? 'Select none' : 'Select all'}</Button>
 		<span class="grow"></span>
-		<IconButton label="Archive" disabled={selection.count === 0} onclick={() => void act(archiveMany)}><Archive /></IconButton>
-		<IconButton label="Delete" disabled={selection.count === 0} onclick={() => void act(trashMany)}><Trash2 /></IconButton>
+		<IconButton label="Archive" disabled={selection.count === 0} onclick={() => void act(archiveMany)}
+			><Archive /></IconButton
+		>
+		<IconButton label="Delete" disabled={selection.count === 0} onclick={() => void act(trashMany)}
+			><Trash2 /></IconButton
+		>
 		<IconButton label="More" disabled={selection.count === 0} onclick={() => (more = true)}><Ellipsis /></IconButton>
 		<Button size="sm" onclick={() => selection.exit()}>Done</Button>
 	</Glass>

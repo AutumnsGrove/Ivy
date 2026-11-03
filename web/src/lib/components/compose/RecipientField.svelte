@@ -20,7 +20,10 @@
 	function commit(raw: string) {
 		const parsed = parseRecipients(raw);
 		if (parsed.accepted.length) {
-			recipients = [...recipients, ...parsed.accepted.filter((a) => !recipients.some((r) => r.toLowerCase() === a.toLowerCase()))];
+			recipients = [
+				...recipients,
+				...parsed.accepted.filter((a) => !recipients.some((r) => r.toLowerCase() === a.toLowerCase()))
+			];
 			onchange?.();
 		}
 		query = parsed.rejected.join(', ');
@@ -67,7 +70,7 @@
 				focused = false;
 				commit(query);
 			}}
-			onkeydown={onkeydown}
+			{onkeydown}
 			oninput={(e) => (e.currentTarget.value.includes(',') ? commit(e.currentTarget.value) : null)}
 		/>
 	</div>

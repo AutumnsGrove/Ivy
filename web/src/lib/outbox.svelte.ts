@@ -67,8 +67,10 @@ export const outbox = {
 		const out: Record<string, boolean> = {};
 		for (const op of live) {
 			if (op.messageId !== id || op.kind !== 'flags') continue;
-			for (const flag of op.flagsAdd ?? []) if (isTagKeyword(flag)) out[flag.slice(TAG_PREFIX.length).toLowerCase()] = true;
-			for (const flag of op.flagsClear ?? []) if (isTagKeyword(flag)) out[flag.slice(TAG_PREFIX.length).toLowerCase()] = false;
+			for (const flag of op.flagsAdd ?? [])
+				if (isTagKeyword(flag)) out[flag.slice(TAG_PREFIX.length).toLowerCase()] = true;
+			for (const flag of op.flagsClear ?? [])
+				if (isTagKeyword(flag)) out[flag.slice(TAG_PREFIX.length).toLowerCase()] = false;
 		}
 		return out;
 	},

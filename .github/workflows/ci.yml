@@ -121,7 +121,7 @@ jobs:
           cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: web
-      - name: typecheck and unit tests
+      - name: typecheck, lint, format and unit tests
         run: make web-check
       - name: production build and load budgets
         run: make web-budget

@@ -19,8 +19,14 @@
 {#if href}
 	<a {href} class="ib {tone}" aria-label={label} {onclick}>{@render children()}</a>
 {:else}
-	<button type="button" class="ib {tone}" class:on={pressed} aria-pressed={pressed} aria-label={label} {disabled} {onclick}
-		>{@render children()}</button
+	<button
+		type="button"
+		class="ib {tone}"
+		class:on={pressed}
+		aria-pressed={pressed}
+		aria-label={label}
+		{disabled}
+		{onclick}>{@render children()}</button
 	>
 {/if}
 

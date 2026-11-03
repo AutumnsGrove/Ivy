@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { api } from '#lib/api/client.js';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { ApiError } from '#lib/api/errors.js';
 	import { toasts } from '#lib/toast.js';
 	import type { WaitingItem } from '#lib/types.js';
@@ -11,7 +12,7 @@
 
 	// A row leaves as soon as the server has kept the decision, without reloading the list:
 	// a reload could ask the model about more sent mail, and this click has nothing to do with that.
-	let gone = $state<Set<string>>(new Set());
+	let gone = new SvelteSet<string>();
 	const visible = $derived(data.waiting.items.filter((w) => !gone.has(w.id)));
 
 	async function stop(item: WaitingItem) {
@@ -21,7 +22,7 @@
 			toasts.push({ text: e instanceof ApiError ? e.message : "Couldn't stop waiting", tone: 'danger' });
 			return;
 		}
-		gone = new Set(gone).add(item.id);
+		gone.add(item.id);
 		toasts.push({ text: 'Stopped waiting', tone: 'ok' });
 	}
 </script>

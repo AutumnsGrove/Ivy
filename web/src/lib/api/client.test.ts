@@ -32,7 +32,12 @@ describe('reader api (gateway backed)', () => {
 		expect(all.items.length).toBeGreaterThan(3);
 
 		const calls = route({
-			'/api/v1/inbox?account_id=a1': { items: mock.inbox.filter((m) => m.accountId === 'a1'), needCount: 0, unreadCount: 0, readingWaiting: 0 }
+			'/api/v1/inbox?account_id=a1': {
+				items: mock.inbox.filter((m) => m.accountId === 'a1'),
+				needCount: 0,
+				unreadCount: 0,
+				readingWaiting: 0
+			}
 		});
 		const one = await api.listInbox({ accountId: 'a1' });
 		expect(one.items.every((m) => m.accountId === 'a1')).toBe(true);
@@ -180,7 +185,6 @@ describe('still-mocked routes', () => {
 			code: 'provider_error'
 		});
 	});
-
 });
 
 describe('rules api (gateway backed)', () => {
@@ -198,7 +202,15 @@ describe('rules api (gateway backed)', () => {
 });
 
 describe('the smart backfill', () => {
-	const estimate = { account: 'a1', window: '30d', items: 41, usd: 0.01, fits: true, accountHeadroomUsd: 4.5, globalHeadroomUsd: 9 };
+	const estimate = {
+		account: 'a1',
+		window: '30d',
+		items: 41,
+		usd: 0.01,
+		fits: true,
+		accountHeadroomUsd: 4.5,
+		globalHeadroomUsd: 9
+	};
 
 	it('prices a window with a GET and starts it with a POST', async () => {
 		const calls: { url: string; init: RequestInit }[] = [];

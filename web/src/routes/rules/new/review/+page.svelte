@@ -41,10 +41,15 @@
 
 	<GroupLabel>On your last 200 messages</GroupLabel>
 	<Glass radius="group" class="res">
-		{#each results as r}
+		{#each results as r (r.s)}
 			<div class="r" class:left={!r.tagged}>
-				<span class="i">{#if r.tagged}<Check />{:else}<X />{/if}</span>
-				<span class="m"><span class="ell s">{r.s}</span><span class="d">Cloudflare · {r.tagged ? 'tagged' : 'left alone'}</span></span>
+				<span class="i"
+					>{#if r.tagged}<Check />{:else}<X />{/if}</span
+				>
+				<span class="m"
+					><span class="ell s">{r.s}</span><span class="d">Cloudflare · {r.tagged ? 'tagged' : 'left alone'}</span
+					></span
+				>
 			</div>
 		{/each}
 	</Glass>

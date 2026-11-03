@@ -7,8 +7,14 @@ describe('outcomeToast', () => {
 		expect(outcomeToast({ kind: 'updated', version: 'r551.abc' })).toEqual({ text: 'Updated to r551.abc', tone: 'ok' });
 		expect(outcomeToast({ kind: 'updated', version: undefined }).text).toBe('Updated');
 		expect(outcomeToast({ kind: 'current', version: 'r550' })).toEqual({ text: 'Ivy is up to date', tone: 'ok' });
-		expect(outcomeToast({ kind: 'failed', detail: 'not healthy' })).toEqual({ text: 'The update failed: not healthy', tone: 'danger' });
-		expect(outcomeToast({ kind: 'pending' })).toEqual({ text: 'Still updating. Check back in a minute.', tone: 'warn' });
+		expect(outcomeToast({ kind: 'failed', detail: 'not healthy' })).toEqual({
+			text: 'The update failed: not healthy',
+			tone: 'danger'
+		});
+		expect(outcomeToast({ kind: 'pending' })).toEqual({
+			text: 'Still updating. Check back in a minute.',
+			tone: 'warn'
+		});
 	});
 });
 
@@ -59,13 +65,23 @@ describe('followUpdate', () => {
 	});
 
 	it('says it is already up to date when the watcher finished and the version did not change', async () => {
-		const { d } = deps([{ ...idle, watcher: watcher('ok', 'T1') }, { ...idle, watcher: watcher('ok', 'T2') }], ['r1', 'r1']);
+		const { d } = deps(
+			[
+				{ ...idle, watcher: watcher('ok', 'T1') },
+				{ ...idle, watcher: watcher('ok', 'T2') }
+			],
+			['r1', 'r1']
+		);
 		expect(await followUpdate(d)).toEqual({ kind: 'current', version: 'r1' });
 	});
 
 	it('does not mistake the previous result for this one', async () => {
 		const { d, polls } = deps(
-			[{ ...idle, watcher: watcher('failed', 'OLD', 'boom') }, { ...idle, running: true, watcher: watcher('failed', 'OLD', 'boom') }, { ...idle, watcher: watcher('ok', 'NEW') }],
+			[
+				{ ...idle, watcher: watcher('failed', 'OLD', 'boom') },
+				{ ...idle, running: true, watcher: watcher('failed', 'OLD', 'boom') },
+				{ ...idle, watcher: watcher('ok', 'NEW') }
+			],
 			['r1', 'r2']
 		);
 		expect(await followUpdate(d)).toEqual({ kind: 'updated', version: 'r2' });
@@ -74,7 +90,10 @@ describe('followUpdate', () => {
 
 	it("reports the watcher's own reason when it failed", async () => {
 		const { d } = deps(
-			[{ ...idle, watcher: watcher('ok', 'T1') }, { ...idle, watcher: watcher('failed', 'T2', 'the new container was not healthy') }],
+			[
+				{ ...idle, watcher: watcher('ok', 'T1') },
+				{ ...idle, watcher: watcher('failed', 'T2', 'the new container was not healthy') }
+			],
 			['r1', 'r1']
 		);
 		expect(await followUpdate(d)).toEqual({ kind: 'failed', detail: 'the new container was not healthy' });
@@ -82,7 +101,10 @@ describe('followUpdate', () => {
 
 	it('reports a failure Ivy hit before it reached the watcher', async () => {
 		const { d } = deps(
-			[{ ...idle, watcher: watcher('ok', 'T1') }, { ...idle, done: true, success: false, error: 'update: manifest check failed (status 503)' }],
+			[
+				{ ...idle, watcher: watcher('ok', 'T1') },
+				{ ...idle, done: true, success: false, error: 'update: manifest check failed (status 503)' }
+			],
 			['r1', 'r1']
 		);
 		expect(await followUpdate(d)).toEqual({ kind: 'failed', detail: 'update: manifest check failed (status 503)' });
@@ -107,11 +129,15 @@ describe('followUpdate', () => {
 
 	it('copes with a first status read that fails, and a version it cannot read', async () => {
 		// The baseline read is retried, so the stale T1 is the baseline and only T2 counts as new.
-		const { d } = deps([new Error('down'), { ...idle, watcher: watcher('ok', 'T1') }, { ...idle, watcher: watcher('ok', 'T2') }], ['r1'], {
-			version: async () => {
-				throw new Error('down');
+		const { d } = deps(
+			[new Error('down'), { ...idle, watcher: watcher('ok', 'T1') }, { ...idle, watcher: watcher('ok', 'T2') }],
+			['r1'],
+			{
+				version: async () => {
+					throw new Error('down');
+				}
 			}
-		});
+		);
 		expect(await followUpdate(d)).toEqual({ kind: 'current', version: undefined });
 	});
 });

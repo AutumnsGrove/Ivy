@@ -31,7 +31,7 @@ describe('TagPicker', () => {
 		expect(mocks.listTags).not.toHaveBeenCalled();
 	});
 
-	it("shows every tag, on for the ones the message is already in", async () => {
+	it('shows every tag, on for the ones the message is already in', async () => {
 		render(TagPicker, { id: 'm1', open: true });
 		const work = await screen.findByRole('switch', { name: 'Work' });
 		expect(work).toHaveAttribute('aria-checked', 'true');
@@ -42,9 +42,19 @@ describe('TagPicker', () => {
 		mocks.tagMessage.mockResolvedValue(true);
 		render(TagPicker, { id: 'm1', open: true });
 		await fireEvent.click(await screen.findByRole('switch', { name: 'Home' }));
-		expect(mocks.tagMessage).toHaveBeenCalledWith('m1', expect.objectContaining({ id: 't2', name: 'Home' }), true, expect.any(Function));
+		expect(mocks.tagMessage).toHaveBeenCalledWith(
+			'm1',
+			expect.objectContaining({ id: 't2', name: 'Home' }),
+			true,
+			expect.any(Function)
+		);
 		await fireEvent.click(screen.getByRole('switch', { name: 'Work' }));
-		expect(mocks.tagMessage).toHaveBeenLastCalledWith('m1', expect.objectContaining({ id: 't1' }), false, expect.any(Function));
+		expect(mocks.tagMessage).toHaveBeenLastCalledWith(
+			'm1',
+			expect.objectContaining({ id: 't1' }),
+			false,
+			expect.any(Function)
+		);
 	});
 
 	it('follows an Undo made from the toast while it is still open', async () => {

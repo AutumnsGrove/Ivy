@@ -16,7 +16,9 @@ function stubFetch(value: unknown) {
 
 describe('waiting-on api', () => {
 	it('lists by account', async () => {
-		const page = { items: [{ id: 's1', accountId: 'a1', to: ['Sam'], subject: 'Figures', sentAt: '2026-10-20T09:00:00Z', days: 5 }] };
+		const page = {
+			items: [{ id: 's1', accountId: 'a1', to: ['Sam'], subject: 'Figures', sentAt: '2026-10-20T09:00:00Z', days: 5 }]
+		};
 		const calls = stubFetch(reply(page));
 		await expect(api.listWaitingOn({ accountId: 'a1' })).resolves.toEqual(page);
 		expect(calls[0].url).toBe('/api/v1/waiting?account_id=a1');

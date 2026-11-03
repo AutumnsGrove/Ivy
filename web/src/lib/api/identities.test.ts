@@ -15,14 +15,16 @@ function stubFetch(value: unknown) {
 }
 
 describe('identities api', () => {
-	it('lists an account\'s send addresses', async () => {
+	it("lists an account's send addresses", async () => {
 		const calls = stubFetch(reply({ identities: [] }));
 		await expect(api.listIdentities('a1')).resolves.toEqual({ identities: [] });
 		expect(calls[0].url).toBe('/api/v1/accounts/a1/identities');
 	});
 
 	it('saves an identity by address as a JSON body', async () => {
-		const calls = stubFetch(reply({ id: 'i1', accountId: 'a1', address: 'hello@example.com', name: 'Autumn', signature: '', primary: false }));
+		const calls = stubFetch(
+			reply({ id: 'i1', accountId: 'a1', address: 'hello@example.com', name: 'Autumn', signature: '', primary: false })
+		);
 		await api.saveIdentity('a1', { address: 'hello@example.com', name: 'Autumn' });
 		expect(calls[0].url).toBe('/api/v1/accounts/a1/identities');
 		expect(calls[0].init.method).toBe('PUT');
@@ -38,7 +40,9 @@ describe('identities api', () => {
 
 	it('keeps the identity limit refusal so the editor can say so', async () => {
 		stubFetch(reply({ code: 'too_many_identities', message: 'There are too many sending addresses' }, 409));
-		await expect(api.saveIdentity('a1', { address: 'x@example.com' })).rejects.toMatchObject({ code: 'too_many_identities' });
+		await expect(api.saveIdentity('a1', { address: 'x@example.com' })).rejects.toMatchObject({
+			code: 'too_many_identities'
+		});
 	});
 
 	it('asks for a reply prefill, with all as a query flag', async () => {

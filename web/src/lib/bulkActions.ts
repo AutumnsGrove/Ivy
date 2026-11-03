@@ -31,7 +31,11 @@ function inverses(batch: OutboxBatch, ops: OutboxItem[]): OutboxBatch[] {
 			if (!op.sourceFolderId) continue;
 			byFolder.set(op.sourceFolderId, [...(byFolder.get(op.sourceFolderId) ?? []), op.messageId]);
 		}
-		return [...byFolder].map(([destinationFolderId, messageIds]) => ({ messageIds, action: 'move', destinationFolderId }));
+		return [...byFolder].map(([destinationFolderId, messageIds]) => ({
+			messageIds,
+			action: 'move',
+			destinationFolderId
+		}));
 	}
 	const back = OPPOSITE[batch.action];
 	return back ? [{ ...batch, messageIds: ops.map((o) => o.messageId), action: back }] : [];

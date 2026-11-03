@@ -58,13 +58,23 @@
 	<form onsubmit={submit}>
 		{#if updating}
 			<h1>Update password</h1>
-			<p class="lede">Enter the new password for {updating.address}. Ivy tests it first and keeps the old one if it doesn't work.</p>
+			<p class="lede">
+				Enter the new password for {updating.address}. Ivy tests it first and keeps the old one if it doesn't work.
+			</p>
 		{:else}
 			<h1>Connect an account</h1>
-			<p class="lede">Ivy keeps a private copy of your mail so search is instant. Your provider stays the source of truth.</p>
+			<p class="lede">
+				Ivy keeps a private copy of your mail so search is instant. Your provider stays the source of truth.
+			</p>
 
 			<div class="f">
-				<Field label="Email address" type="email" autocomplete="username" bind:value={email} placeholder="you@yourdomain.com" />
+				<Field
+					label="Email address"
+					type="email"
+					autocomplete="username"
+					bind:value={email}
+					placeholder="you@yourdomain.com"
+				/>
 				<p class="provider">For now Ivy connects to Purelymail. Other providers come later.</p>
 			</div>
 		{/if}
@@ -84,7 +94,8 @@
 					<div>Smart features</div>
 					<div class="sub">
 						{#if smart}
-							Search by meaning sends message text to OpenRouter, within your monthly cap. It starts the next time Ivy starts.
+							Search by meaning sends message text to OpenRouter, within your monthly cap. It starts the next time Ivy
+							starts.
 						{:else}
 							Off unless you turn it on. When off, this account's mail never leaves your server.
 						{/if}
@@ -93,7 +104,9 @@
 				<Toggle label="Smart features" bind:checked={smart} />
 			</Glass>
 
-			<p class="note"><Glint />Ivy will read your whole mailbox once, newest first. You can start using it right away.</p>
+			<p class="note">
+				<Glint />Ivy will read your whole mailbox once, newest first. You can start using it right away.
+			</p>
 		{/if}
 
 		{#if failure}<p class="fail" role="alert">{failure}</p>{/if}

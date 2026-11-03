@@ -3,7 +3,10 @@ import { toast } from './helpers';
 
 // A valid 1x1 transparent PNG. It must really decode: the browser resizes the photo before
 // uploading, and Chromium rejects an image that only has the right magic bytes.
-const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=', 'base64');
+const PNG = Buffer.from(
+	'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=',
+	'base64'
+);
 
 test.describe('account customization', () => {
 	test('renames an account and the name survives a reload', async ({ page }) => {
@@ -50,7 +53,9 @@ test.describe('account customization', () => {
 		});
 
 		const upload = page.waitForRequest((r) => r.method() === 'PUT' && r.url().includes('/photo'));
-		await page.getByLabel('Choose a photo').setInputFiles({ name: 'wide.png', mimeType: 'image/png', buffer: Buffer.from(wide) });
+		await page
+			.getByLabel('Choose a photo')
+			.setInputFiles({ name: 'wide.png', mimeType: 'image/png', buffer: Buffer.from(wide) });
 		const body = (await upload).postDataBuffer()!;
 
 		// PNG IHDR: width and height are the big-endian words at bytes 16 and 20.
@@ -63,7 +68,9 @@ test.describe('account customization', () => {
 		await page.goto('/settings/account/a1');
 		let puts = 0;
 		page.on('request', (r) => r.method() === 'PUT' && puts++);
-		await page.getByLabel('Choose a photo').setInputFiles({ name: 'broken.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('not an image') });
+		await page
+			.getByLabel('Choose a photo')
+			.setInputFiles({ name: 'broken.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('not an image') });
 		await expect(toast(page, "can't read that photo")).toBeVisible();
 		expect(puts).toBe(0);
 	});
@@ -123,7 +130,10 @@ test.describe('send identities', () => {
 		await page.reload();
 		await expect(page.locator('.row', { hasText: 'abuse@example.com' }).getByRole('switch')).toBeChecked();
 
-		await page.locator('.row', { hasText: 'abuse@example.com' }).getByRole('button', { name: 'Clear abuse@example.com' }).click();
+		await page
+			.locator('.row', { hasText: 'abuse@example.com' })
+			.getByRole('button', { name: 'Clear abuse@example.com' })
+			.click();
 		await expect(toast(page, 'Address cleared')).toBeVisible();
 		await expect(page.locator('.row', { hasText: 'abuse@example.com' })).toHaveCount(0);
 	});

@@ -24,7 +24,11 @@
 </script>
 
 <TopBar title="A check" backHref="/checks">
-	{#snippet trailing()}<Button size="sm" variant="primary" onclick={() => (toasts.push({ text: 'Check saved', tone: 'ok' }), goto('/checks'))}>Save</Button>{/snippet}
+	{#snippet trailing()}<Button
+			size="sm"
+			variant="primary"
+			onclick={() => (toasts.push({ text: 'Check saved', tone: 'ok' }), goto('/checks'))}>Save</Button
+		>{/snippet}
 </TopBar>
 
 <Page>
@@ -60,7 +64,11 @@
 	<GroupLabel>Used by</GroupLabel>
 	<Glass radius="card" class="used"><span>{c.usedBy}</span><ChevronRight /></Glass>
 
-	<div class="try"><Button size="lg" block onclick={() => toasts.push({ text: 'Trying on your last 200 messages…', tone: 'info' })}>Try on recent mail</Button></div>
+	<div class="try">
+		<Button size="lg" block onclick={() => toasts.push({ text: 'Trying on your last 200 messages…', tone: 'info' })}
+			>Try on recent mail</Button
+		>
+	</div>
 </Page>
 
 <style>

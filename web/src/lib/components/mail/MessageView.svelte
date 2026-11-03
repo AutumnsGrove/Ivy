@@ -125,7 +125,9 @@
 			<button type="button" class="name tap" onclick={() => show(message.sender)}>{message.from}</button>
 			<div class="to">
 				<Dot {color} />
-				<button type="button" class="tap" onclick={() => show(message.to[0] ?? message.sender)}>to {message.toShort}</button>
+				<button type="button" class="tap" onclick={() => show(message.to[0] ?? message.sender)}
+					>to {message.toShort}</button
+				>
 				· {formatMessageTime(message.date)}
 				<!-- Flagging itself lives in More; this only says it is so. -->
 				{#if flagged}<span class="flagged" role="img" aria-label="Flagged"><Flag /></span>{/if}
@@ -139,7 +141,7 @@
 		{#if message.html}
 			<MessageBody src={bodySrc} />
 		{:else}
-			{#each message.paragraphs as p}<p>{p}</p>{/each}
+			{#each message.paragraphs as p, i (i)}<p>{p}</p>{/each}
 		{/if}
 	</div>
 

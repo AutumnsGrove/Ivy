@@ -17,7 +17,9 @@ test('Often in touch keeps each name inside its own avatar column', async ({ pag
 		boxes.push(link);
 	}
 	for (let i = 1; i < boxes.length; i++) {
-		expect(boxes[i].x, `item ${i} starts after item ${i - 1} ends`).toBeGreaterThanOrEqual(boxes[i - 1].x + boxes[i - 1].width - 1);
+		expect(boxes[i].x, `item ${i} starts after item ${i - 1} ends`).toBeGreaterThanOrEqual(
+			boxes[i - 1].x + boxes[i - 1].width - 1
+		);
 	}
 });
 

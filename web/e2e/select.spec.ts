@@ -63,7 +63,10 @@ test.describe('selecting several messages', () => {
 		await page.getByRole('button', { name: 'Select', exact: true }).click();
 		await card(page, 'Moving my blog').click();
 		await bar(page).getByRole('button', { name: 'Delete' }).click();
-		await page.getByRole('dialog', { name: 'Move 1 message to Trash?' }).getByRole('button', { name: 'Cancel' }).click();
+		await page
+			.getByRole('dialog', { name: 'Move 1 message to Trash?' })
+			.getByRole('button', { name: 'Cancel' })
+			.click();
 
 		await expect(bar(page)).toContainText('1 selected');
 		await expect(toast(page, /Moved/)).toHaveCount(0);

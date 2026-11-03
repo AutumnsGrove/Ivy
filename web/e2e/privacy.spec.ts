@@ -10,7 +10,9 @@ test.describe('the withheld marker', () => {
 	test('says why a message is kept private', async ({ page }) => {
 		await page.goto('/m/m3');
 		const note = page.getByRole('region', { name: 'Privacy' });
-		await expect(note).toContainText('Kept private from helpers: it reads like it is giving instructions to a program.');
+		await expect(note).toContainText(
+			'Kept private from helpers: it reads like it is giving instructions to a program.'
+		);
 	});
 
 	test('stays out of the way of mail nothing was found in', async ({ page }) => {

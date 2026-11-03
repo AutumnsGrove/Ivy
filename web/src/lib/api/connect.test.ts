@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from './client';
 
-const reply = (status: number, body: unknown) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+const reply = (status: number, body: unknown) => ({
+	ok: status >= 200 && status < 300,
+	status,
+	json: async () => body
+});
 
 const stub = (value: unknown) => {
 	const mock = vi.fn(async (_url: string, _init?: RequestInit) => value);
@@ -43,7 +47,11 @@ describe('connectAccount', () => {
 
 describe('updateAccountPassword', () => {
 	it('puts the new password to the account and resolves on a 204', async () => {
-		const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 204, json: async () => undefined }));
+		const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({
+			ok: true,
+			status: 204,
+			json: async () => undefined
+		}));
 		vi.stubGlobal('fetch', mock);
 		await expect(api.updateAccountPassword('purelymail-2', 'newpass')).resolves.toBeUndefined();
 
@@ -54,7 +62,11 @@ describe('updateAccountPassword', () => {
 	});
 
 	it('escapes the account id, which comes from the URL', async () => {
-		const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, status: 204, json: async () => undefined }));
+		const mock = vi.fn(async (_url: string, _init?: RequestInit) => ({
+			ok: true,
+			status: 204,
+			json: async () => undefined
+		}));
 		vi.stubGlobal('fetch', mock);
 		await api.updateAccountPassword('a/b', 'pw');
 		expect(mock.mock.calls[0][0]).toBe('/api/v1/accounts/a%2Fb/password');

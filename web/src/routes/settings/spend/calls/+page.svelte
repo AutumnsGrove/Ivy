@@ -70,7 +70,9 @@
 								<span>{address(c.accountId)}</span>
 								{#if c.model}<span>{c.model}</span>{/if}
 							</div>
-							<div class="b" class:held={c.outcome === 'refused'} class:err={c.outcome === 'error'}>{callDetail(c)}</div>
+							<div class="b" class:held={c.outcome === 'refused'} class:err={c.outcome === 'error'}>
+								{callDetail(c)}
+							</div>
 							{#if c.probabilities}
 								<div class="prob">
 									{#each c.probabilities as p (p.label)}
@@ -88,13 +90,16 @@
 			</Glass>
 
 			<p class="legend">
-				<i class="dot ok"></i>Done <i class="dot refused"></i>Held back <i class="dot error"></i>Error <i class="dot rejected"></i>Declined
+				<i class="dot ok"></i>Done <i class="dot refused"></i>Held back <i class="dot error"></i>Error
+				<i class="dot rejected"></i>Declined
 			</p>
 
 			<div class="acts">
 				{#if cursor}<Button variant="tonal" onclick={older} disabled={busy}>Show older</Button>{/if}
 				<span class="grow"></span>
-				<Button variant="tonal" download href={api.callsExportUrl('csv', { outcome: data.outcome })}><Download />Save as CSV</Button>
+				<Button variant="tonal" download href={api.callsExportUrl('csv', { outcome: data.outcome })}
+					><Download />Save as CSV</Button
+				>
 			</div>
 		{:else}
 			<p class="none">No calls to show{data.outcome ? ' for this filter' : ' yet'}.</p>

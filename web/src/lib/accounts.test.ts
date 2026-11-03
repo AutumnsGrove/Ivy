@@ -22,7 +22,10 @@ describe('syncLine', () => {
 	it('leaves the phrase alone when there is no instant, or while it is still reading', () => {
 		expect(syncLine({ sync: 'ok', syncNote: 'Waiting for the first sync' }, opts)).toBe('Waiting for the first sync');
 		expect(
-			syncLine({ sync: 'syncing', syncNote: 'Reading your mailbox, newest first', syncedAt: '2026-10-03T15:29:00Z' }, opts)
+			syncLine(
+				{ sync: 'syncing', syncNote: 'Reading your mailbox, newest first', syncedAt: '2026-10-03T15:29:00Z' },
+				opts
+			)
 		).toBe('Reading your mailbox, newest first');
 	});
 });

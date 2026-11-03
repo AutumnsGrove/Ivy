@@ -59,6 +59,8 @@ export class Selection {
 
 	/** Drops ids that have left the list (acted on, or hidden by a live op). */
 	prune(loaded: string[]) {
+		// A local lookup set that Svelte never observes, so it needs no reactivity.
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
 		const keep = new Set(loaded);
 		if (this.ids.every((id) => keep.has(id))) return;
 		this.ids = this.ids.filter((id) => keep.has(id));

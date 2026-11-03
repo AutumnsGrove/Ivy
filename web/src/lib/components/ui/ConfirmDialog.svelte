@@ -3,15 +3,12 @@
 	import Button from './Button.svelte';
 	import Sheet from './Sheet.svelte';
 
-	// Keep the open state in step with the pending request; the Sheet owns the
-	// scrim and Escape handling and calls back through onclose.
-	let open = $state(false);
-	$effect(() => {
-		open = confirm.pending !== null;
-	});
+	// The Sheet owns the scrim and Escape handling and calls back through onclose;
+	// whether it is open is exactly whether a request is pending.
+	const open = $derived(confirm.pending !== null);
 </script>
 
-<Sheet bind:open title={confirm.pending?.request.title ?? 'Confirm'} onclose={() => confirm.answer(false)}>
+<Sheet {open} title={confirm.pending?.request.title ?? 'Confirm'} onclose={() => confirm.answer(false)}>
 	{#if confirm.pending}
 		<h2 class="title">{confirm.pending.request.title}</h2>
 		{#if confirm.pending.request.body}

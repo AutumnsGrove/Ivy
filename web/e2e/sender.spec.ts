@@ -41,7 +41,9 @@ test.describe('sender sheet', () => {
 	test('a Cc person opens the same sheet for them', async ({ page }) => {
 		await page.goto('/m/m1');
 		await inReader(page, /Mara Linden/).click();
-		await sheetOf(page).getByRole('button', { name: /Taro Kimura/ }).click();
+		await sheetOf(page)
+			.getByRole('button', { name: /Taro Kimura/ })
+			.click();
 		await expect(sheetOf(page).locator('.addr')).toHaveText('taro@example.com');
 	});
 

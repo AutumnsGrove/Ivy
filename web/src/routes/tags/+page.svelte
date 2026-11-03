@@ -9,6 +9,9 @@
 	import TagTile from '#lib/components/ui/TagTile.svelte';
 
 	let { data } = $props();
+	// The sheet opens on the URL's request and the operator can open it themselves;
+	// a $derived could not be written back.
+	// eslint-disable-next-line svelte/prefer-writable-derived
 	let sheet = $state(false);
 	$effect.pre(() => {
 		sheet = data.openNew;
@@ -17,7 +20,8 @@
 
 <Page>
 	<LargeHeader title="Tags" subtitle="Yours to shape">
-		{#snippet trailing()}<IconButton label="New tag" tone="accent" onclick={() => (sheet = true)}><Plus /></IconButton>{/snippet}
+		{#snippet trailing()}<IconButton label="New tag" tone="accent" onclick={() => (sheet = true)}><Plus /></IconButton
+			>{/snippet}
 	</LargeHeader>
 
 	<div class="groups">

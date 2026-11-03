@@ -39,6 +39,8 @@ describe('spend api', () => {
 
 	it('builds the download link for the filter on screen', () => {
 		expect(api.callsExportUrl('csv')).toBe('/api/v1/spend/calls/export?format=csv');
-		expect(api.callsExportUrl('csv', { outcome: 'refused' })).toBe('/api/v1/spend/calls/export?format=csv&outcome=refused');
+		expect(api.callsExportUrl('csv', { outcome: 'refused' })).toBe(
+			'/api/v1/spend/calls/export?format=csv&outcome=refused'
+		);
 	});
 });

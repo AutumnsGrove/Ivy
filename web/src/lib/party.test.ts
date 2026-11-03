@@ -52,7 +52,9 @@ describe('spamLine', () => {
 	});
 
 	it('shows a score of zero and a fractional threshold', () => {
-		expect(spamLine({ score: 0, required: 4.5, flagged: false })).toContain('Spam score 0.0; your provider flags 4.5 and above');
+		expect(spamLine({ score: 0, required: 4.5, flagged: false })).toContain(
+			'Spam score 0.0; your provider flags 4.5 and above'
+		);
 	});
 
 	it('is absent when the provider gave no score', () => {

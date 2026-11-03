@@ -38,7 +38,11 @@ describe('MessageList', () => {
 });
 
 describe('MessageList needs-attention marker', () => {
-	const flagged = { ...item('m1', '2026-10-09T12:00:00Z'), needs: true, needsReason: 'Dana asks you to confirm Friday' };
+	const flagged = {
+		...item('m1', '2026-10-09T12:00:00Z'),
+		needs: true,
+		needsReason: 'Dana asks you to confirm Friday'
+	};
 
 	it('shows the reason as plain text under the marker', () => {
 		render(MessageList, { items: [{ ...flagged, needsReason: '<b>x</b> confirm' }], accounts });

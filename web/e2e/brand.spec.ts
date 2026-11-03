@@ -13,7 +13,12 @@ test.describe('app icon', () => {
 		await page.goto('/');
 		const manifest = await (await request.get('/manifest.webmanifest')).json();
 		expect(manifest.name).toBe('Ivy');
-		const urls = ['/favicon.ico', '/favicon-32.png', '/apple-touch-icon.png', ...manifest.icons.map((i: { src: string }) => i.src)];
+		const urls = [
+			'/favicon.ico',
+			'/favicon-32.png',
+			'/apple-touch-icon.png',
+			...manifest.icons.map((i: { src: string }) => i.src)
+		];
 		for (const url of urls) {
 			const res = await request.get(url);
 			expect(res.status(), url).toBe(200);

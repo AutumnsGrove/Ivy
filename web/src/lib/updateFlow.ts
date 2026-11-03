@@ -57,7 +57,9 @@ export async function followUpdate(d: UpdateDeps): Promise<UpdateOutcome> {
 		if (!w || w.finished_at === seen) continue; // still the previous attempt's result
 		if (w.status === 'failed') return { kind: 'failed', detail: w.detail ?? 'the update did not finish' };
 		const after = (await attempt(d.version))?.version;
-		return after !== versionBefore && after !== undefined ? { kind: 'updated', version: after } : { kind: 'current', version: after };
+		return after !== versionBefore && after !== undefined
+			? { kind: 'updated', version: after }
+			: { kind: 'current', version: after };
 	}
 	return { kind: 'pending' };
 }

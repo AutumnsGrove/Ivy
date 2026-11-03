@@ -41,9 +41,14 @@ export async function squarePhoto(file: Blob, deps: PhotoDeps = browserDeps): Pr
 		throw new PhotoError("This browser can't read that photo. Try a JPEG or PNG.");
 	}
 	try {
-		if (!(img.width > 0 && img.height > 0)) throw new PhotoError("That image has nothing in it.");
+		if (!(img.width > 0 && img.height > 0)) throw new PhotoError('That image has nothing in it.');
 		const crop = squareCrop(img.width, img.height);
-		const out = await deps.encode(img, crop, Math.min(crop.side, PHOTO_EDGE), KEEPS_ALPHA.has(file.type) ? 'image/png' : 'image/jpeg');
+		const out = await deps.encode(
+			img,
+			crop,
+			Math.min(crop.side, PHOTO_EDGE),
+			KEEPS_ALPHA.has(file.type) ? 'image/png' : 'image/jpeg'
+		);
 		if (!out) throw new PhotoError("That photo couldn't be resized.");
 		return out;
 	} finally {
@@ -107,7 +112,11 @@ export function targetSize(width: number, height: number, size: PrepareSize): { 
  * A non-image, an animated GIF, or Original size with location removal off is
  * returned byte-for-byte.
  */
-export async function prepareImage(file: Blob, opts: { size: PrepareSize; stripLocation: boolean }, deps: PrepareDeps = browserPrepareDeps): Promise<PreparedImage> {
+export async function prepareImage(
+	file: Blob,
+	opts: { size: PrepareSize; stripLocation: boolean },
+	deps: PrepareDeps = browserPrepareDeps
+): Promise<PreparedImage> {
 	const name = file instanceof File ? file.name : 'attachment';
 	const type = (file.type || '').toLowerCase();
 	if (!type.startsWith('image/') || PREPARE_BYPASS.has(type)) {

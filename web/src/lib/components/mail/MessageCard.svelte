@@ -50,7 +50,9 @@
 {#snippet body()}
 	<span class="top">
 		{#if choosing}
-			<span class="box" class:on={checked} aria-hidden="true">{#if checked}<Check />{/if}</span>
+			<span class="box" class:on={checked} aria-hidden="true"
+				>{#if checked}<Check />{/if}</span
+			>
 		{/if}
 		<span class="dot" style:background={accountColor}></span>
 		<span class="from ell">{from}</span>
@@ -82,13 +84,7 @@
 		{@render body()}
 	</a>
 {:else}
-	<button
-		type="button"
-		class="card"
-		class:selected
-		aria-current={selected ? 'true' : undefined}
-		onclick={onselect}
-	>
+	<button type="button" class="card" class:selected aria-current={selected ? 'true' : undefined} onclick={onselect}>
 		{@render body()}
 	</button>
 {/if}

@@ -46,7 +46,9 @@
 </script>
 
 <TopBar title="Edit tag" backHref="/tags">
-	{#snippet trailing()}<Button size="sm" variant="primary" onclick={() => void save()} disabled={!name.trim() || saving}>Save</Button>{/snippet}
+	{#snippet trailing()}<Button size="sm" variant="primary" onclick={() => void save()} disabled={!name.trim() || saving}
+			>Save</Button
+		>{/snippet}
 </TopBar>
 
 <Page>

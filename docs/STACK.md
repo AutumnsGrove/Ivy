@@ -61,7 +61,7 @@ rule from `PLAN.md` section 6: verify before pinning). The constraint: **pure Go
 | Styling | Pure CSS custom properties, vendored Grove tokens; Lexend + Newsreader self-hosted (subset, `font-display: swap`, preloaded); Lucide icons imported per icon |
 | Unit/component | Vitest + `@testing-library/svelte` |
 | E2E / visual / a11y | `@playwright/test`, screenshot diffs, `@axe-core/playwright` |
-| Lint/format | ESLint, Prettier, `svelte-check` |
+| Lint/format | ESLint (flat config, `typescript-eslint`, `eslint-plugin-svelte`), Prettier (`prettier-plugin-svelte`), `svelte-check` |
 | API types | `openapi-typescript` | Generated from `api/openapi.yaml` into `src/lib/api/schema.d.ts`; `src/lib/types.ts` re-exports it |
 | Build | Vite (via SvelteKit); `make web-assets` copies the output into `internal/webui/build` and `cmd/ivy-assets` precompresses it (brotli 11 / zstd / gzip 9) |
 | Sanitised mail view | Sandboxed iframe fed by server-sanitised HTML (no client sanitiser library) |
@@ -81,6 +81,8 @@ compiled output plus fonts and icons, about 100 KB gzip for every route together
 | `@playwright/test` | E2E on WebKit (iPhone) and Chromium (desktop) |
 | `@axe-core/playwright` | Accessibility assertions in E2E (STANDARDS.md 5); the shell landmarks the pass required were added in 2g |
 | `squire-rte` 2.4.9 | The compose rich-text editor (chunk 4h). Runtime, MIT, zero deps, 16.1 KiB brotli, route-split to `/compose`; see the Rich text row above |
+| `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-svelte`, `eslint-config-prettier`, `globals` | Lint (STANDARDS.md 5). Dev only, never in the bundle. `typescript-eslint` is what makes the TS inside `.svelte` and `*.svelte.ts` parse; `eslint-plugin-svelte` brings Svelte's own correctness and a11y rules; `eslint-config-prettier` switches off every stylistic rule so the linter and the formatter cannot disagree |
+| `prettier`, `prettier-plugin-svelte` | Format (STANDARDS.md 5). Dev only; the plugin is what formats `.svelte` markup and the script and style blocks inside it. Settings match the style the tree already had (tabs, single quotes, no trailing commas, 120 columns) |
 
 Frontend dependency policy: the runtime dependency list should stay near-empty (Svelte plus icons),
 with `squire-rte` the single deliberate exception. Anything else is justified here with its

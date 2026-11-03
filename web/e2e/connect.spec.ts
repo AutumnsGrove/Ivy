@@ -13,7 +13,11 @@ test.describe('connecting an account', () => {
 		const request = page.waitForRequest((r) => r.url().endsWith('/api/v1/accounts') && r.method() === 'POST');
 		await page.getByRole('button', { name: 'Test and connect' }).click();
 
-		expect((await request).postDataJSON()).toEqual({ address: 'new@grove.test', password: 'correct horse', smart: false });
+		expect((await request).postDataJSON()).toEqual({
+			address: 'new@grove.test',
+			password: 'correct horse',
+			smart: false
+		});
 		await expect(toast(page, 'Connected')).toBeVisible();
 		await expect(page).toHaveURL('/');
 	});
@@ -82,7 +86,11 @@ test.describe('connecting an account', () => {
 			if (route.request().method() !== 'POST') return route.fallback();
 			posts++;
 			await new Promise((r) => setTimeout(r, 400));
-			return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ id: 'purelymail' }) });
+			return route.fulfill({
+				status: 201,
+				contentType: 'application/json',
+				body: JSON.stringify({ id: 'purelymail' })
+			});
 		});
 		await page.goto('/welcome/account');
 		await page.getByLabel('Email address').fill('new@grove.test');
@@ -103,7 +111,9 @@ test.describe('updating a password', () => {
 		await expect(page.getByLabel('Email address')).toHaveCount(0);
 		await expect(page.getByRole('switch', { name: 'Smart features' })).toHaveCount(0);
 
-		const request = page.waitForRequest((r) => r.url().endsWith('/api/v1/accounts/a1/password') && r.method() === 'PUT');
+		const request = page.waitForRequest(
+			(r) => r.url().endsWith('/api/v1/accounts/a1/password') && r.method() === 'PUT'
+		);
 		await page.getByLabel('App password').fill('new password');
 		await page.getByRole('button', { name: 'Test and save' }).click();
 		expect((await request).postDataJSON()).toEqual({ password: 'new password' });

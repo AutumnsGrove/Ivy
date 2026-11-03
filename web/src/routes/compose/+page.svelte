@@ -205,11 +205,27 @@
 		for (const file of files) {
 			const isImage = (file.type || '').startsWith('image/');
 			const tempId = newId();
-			const att: Att = { id: '', tempId, name: file.name, size: formatSize(file.size), image: isImage, inline: false, pending: true };
+			const att: Att = {
+				id: '',
+				tempId,
+				name: file.name,
+				size: formatSize(file.size),
+				image: isImage,
+				inline: false,
+				pending: true
+			};
 			attachments = [...attachments, att];
 			try {
-				let prepared: { blob: Blob; name: string; mime: string } = { blob: file, name: file.name, mime: file.type || 'application/octet-stream' };
-				if (isImage) prepared = await prepareImage(file, { size: snap.settings.photoSize, stripLocation: snap.settings.stripLocation });
+				let prepared: { blob: Blob; name: string; mime: string } = {
+					blob: file,
+					name: file.name,
+					mime: file.type || 'application/octet-stream'
+				};
+				if (isImage)
+					prepared = await prepareImage(file, {
+						size: snap.settings.photoSize,
+						stripLocation: snap.settings.stripLocation
+					});
 				const up = await api.uploadAttachment(snap.accountId, prepared.name, prepared.blob);
 				const isInline = inline && isImage;
 				// Reassign through the array: only the proxy Svelte tracks is reactive,
@@ -340,7 +356,11 @@
 		auto.touch();
 		await auto.flush();
 		if (auto.pending()) {
-			toasts.push({ text: "Couldn't save your draft", detail: 'Nothing was sent. Try again in a moment.', tone: 'warn' });
+			toasts.push({
+				text: "Couldn't save your draft",
+				detail: 'Nothing was sent. Try again in a moment.',
+				tone: 'warn'
+			});
 			return;
 		}
 		sending = true;
@@ -414,7 +434,13 @@
 		<RecipientField label="To" bind:recipients={to} {people} placeholder="name@example.com" onchange={touch} />
 		{#if showCc}
 			<RecipientField label="Cc" bind:recipients={cc} {people} placeholder="Optional" onchange={touch} />
-			<RecipientField label="Bcc" bind:recipients={bcc} {people} placeholder="Hidden from the others" onchange={touch} />
+			<RecipientField
+				label="Bcc"
+				bind:recipients={bcc}
+				{people}
+				placeholder="Hidden from the others"
+				onchange={touch}
+			/>
 		{:else}
 			<button type="button" class="addcc" onclick={() => (showCc = true)}>Add Cc or Bcc</button>
 		{/if}
@@ -434,19 +460,13 @@
 		{/if}
 
 		{#if bodyFormat === 'html'}
-			<RichEditor
-				bind:value={body}
-				oninput={markBodyTouched}
-				onpath={(s) => (format = s)}
-				onapi={(a) => (rich = a)}
-			/>
+			<RichEditor bind:value={body} oninput={markBodyTouched} onpath={(s) => (format = s)} onapi={(a) => (rich = a)} />
 		{:else}
 			<textarea
 				bind:value={body}
 				oninput={markBodyTouched}
 				aria-label="Message body"
-				placeholder="Write something kind…"
-			></textarea>
+				placeholder="Write something kind…"></textarea>
 		{/if}
 
 		{#if attachments.length}
@@ -470,15 +490,21 @@
 	</Glass>
 
 	<Glass variant="strong" radius="bar" class="fmt">
-		<IconButton label="Bold" disabled={bodyFormat !== 'html'} pressed={format.bold} onclick={() => rich?.bold()}><Bold /></IconButton>
+		<IconButton label="Bold" disabled={bodyFormat !== 'html'} pressed={format.bold} onclick={() => rich?.bold()}
+			><Bold /></IconButton
+		>
 		<IconButton label="Italic" disabled={bodyFormat !== 'html'} pressed={format.italic} onclick={() => rich?.italic()}
 			><Italic /></IconButton
 		>
-		<IconButton label="Link" disabled={bodyFormat !== 'html'} pressed={format.link} onclick={addLink}><Link /></IconButton>
+		<IconButton label="Link" disabled={bodyFormat !== 'html'} pressed={format.link} onclick={addLink}
+			><Link /></IconButton
+		>
 		<IconButton label="List" disabled={bodyFormat !== 'html'} pressed={format.list} onclick={() => rich?.toggleList()}
 			><List /></IconButton
 		>
-		<IconButton label="Insert image" tone="accent" onclick={() => ((inlineNext = true), (attachOpen = true))}><ImageIcon /></IconButton>
+		<IconButton label="Insert image" tone="accent" onclick={() => ((inlineNext = true), (attachOpen = true))}
+			><ImageIcon /></IconButton
+		>
 		<span class="grow"></span>
 		{#if canSwitchMode}
 			<div class="modes" role="group" aria-label="Message format">

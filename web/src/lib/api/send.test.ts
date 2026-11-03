@@ -67,7 +67,9 @@ describe('send api', () => {
 
 	it('keeps the queue-full refusal so the screen can say wait', async () => {
 		stubFetch(reply({ code: 'send_full', message: 'There are too many unsent messages' }, 409));
-		await expect(api.sendMessage({ accountId: 'a1', from: 'x@y', to: [], subject: '', text: '' })).rejects.toMatchObject({
+		await expect(
+			api.sendMessage({ accountId: 'a1', from: 'x@y', to: [], subject: '', text: '' })
+		).rejects.toMatchObject({
 			code: 'send_full'
 		});
 	});
@@ -79,7 +81,9 @@ describe('send api', () => {
 
 	it('keeps invalid_message from the builder', async () => {
 		stubFetch(reply({ code: 'invalid_message', message: 'Ivy cannot send that message: the subject' }, 400));
-		await expect(api.sendMessage({ accountId: 'a1', from: 'x@y', to: [], subject: '', text: '' })).rejects.toMatchObject({
+		await expect(
+			api.sendMessage({ accountId: 'a1', from: 'x@y', to: [], subject: '', text: '' })
+		).rejects.toMatchObject({
 			code: 'invalid_message'
 		});
 	});
@@ -94,7 +98,16 @@ describe('drafts api', () => {
 
 	it('saves a draft as JSON and returns the version', async () => {
 		const calls = stubFetch(
-			reply({ id: 'd1', draftId: 'draft-1', accountId: 'a1', version: 1, subject: 'Hi', to: [], updatedAt: '', source: 'local' })
+			reply({
+				id: 'd1',
+				draftId: 'draft-1',
+				accountId: 'a1',
+				version: 1,
+				subject: 'Hi',
+				to: [],
+				updatedAt: '',
+				source: 'local'
+			})
 		);
 		const saved = await api.saveDraft({ accountId: 'a1', from: 'hello@example.com', to: [], text: 'Hi' });
 		expect(saved.version).toBe(1);

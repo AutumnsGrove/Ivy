@@ -15,13 +15,10 @@
 	let { data } = $props();
 	let range = $state<'today' | 'week' | 'saved'>('today');
 	// The route loads the newest page of the feed; "Show older" appends the rest.
-	const pager = new Pager<Issue>(
-		async (cursor) => {
-			const next = await api.listReading({ cursor });
-			return { items: next.issues, nextCursor: next.nextCursor };
-		},
-		"Couldn't load older issues"
-	);
+	const pager = new Pager<Issue>(async (cursor) => {
+		const next = await api.listReading({ cursor });
+		return { items: next.issues, nextCursor: next.nextCursor };
+	}, "Couldn't load older issues");
 	$effect.pre(() => pager.reset({ items: data.feed.issues, nextCursor: data.feed.nextCursor }));
 </script>
 

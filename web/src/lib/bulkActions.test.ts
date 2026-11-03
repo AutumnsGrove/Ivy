@@ -43,7 +43,10 @@ describe('moving a selection', () => {
 
 	it('queues one batch, remembers every op for the overlay, and offers one Undo', async () => {
 		mocks.ask.mockResolvedValue(true);
-		const ops = [op({ id: '1', messageId: 'a', sourceFolderId: 'inbox-1' }), op({ id: '2', messageId: 'b', sourceFolderId: 'inbox-1' })];
+		const ops = [
+			op({ id: '1', messageId: 'a', sourceFolderId: 'inbox-1' }),
+			op({ id: '2', messageId: 'b', sourceFolderId: 'inbox-1' })
+		];
 		mocks.enqueueBatch.mockResolvedValue({ ops, skipped: [] });
 
 		expect(await archiveMany(['a', 'b'])).toBe(true);
@@ -86,7 +89,10 @@ describe('moving a selection', () => {
 			]
 		});
 		await archiveMany(['a', 'b', 'c']);
-		expect(mocks.push.mock.calls[0][0]).toMatchObject({ text: 'Archived 1', detail: '2 skipped: already there or gone.' });
+		expect(mocks.push.mock.calls[0][0]).toMatchObject({
+			text: 'Archived 1',
+			detail: '2 skipped: already there or gone.'
+		});
 	});
 
 	it('when every message is skipped it is a failure, not a success', async () => {
@@ -99,9 +105,11 @@ describe('moving a selection', () => {
 		expect(mocks.push.mock.calls[0][0]).toMatchObject({ tone: 'danger' });
 	});
 
-	it('shows the server\'s reason when the whole batch is refused, and queues nothing', async () => {
+	it("shows the server's reason when the whole batch is refused, and queues nothing", async () => {
 		mocks.ask.mockResolvedValue(true);
-		mocks.enqueueBatch.mockRejectedValue(new ApiError('outbox_full', 'There are too many unsent actions; wait for them to finish'));
+		mocks.enqueueBatch.mockRejectedValue(
+			new ApiError('outbox_full', 'There are too many unsent actions; wait for them to finish')
+		);
 		expect(await archiveMany(['a', 'b'])).toBe(false);
 		expect(mocks.remember).not.toHaveBeenCalled();
 		expect(mocks.push.mock.calls[0][0]).toMatchObject({

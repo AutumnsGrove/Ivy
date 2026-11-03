@@ -61,7 +61,9 @@
 
 <Page>
 	{#if data.active.length === 0 && data.recent.length === 0}
-		<p class="empty">Nothing is waiting to send. Actions you take in the reader appear here while they reach your mail server.</p>
+		<p class="empty">
+			Nothing is waiting to send. Actions you take in the reader appear here while they reach your mail server.
+		</p>
 	{:else}
 		{#if data.active.length}
 			<h2 class="head">On the way</h2>

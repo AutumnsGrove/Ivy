@@ -38,11 +38,15 @@
 	function key(e: KeyboardEvent) {
 		const step = e.shiftKey ? BIG_STEP : STEP;
 		const next =
-			e.key === 'ArrowRight' ? value + step
-			: e.key === 'ArrowLeft' ? value - step
-			: e.key === 'Home' ? min
-			: e.key === 'End' ? max
-			: null;
+			e.key === 'ArrowRight'
+				? value + step
+				: e.key === 'ArrowLeft'
+					? value - step
+					: e.key === 'Home'
+						? min
+						: e.key === 'End'
+							? max
+							: null;
 		if (next === null) return;
 		e.preventDefault();
 		onresize(clamp(next));

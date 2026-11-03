@@ -35,9 +35,7 @@ describe('standing', () => {
 		expect(standing(answer({ suppressed: true, acts: false }))).toBe('held');
 	});
 	it('says the quiet option is quiet even at full probability', () => {
-		expect(
-			standing(answer({ choice: 'none', probabilities: { none: 1 }, fires: false, acts: false }))
-		).toBe('quiet');
+		expect(standing(answer({ choice: 'none', probabilities: { none: 1 }, fires: false, acts: false }))).toBe('quiet');
 	});
 	it('says a non-quiet answer under the bar is below it', () => {
 		expect(standing(answer({ probabilities: { likely: 0.6 }, fires: false, acts: false }))).toBe('below');

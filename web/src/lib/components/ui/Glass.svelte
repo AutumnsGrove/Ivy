@@ -9,14 +9,7 @@
 		as?: string;
 		children: Snippet;
 	};
-	let {
-		variant = 'glass',
-		radius = 'card',
-		as = 'div',
-		class: cls,
-		children,
-		...rest
-	}: Props = $props();
+	let { variant = 'glass', radius = 'card', as = 'div', class: cls, children, ...rest }: Props = $props();
 </script>
 
 <svelte:element this={as} class={['surface', variant, `r-${radius}`, cls]} {...rest}>
