@@ -18,7 +18,10 @@ test.describe('tagging a message', () => {
 		const done = toast(page, 'Tagged “receipts”');
 		await expect(done).toBeVisible();
 
-		await done.getByRole('button', { name: 'Undo' }).click();
+		// The toast is still animating in; a thumb taps it wherever it is drawn, so
+		// the test must not wait for the enter animation to settle (WebKit on a
+		// loaded CI runner never did before the timer took the toast away).
+		await done.getByRole('button', { name: 'Undo' }).click({ force: true });
 		await expect(toast(page, 'Undone')).toBeVisible();
 		await expect(receipts).toHaveAttribute('aria-checked', 'false');
 	});

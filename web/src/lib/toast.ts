@@ -16,6 +16,10 @@ export type ToastInput = {
 };
 
 const DEFAULT_MS = 4000;
+// An undo offer gets the room undo-send's default delay gives you (10 s). Four
+// seconds is a race for a thumb, and it left the phone e2e clicking a toast
+// that was already on its way out. An explicit duration still wins.
+const UNDO_MS = 10_000;
 
 const show = {
 	plain: toast,
@@ -27,7 +31,7 @@ const show = {
 
 export const toasts = {
 	push(input: ToastInput): string | number {
-		const { text, detail, tone = 'plain', action, duration = DEFAULT_MS } = input;
+		const { text, detail, tone = 'plain', action, duration = action ? UNDO_MS : DEFAULT_MS } = input;
 		return show[tone](text, {
 			description: detail,
 			duration: duration === 0 ? Infinity : duration,

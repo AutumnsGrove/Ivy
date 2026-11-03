@@ -40,6 +40,11 @@ describe('toasts facade over sonner', () => {
 		expect(sonner.error).toHaveBeenCalledWith('Not sent', expect.objectContaining({ duration: Infinity }));
 	});
 
+	it('gives an undo offer the same window as undo-send, not the plain four seconds', () => {
+		toasts.push({ text: 'Tagged “receipts”', action: { label: 'Undo', run: () => {} } });
+		expect(sonner).toHaveBeenCalledWith('Tagged “receipts”', expect.objectContaining({ duration: 10_000 }));
+	});
+
 	it('wires the action button to its handler', () => {
 		const run = vi.fn();
 		toasts.push({ text: 'Archived', action: { label: 'Undo', run } });
