@@ -597,6 +597,11 @@ Found by the round 32 audit; each needs a home before its milestone starts.
   it. A first slice needs no RSVP: parse the `text/calendar` part server-side (title, start, end,
   location) into the message view, render the chip from it, and let Add download the `.ics` for the
   phone to open. Replying to an organiser stays out until RSVP is decided.
+- **Links in mail open inside the body frame (issue #21, operator, 2026-10-22).** A plain click on a
+  link navigates the sandboxed frame, so the destination page runs in the mail-sized box; ⌘-click and
+  middle click already open a tab, which is the behaviour the operator wants by default. Needs
+  `target="_blank"` in `addLinkRel`, `allow-popups` on the frame, a decision on `mailto:`/`tel:`, and
+  the `ARCHITECTURE.md` display note corrected. Not started.
 - **Reader: mail the inverter gets wrong.** Dark mode inverts rich mail written for a light page and
   leaves mail whose first declared background is dark (`gateway/bodydark.go`). A light mail with a dark
   banner gets a light banner; a mail with no declared background that styles its text white would be
