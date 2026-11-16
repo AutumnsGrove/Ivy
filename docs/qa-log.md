@@ -2181,3 +2181,30 @@ she chose to make it true.
 5. **"Zero warnings" is now enforced, not hoped for.** `pnpm check` runs `svelte-check
    --fail-on-warnings`; `pnpm lint` is ESLint; `pnpm format:check` is Prettier; `make web-check`
    runs all three plus Vitest, and CI calls that target, so a human runs exactly what CI runs.
+
+## GO-2026-6865: one dependency bump, not a sweep (2026-11-16, agent; issue #23)
+
+`govulncheck` had been red on `main` and on every pull request since 2026-11-16 with a single
+finding in `github.com/klauspost/compress` v1.20.1 (a panic on two-block zstd frames, reached from
+our own `internal/compress` middleware), fixed upstream in v1.20.2. The temptation was to run
+`go get -u ./...` while the module was open; that is the wrong move.
+
+1. **Only the vulnerable pin moved.** v1.20.1 → v1.20.2 and its two `go.sum` lines. `go mod tidy`
+   had nothing else to say, so the diff is four lines and the reviewer can see the whole of it.
+   `go list -m -u all` offers roughly fifty further upgrades (mostly transitive, several major
+   versions behind), and each one is its own change with its own test run — a green `govulncheck`
+   is not a licence to batch unrelated dependency churn into a fix that exists to unblock CI.
+2. **The affected path is already covered by tests, so no new test was written.** The zstd
+   encoder/decoder round trip is asserted through the middleware in
+   `internal/compress/middleware_test.go` (content type, ETag suffix, negotiation order, streaming
+   flush) and again through the precompressed asset path in `internal/asset/`. Those ran before
+   and after the bump; a hand-rolled "does zstd still work" test would have proved less.
+3. **The finding was reproduced locally before the fix, and the exact trace in issue #23 matched**
+   (`middleware.go:203` → `zstd.Encoder.Close` → `fse.Compress`). After the bump the scan reports
+   "No vulnerabilities found".
+4. **One intermittent `-race` report was seen once and left alone.** A full-suite local run flagged
+   a write in `mailworld.(*World).Close` closing the SMTP listener against a concurrent `Accept`;
+   three further full-suite runs and five isolated `./smtp/` runs were clean, `smtpFaultListener`
+   holds no shared mutable state, and CI's `test (race, integration through mailworld)` step is
+   green. Recorded here so the next sighting is the second one, which is when it stops being a
+   flake.

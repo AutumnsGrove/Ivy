@@ -654,6 +654,9 @@ Found by the round 32 audit; each needs a home before its milestone starts.
 
 ### Harness, CI and docs
 
+- Dependency refresh, one module at a time: `go list -m -u all` lists ~50 pending upgrades (mostly
+  transitive, some majors behind) and `klauspost/compress` was bumped alone to v1.20.2 for
+  GO-2026-6865 (issue #23, see the qa-log). The rest is ordinary upkeep, not a fire.
 - `--llm live|fake` and the OpenRouter-only-external-host rail (chunk 5); Playwright sharding.
 - CI: `bench` (advisory `benchstat`), `nightly.yml` (Firefox E2E, time-boxed fuzzing, fresh
   `govulncheck`/`pnpm audit`, link rot), the manual `live` and `evals` workflows (need protected
